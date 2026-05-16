@@ -116,13 +116,13 @@ watch([entityType, entityId], () => {
   <div class="config-history-tab">
     <div v-if="error" class="error-banner">
       {{ error }}
-      <button @click="error = null">Dismiss</button>
+      <button @click="error = null">{{ $t('agents.configHistoryTab.dismiss') }}</button>
     </div>
 
     <!-- Entity selector -->
     <div class="selector-bar">
       <div class="selector-group">
-        <label>Entity Type</label>
+        <label>{{ $t('agents.configHistoryTab.entityType') }}</label>
         <select v-model="entityType">
           <option v-for="t in entityTypes" :key="t.value" :value="t.value">
             {{ t.label }}
@@ -130,23 +130,23 @@ watch([entityType, entityId], () => {
         </select>
       </div>
       <div class="selector-group">
-        <label>Entity ID</label>
+        <label>{{ $t('agents.configHistoryTab.entityID') }}</label>
         <input
           v-if="entityType === 'agent'"
           v-model="entityId"
           placeholder="e.g. orchestrator, chat, rag..."
         />
         <select v-else v-model="entityId">
-          <option value="" disabled>Select...</option>
+          <option value="" disabled>{{ $t('agents.configHistoryTab.select') }}</option>
           <option v-for="e in systemEntities" :key="e" :value="e">{{ e }}</option>
         </select>
       </div>
       <button class="btn-primary" @click="fetchRevisions" :disabled="!entityId">
-        Load History
+        {{ $t('agents.configHistoryTab.loadHistory') }}
       </button>
     </div>
 
-    <div v-if="loading" class="loading">Loading revisions...</div>
+    <div v-if="loading" class="loading">{{ $t('agents.configHistoryTab.loadingRevisions') }}</div>
 
     <div v-else-if="revisions.length === 0 && entityId" class="empty-state">
       No revisions found for {{ entityType }}/{{ entityId }}
@@ -179,17 +179,17 @@ watch([entityType, entityId], () => {
       <!-- Diff view -->
       <div v-if="selectedRevision" class="diff-panel">
         <div class="diff-header">
-          <h3>Revision Details</h3>
+          <h3>{{ $t('agents.configHistoryTab.revisionDetails') }}</h3>
           <div class="diff-actions">
             <button
               v-if="!showRollbackConfirm"
               class="btn-rollback"
               @click="showRollbackConfirm = true"
             >
-              Rollback to this
+              {{ $t('agents.configHistoryTab.rollbackToThis') }}
             </button>
             <template v-else>
-              <span class="confirm-text">Confirm rollback?</span>
+              <span class="confirm-text">{{ $t('agents.configHistoryTab.confirmRollback') }}</span>
               <button
                 class="btn-confirm"
                 :disabled="rollbackLoading"
@@ -198,7 +198,7 @@ watch([entityType, entityId], () => {
                 {{ rollbackLoading ? 'Rolling back...' : 'Yes, rollback' }}
               </button>
               <button class="btn-cancel" @click="showRollbackConfirm = false">
-                Cancel
+                {{ $t('agents.configHistoryTab.cancel') }}
               </button>
             </template>
           </div>

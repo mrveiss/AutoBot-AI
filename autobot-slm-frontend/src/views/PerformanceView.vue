@@ -85,17 +85,17 @@ function navigateTo(path: string): void {
     <div class="bg-white border-b border-gray-200 px-6 py-4">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-4">
-          <h1 class="text-2xl font-bold text-gray-900">Performance</h1>
+          <h1 class="text-2xl font-bold text-gray-900">{{ $t('performanceView.performance') }}</h1>
         </div>
 
         <!-- Quick Stats Bar -->
         <div class="flex items-center gap-6 text-sm" role="status" aria-label="Performance summary">
           <div class="flex items-center gap-2 text-gray-600">
-            <span class="text-gray-400">Avg Latency:</span>
+            <span class="text-gray-400">{{ $t('performanceView.avgLatency') }}</span>
             <span class="font-semibold">{{ avgLatency.toFixed(1) }}ms</span>
           </div>
           <div class="flex items-center gap-2 text-gray-600">
-            <span class="text-gray-400">Error Rate:</span>
+            <span class="text-gray-400">{{ $t('performanceView.errorRate') }}</span>
             <span
               :class="[
                 'font-semibold',
@@ -106,7 +106,7 @@ function navigateTo(path: string): void {
             </span>
           </div>
           <div class="flex items-center gap-2 text-gray-600">
-            <span class="text-gray-400">SLO Compliance:</span>
+            <span class="text-gray-400">{{ $t('performanceView.sLOCompliance') }}</span>
             <span :class="['font-semibold', complianceColor()]">
               {{ sloCompliance.toFixed(1) }}%
             </span>

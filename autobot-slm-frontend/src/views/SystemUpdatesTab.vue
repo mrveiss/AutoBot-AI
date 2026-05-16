@@ -247,10 +247,10 @@ onUnmounted(() => {
     <div class="flex items-center justify-between mb-6">
       <div>
         <h2 class="text-lg font-semibold text-gray-900">
-          System Updates
+          {{ $t('systemUpdatesTab.systemUpdates') }}
         </h2>
         <p class="text-sm text-gray-500 mt-1">
-          Discover and apply system package updates across the fleet
+          {{ $t('systemUpdatesTab.discoverAndApplySystem') }}
         </p>
       </div>
       <div class="flex items-center gap-3">
@@ -260,7 +260,7 @@ onUnmounted(() => {
           class="px-3 py-2 border border-gray-300 rounded-lg text-sm
                  bg-white focus:ring-2 focus:ring-primary-500"
         >
-          <option value="">All Nodes</option>
+          <option value="">{{ $t('systemUpdatesTab.allNodes') }}</option>
           <option
             v-for="node in nodeOptions"
             :key="node.value"
@@ -319,7 +319,7 @@ onUnmounted(() => {
         @click="systemUpdates.clearError()"
         class="ml-2 underline"
       >
-        Dismiss
+        {{ $t('systemUpdatesTab.dismiss') }}
       </button>
     </div>
     <div
@@ -337,7 +337,7 @@ onUnmounted(() => {
     >
       <div class="flex items-center justify-between mb-2">
         <span class="text-sm font-medium text-gray-700">
-          Discovering packages...
+          {{ $t('systemUpdatesTab.discoveringPackages') }}
         </span>
         <span class="text-sm text-gray-500">
           {{ systemUpdates.discoverStatus.value.nodes_checked }} /
@@ -361,25 +361,25 @@ onUnmounted(() => {
     <!-- Summary Stats -->
     <div class="grid grid-cols-4 gap-4 mb-6">
       <div class="bg-white rounded-lg border p-4">
-        <p class="text-sm text-gray-500">Total Upgradable</p>
+        <p class="text-sm text-gray-500">{{ $t('systemUpdatesTab.totalUpgradable') }}</p>
         <p class="text-2xl font-bold">
           {{ systemUpdates.updateCount.value }}
         </p>
       </div>
       <div class="bg-white rounded-lg border p-4">
-        <p class="text-sm text-gray-500">Security Updates</p>
+        <p class="text-sm text-gray-500">{{ $t('systemUpdatesTab.securityUpdates') }}</p>
         <p class="text-2xl font-bold text-orange-600">
           {{ systemUpdates.securityCount.value }}
         </p>
       </div>
       <div class="bg-white rounded-lg border p-4">
-        <p class="text-sm text-gray-500">Nodes with Updates</p>
+        <p class="text-sm text-gray-500">{{ $t('systemUpdatesTab.nodesWithUpdates') }}</p>
         <p class="text-2xl font-bold text-blue-600">
           {{ systemUpdates.nodesWithUpdates.value }}
         </p>
       </div>
       <div class="bg-white rounded-lg border p-4">
-        <p class="text-sm text-gray-500">Last Checked</p>
+        <p class="text-sm text-gray-500">{{ $t('systemUpdatesTab.lastChecked') }}</p>
         <p class="text-sm font-medium mt-1">
           {{ formatDate(systemUpdates.lastChecked.value) }}
         </p>
@@ -434,17 +434,17 @@ onUnmounted(() => {
             class="px-2 py-1 text-xs bg-orange-100 text-orange-700
                    rounded hover:bg-orange-200 disabled:opacity-50"
           >
-            Upgrade All
+            {{ $t('systemUpdatesTab.upgradeAll') }}
           </button>
         </div>
         <!-- Package rows -->
         <table class="w-full">
           <thead class="sr-only">
             <tr>
-              <th>Select</th>
-              <th>Package</th>
-              <th>Version</th>
-              <th>Severity</th>
+              <th>{{ $t('systemUpdatesTab.select') }}</th>
+              <th>{{ $t('systemUpdatesTab.package') }}</th>
+              <th>{{ $t('systemUpdatesTab.version') }}</th>
+              <th>{{ $t('systemUpdatesTab.severity') }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100">
@@ -500,8 +500,7 @@ onUnmounted(() => {
              text-gray-500"
     >
       <p>
-        No upgradable packages found. Click "Check for Updates" to
-        discover available packages.
+        {{ $t('systemUpdatesTab.noUpgradablePackagesFound') }}
       </p>
     </div>
 
@@ -528,12 +527,12 @@ onUnmounted(() => {
         class="px-4 py-3 bg-gray-50 border-b
                flex items-center justify-between"
       >
-        <h2 class="font-medium text-gray-900">Update Jobs</h2>
+        <h2 class="font-medium text-gray-900">{{ $t('systemUpdatesTab.updateJobs') }}</h2>
         <button
           @click="systemUpdates.fetchJobs()"
           class="text-sm text-blue-600 hover:underline"
         >
-          Refresh
+          {{ $t('systemUpdatesTab.refresh') }}
         </button>
       </div>
       <table v-if="systemUpdates.jobs.value.length" class="w-full">
@@ -543,37 +542,37 @@ onUnmounted(() => {
               class="px-4 py-3 text-left text-xs
                      font-medium text-gray-500 uppercase"
             >
-              Job ID
+              {{ $t('systemUpdatesTab.jobID') }}
             </th>
             <th
               class="px-4 py-3 text-left text-xs
                      font-medium text-gray-500 uppercase"
             >
-              Node
+              {{ $t('systemUpdatesTab.node') }}
             </th>
             <th
               class="px-4 py-3 text-left text-xs
                      font-medium text-gray-500 uppercase"
             >
-              Status
+              {{ $t('systemUpdatesTab.status') }}
             </th>
             <th
               class="px-4 py-3 text-left text-xs
                      font-medium text-gray-500 uppercase"
             >
-              Progress
+              {{ $t('systemUpdatesTab.progress') }}
             </th>
             <th
               class="px-4 py-3 text-left text-xs
                      font-medium text-gray-500 uppercase"
             >
-              Started
+              {{ $t('systemUpdatesTab.started') }}
             </th>
             <th
               class="px-4 py-3 text-right text-xs
                      font-medium text-gray-500 uppercase"
             >
-              Actions
+              {{ $t('systemUpdatesTab.actions') }}
             </th>
           </tr>
         </thead>
@@ -643,7 +642,7 @@ onUnmounted(() => {
         v-if="!systemUpdates.jobs.value.length"
         class="p-8 text-center text-gray-500"
       >
-        No update jobs found
+        {{ $t('systemUpdatesTab.noUpdateJobsFound') }}
       </div>
     </div>
   </div>

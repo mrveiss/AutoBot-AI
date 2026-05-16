@@ -71,7 +71,7 @@ function getStatusColor(status: string): string {
     <div class="bg-white border-b border-gray-200 px-6 py-4">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-4">
-          <h1 class="text-2xl font-bold text-gray-900">Monitoring</h1>
+          <h1 class="text-2xl font-bold text-gray-900">{{ $t('monitoringView.monitoring') }}</h1>
           <div class="flex items-center gap-2" role="status" :aria-label="`System health: ${systemHealth}`">
             <span
               :class="['w-2.5 h-2.5 rounded-full', getStatusColor(systemHealth)]"

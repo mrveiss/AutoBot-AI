@@ -62,7 +62,7 @@ function copyToClipboard(text: string): void {
     <!-- Connection Test Card -->
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 mb-6">
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold">Connection Status</h2>
+        <h2 class="text-lg font-semibold">{{ $t('settings.aPISettings.connectionStatus') }}</h2>
         <button
           @click="testConnection"
           :disabled="testingConnection"
@@ -76,7 +76,7 @@ function copyToClipboard(text: string): void {
           >
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          Test Connection
+          {{ $t('settings.aPISettings.testConnection') }}
         </button>
       </div>
 
@@ -101,13 +101,13 @@ function copyToClipboard(text: string): void {
 
     <!-- API Endpoints -->
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 mb-6">
-      <h2 class="text-lg font-semibold mb-6">API Endpoints</h2>
+      <h2 class="text-lg font-semibold mb-6">{{ $t('settings.aPISettings.aPIEndpoints') }}</h2>
 
       <div class="space-y-4">
         <!-- Backend API -->
         <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
           <div>
-            <p class="font-medium text-gray-900">Backend API</p>
+            <p class="font-medium text-gray-900">{{ $t('settings.aPISettings.backendAPI') }}</p>
             <p class="text-sm text-gray-500 font-mono">{{ apiUrl }}</p>
           </div>
           <button
@@ -124,7 +124,7 @@ function copyToClipboard(text: string): void {
         <!-- WebSocket -->
         <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
           <div>
-            <p class="font-medium text-gray-900">WebSocket</p>
+            <p class="font-medium text-gray-900">{{ $t('settings.aPISettings.webSocket') }}</p>
             <p class="text-sm text-gray-500 font-mono">{{ wsUrl }}</p>
           </div>
           <button
@@ -141,7 +141,7 @@ function copyToClipboard(text: string): void {
         <!-- Grafana -->
         <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
           <div>
-            <p class="font-medium text-gray-900">Grafana (Proxied)</p>
+            <p class="font-medium text-gray-900">{{ $t('settings.aPISettings.grafanaProxied') }}</p>
             <p class="text-sm text-gray-500 font-mono">{{ origin + getGrafanaUrl() }}</p>
           </div>
           <button
@@ -158,7 +158,7 @@ function copyToClipboard(text: string): void {
         <!-- Prometheus -->
         <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
           <div>
-            <p class="font-medium text-gray-900">Prometheus (Proxied)</p>
+            <p class="font-medium text-gray-900">{{ $t('settings.aPISettings.prometheusProxied') }}</p>
             <p class="text-sm text-gray-500 font-mono">{{ origin + getPrometheusUrl() }}</p>
           </div>
           <button
@@ -175,7 +175,7 @@ function copyToClipboard(text: string): void {
         <!-- AutoBot Backend -->
         <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
           <div>
-            <p class="font-medium text-gray-900">AutoBot Backend (Proxied)</p>
+            <p class="font-medium text-gray-900">{{ $t('settings.aPISettings.autoBotBackendProxied') }}</p>
             <p class="text-sm text-gray-500 font-mono">{{ origin + getBackendUrl() }}</p>
           </div>
           <button
@@ -193,9 +193,9 @@ function copyToClipboard(text: string): void {
 
     <!-- Configuration Reference -->
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-      <h2 class="text-lg font-semibold mb-4">Configuration Reference</h2>
+      <h2 class="text-lg font-semibold mb-4">{{ $t('settings.aPISettings.configurationReference') }}</h2>
       <p class="text-sm text-gray-500 mb-4">
-        These settings are defined in the SSOT configuration file.
+        {{ $t('settings.aPISettings.theseSettingsAreDefined') }}
       </p>
 
       <div class="bg-gray-900 rounded-lg p-4 overflow-x-auto">

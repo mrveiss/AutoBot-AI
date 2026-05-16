@@ -139,8 +139,8 @@ onMounted(() => { fetchDefaults() })
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <h2 class="text-lg font-semibold text-gray-900">Config Defaults</h2>
-        <p class="text-sm text-gray-500">Global default configurations applied to all nodes</p>
+        <h2 class="text-lg font-semibold text-gray-900">{{ $t('settings.admin.configDefaultsSettings.configDefaults') }}</h2>
+        <p class="text-sm text-gray-500">{{ $t('settings.admin.configDefaultsSettings.globalDefaultConfigurationsApplied') }}</p>
       </div>
       <div class="flex gap-2">
         <button @click="fetchDefaults" :disabled="isLoading"
@@ -149,7 +149,7 @@ onMounted(() => { fetchDefaults() })
         </button>
         <button @click="openAddForm"
           class="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
-          Add Default
+          {{ $t('settings.admin.configDefaultsSettings.addDefault') }}
         </button>
       </div>
     </div>
@@ -157,7 +157,7 @@ onMounted(() => { fetchDefaults() })
     <!-- Alerts -->
     <div v-if="errorMessage" class="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
       {{ errorMessage }}
-      <button @click="errorMessage = null" class="ml-2 underline">Dismiss</button>
+      <button @click="errorMessage = null" class="ml-2 underline">{{ $t('settings.admin.configDefaultsSettings.dismiss') }}</button>
     </div>
     <div v-if="successMessage" class="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
       {{ successMessage }}
@@ -167,27 +167,27 @@ onMounted(() => { fetchDefaults() })
     <div v-if="showAddForm" class="bg-white rounded-lg border">
       <div class="px-4 py-3 bg-gray-50 border-b flex items-center justify-between">
         <h3 class="font-medium text-gray-900">{{ editingKey ? `Edit: ${editingKey}` : 'Add Config Default' }}</h3>
-        <button @click="showAddForm = false" class="text-gray-400 hover:text-gray-600">&times;</button>
+        <button @click="showAddForm = false" class="text-gray-400 hover:text-gray-600">{{ $t('settings.admin.configDefaultsSettings.times') }}</button>
       </div>
       <form @submit.prevent="saveConfig" class="p-4 space-y-4">
         <div class="grid grid-cols-3 gap-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Key *</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.configDefaultsSettings.key') }}</label>
             <input v-model="newKey" :disabled="!!editingKey" required
               class="w-full px-3 py-2 border rounded-lg text-sm disabled:bg-gray-100"
               placeholder="e.g. monitoring.interval" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Value *</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.configDefaultsSettings.value') }}</label>
             <input v-model="newValue" required
               class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="e.g. 30" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.configDefaultsSettings.type') }}</label>
             <select v-model="newValueType" class="w-full px-3 py-2 border rounded-lg text-sm">
-              <option value="string">String</option>
-              <option value="int">Integer</option>
-              <option value="bool">Boolean</option>
+              <option value="string">{{ $t('settings.admin.configDefaultsSettings.string') }}</option>
+              <option value="int">{{ $t('settings.admin.configDefaultsSettings.integer') }}</option>
+              <option value="bool">{{ $t('settings.admin.configDefaultsSettings.boolean') }}</option>
               <option value="json">JSON</option>
             </select>
           </div>
@@ -197,7 +197,7 @@ onMounted(() => { fetchDefaults() })
             {{ editingKey ? 'Update' : 'Create' }}
           </button>
           <button type="button" @click="showAddForm = false"
-            class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">Cancel</button>
+            class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">{{ $t('settings.admin.configDefaultsSettings.cancel') }}</button>
         </div>
       </form>
     </div>
@@ -214,11 +214,11 @@ onMounted(() => { fetchDefaults() })
       <table class="w-full">
         <thead class="bg-gray-50">
           <tr>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Key</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Value</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Updated</th>
-            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('settings.admin.configDefaultsSettings.key1') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('settings.admin.configDefaultsSettings.value1') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('settings.admin.configDefaultsSettings.type') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('settings.admin.configDefaultsSettings.updated') }}</th>
+            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{{ $t('settings.admin.configDefaultsSettings.actions') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200">
@@ -233,17 +233,17 @@ onMounted(() => { fetchDefaults() })
             <td class="px-4 py-3 text-sm text-gray-500">{{ formatDate(cfg.updated_at) }}</td>
             <td class="px-4 py-3 text-right">
               <button @click="openEditForm(cfg)"
-                class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-sm hover:bg-gray-200 mr-1">Edit</button>
+                class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-sm hover:bg-gray-200 mr-1">{{ $t('settings.admin.configDefaultsSettings.edit') }}</button>
               <button @click="deleteConfig(cfg.config_key)"
-                class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-sm hover:bg-red-200">Delete</button>
+                class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-sm hover:bg-red-200">{{ $t('settings.admin.configDefaultsSettings.delete') }}</button>
             </td>
           </tr>
         </tbody>
       </table>
       <div v-if="!filteredConfigs.length && !isLoading" class="p-8 text-center text-gray-500">
-        No config defaults found. Click "Add Default" to create one.
+        {{ $t('settings.admin.configDefaultsSettings.noConfigDefaultsFound') }}
       </div>
-      <div v-if="isLoading" class="p-8 text-center text-gray-500">Loading configs...</div>
+      <div v-if="isLoading" class="p-8 text-center text-gray-500">{{ $t('settings.admin.configDefaultsSettings.loadingConfigs') }}</div>
     </div>
   </div>
 </template>

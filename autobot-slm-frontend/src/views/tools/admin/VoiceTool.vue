@@ -261,8 +261,8 @@ onUnmounted(() => {
                 </svg>
               </div>
               <div>
-                <h2 class="text-lg font-semibold text-gray-900">Voice Interface</h2>
-                <p class="text-sm text-gray-500">Speak to interact with the AI assistant</p>
+                <h2 class="text-lg font-semibold text-gray-900">{{ $t('tools.admin.voiceTool.voiceInterface') }}</h2>
+                <p class="text-sm text-gray-500">{{ $t('tools.admin.voiceTool.speakToInteractWith') }}</p>
               </div>
             </div>
 
@@ -320,20 +320,20 @@ onUnmounted(() => {
 
           <!-- Transcript Display -->
           <div v-if="transcript" class="mt-6 p-4 bg-gray-100 rounded-lg max-w-lg w-full">
-            <p class="text-sm text-gray-500 mb-1">You said:</p>
+            <p class="text-sm text-gray-500 mb-1">{{ $t('tools.admin.voiceTool.youSaid') }}</p>
             <p class="text-gray-900">{{ transcript }}</p>
           </div>
 
           <!-- AI Response -->
           <div v-if="aiResponse" class="mt-4 p-4 bg-primary-50 rounded-lg max-w-lg w-full">
             <div class="flex items-center justify-between mb-1">
-              <p class="text-sm text-primary-600">AI Response:</p>
+              <p class="text-sm text-primary-600">{{ $t('tools.admin.voiceTool.aIResponse') }}</p>
               <button
                 v-if="isSpeaking"
                 @click="stopSpeaking"
                 class="text-xs text-red-600 hover:text-red-700"
               >
-                Stop Speaking
+                {{ $t('tools.admin.voiceTool.stopSpeaking') }}
               </button>
             </div>
             <p class="text-gray-900">{{ aiResponse }}</p>
@@ -345,7 +345,7 @@ onUnmounted(() => {
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            <span>Processing...</span>
+            <span>{{ $t('tools.admin.voiceTool.processing') }}</span>
           </div>
         </div>
 
@@ -353,12 +353,12 @@ onUnmounted(() => {
         <div v-if="conversationHistory.length > 0" class="border-t border-gray-200 max-h-48 overflow-auto">
           <div class="p-4 space-y-2">
             <div class="flex items-center justify-between mb-2">
-              <h3 class="text-sm font-medium text-gray-700">Conversation History</h3>
+              <h3 class="text-sm font-medium text-gray-700">{{ $t('tools.admin.voiceTool.conversationHistory') }}</h3>
               <button
                 @click="clearHistory"
                 class="text-xs text-gray-500 hover:text-red-600"
               >
-                Clear
+                {{ $t('tools.admin.voiceTool.clear') }}
               </button>
             </div>
             <div
@@ -381,24 +381,24 @@ onUnmounted(() => {
 
       <!-- Settings Panel -->
       <div class="w-80 bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">Voice Settings</h3>
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('tools.admin.voiceTool.voiceSettings') }}</h3>
 
         <div class="space-y-4">
           <!-- Language -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Language</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('tools.admin.voiceTool.language') }}</label>
             <select
               v-model="settings.language"
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
             >
-              <option value="en-US">English (US)</option>
-              <option value="en-GB">English (UK)</option>
-              <option value="es-ES">Spanish</option>
-              <option value="fr-FR">French</option>
-              <option value="de-DE">German</option>
-              <option value="it-IT">Italian</option>
-              <option value="ja-JP">Japanese</option>
-              <option value="zh-CN">Chinese (Simplified)</option>
+              <option value="en-US">{{ $t('tools.admin.voiceTool.englishUS') }}</option>
+              <option value="en-GB">{{ $t('tools.admin.voiceTool.englishUK') }}</option>
+              <option value="es-ES">{{ $t('tools.admin.voiceTool.spanish') }}</option>
+              <option value="fr-FR">{{ $t('tools.admin.voiceTool.french') }}</option>
+              <option value="de-DE">{{ $t('tools.admin.voiceTool.german') }}</option>
+              <option value="it-IT">{{ $t('tools.admin.voiceTool.italian') }}</option>
+              <option value="ja-JP">{{ $t('tools.admin.voiceTool.japanese') }}</option>
+              <option value="zh-CN">{{ $t('tools.admin.voiceTool.chineseSimplified') }}</option>
             </select>
           </div>
 
@@ -434,7 +434,7 @@ onUnmounted(() => {
 
           <!-- Auto-listen -->
           <div class="flex items-center justify-between">
-            <label class="text-sm font-medium text-gray-700">Auto-listen after response</label>
+            <label class="text-sm font-medium text-gray-700">{{ $t('tools.admin.voiceTool.autoListenAfterResponse') }}</label>
             <button
               @click="settings.autoListen = !settings.autoListen"
               :class="[
@@ -454,12 +454,12 @@ onUnmounted(() => {
 
         <!-- Tips -->
         <div class="mt-6 p-4 bg-gray-50 rounded-lg">
-          <h4 class="text-sm font-medium text-gray-900 mb-2">Tips</h4>
+          <h4 class="text-sm font-medium text-gray-900 mb-2">{{ $t('tools.admin.voiceTool.tips') }}</h4>
           <ul class="text-xs text-gray-600 space-y-1">
-            <li>Speak clearly and at a normal pace</li>
-            <li>Use a quiet environment for best results</li>
-            <li>Grant microphone permissions when prompted</li>
-            <li>Try different languages for multilingual support</li>
+            <li>{{ $t('tools.admin.voiceTool.speakClearlyAndAt') }}</li>
+            <li>{{ $t('tools.admin.voiceTool.useAQuietEnvironment') }}</li>
+            <li>{{ $t('tools.admin.voiceTool.grantMicrophonePermissionsWhen') }}</li>
+            <li>{{ $t('tools.admin.voiceTool.tryDifferentLanguagesFor') }}</li>
           </ul>
         </div>
       </div>

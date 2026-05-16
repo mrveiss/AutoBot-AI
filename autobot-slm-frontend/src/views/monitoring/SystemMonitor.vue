@@ -72,7 +72,7 @@ function getMetricColor(value: number): string {
   <div class="p-6">
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
-      <h2 class="text-xl font-bold text-gray-900">System Monitoring</h2>
+      <h2 class="text-xl font-bold text-gray-900">{{ $t('monitoring.systemMonitor.systemMonitoring') }}</h2>
       <div class="flex gap-2">
         <button
           @click="viewMode = 'grafana'"
@@ -86,7 +86,7 @@ function getMetricColor(value: number): string {
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
           </svg>
-          Metrics Dashboards
+          {{ $t('monitoring.systemMonitor.metricsDashboards') }}
         </button>
         <button
           @click="viewMode = 'details'"
@@ -100,7 +100,7 @@ function getMetricColor(value: number): string {
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
           </svg>
-          Service Details
+          {{ $t('monitoring.systemMonitor.serviceDetails') }}
         </button>
         <button
           @click="viewMode = 'metrics'"
@@ -114,7 +114,7 @@ function getMetricColor(value: number): string {
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
           </svg>
-          Metrics Details
+          {{ $t('monitoring.systemMonitor.metricsDetails') }}
         </button>
       </div>
     </div>
@@ -159,19 +159,19 @@ function getMetricColor(value: number): string {
       <!-- Summary Cards -->
       <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
-          <p class="text-sm text-gray-500">CPU Usage</p>
+          <p class="text-sm text-gray-500">{{ $t('monitoring.systemMonitor.cPUUsage') }}</p>
           <p class="text-2xl font-bold" :class="getMetricColor(cpuUsage)">{{ cpuUsage.toFixed(1) }}%</p>
         </div>
         <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
-          <p class="text-sm text-gray-500">Memory Usage</p>
+          <p class="text-sm text-gray-500">{{ $t('monitoring.systemMonitor.memoryUsage') }}</p>
           <p class="text-2xl font-bold" :class="getMetricColor(memoryUsage)">{{ memoryUsage.toFixed(1) }}%</p>
         </div>
         <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
-          <p class="text-sm text-gray-500">Disk Usage</p>
+          <p class="text-sm text-gray-500">{{ $t('monitoring.systemMonitor.diskUsage') }}</p>
           <p class="text-2xl font-bold" :class="getMetricColor(diskUsage)">{{ diskUsage.toFixed(1) }}%</p>
         </div>
         <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
-          <p class="text-sm text-gray-500">System Health</p>
+          <p class="text-sm text-gray-500">{{ $t('monitoring.systemMonitor.systemHealth') }}</p>
           <p class="text-2xl font-bold capitalize" :class="{
             'text-success-600': systemHealth === 'healthy',
             'text-warning-600': systemHealth === 'degraded',
@@ -202,17 +202,17 @@ function getMetricColor(value: number): string {
               <span :class="getMetricColor(node.cpu)">{{ node.cpu.toFixed(1) }}%</span>
             </div>
             <div class="flex justify-between text-sm">
-              <span class="text-gray-600">Memory</span>
+              <span class="text-gray-600">{{ $t('monitoring.systemMonitor.memory') }}</span>
               <span :class="getMetricColor(node.memory)">{{ node.memory.toFixed(1) }}%</span>
             </div>
             <div class="flex justify-between text-sm">
-              <span class="text-gray-600">Disk</span>
+              <span class="text-gray-600">{{ $t('monitoring.systemMonitor.disk') }}</span>
               <span :class="getMetricColor(node.disk)">{{ node.disk.toFixed(1) }}%</span>
             </div>
           </div>
 
           <div v-if="node.services.length > 0" class="mt-4 pt-3 border-t border-gray-100">
-            <p class="text-xs text-gray-500 mb-2">Services</p>
+            <p class="text-xs text-gray-500 mb-2">{{ $t('monitoring.systemMonitor.services') }}</p>
             <div class="flex flex-wrap gap-1">
               <span
                 v-for="service in node.services"

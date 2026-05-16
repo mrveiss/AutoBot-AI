@@ -104,7 +104,7 @@ function goToCodeSync(): void {
             @click="goToCodeSync"
             class="px-3 py-1.5 text-sm font-medium text-amber-800 bg-amber-200 hover:bg-amber-300 rounded-md transition-colors"
           >
-            View Updates
+            {{ $t('updateNotification.viewUpdates') }}
           </button>
           <!-- Dismiss button -->
           <button

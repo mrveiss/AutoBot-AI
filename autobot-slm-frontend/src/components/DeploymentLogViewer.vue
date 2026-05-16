@@ -239,7 +239,7 @@ onUnmounted(() => {
       <!-- Header -->
       <div class="flex items-center justify-between px-4 py-3 border-b border-gray-700">
         <div class="flex items-center gap-3">
-          <h3 id="deployment-log-title" class="text-lg font-semibold text-white">Deployment Log</h3>
+          <h3 id="deployment-log-title" class="text-lg font-semibold text-white">{{ $t('deploymentLogViewer.deploymentLog') }}</h3>
           <span class="text-sm text-gray-400">{{ deploymentId }}</span>
           <span
             :class="[
@@ -304,7 +304,7 @@ onUnmounted(() => {
           <span :class="getLogClass(log.log_type)">{{ log.message }}</span>
         </div>
         <div v-if="logs.length === 0" class="text-gray-500 italic">
-          Waiting for deployment logs...
+          {{ $t('deploymentLogViewer.waitingForDeploymentLogs') }}
         </div>
       </div>
 
@@ -344,7 +344,7 @@ onUnmounted(() => {
           @click="emit('close')"
           class="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors"
         >
-          Close
+          {{ $t('deploymentLogViewer.close') }}
         </button>
       </div>
     </div>

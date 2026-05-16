@@ -147,19 +147,19 @@ onMounted(async () => {
       <!-- Status Summary Cards -->
       <div class="grid grid-cols-4 gap-4 mb-6">
         <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
-          <p class="text-sm text-gray-500">Total Nodes</p>
+          <p class="text-sm text-gray-500">{{ $t('settings.infrastructureSettings.totalNodes') }}</p>
           <p class="text-3xl font-bold text-gray-900">{{ infrastructureStatus.total }}</p>
         </div>
         <div class="bg-white rounded-lg shadow-xs border border-green-200 p-4">
-          <p class="text-sm text-green-600">Online</p>
+          <p class="text-sm text-green-600">{{ $t('settings.infrastructureSettings.online') }}</p>
           <p class="text-3xl font-bold text-green-700">{{ infrastructureStatus.online }}</p>
         </div>
         <div class="bg-white rounded-lg shadow-xs border border-red-200 p-4">
-          <p class="text-sm text-red-600">Offline</p>
+          <p class="text-sm text-red-600">{{ $t('settings.infrastructureSettings.offline') }}</p>
           <p class="text-3xl font-bold text-red-700">{{ infrastructureStatus.offline }}</p>
         </div>
         <div class="bg-white rounded-lg shadow-xs border border-yellow-200 p-4">
-          <p class="text-sm text-yellow-600">Pending</p>
+          <p class="text-sm text-yellow-600">{{ $t('settings.infrastructureSettings.pending') }}</p>
           <p class="text-3xl font-bold text-yellow-700">{{ infrastructureStatus.pending }}</p>
         </div>
       </div>
@@ -168,8 +168,8 @@ onMounted(async () => {
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4 mb-6">
         <div class="flex items-center justify-between">
           <div>
-            <h3 class="font-semibold text-gray-900">Node Management</h3>
-            <p class="text-sm text-gray-500">Add, remove, and configure infrastructure nodes</p>
+            <h3 class="font-semibold text-gray-900">{{ $t('settings.infrastructureSettings.nodeManagement') }}</h3>
+            <p class="text-sm text-gray-500">{{ $t('settings.infrastructureSettings.addRemoveAndConfigure') }}</p>
           </div>
           <button
             @click="navigateToNodes"
@@ -178,16 +178,16 @@ onMounted(async () => {
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
             </svg>
-            Manage Nodes
+            {{ $t('settings.infrastructureSettings.manageNodes') }}
           </button>
         </div>
       </div>
 
       <!-- Service Endpoints -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-        <h2 class="text-lg font-semibold mb-4">Service Endpoints</h2>
+        <h2 class="text-lg font-semibold mb-4">{{ $t('settings.infrastructureSettings.serviceEndpoints') }}</h2>
         <p class="text-sm text-gray-500 mb-6">
-          Configured infrastructure endpoints from SSOT configuration
+          {{ $t('settings.infrastructureSettings.configuredInfrastructureEndpointsFrom') }}
         </p>
 
         <div class="grid gap-3">
@@ -225,11 +225,10 @@ onMounted(async () => {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <div>
-            <p class="text-sm font-medium text-blue-800">Configuration Source</p>
+            <p class="text-sm font-medium text-blue-800">{{ $t('settings.infrastructureSettings.configurationSource') }}</p>
             <p class="text-sm text-blue-600 mt-1">
-              These endpoints are configured in <code class="bg-blue-100 px-1 rounded-sm">src/config/ssot-config.ts</code>.
-              For detailed node management including enrollment, updates, and certificate management, use the
-              <button @click="navigateToNodes" class="underline hover:text-blue-800">Nodes settings</button>.
+              {{ $t('settings.infrastructureSettings.theseEndpointsAreConfigured') }} <code class="bg-blue-100 px-1 rounded-sm">{{ $t('settings.infrastructureSettings.srcConfigSsotConfig') }}</code>{{ $t('settings.infrastructureSettings.forDetailedNodeManagement') }}
+              <button @click="navigateToNodes" class="underline hover:text-blue-800">{{ $t('settings.infrastructureSettings.nodesSettings') }}</button>.
             </p>
           </div>
         </div>

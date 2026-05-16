@@ -63,8 +63,8 @@ onMounted(() => {
               </svg>
             </div>
             <div>
-              <h1 class="text-2xl font-bold text-gray-900">Tools</h1>
-              <p class="text-sm text-gray-500">Infrastructure and management tools</p>
+              <h1 class="text-2xl font-bold text-gray-900">{{ $t('tools.toolsLayout.tools') }}</h1>
+              <p class="text-sm text-gray-500">{{ $t('tools.toolsLayout.infrastructureAndManagementTools') }}</p>
             </div>
           </div>
         </div>

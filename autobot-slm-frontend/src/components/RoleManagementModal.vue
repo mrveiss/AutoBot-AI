@@ -150,23 +150,23 @@ function formatDate(dateStr: string | null): string {
   >
     <div class="modal-content">
       <div class="modal-header">
-        <h3 id="role-mgmt-title">Role Management</h3>
+        <h3 id="role-mgmt-title">{{ $t('roleManagementModal.roleManagement') }}</h3>
         <span class="hostname">{{ hostname }}</span>
         <button class="close-btn" @click="emit('close')" aria-label="Close role management">
-          <span aria-hidden="true">&times;</span>
+          <span aria-hidden="true">{{ $t('roleManagementModal.times') }}</span>
         </button>
       </div>
 
       <div v-if="isLoading" class="loading" role="status">
-        Loading role information...
+        {{ $t('roleManagementModal.loadingRoleInformation') }}
       </div>
 
       <div v-else class="modal-body">
         <!-- Detected Roles Section -->
         <section class="section" aria-label="Auto-detected roles">
-          <h4>Auto-Detected Roles</h4>
+          <h4>{{ $t('roleManagementModal.autoDetectedRoles') }}</h4>
           <div v-if="detectedRolesList.length === 0" class="empty-message">
-            No roles auto-detected on this node.
+            {{ $t('roleManagementModal.noRolesAutoDetected') }}
           </div>
           <div v-else class="role-list">
             <div
@@ -182,15 +182,15 @@ function formatDate(dateStr: string | null): string {
 
         <!-- All Role Statuses -->
         <section class="section" aria-label="Role status table">
-          <h4>Role Status</h4>
+          <h4>{{ $t('roleManagementModal.roleStatus') }}</h4>
           <table class="role-table" v-if="allNodeRoles.length > 0">
             <thead>
               <tr>
-                <th scope="col">Role</th>
-                <th scope="col">Status</th>
-                <th scope="col">Version</th>
-                <th scope="col">Last Synced</th>
-                <th scope="col">Actions</th>
+                <th scope="col">{{ $t('roleManagementModal.role') }}</th>
+                <th scope="col">{{ $t('roleManagementModal.status') }}</th>
+                <th scope="col">{{ $t('roleManagementModal.version') }}</th>
+                <th scope="col">{{ $t('roleManagementModal.lastSynced') }}</th>
+                <th scope="col">{{ $t('roleManagementModal.actions') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -215,7 +215,7 @@ function formatDate(dateStr: string | null): string {
                     @click="handleSyncRole(role.role_name)"
                     :aria-label="`Sync ${role.role_name}`"
                   >
-                    Sync
+                    {{ $t('roleManagementModal.sync') }}
                   </button>
                   <button
                     v-if="role.assignment_type === 'manual'"
@@ -224,24 +224,24 @@ function formatDate(dateStr: string | null): string {
                     @click="handleRemoveRole(role.role_name)"
                     :aria-label="`Remove ${role.role_name}`"
                   >
-                    Remove
+                    {{ $t('roleManagementModal.remove') }}
                   </button>
                 </td>
               </tr>
             </tbody>
           </table>
           <div v-else class="empty-message">
-            No roles assigned to this node.
+            {{ $t('roleManagementModal.noRolesAssignedTo') }}
           </div>
         </section>
 
         <!-- Assign Role Section -->
         <section class="section" aria-label="Assign role">
-          <h4>Assign Role Manually</h4>
+          <h4>{{ $t('roleManagementModal.assignRoleManually') }}</h4>
           <div class="assign-form">
-            <label for="role-select" class="sr-only">Select a role to assign</label>
+            <label for="role-select" class="sr-only">{{ $t('roleManagementModal.selectARoleTo') }}</label>
             <select id="role-select" v-model="selectedRole" class="role-select">
-              <option value="">Select a role...</option>
+              <option value="">{{ $t('roleManagementModal.selectARole') }}</option>
               <option
                 v-for="role in availableRoles"
                 :key="role.name"
@@ -255,14 +255,14 @@ function formatDate(dateStr: string | null): string {
               :disabled="!selectedRole || isSaving"
               @click="handleAssignRole"
             >
-              Assign
+              {{ $t('roleManagementModal.assign') }}
             </button>
           </div>
         </section>
 
         <!-- Listening Ports -->
         <section class="section" v-if="nodeRoles?.listening_ports?.length" aria-label="Listening ports">
-          <h4>Listening Ports</h4>
+          <h4>{{ $t('roleManagementModal.listeningPorts') }}</h4>
           <div class="port-list">
             <span
               v-for="port in nodeRoles.listening_ports"
@@ -280,10 +280,10 @@ function formatDate(dateStr: string | null): string {
           <div class="confirm-dialog" role="alertdialog" aria-labelledby="confirm-title">
             <h4 id="confirm-title">Remove {{ roleToRemove }}?</h4>
             <p v-if="isDataBearingRole" class="confirm-warning">
-              This role may contain data. You can back it up before removal.
+              {{ $t('roleManagementModal.thisRoleMayContain') }}
             </p>
             <p v-else class="confirm-text">
-              This will stop and remove the service from the node.
+              {{ $t('roleManagementModal.thisWillStopAnd') }}
             </p>
             <div class="confirm-actions">
               <button
@@ -291,7 +291,7 @@ function formatDate(dateStr: string | null): string {
                 class="btn btn-sm btn-primary"
                 @click="confirmRemove(true)"
               >
-                Backup &amp; Remove
+                {{ $t('roleManagementModal.backupAmpRemove') }}
               </button>
               <button
                 class="btn btn-sm btn-danger"
@@ -300,7 +300,7 @@ function formatDate(dateStr: string | null): string {
                 {{ isDataBearingRole ? 'Remove without backup' : 'Remove' }}
               </button>
               <button class="btn btn-sm btn-secondary" @click="cancelRemove">
-                Cancel
+                {{ $t('roleManagementModal.cancel') }}
               </button>
             </div>
           </div>
@@ -313,7 +313,7 @@ function formatDate(dateStr: string | null): string {
       </div>
 
       <div class="modal-footer">
-        <button class="btn btn-secondary" @click="emit('close')">Close</button>
+        <button class="btn btn-secondary" @click="emit('close')">{{ $t('roleManagementModal.close') }}</button>
       </div>
     </div>
   </div>

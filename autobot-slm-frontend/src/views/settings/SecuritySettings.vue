@@ -265,7 +265,7 @@ onMounted(async () => {
 
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <h2 class="text-xl font-semibold text-gray-900 mb-4">
-        Two-Factor Authentication
+        {{ $t('settings.securitySettings.twoFactorAuthentication') }}
       </h2>
 
       <div v-if="mfaStatus?.enabled" class="space-y-4">
@@ -286,7 +286,7 @@ onMounted(async () => {
             />
           </svg>
           <div class="flex-1">
-            <h3 class="font-semibold text-green-900">MFA is enabled</h3>
+            <h3 class="font-semibold text-green-900">{{ $t('settings.securitySettings.mFAIsEnabled') }}</h3>
             <p class="text-sm text-green-700 mt-1">
               Your account is protected with {{ mfaStatus.method }} authentication
             </p>
@@ -304,13 +304,13 @@ onMounted(async () => {
             @click="showDisableModal = true"
             class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
           >
-            Disable MFA
+            {{ $t('settings.securitySettings.disableMFA') }}
           </button>
           <button
             @click="showRegenerateModal = true"
             class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
           >
-            Regenerate Backup Codes
+            {{ $t('settings.securitySettings.regenerateBackupCodes') }}
           </button>
         </div>
       </div>
@@ -333,10 +333,9 @@ onMounted(async () => {
             />
           </svg>
           <div>
-            <h3 class="font-semibold text-yellow-900">MFA is not enabled</h3>
+            <h3 class="font-semibold text-yellow-900">{{ $t('settings.securitySettings.mFAIsNotEnabled') }}</h3>
             <p class="text-sm text-yellow-700 mt-1">
-              Enable two-factor authentication to add an extra layer of security
-              to your account
+              {{ $t('settings.securitySettings.enableTwoFactorAuthentication') }}
             </p>
           </div>
         </div>
@@ -346,19 +345,19 @@ onMounted(async () => {
           :disabled="loading"
           class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
         >
-          Enable 2FA
+          {{ $t('settings.securitySettings.enable2FA') }}
         </button>
       </div>
     </div>
 
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-xl font-semibold text-gray-900">API Keys</h2>
+        <h2 class="text-xl font-semibold text-gray-900">{{ $t('settings.securitySettings.aPIKeys') }}</h2>
         <button
           @click="openCreateKeyModal"
           class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
         >
-          Create API Key
+          {{ $t('settings.securitySettings.createAPIKey') }}
         </button>
       </div>
 
@@ -376,7 +375,7 @@ onMounted(async () => {
             d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
           />
         </svg>
-        <p>No API keys created yet</p>
+        <p>{{ $t('settings.securitySettings.noAPIKeysCreated') }}</p>
       </div>
 
       <div v-else class="overflow-x-auto">
@@ -386,32 +385,32 @@ onMounted(async () => {
               <th
                 class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
-                Name
+                {{ $t('settings.securitySettings.name') }}
               </th>
               <th
                 class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
-                Key Prefix
+                {{ $t('settings.securitySettings.keyPrefix') }}
               </th>
               <th
                 class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
-                Scopes
+                {{ $t('settings.securitySettings.scopes') }}
               </th>
               <th
                 class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
-                Usage
+                {{ $t('settings.securitySettings.usage') }}
               </th>
               <th
                 class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
-                Expires
+                {{ $t('settings.securitySettings.expires') }}
               </th>
               <th
                 class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
-                Actions
+                {{ $t('settings.securitySettings.actions') }}
               </th>
             </tr>
           </thead>
@@ -458,7 +457,7 @@ onMounted(async () => {
                   @click="revokeAPIKey(key.id)"
                   class="text-red-600 hover:text-red-800"
                 >
-                  Revoke
+                  {{ $t('settings.securitySettings.revoke') }}
                 </button>
               </td>
             </tr>
@@ -473,13 +472,13 @@ onMounted(async () => {
     >
       <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
         <h3 class="text-lg font-semibold text-gray-900 mb-4">
-          Enable Two-Factor Authentication
+          {{ $t('settings.securitySettings.enableTwoFactorAuthentication1') }}
         </h3>
 
         <div class="space-y-4">
           <div class="text-sm text-gray-600">
             <p class="mb-2">
-              Scan the QR code with your authenticator app or enter the secret manually:
+              {{ $t('settings.securitySettings.scanTheQRCode') }}
             </p>
             <div class="bg-gray-50 p-4 rounded-sm border border-gray-200">
               <p class="font-mono text-xs break-all mb-2">
@@ -489,11 +488,11 @@ onMounted(async () => {
                 @click="copyToClipboard(setupData?.secret || '')"
                 class="text-xs text-primary-600 hover:text-primary-700"
               >
-                Copy Secret
+                {{ $t('settings.securitySettings.copySecret') }}
               </button>
             </div>
             <p class="mt-3 text-xs">
-              Manual Entry URI (for apps that support it):
+              {{ $t('settings.securitySettings.manualEntryURIFor') }}
             </p>
             <div class="bg-gray-50 p-2 rounded-sm border border-gray-200 mt-1">
               <p class="font-mono text-xs break-all">
@@ -504,7 +503,7 @@ onMounted(async () => {
 
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
-              Enter verification code
+              {{ $t('settings.securitySettings.enterVerificationCode') }}
             </label>
             <input
               v-model="mfaSetupCode"
@@ -522,14 +521,14 @@ onMounted(async () => {
               :disabled="loading || mfaSetupCode.length < 6"
               class="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
             >
-              Verify and Enable
+              {{ $t('settings.securitySettings.verifyAndEnable') }}
             </button>
             <button
               @click="cancelMFASetup"
               :disabled="loading"
               class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
             >
-              Cancel
+              {{ $t('settings.securitySettings.cancel') }}
             </button>
           </div>
         </div>
@@ -542,15 +541,14 @@ onMounted(async () => {
     >
       <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
         <h3 class="text-lg font-semibold text-gray-900 mb-4">
-          Backup Codes
+          {{ $t('settings.securitySettings.backupCodes') }}
         </h3>
 
         <div class="space-y-4">
           <div
             class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800"
           >
-            Save these backup codes in a secure location. Each code can only be
-            used once.
+            {{ $t('settings.securitySettings.saveTheseBackupCodes') }}
           </div>
 
           <div class="bg-gray-50 p-4 rounded-sm border border-gray-200">
@@ -568,13 +566,13 @@ onMounted(async () => {
               @click="copyToClipboard(backupCodes.join('\n'))"
               class="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
             >
-              Copy All
+              {{ $t('settings.securitySettings.copyAll') }}
             </button>
             <button
               @click="showBackupCodes = false"
               class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
             >
-              Done
+              {{ $t('settings.securitySettings.done') }}
             </button>
           </div>
         </div>
@@ -586,16 +584,16 @@ onMounted(async () => {
       class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
     >
       <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">Disable MFA</h3>
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.securitySettings.disableMFA') }}</h3>
 
         <div class="space-y-4">
           <p class="text-sm text-gray-600">
-            Enter your password to confirm disabling two-factor authentication.
+            {{ $t('settings.securitySettings.enterYourPasswordTo') }}
           </p>
 
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
-              Password
+              {{ $t('settings.securitySettings.password') }}
             </label>
             <input
               v-model="disablePassword"
@@ -611,7 +609,7 @@ onMounted(async () => {
               :disabled="loading || !disablePassword"
               class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
             >
-              Disable MFA
+              {{ $t('settings.securitySettings.disableMFA') }}
             </button>
             <button
               @click="
@@ -620,7 +618,7 @@ onMounted(async () => {
               :disabled="loading"
               class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
             >
-              Cancel
+              {{ $t('settings.securitySettings.cancel') }}
             </button>
           </div>
         </div>
@@ -633,19 +631,19 @@ onMounted(async () => {
     >
       <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
         <h3 class="text-lg font-semibold text-gray-900 mb-4">
-          Regenerate Backup Codes
+          {{ $t('settings.securitySettings.regenerateBackupCodes') }}
         </h3>
 
         <div class="space-y-4">
           <div
             class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800"
           >
-            This will invalidate your existing backup codes and generate new ones.
+            {{ $t('settings.securitySettings.thisWillInvalidateYour') }}
           </div>
 
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
-              Password
+              {{ $t('settings.securitySettings.password') }}
             </label>
             <input
               v-model="regeneratePassword"
@@ -661,7 +659,7 @@ onMounted(async () => {
               :disabled="loading || !regeneratePassword"
               class="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
             >
-              Regenerate
+              {{ $t('settings.securitySettings.regenerate') }}
             </button>
             <button
               @click="
@@ -671,7 +669,7 @@ onMounted(async () => {
               :disabled="loading"
               class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
             >
-              Cancel
+              {{ $t('settings.securitySettings.cancel') }}
             </button>
           </div>
         </div>
@@ -684,13 +682,13 @@ onMounted(async () => {
     >
       <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
         <h3 class="text-lg font-semibold text-gray-900 mb-4">
-          Create API Key
+          {{ $t('settings.securitySettings.createAPIKey') }}
         </h3>
 
         <div class="space-y-4">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
-              Name
+              {{ $t('settings.securitySettings.name') }}
             </label>
             <input
               v-model="newKeyForm.name"
@@ -702,7 +700,7 @@ onMounted(async () => {
 
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
-              Description (optional)
+              {{ $t('settings.securitySettings.descriptionOptional') }}
             </label>
             <input
               v-model="newKeyForm.description"
@@ -714,7 +712,7 @@ onMounted(async () => {
 
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">
-              Scopes
+              {{ $t('settings.securitySettings.scopes') }}
             </label>
             <div class="space-y-2 max-h-48 overflow-y-auto">
               <label
@@ -738,17 +736,17 @@ onMounted(async () => {
 
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
-              Expiration
+              {{ $t('settings.securitySettings.expiration') }}
             </label>
             <select
               v-model="newKeyForm.expires_days"
               class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
             >
-              <option :value="undefined">Never</option>
-              <option :value="30">30 days</option>
-              <option :value="60">60 days</option>
-              <option :value="90">90 days</option>
-              <option :value="365">1 year</option>
+              <option :value="undefined">{{ $t('settings.securitySettings.never') }}</option>
+              <option :value="30">{{ $t('settings.securitySettings.30Days') }}</option>
+              <option :value="60">{{ $t('settings.securitySettings.60Days') }}</option>
+              <option :value="90">{{ $t('settings.securitySettings.90Days') }}</option>
+              <option :value="365">{{ $t('settings.securitySettings.1Year') }}</option>
             </select>
           </div>
 
@@ -758,14 +756,14 @@ onMounted(async () => {
               :disabled="loading || !newKeyForm.name || newKeyForm.scopes.length === 0"
               class="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
             >
-              Create Key
+              {{ $t('settings.securitySettings.createKey') }}
             </button>
             <button
               @click="showCreateKeyModal = false"
               :disabled="loading"
               class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
             >
-              Cancel
+              {{ $t('settings.securitySettings.cancel') }}
             </button>
           </div>
         </div>
@@ -778,14 +776,14 @@ onMounted(async () => {
     >
       <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
         <h3 class="text-lg font-semibold text-gray-900 mb-4">
-          API Key Created
+          {{ $t('settings.securitySettings.aPIKeyCreated') }}
         </h3>
 
         <div class="space-y-4">
           <div
             class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800"
           >
-            This key will not be shown again. Save it in a secure location.
+            {{ $t('settings.securitySettings.thisKeyWillNot') }}
           </div>
 
           <div class="bg-gray-50 p-4 rounded-sm border border-gray-200">
@@ -797,13 +795,13 @@ onMounted(async () => {
               @click="copyToClipboard(createdKey?.key || '')"
               class="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
             >
-              Copy Key
+              {{ $t('settings.securitySettings.copyKey') }}
             </button>
             <button
               @click="showKeyCreatedModal = false"
               class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
             >
-              Done
+              {{ $t('settings.securitySettings.done') }}
             </button>
           </div>
         </div>

@@ -133,7 +133,7 @@ function formatDate(dateStr: string): string {
             d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
           />
         </svg>
-        Refresh
+        {{ $t('performance.performanceOverview.refresh') }}
       </button>
     </div>
 
@@ -141,7 +141,7 @@ function formatDate(dateStr: string): string {
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
       <!-- Avg Latency -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
-        <p class="text-sm text-gray-500 mb-1">Avg Latency</p>
+        <p class="text-sm text-gray-500 mb-1">{{ $t('performance.performanceOverview.avgLatency') }}</p>
         <p :class="['text-3xl font-bold', latencyColor(avgLatency)]">
           {{ formatDuration(avgLatency) }}
         </p>
@@ -150,7 +150,7 @@ function formatDate(dateStr: string): string {
 
       <!-- P95 Latency -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
-        <p class="text-sm text-gray-500 mb-1">P95 Latency</p>
+        <p class="text-sm text-gray-500 mb-1">{{ $t('performance.performanceOverview.p95Latency') }}</p>
         <p :class="['text-3xl font-bold', latencyColor(p95Latency)]">
           {{ formatDuration(p95Latency) }}
         </p>
@@ -161,27 +161,27 @@ function formatDate(dateStr: string): string {
 
       <!-- Throughput -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
-        <p class="text-sm text-gray-500 mb-1">Throughput</p>
+        <p class="text-sm text-gray-500 mb-1">{{ $t('performance.performanceOverview.throughput') }}</p>
         <p class="text-3xl font-bold text-gray-900">
           {{ throughput.toLocaleString() }}
         </p>
-        <p class="text-xs text-gray-400 mt-1">requests / min</p>
+        <p class="text-xs text-gray-400 mt-1">{{ $t('performance.performanceOverview.requestsMin') }}</p>
       </div>
 
       <!-- Error Rate -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
-        <p class="text-sm text-gray-500 mb-1">Error Rate</p>
+        <p class="text-sm text-gray-500 mb-1">{{ $t('performance.performanceOverview.errorRate') }}</p>
         <p :class="['text-3xl font-bold', errorRateColor(errorRate)]">
           {{ errorRate.toFixed(2) }}%
         </p>
-        <p class="text-xs text-gray-400 mt-1">of total requests</p>
+        <p class="text-xs text-gray-400 mt-1">{{ $t('performance.performanceOverview.ofTotalRequests') }}</p>
       </div>
     </div>
 
     <!-- SLO Compliance -->
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4 mb-6">
       <div class="flex items-center justify-between mb-2">
-        <h2 class="text-sm font-medium text-gray-700">SLO Compliance</h2>
+        <h2 class="text-sm font-medium text-gray-700">{{ $t('performance.performanceOverview.sLOCompliance') }}</h2>
         <span class="text-sm font-semibold text-gray-900">
           {{ sloCompliance.toFixed(1) }}%
         </span>
@@ -200,21 +200,21 @@ function formatDate(dateStr: string): string {
     <!-- Top 10 Slowest Traces -->
     <div class="bg-white rounded-lg shadow-xs border border-gray-200">
       <div class="px-4 py-3 border-b border-gray-200">
-        <h2 class="text-sm font-medium text-gray-700">Top 10 Slowest Traces</h2>
+        <h2 class="text-sm font-medium text-gray-700">{{ $t('performance.performanceOverview.top10SlowestTraces') }}</h2>
       </div>
       <div v-if="topSlowTraces.length === 0 && !loading" class="p-8 text-center text-gray-400">
-        No trace data available
+        {{ $t('performance.performanceOverview.noTraceDataAvailable') }}
       </div>
       <div v-else class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200">
           <thead class="bg-gray-50">
             <tr>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Duration</th>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Spans</th>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Node</th>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('performance.performanceOverview.name') }}</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('performance.performanceOverview.duration') }}</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('performance.performanceOverview.spans') }}</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('performance.performanceOverview.status') }}</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('performance.performanceOverview.node') }}</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('performance.performanceOverview.time') }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-200">

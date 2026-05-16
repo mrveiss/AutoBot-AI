@@ -83,9 +83,9 @@ async function assignRole(): Promise<void> {
       <div class="relative bg-white rounded-lg shadow-xl max-w-md w-full">
         <!-- Header -->
         <div class="px-6 py-4 border-b border-gray-200">
-          <h2 class="text-lg font-semibold text-gray-900">Assign NPU Worker Role</h2>
+          <h2 class="text-lg font-semibold text-gray-900">{{ $t('fleet.assignNPURoleModal.assignNPUWorkerRole') }}</h2>
           <p class="text-sm text-gray-500 mt-1">
-            Select a node to enable NPU acceleration capabilities
+            {{ $t('fleet.assignNPURoleModal.selectANodeTo') }}
           </p>
         </div>
 
@@ -99,13 +99,13 @@ async function assignRole(): Promise<void> {
           <!-- Node Selection -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">
-              Select Node
+              {{ $t('fleet.assignNPURoleModal.selectNode') }}
             </label>
             <select
               v-model="selectedNodeId"
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             >
-              <option value="">-- Select a node --</option>
+              <option value="">{{ $t('fleet.assignNPURoleModal.selectANode') }}</option>
               <option
                 v-for="node in eligibleNodes"
                 :key="node.node_id"
@@ -118,22 +118,22 @@ async function assignRole(): Promise<void> {
 
           <!-- Selected Node Info -->
           <div v-if="selectedNode" class="bg-gray-50 rounded-lg p-4">
-            <h4 class="text-sm font-medium text-gray-700 mb-2">Node Details</h4>
+            <h4 class="text-sm font-medium text-gray-700 mb-2">{{ $t('fleet.assignNPURoleModal.nodeDetails') }}</h4>
             <dl class="space-y-1 text-sm">
               <div class="flex justify-between">
-                <dt class="text-gray-500">Hostname</dt>
+                <dt class="text-gray-500">{{ $t('fleet.assignNPURoleModal.hostname') }}</dt>
                 <dd class="text-gray-900">{{ selectedNode.hostname }}</dd>
               </div>
               <div class="flex justify-between">
-                <dt class="text-gray-500">IP Address</dt>
+                <dt class="text-gray-500">{{ $t('fleet.assignNPURoleModal.iPAddress') }}</dt>
                 <dd class="text-gray-900">{{ selectedNode.ip_address }}</dd>
               </div>
               <div class="flex justify-between">
-                <dt class="text-gray-500">Status</dt>
+                <dt class="text-gray-500">{{ $t('fleet.assignNPURoleModal.status') }}</dt>
                 <dd class="text-gray-900">{{ selectedNode.status }}</dd>
               </div>
               <div class="flex justify-between">
-                <dt class="text-gray-500">Current Roles</dt>
+                <dt class="text-gray-500">{{ $t('fleet.assignNPURoleModal.currentRoles') }}</dt>
                 <dd class="text-gray-900">
                   {{ selectedNode.roles.length > 0 ? selectedNode.roles.join(', ') : 'None' }}
                 </dd>
@@ -147,10 +147,9 @@ async function assignRole(): Promise<void> {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <div class="text-sm text-blue-700">
-              <p class="font-medium">Auto-Detection</p>
+              <p class="font-medium">{{ $t('fleet.assignNPURoleModal.autoDetection') }}</p>
               <p class="mt-1">
-                After assigning the role, the system will automatically detect NPU capabilities
-                including device type, available models, and memory capacity.
+                {{ $t('fleet.assignNPURoleModal.afterAssigningTheRole') }}
               </p>
             </div>
           </div>
@@ -161,10 +160,9 @@ async function assignRole(): Promise<void> {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
             <div class="text-sm text-yellow-700">
-              <p class="font-medium">No Eligible Nodes</p>
+              <p class="font-medium">{{ $t('fleet.assignNPURoleModal.noEligibleNodes') }}</p>
               <p class="mt-1">
-                All available nodes either already have the NPU Worker role or are offline.
-                Ensure nodes are online before assigning roles.
+                {{ $t('fleet.assignNPURoleModal.allAvailableNodesEither') }}
               </p>
             </div>
           </div>
@@ -176,7 +174,7 @@ async function assignRole(): Promise<void> {
             @click="close"
             class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
           >
-            Cancel
+            {{ $t('fleet.assignNPURoleModal.cancel') }}
           </button>
           <button
             @click="assignRole"

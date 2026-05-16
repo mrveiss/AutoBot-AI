@@ -71,8 +71,8 @@ onMounted(() => {
     <div class="bg-white border-b border-gray-200 px-6 py-4">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-4">
-          <h1 class="text-2xl font-bold text-gray-900">Settings</h1>
-          <p class="text-sm text-gray-500">Configure system settings and infrastructure</p>
+          <h1 class="text-2xl font-bold text-gray-900">{{ $t('settingsView.settings') }}</h1>
+          <p class="text-sm text-gray-500">{{ $t('settingsView.configureSystemSettingsAnd') }}</p>
         </div>
       </div>
 

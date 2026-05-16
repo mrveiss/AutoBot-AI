@@ -232,7 +232,7 @@ onMounted(() => {
     <div class="flex flex-wrap items-center gap-3 mb-4">
       <!-- Time Range -->
       <div class="flex items-center gap-1">
-        <span class="text-sm text-gray-500">Time:</span>
+        <span class="text-sm text-gray-500">{{ $t('performance.tracingView.time') }}</span>
         <div class="flex rounded-lg border border-gray-300 overflow-hidden">
           <button
             v-for="opt in timeRangeOptions"
@@ -252,7 +252,7 @@ onMounted(() => {
 
       <!-- Status Filter -->
       <div class="flex items-center gap-1">
-        <span class="text-sm text-gray-500">Status:</span>
+        <span class="text-sm text-gray-500">{{ $t('performance.tracingView.status') }}</span>
         <select
           v-model="statusFilter"
           class="text-sm border border-gray-300 rounded-lg px-2 py-1.5 bg-white"
@@ -265,7 +265,7 @@ onMounted(() => {
 
       <!-- Node Filter -->
       <div class="flex items-center gap-1">
-        <span class="text-sm text-gray-500">Node:</span>
+        <span class="text-sm text-gray-500">{{ $t('performance.tracingView.node') }}</span>
         <input
           v-model="nodeFilter"
           type="text"
@@ -279,7 +279,7 @@ onMounted(() => {
         @click="onFilterChange"
         class="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
       >
-        Apply
+        {{ $t('performance.tracingView.apply') }}
       </button>
 
       <div class="flex-1"></div>
@@ -292,7 +292,7 @@ onMounted(() => {
     <!-- Traces Table -->
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 mb-4">
       <div v-if="traces.length === 0 && !loading" class="p-8 text-center text-gray-400">
-        No traces found for the current filters
+        {{ $t('performance.tracingView.noTracesFoundFor') }}
       </div>
       <div v-else class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200">
@@ -300,22 +300,22 @@ onMounted(() => {
             <tr>
               <th class="w-8 px-2 py-2"></th>
               <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                Name
+                {{ $t('performance.tracingView.name') }}
               </th>
               <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                Duration
+                {{ $t('performance.tracingView.duration') }}
               </th>
               <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                Spans
+                {{ $t('performance.tracingView.spans') }}
               </th>
               <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                Status
+                {{ $t('performance.tracingView.status1') }}
               </th>
               <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                Node
+                {{ $t('performance.tracingView.node1') }}
               </th>
               <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                Time
+                {{ $t('performance.tracingView.time1') }}
               </th>
             </tr>
           </thead>
@@ -373,7 +373,7 @@ onMounted(() => {
               <tr v-if="expandedTraceId === trace.trace_id">
                 <td colspan="7" class="px-4 py-4 bg-gray-50">
                   <div v-if="detailLoading" class="text-center text-gray-400 py-4">
-                    Loading span details...
+                    {{ $t('performance.tracingView.loadingSpanDetails') }}
                   </div>
                   <div v-else-if="expandedDetail" class="space-y-1">
                     <div class="text-xs font-medium text-gray-500 mb-2">
@@ -411,7 +411,7 @@ onMounted(() => {
                     </div>
                   </div>
                   <div v-else class="text-center text-gray-400 py-4">
-                    Failed to load span details
+                    {{ $t('performance.tracingView.failedToLoadSpan') }}
                   </div>
                 </td>
               </tr>
