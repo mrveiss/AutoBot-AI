@@ -32,24 +32,25 @@ from constants.threshold_constants import TimingConstants
 # Add scripts path for log forwarder import
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-try:
-    # log_forwarder lives in autobot-infrastructure/shared/scripts/logging/ —
-    # only available when the infrastructure repo is on PYTHONPATH (#6666).
-    from scripts.logging.log_forwarder import (
-        DestinationConfig,
-        DestinationScope,
-        DestinationType,
-        LogForwarder,
-        SyslogProtocol,
-    )
-except ImportError as _log_forwarder_import_error:
-    from autobot_shared.missing_dep import MissingDep as _MissingDep
+# log_forwarder lives in autobot-infrastructure/shared/scripts/logging/ —
+# only available when the infrastructure repo is on PYTHONPATH (#6666).
+from autobot_shared.missing_dep import optional_import
 
-    DestinationConfig = _MissingDep("DestinationConfig", _log_forwarder_import_error)  # type: ignore[assignment, misc]
-    DestinationScope = _MissingDep("DestinationScope", _log_forwarder_import_error)  # type: ignore[assignment, misc]
-    DestinationType = _MissingDep("DestinationType", _log_forwarder_import_error)  # type: ignore[assignment, misc]
-    LogForwarder = _MissingDep("LogForwarder", _log_forwarder_import_error)  # type: ignore[assignment, misc]
-    SyslogProtocol = _MissingDep("SyslogProtocol", _log_forwarder_import_error)  # type: ignore[assignment, misc]
+_log_forwarder_imports = optional_import(
+    "scripts.logging.log_forwarder",
+    [
+        "DestinationConfig",
+        "DestinationScope",
+        "DestinationType",
+        "LogForwarder",
+        "SyslogProtocol",
+    ],
+)
+DestinationConfig = _log_forwarder_imports["DestinationConfig"]  # type: ignore[assignment, misc]
+DestinationScope = _log_forwarder_imports["DestinationScope"]  # type: ignore[assignment, misc]
+DestinationType = _log_forwarder_imports["DestinationType"]  # type: ignore[assignment, misc]
+LogForwarder = _log_forwarder_imports["LogForwarder"]  # type: ignore[assignment, misc]
+SyslogProtocol = _log_forwarder_imports["SyslogProtocol"]  # type: ignore[assignment, misc]
 from api.schemas_system import (
     LogForwardingDestinationItem,
     LogFwdAutoStartResponse,
