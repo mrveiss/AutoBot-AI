@@ -9,12 +9,10 @@ Provides endpoints for configuring and monitoring AI agents used throughout the 
 Each agent can have its own LLM model configuration and status monitoring.
 """
 
-from autobot_shared.ssot_config import config
 import logging
 import os
 from datetime import datetime, timezone
 from typing import Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -32,6 +30,8 @@ from api.schemas_common import DataResponse
 from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import parse_utc_iso
 from services.config_revision_service import ConfigRevisionService
 from services.config_service import ConfigService

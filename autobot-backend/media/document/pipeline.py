@@ -12,8 +12,8 @@ import base64
 import io
 import logging
 from typing import Any, Dict, List
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from media.core.pipeline import BasePipeline
 from media.core.types import MediaInput, MediaType, ProcessingResult
 

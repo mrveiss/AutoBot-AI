@@ -20,11 +20,12 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
+from autobot_shared.logging_manager import get_logger
+
 from .config import AutoResearchConfig
 from .models import Experiment, ExperimentResult, ExperimentState, ExperimentTask, ScorerResult
 from .parser import ExperimentOutputParser
 from .store import ExperimentStore
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

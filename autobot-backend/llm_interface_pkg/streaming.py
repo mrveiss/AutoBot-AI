@@ -9,6 +9,7 @@ Extracted from llm_interface.py as part of Issue #381 god class refactoring.
 
 import time
 from typing import Dict
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

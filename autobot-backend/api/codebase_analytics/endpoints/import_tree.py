@@ -15,10 +15,10 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from utils.background_task_manager import BackgroundTaskManager
 
 from .shared import INTERNAL_MODULE_PREFIXES, STDLIB_MODULES, get_project_root
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

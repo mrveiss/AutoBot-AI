@@ -22,9 +22,9 @@ import logging
 import time
 from dataclasses import asdict
 from typing import Any, Dict, List
-from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 
 # Re-export benchmarking functions for backward compatibility (used by external code)
 # Re-export all public API from the package for backward compatibility

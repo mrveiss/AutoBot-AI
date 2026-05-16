@@ -9,7 +9,6 @@ Contains the main screen analysis and multimodal processing logic.
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import base64
@@ -20,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+from autobot_shared.logging_manager import get_logger
 from desktop_streaming_manager import get_desktop_streaming
 from memory import TaskPriority
 from multimodal_processor import (

@@ -15,8 +15,8 @@ from typing import Any, Callable, Dict, FrozenSet, Optional, Set
 
 from fastapi import WebSocket, WebSocketDisconnect
 
-from constants.threshold_constants import TimingConstants
 from autobot_shared.logging_manager import get_logger
+from constants.threshold_constants import TimingConstants
 
 logger = get_logger(__name__)
 

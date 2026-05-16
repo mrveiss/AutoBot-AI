@@ -32,10 +32,10 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.threshold_constants import StringParsingConstants
 from type_defs.common import Metadata
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

@@ -19,10 +19,10 @@ from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
 from ..api_endpoint_scanner import APIEndpointChecker
 from ..models import APIEndpointAnalysis
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

@@ -6,6 +6,7 @@ import os
 import sys
 from pathlib import Path
 from typing import List, Optional
+
 from autobot_shared.logging_manager import get_logger
 
 # Add the project root to Python path for absolute imports

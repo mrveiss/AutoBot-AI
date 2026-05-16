@@ -13,9 +13,9 @@ core sliding-window logic (Issue #4460).
 
 import uuid
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

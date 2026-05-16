@@ -20,10 +20,10 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, FrozenSet, List, Optional
 from urllib.parse import urlparse
-from autobot_shared.logging_manager import get_logger
 
 from pydantic import BaseModel
 
+from autobot_shared.logging_manager import get_logger
 from circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from constants.security_constants import SecurityConstants
 from constants.threshold_constants import CircuitBreakerDefaults, TimingConstants

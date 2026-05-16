@@ -14,8 +14,6 @@ Stores key metadata in Redis MAIN database:
 
 from __future__ import annotations
 
-from autobot_shared.ssot_config import config
-
 import hashlib
 import os
 import secrets
@@ -24,9 +22,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 

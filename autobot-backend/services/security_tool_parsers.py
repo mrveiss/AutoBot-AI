@@ -16,9 +16,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.time_utils import now_utc
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

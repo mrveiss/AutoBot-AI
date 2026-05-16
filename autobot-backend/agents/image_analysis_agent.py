@@ -13,6 +13,7 @@ image data for analysis.
 
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
@@ -24,7 +25,6 @@ from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

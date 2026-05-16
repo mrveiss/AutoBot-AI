@@ -11,9 +11,10 @@ Issue #2032: Multi-GPU VRAM detection — sums free VRAM across all GPUs.
 
 import logging
 from typing import List, Tuple
-from autobot_shared.logging_manager import get_logger
 
 import psutil
+
+from autobot_shared.logging_manager import get_logger
 
 from .types import SystemResources
 

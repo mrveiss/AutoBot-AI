@@ -33,10 +33,10 @@ from autobot_shared.error_boundaries import (
     get_error_statistics,
     with_error_handling,
 )
+from autobot_shared.logging_manager import get_logger
 from config.manager import get_config_manager
 from type_defs.common import Metadata
 from utils.error_metrics import get_metrics_collector
-from autobot_shared.logging_manager import get_logger
 
 config = get_config_manager()
 

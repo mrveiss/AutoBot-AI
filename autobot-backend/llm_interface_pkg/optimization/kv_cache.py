@@ -20,6 +20,7 @@ Issue #1964: Layer-aligned KV cache management for sequential layer processing.
 import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, Optional, Tuple
+
 from autobot_shared.logging_manager import get_logger
 
 if TYPE_CHECKING:

@@ -11,9 +11,9 @@ from api.schemas_system import (
 )
 from api.system_health import register_redis_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from services.config_service import ConfigService
 from utils.connection_utils import ConnectionTester
-from autobot_shared.logging_manager import get_logger
 
 router = APIRouter()
 

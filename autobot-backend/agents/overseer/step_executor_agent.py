@@ -23,8 +23,8 @@ import logging
 import time
 from datetime import datetime, timezone
 from typing import AsyncGenerator, Optional, Tuple, Union
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from security.command_patterns import check_dangerous_patterns, is_safe_command
 from utils.command_utils import execute_shell_command_streaming
 

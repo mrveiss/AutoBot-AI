@@ -15,7 +15,6 @@ Issue #4564: BaseSynthesizer ABC extracted for shared interface reuse.
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import json
 import logging
@@ -25,6 +24,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from services.knowledge.synthesis_provenance import SynthesisProvenanceLog
 
 from .config import AutoResearchConfig

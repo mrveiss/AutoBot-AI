@@ -12,11 +12,11 @@ import asyncio
 import json
 import logging
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
 from constants.threshold_constants import QueryDefaults
 from constants.ttl_constants import TIMEOUT_TASK_ANALYSIS, TTL_24_HOURS

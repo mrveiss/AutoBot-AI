@@ -32,7 +32,6 @@ Usage:
 Part of EPIC #217 - Advanced Code Intelligence Methods
 """
 
-from autobot_shared.ssot_config import config
 import ast
 import os
 import threading
@@ -42,8 +41,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional, Tuple, Union
 
-from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 

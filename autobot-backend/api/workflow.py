@@ -12,7 +12,6 @@ import time
 import uuid
 from datetime import datetime, timezone
 from typing import Awaitable, Callable, Dict, Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 
@@ -30,6 +29,7 @@ from api.schemas_workflows import (
 from api.workflow_state import get_workflow_state_machine
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from constants.error_constants import ERR_WORKFLOW_NOT_FOUND
 from event_manager import get_event_manager as _get_event_manager
 from metrics.system_monitor import system_monitor

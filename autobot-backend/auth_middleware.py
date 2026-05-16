@@ -13,7 +13,6 @@ import os
 import secrets
 from datetime import timezone
 from typing import Dict, Optional, Tuple
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import HTTPException, Request, status
 
@@ -23,6 +22,7 @@ from autobot_shared.auth.jwt_core import (
     hash_password,
     verify_password,
 )
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.time_utils import parse_utc_iso

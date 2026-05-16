@@ -13,6 +13,7 @@ Issue #1967 — Web Pipeline Engine Phase 1.
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

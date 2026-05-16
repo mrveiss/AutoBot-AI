@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from agents.web_researcher import WebResearcher as WebResearchAssistant
+from autobot_shared.logging_manager import get_logger
 from event_manager import get_event_manager
 from knowledge_base import KnowledgeBase
 
@@ -21,7 +22,6 @@ from .formatters import ToolInfoFormatter
 from .parsers import InstructionParser
 from .processors import ResearchResultsProcessor, ResultProcessor, ToolInfoData
 from .text_extraction import TextExtractor
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

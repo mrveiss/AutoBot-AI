@@ -25,8 +25,8 @@ import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from circuit_breaker import circuit_breaker_async
 from constants.status_enums import TaskStatus
 from constants.threshold_constants import (

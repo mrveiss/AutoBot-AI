@@ -33,8 +33,8 @@ from api.schemas_knowledge import (
     SuggestTagsRequest,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from knowledge import get_knowledge_base
 from autobot_shared.logging_manager import get_logger
+from knowledge import get_knowledge_base
 
 logger = get_logger(__name__)
 

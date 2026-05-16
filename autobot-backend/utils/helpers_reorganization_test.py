@@ -13,12 +13,13 @@ Tests the extracted helper functions from the deep nesting reduction refactoring
 Issue: #402 - [Code Quality] Reduce Deep Nesting - 524 functions exceed 4 levels
 """
 
-from autobot_shared.ssot_config import config
 import json
 from typing import Any, Dict
 from unittest.mock import AsyncMock, patch
 
 import pytest
+
+from autobot_shared.ssot_config import config
 
 
 class TestReorganizeRedisHelpers:

@@ -25,7 +25,6 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from time import time
 from typing import Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 from cryptography.fernet import Fernet
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -44,6 +43,7 @@ from api.schemas_system import (
 from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 from middleware.proxy_utils import get_client_ip
 from services.audit.audit_log import AuditAction, audit_record

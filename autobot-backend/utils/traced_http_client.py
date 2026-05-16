@@ -30,9 +30,9 @@ from opentelemetry import trace
 from opentelemetry.trace import SpanKind
 
 from autobot_shared.http_client import HTTPClientManager, get_http_client
+from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

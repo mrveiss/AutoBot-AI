@@ -12,7 +12,6 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import List
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, HTTPException
 
@@ -39,6 +38,7 @@ from api.schemas_workflows import (
     RUMStatusResponse,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 from monitoring.prometheus_metrics import get_metrics_manager
 from type_defs.common import Metadata

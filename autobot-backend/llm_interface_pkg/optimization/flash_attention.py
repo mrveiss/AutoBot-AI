@@ -15,12 +15,13 @@ Issue #1955: Flash Attention v2 with variable-length sequence optimization.
 # Issue #3009: from __future__ import annotations defers annotation evaluation
 # so torch types in dataclass fields / function signatures are strings at runtime.
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import logging
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional, Tuple
+
+from autobot_shared.logging_manager import get_logger
 
 if TYPE_CHECKING:
     import torch  # noqa: F401  # used by deferred (string) type annotations

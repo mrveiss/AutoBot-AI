@@ -12,10 +12,10 @@ Part of Issue #381 - God Class Refactoring
 import logging
 import time
 from typing import Any, Dict, Tuple
-from autobot_shared.logging_manager import get_logger
 
 import numpy as np
 
+from autobot_shared.logging_manager import get_logger
 from config import get_config_section
 
 from ..base import BaseModalProcessor

@@ -16,16 +16,16 @@ Issue: #260
 import asyncio
 import json
 import uuid
-from autobot_shared.ssot_config import config
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, List, Optional
 
 from redis.exceptions import RedisError
 
-from autobot_shared.redis_mixin import AsyncRedisClientMixin
-from autobot_shared.time_utils import now_utc
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
+from autobot_shared.ssot_config import config
+from autobot_shared.time_utils import now_utc
 
 logger = get_logger(__name__)
 

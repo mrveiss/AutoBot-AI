@@ -20,10 +20,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 import yaml
 
+from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
 
 if TYPE_CHECKING:

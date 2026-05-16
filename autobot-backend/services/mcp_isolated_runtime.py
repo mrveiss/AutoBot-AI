@@ -5,8 +5,6 @@
 
 from __future__ import annotations
 
-from autobot_shared.ssot_config import config
-
 import asyncio
 import json
 import os
@@ -15,9 +13,10 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
-from services.mcp_isolation_config import BridgePolicy, IsolationMode, policy_for
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
+from autobot_shared.ssot_config import config
+from services.mcp_isolation_config import BridgePolicy, IsolationMode, policy_for
 
 logger = get_logger(__name__)
 

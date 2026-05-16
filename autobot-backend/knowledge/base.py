@@ -13,7 +13,6 @@ import json
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 import redis
 from llama_index.core import Settings, VectorStoreIndex
@@ -24,6 +23,7 @@ from llama_index.vector_stores.chroma import ChromaVectorStore
 from redis import asyncio as aioredis
 
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_management.types import DATABASE_MAPPING
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager

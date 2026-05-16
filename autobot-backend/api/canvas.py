@@ -30,9 +30,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.schemas_canvas import (
     CanvasExportRequest,
     CanvasGetResponse,
+    CanvasOut,
     CanvasPutRequest,
     CanvasPutResponse,
-    CanvasOut,
     CellCreateRequest,
     CellOut,
     CellTransitionRequest,

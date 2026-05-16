@@ -19,6 +19,7 @@ from typing import Any, Dict, Optional, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from events.event_types import HEARTBEAT_RUN_COMPLETED, HEARTBEAT_RUN_STARTED
 from live_event_manager import publish_live_event
@@ -32,7 +33,6 @@ from models.heartbeat import (
     WakeupTrigger,
 )
 from services.run_jwt import get_run_jwt_scopes, mint_run_jwt, revoke_run_jwt_async
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

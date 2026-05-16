@@ -18,7 +18,6 @@ import pytest
 # Pre-import TerminalActivityModel so SQLAlchemy can resolve the string-based
 # relationship on User.terminal_activities before UserRole mapper initialises.
 import models.activities  # noqa: F401
-
 from user_management.services.user_service import UserService
 
 _REDIS_KEY_PREFIX = "rbac:perm:"

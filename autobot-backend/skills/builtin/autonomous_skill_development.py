@@ -15,8 +15,8 @@ Governance modes:
 
 import logging
 from typing import Any, Dict
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from skills.base_skill import BaseSkill, SkillManifest
 
 logger = get_logger(__name__)

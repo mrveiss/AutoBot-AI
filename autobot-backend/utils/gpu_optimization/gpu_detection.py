@@ -16,6 +16,7 @@ import platform
 import subprocess
 from pathlib import Path
 from typing import Any, Dict, Optional
+
 from autobot_shared.logging_manager import get_logger
 
 from .types import GPUCapabilities

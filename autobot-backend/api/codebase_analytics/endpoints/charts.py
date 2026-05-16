@@ -13,10 +13,10 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from utils.chromadb_client import get_all_paginated
 
 from ..storage import get_code_collection, get_redis_connection
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

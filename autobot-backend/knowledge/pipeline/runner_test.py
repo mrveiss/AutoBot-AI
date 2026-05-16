@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import pytest
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.pipeline.base import (
     BaseCognifier,
     BaseExtractor,
@@ -23,7 +24,6 @@ from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.models.entity import Entity
 from knowledge.pipeline.registry import TaskRegistry
 from knowledge.pipeline.runner import PipelineRunner
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

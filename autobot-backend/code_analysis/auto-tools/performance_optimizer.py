@@ -10,10 +10,11 @@ import json
 import os
 import re
 import shutil
-from autobot_shared.ssot_config import config
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Tuple
+
+from autobot_shared.ssot_config import config
 
 
 class ConsoleLogCleaner:

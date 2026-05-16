@@ -9,12 +9,12 @@ Mount point: /api/analytics/codebase (via router.py)
 """
 
 import logging
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
 from ..scanner import (
     _active_tasks,

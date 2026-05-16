@@ -11,7 +11,6 @@ import logging
 import time
 import uuid
 from typing import List, Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
@@ -28,6 +27,7 @@ from api.schemas_system import MultimodalHealthResponse
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from multimodal_processor import (
     ModalityType,
     MultiModalInput,

@@ -26,7 +26,6 @@ Guardrails
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import json
@@ -38,6 +37,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import timezone
 from typing import Any, Deque, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 

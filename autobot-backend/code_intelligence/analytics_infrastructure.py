@@ -27,8 +27,8 @@ import json
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
 logger = get_logger(__name__)

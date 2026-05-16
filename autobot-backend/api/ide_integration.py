@@ -23,7 +23,6 @@ import json
 import logging
 import re
 from typing import Any, Dict, List, Optional, Set, Tuple
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Request
 
@@ -55,9 +54,10 @@ from api.schemas_code import (
 )
 from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
-from autobot_shared.ssot_constants import TTL_10_SECONDS
 from autobot_shared.singleton_factory import lazy_optional_singleton, lazy_singleton
+from autobot_shared.ssot_constants import TTL_10_SECONDS
 from models.completion_context import CompletionContext
 from services.context_analyzer import ContextAnalyzer
 from services.pattern_extractor import PatternExtractor

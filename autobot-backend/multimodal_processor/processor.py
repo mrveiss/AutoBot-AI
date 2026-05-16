@@ -14,8 +14,8 @@ import asyncio
 import logging
 import time
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from enhanced_memory_manager_async import (
     TaskPriority,
     get_async_enhanced_memory_manager,

@@ -27,10 +27,10 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from services.workflow_automation.manager import WorkflowAutomationManager
 from services.workflow_automation.models import AutomationMode, WorkflowStep
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

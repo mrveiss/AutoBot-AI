@@ -10,8 +10,9 @@ Routes messages to appropriate agents based on content and context.
 
 from typing import Any, Dict, Optional
 
-from .types import MessageType, RoutingDecision, UnifiedMessage
 from autobot_shared.logging_manager import get_logger
+
+from .types import MessageType, RoutingDecision, UnifiedMessage
 
 logger = get_logger(__name__)
 

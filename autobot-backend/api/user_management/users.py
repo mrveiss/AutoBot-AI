@@ -10,7 +10,6 @@ REST API for user management operations.
 import logging
 import uuid
 from typing import Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -30,6 +29,7 @@ from api.user_management.dependencies import (
     require_platform_admin,
     require_user_management_enabled,
 )
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from user_management.middleware.rate_limit import (
     PasswordChangeRateLimiter,

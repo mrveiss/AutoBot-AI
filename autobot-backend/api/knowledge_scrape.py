@@ -45,11 +45,11 @@ API contract::
 import logging
 from datetime import datetime, timezone
 from typing import Literal, Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from autobot_shared.logging_manager import get_logger
 from web_fetch import FetchResult, RenderMode, WebFetcher
 
 logger = get_logger(__name__)

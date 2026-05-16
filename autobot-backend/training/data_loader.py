@@ -10,13 +10,13 @@ Loads code patterns from database and prepares training data.
 import logging
 import re
 from typing import Dict, List, Optional, Tuple
-from autobot_shared.logging_manager import get_logger
 
 import torch
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from torch.utils.data import Dataset
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from models.code_pattern import CodePattern
 

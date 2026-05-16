@@ -13,12 +13,12 @@ Endpoints:
 
 import logging
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import with_error_handling
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

@@ -11,12 +11,12 @@ import asyncio
 import logging
 from typing import Any, Dict
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.task_result import task_error, task_success
 from models.task_context import TaskExecutionContext
 from utils.command_validator import command_validator
 
 from .base import TaskHandler
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

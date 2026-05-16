@@ -6,9 +6,9 @@
 import os
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from skills.models import SkillState
 from skills.sync.base_sync import BaseRepoSync
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

@@ -21,13 +21,12 @@ import asyncio
 import logging
 import os
 import threading
-from autobot_shared.ssot_config import config
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import aiohttp
 
-from autobot_shared.ssot_config import get_config
+from autobot_shared.ssot_config import config, get_config
 
 logger = get_logger(__name__)
 

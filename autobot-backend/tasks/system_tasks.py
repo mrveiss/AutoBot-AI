@@ -10,8 +10,8 @@ NOTE: These tasks have been moved to SLM server (#729).
 Stubs maintained for backward compatibility with existing API endpoints.
 """
 
-from celery_app import celery_app
 from autobot_shared.logging_manager import get_logger
+from celery_app import celery_app
 
 logger = get_logger(__name__)
 

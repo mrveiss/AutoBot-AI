@@ -31,6 +31,7 @@ import time
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from config.async_ops import AsyncOperationsMixin
 from config.file_watcher import FileWatcherMixin
@@ -42,7 +43,6 @@ from config.sync_ops import SyncOperationsMixin
 from config.timeout_config import TimeoutConfigMixin
 from config.validation import ValidationMixin
 from constants.path_constants import PATH
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

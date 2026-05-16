@@ -33,9 +33,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
-from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from knowledge_factory import get_or_create_knowledge_base
 from llm_interface_pkg.types import LLMType

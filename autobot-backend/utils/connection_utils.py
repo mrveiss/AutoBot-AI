@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 
 import aiohttp
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config as _ssot_config
 from autobot_shared.ssot_config import get_ollama_url
@@ -21,7 +22,6 @@ from constants.api_constants import PATH_OLLAMA_GENERATE, PATH_OLLAMA_TAGS
 from constants.model_constants import ModelConstants
 from constants.network_constants import NetworkConstants
 from type_defs.common import Metadata
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

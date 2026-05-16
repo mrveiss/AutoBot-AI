@@ -14,10 +14,10 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 from pydantic import BaseModel, Field
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 
 logger = get_logger(__name__)

@@ -8,8 +8,8 @@ Tests for multi-level context extraction.
 """
 
 from unittest.mock import MagicMock, patch
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from services.context_analyzer import ContextAnalyzer
 
 SAMPLE_CODE = """

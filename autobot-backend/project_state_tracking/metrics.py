@@ -12,9 +12,10 @@ Part of Issue #381 - God Class Refactoring
 from datetime import datetime, timedelta, timezone
 from typing import Any, List, Optional
 
+from autobot_shared.logging_manager import get_logger
+
 from .models import StateSnapshot
 from .types import REDIS_METRIC_KEYS, TrackingMetric
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

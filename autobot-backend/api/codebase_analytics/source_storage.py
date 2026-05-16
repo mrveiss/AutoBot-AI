@@ -11,10 +11,10 @@ Uses the analytics Redis database (DB 11) with keys:
 
 from typing import List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
 from .source_models import CodeSource, SourceAccess
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

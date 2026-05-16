@@ -14,9 +14,9 @@ Uses the 'knowledge' Redis database (DATABASE_MAPPING["knowledge"]).
 import json
 from typing import Any, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.ttl_constants import TTL_WORKING_MEMORY_DEFAULT
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

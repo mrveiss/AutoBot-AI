@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 import yaml
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.threshold_constants import TimingConstants
 from event_manager import get_event_manager
@@ -30,7 +31,6 @@ from models.npu_models import (
 )
 from npu_integration import NPUWorkerClient
 from utils.async_initializable import AsyncInitializable
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

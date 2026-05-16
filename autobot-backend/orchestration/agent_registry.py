@@ -10,8 +10,9 @@ Contains agent registration, lookup, and management functionality.
 
 from typing import Dict, List, Optional, Set
 
-from .types import AgentCapability, AgentProfile
 from autobot_shared.logging_manager import get_logger
+
+from .types import AgentCapability, AgentProfile
 
 logger = get_logger(__name__)
 

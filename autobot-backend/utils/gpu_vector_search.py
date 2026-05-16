@@ -24,10 +24,10 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from autobot_shared.logging_manager import get_logger
 
 import numpy as np
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.missing_dep import MissingDep as _MissingDep
 from knowledge.backends import BaseClient, BaseCollection
 from utils.async_initializable import AsyncInitializable

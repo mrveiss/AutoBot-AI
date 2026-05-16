@@ -9,10 +9,10 @@ import platform
 import subprocess  # nosec B404 - required for GPU detection
 import sys
 from typing import Any, Dict, Optional
-from autobot_shared.logging_manager import get_logger
 
 import psutil
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
 logger = get_logger(__name__)

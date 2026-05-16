@@ -16,9 +16,9 @@ This runs as part of the system startup to ensure configuration consistency.
 
 import asyncio
 import logging
-from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 from type_defs.common import Metadata
 
 # Import network constants

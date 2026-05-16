@@ -8,13 +8,13 @@ Advanced multi-agent orchestration endpoints with improved coordination and stra
 """
 
 import logging
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 
 from api.schemas_workflows import AgentRecommendationRequest, WorkflowRequest
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.logging_manager import get_logger
 
 try:
     from orchestrator import create_and_execute_workflow, get_orchestrator_sync

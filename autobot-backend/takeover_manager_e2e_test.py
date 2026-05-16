@@ -8,11 +8,11 @@ import asyncio
 import json
 import logging
 import time
-from autobot_shared.logging_manager import get_logger
 
 # Test the workflow automation system
 from unittest.mock import AsyncMock
 
+from autobot_shared.logging_manager import get_logger
 from tests.test_helpers import get_test_backend_url
 
 # Import system components

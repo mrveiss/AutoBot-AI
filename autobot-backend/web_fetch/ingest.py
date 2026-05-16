@@ -14,9 +14,10 @@ duplicate that logic.
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import logging
+
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

@@ -10,8 +10,8 @@ acting like a helpful librarian that finds relevant information before answering
 import asyncio
 import logging
 from typing import Any, Dict, List
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,

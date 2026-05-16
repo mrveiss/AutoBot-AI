@@ -39,10 +39,10 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
+from autobot_shared.logging_manager import get_logger
 from constants.api_constants import PATH_API_HEALTH
 from middleware.proxy_utils import get_client_ip
 from services.audit_logger import AuditResult, get_audit_logger
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

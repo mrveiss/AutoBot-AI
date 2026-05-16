@@ -8,7 +8,6 @@ Issue #2597: Endpoints for managing experiments, viewing results, and stats.
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import logging
 import re
@@ -18,6 +17,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, R
 from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
+from autobot_shared.logging_manager import get_logger
 from constants.error_constants import ERR_EXPERIMENT_NOT_FOUND, ERR_SESSION_NOT_FOUND
 from constants.ttl_constants import TTL_24_HOURS
 

@@ -21,12 +21,12 @@ from api.schemas_workflows import (
 )
 from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from services.resilience.circuit_breaker_manager import (
     get_circuit_breaker_manager,
 )
 from services.resilience.error_budget import get_error_budget_tracker
 from services.resilience.fallback_manager import get_fallback_manager
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

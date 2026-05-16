@@ -10,6 +10,8 @@ Issue #712: Extracted from security_analyzer.py for modularity.
 import ast
 from typing import Dict, List, Optional, Set
 
+from autobot_shared.logging_manager import get_logger
+
 from .constants import (
     DEBUG_MODE_VARS,
     HTTP_METHODS,
@@ -25,7 +27,6 @@ from .constants import (
     VulnerabilityType,
 )
 from .finding import SecurityFinding
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

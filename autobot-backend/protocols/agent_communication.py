@@ -20,6 +20,7 @@ from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Awaitable, Callable, Dict, List, Optional
+
 from autobot_shared.logging_manager import get_logger
 
 # Add project root to path for imports

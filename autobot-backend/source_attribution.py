@@ -13,8 +13,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
-from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = get_logger(__name__)
 

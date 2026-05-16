@@ -16,8 +16,8 @@ from typing import Callable
 
 from fastapi import HTTPException, Request
 
-from knowledge_factory import get_or_create_knowledge_base
 from autobot_shared.logging_manager import get_logger
+from knowledge_factory import get_or_create_knowledge_base
 
 logger = get_logger(__name__)
 

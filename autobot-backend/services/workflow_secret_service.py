@@ -14,9 +14,9 @@ Issue #2153 — Secret management for workflow credentials.
 import re
 from typing import Dict, FrozenSet, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from services.secrets_service import SecretsService, get_secrets_service
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

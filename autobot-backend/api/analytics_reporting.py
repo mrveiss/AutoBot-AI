@@ -14,7 +14,6 @@ Provides a single endpoint that aggregates all analytics data from:
 
 import logging
 from typing import Any, Dict
-from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 from fastapi import APIRouter
@@ -23,6 +22,7 @@ from fastapi.responses import JSONResponse
 from api.schemas_common import DataResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 
 logger = get_logger(__name__)

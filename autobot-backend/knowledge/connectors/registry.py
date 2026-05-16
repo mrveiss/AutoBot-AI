@@ -26,9 +26,9 @@ from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Type
 if TYPE_CHECKING:
     from .base import AbstractConnector  # noqa: F401  # forward-ref for string annotations
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from knowledge.connectors.models import ConnectorConfig
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

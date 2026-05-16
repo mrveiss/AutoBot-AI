@@ -12,7 +12,6 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import List, Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -35,6 +34,7 @@ from api.schemas_knowledge import (
     TaskUpdateRequest,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from enhanced_memory_manager_async import (
     AsyncEnhancedMemoryManager,
     TaskEntry,

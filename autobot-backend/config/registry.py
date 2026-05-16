@@ -28,10 +28,11 @@ Issue: #751 - Consolidate Common Utilities
 
 import logging
 import os
-from autobot_shared.ssot_config import config
 import threading
 import time
 from typing import Any, Dict, Optional
+
+from autobot_shared.ssot_config import config
 
 # stdlib logging avoids circular import: network_constants → config.registry → get_logger
 # → logging_manager → from config import config_manager (partially initialized) GH#7765

@@ -5,11 +5,12 @@
 
 import os
 import threading
-from autobot_shared.ssot_config import config
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+
+from autobot_shared.ssot_config import config
 
 
 class _SkillsEngineManager:

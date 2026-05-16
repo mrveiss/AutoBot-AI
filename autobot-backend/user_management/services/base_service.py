@@ -13,6 +13,7 @@ from typing import Optional
 
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

@@ -23,6 +23,7 @@ initialization of security agent with comprehensive report structure. Low priori
 """
 
 import logging
+
 from autobot_shared.logging_manager import get_logger
 
 # Configure logging

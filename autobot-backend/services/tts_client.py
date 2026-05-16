@@ -19,9 +19,8 @@ import os
 
 import aiohttp
 
-from autobot_shared.ssot_config import config
-from autobot_shared.ssot_config import get_config
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config, get_config
 
 logger = get_logger(__name__)
 

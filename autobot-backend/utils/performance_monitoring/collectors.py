@@ -23,6 +23,7 @@ import aiohttp
 import psutil
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot
 from constants.network_constants import NetworkConstants
 from utils.performance_monitoring.hardware import HardwareDetector
@@ -34,7 +35,6 @@ from utils.performance_monitoring.metrics import (
     SystemPerformanceMetrics,
 )
 from utils.performance_monitoring.types import AUTOBOT_PROCESS_KEYWORDS
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

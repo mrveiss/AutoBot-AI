@@ -15,6 +15,7 @@ analytics_controller.py imports. It provides basic local system metrics only.
 from typing import Any, Dict
 
 import psutil
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

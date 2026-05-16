@@ -7,16 +7,16 @@ ChromaDB batch storage, embeddings, and verification for codebase analytics.
 Issue #2013: Decomposed from scanner.py god module.
 """
 
-from autobot_shared.ssot_config import config
 import asyncio
 import json
 import logging
 import os
 from pathlib import Path
 from typing import Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.ssot_config import config
 from utils.file_categorization import FILE_CATEGORY_CODE
 
 from .progress_tracker import FILE_HASH_REDIS_PREFIX

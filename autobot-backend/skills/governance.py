@@ -13,8 +13,8 @@ import logging
 import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from skills.models import GovernanceMode, SkillPackage, TrustLevel
 
 if TYPE_CHECKING:

@@ -8,7 +8,6 @@ Tests for code completion endpoint.
 """
 
 from unittest.mock import MagicMock, patch
-from autobot_shared.logging_manager import get_logger
 
 import pytest
 
@@ -18,6 +17,7 @@ from api.ide_integration import (
     CompletionRequest,
     IDEIntegrationEngine,
 )
+from autobot_shared.logging_manager import get_logger
 from models.completion_context import CompletionContext
 
 

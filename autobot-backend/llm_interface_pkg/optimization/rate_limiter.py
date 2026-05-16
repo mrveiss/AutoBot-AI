@@ -20,8 +20,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Coroutine, Dict, Optional, TypeVar
 
-from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
 
 logger = get_logger(__name__)
 

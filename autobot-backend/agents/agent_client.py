@@ -11,11 +11,11 @@ import logging
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import exponential_backoff_delay
 from utils.service_registry import get_service_url
 

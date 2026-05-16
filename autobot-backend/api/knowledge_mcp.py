@@ -14,12 +14,12 @@ graph (chat_workflow/graph.py).
 import asyncio
 import logging
 from typing import List
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.model_constants import ModelConstants

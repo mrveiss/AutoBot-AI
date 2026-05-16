@@ -14,8 +14,9 @@ import logging
 import re
 from typing import Dict, List, Set
 
-from .tier_config import ComplexityResult, TierConfig
 from autobot_shared.logging_manager import get_logger
+
+from .tier_config import ComplexityResult, TierConfig
 
 logger = get_logger(__name__)
 

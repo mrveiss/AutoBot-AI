@@ -7,7 +7,6 @@ Alembic Environment Configuration
 This module configures Alembic migrations for the User Management System.
 """
 
-from autobot_shared.ssot_config import config
 import os
 import sys
 from logging.config import fileConfig
@@ -17,17 +16,18 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+from autobot_shared.ssot_config import config
+
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Import canvas models so Alembic autogenerate sees them (MVA-359)
+import canvas.models  # noqa: F401
 from autobot_shared.async_compat import run_or_schedule
 from user_management.config import get_deployment_config
 
 # Import models to register with SQLAlchemy
 from user_management.models import Base
-
-# Import canvas models so Alembic autogenerate sees them (MVA-359)
-import canvas.models  # noqa: F401
 
 # this is the Alembic Config object
 config = context.config

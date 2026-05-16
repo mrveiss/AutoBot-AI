@@ -16,9 +16,9 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
+
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import TTL_7_DAYS
-
 from services.man_page_parser import ManPageContent, ManPageParser
 
 logger = get_logger(__name__)

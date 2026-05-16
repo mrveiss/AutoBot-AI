@@ -10,6 +10,7 @@ Issue #2013: Decomposed from scanner.py god module.
 from datetime import datetime, timezone
 from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from utils.file_categorization import (
     FILE_CATEGORY_ARCHIVE,
     FILE_CATEGORY_ASSETS,
@@ -23,7 +24,6 @@ from utils.file_categorization import (
 )
 
 from .types import FileAnalysisResult
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

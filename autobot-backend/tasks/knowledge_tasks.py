@@ -17,8 +17,8 @@ import subprocess  # nosec B404 - used for internal script execution only
 import sys
 import time
 from pathlib import Path
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from celery_app import celery_app
 from type_defs.common import Metadata
 

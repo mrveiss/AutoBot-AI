@@ -12,8 +12,8 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 
 from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError
-from services.run_jwt import JWTRefreshConflictError, _ttl, refresh_run_jwt
 from autobot_shared.logging_manager import get_logger
+from services.run_jwt import JWTRefreshConflictError, _ttl, refresh_run_jwt
 
 logger = get_logger(__name__)
 

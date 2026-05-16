@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Optional
 
 from autobot_shared.ssot_config import config
-
 from constants.model_constants import ANTHROPIC_CLAUDE_SONNET4_6
 
 

@@ -13,8 +13,8 @@ import logging
 import re
 import struct
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from type_defs.common import Metadata
 

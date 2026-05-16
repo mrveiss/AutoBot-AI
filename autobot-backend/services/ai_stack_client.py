@@ -13,17 +13,17 @@ import json
 import os
 import time
 import uuid
-from autobot_shared.ssot_config import config
 from typing import Dict, List, Optional
 from urllib.parse import urljoin
 
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
 from constants.network_constants import NetworkConstants
 from type_defs.common import Metadata
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

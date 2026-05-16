@@ -11,8 +11,8 @@ in responses before they are displayed to users.
 import re
 from typing import Any, Dict, List, Optional
 
-from extensions.base import Extension, HookContext
 from autobot_shared.logging_manager import get_logger
+from extensions.base import Extension, HookContext
 
 logger = get_logger(__name__)
 

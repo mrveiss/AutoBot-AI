@@ -40,8 +40,8 @@ from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 
 config = get_config_manager()
-from constants.api_constants import PATH_API_HEALTH, PATH_HEALTH, PATH_OLLAMA_TAGS
 from autobot_shared.logging_manager import get_logger
+from constants.api_constants import PATH_API_HEALTH, PATH_HEALTH, PATH_OLLAMA_TAGS
 
 
 class ServiceStatus(Enum):

@@ -11,8 +11,8 @@ Issue #2025: Dual-mode entity extraction — LLM + NLP (Neural Mesh RAG Phase 2)
 import logging
 from typing import Any, Dict, List, Optional
 from uuid import UUID
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.cognifiers.llm_utils import parse_llm_json_response
 from knowledge.pipeline.models.chunk import ProcessedChunk

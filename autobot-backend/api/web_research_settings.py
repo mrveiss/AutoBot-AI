@@ -9,7 +9,6 @@ Provides endpoints for managing web research configuration and preferences.
 
 import logging
 from datetime import datetime, timezone
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
@@ -17,6 +16,7 @@ from fastapi.responses import JSONResponse
 from api.schemas_common import DataResponse
 from api.schemas_workflows import WebResearchSettings
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

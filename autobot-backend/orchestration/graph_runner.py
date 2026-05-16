@@ -56,7 +56,6 @@ Public surface
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import logging
@@ -79,6 +78,8 @@ from typing import (
     Union,
     runtime_checkable,
 )
+
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

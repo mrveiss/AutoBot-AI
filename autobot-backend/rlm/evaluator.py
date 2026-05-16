@@ -14,8 +14,8 @@ Issue #1373: Initial RLM prototype.
 
 import logging
 from typing import Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from rlm.types import ReflectionResult, ReflectionVerdict, RLMConfig
 
 logger = get_logger(__name__)

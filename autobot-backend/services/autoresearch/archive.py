@@ -14,8 +14,9 @@ import json
 import random
 from typing import List, Optional
 
-from .models import VariantArchiveEntry
 from autobot_shared.logging_manager import get_logger
+
+from .models import VariantArchiveEntry
 
 logger = get_logger(__name__)
 

@@ -8,12 +8,12 @@ This bypasses cached instances and creates fresh knowledge base for testing
 
 import asyncio
 import logging
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter
 
 from api.schemas_common import DataResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
 router = APIRouter()

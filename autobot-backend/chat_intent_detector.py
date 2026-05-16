@@ -28,8 +28,8 @@ Created: 2025-01-14 (Phase 2)
 import logging
 from typing import Dict, List, Optional
 
-from prompt_manager import get_prompt
 from autobot_shared.logging_manager import get_logger
+from prompt_manager import get_prompt
 
 logger = get_logger(__name__)
 

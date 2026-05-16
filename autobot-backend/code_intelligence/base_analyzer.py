@@ -18,8 +18,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Pattern, Set
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity as IssueSeverity  # noqa: F401  # #6689 consolidation
 
 logger = get_logger(__name__)

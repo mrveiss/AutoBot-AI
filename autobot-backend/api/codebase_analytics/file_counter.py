@@ -10,8 +10,8 @@ Issue #2013: Decomposed from scanner.py god module.
 from pathlib import Path
 from typing import Tuple
 
-from utils.file_categorization import SKIP_DIRS
 from autobot_shared.logging_manager import get_logger
+from utils.file_categorization import SKIP_DIRS
 
 logger = get_logger(__name__)
 

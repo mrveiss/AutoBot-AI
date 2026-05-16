@@ -12,12 +12,13 @@ guards or Jina logic — those live in media/link/pipeline.py.
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import json
 import logging
 import re
 from typing import Any, Dict, Tuple
+
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

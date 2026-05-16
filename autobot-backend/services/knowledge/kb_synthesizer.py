@@ -10,13 +10,14 @@ The summaries are retrieved by RAGService as optional context enrichment.
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import hashlib
 import logging
 import time
 from typing import TYPE_CHECKING, Any, List, Optional
+
+from autobot_shared.logging_manager import get_logger
 
 if TYPE_CHECKING:
     from services.knowledge.synthesis_schema_loader import CollectionConfig

@@ -14,13 +14,13 @@ import logging
 import time
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
-from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import get_ollama_url
 from circuit_breaker import circuit_breaker_async
 from config.manager import get_config_manager

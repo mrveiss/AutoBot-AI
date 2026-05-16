@@ -3,10 +3,11 @@
 Test the new workflow templates system
 """
 
-from autobot_shared.ssot_config import config
 import asyncio
 import os
 import sys
+
+from autobot_shared.ssot_config import config
 
 sys.path.append(config.project_root)
 

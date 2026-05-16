@@ -6,10 +6,10 @@
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 import yaml
 
+from autobot_shared.logging_manager import get_logger
 from constants.model_constants import ModelConfig, ModelConstants
 
 logger = get_logger(__name__)

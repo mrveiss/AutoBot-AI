@@ -25,9 +25,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
-from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity  # #7253: consolidated onto canonical (#6689)
 
 # Anti-pattern severity → 0-100 integer score. Kept as a module-level helper

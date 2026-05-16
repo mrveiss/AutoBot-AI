@@ -13,6 +13,7 @@ import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from enhanced_memory_manager_async import TaskPriority
 from task_execution_tracker import get_task_tracker
 from voice_processing.constants import (
@@ -30,7 +31,6 @@ from voice_processing.constants import (
 )
 from voice_processing.models import VoiceCommandAnalysis
 from voice_processing.types import VoiceCommand
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

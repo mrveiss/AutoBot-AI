@@ -15,6 +15,7 @@ Issue #1954: HfQuantizer integration for pre-quantized GPTQ/AWQ models.
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

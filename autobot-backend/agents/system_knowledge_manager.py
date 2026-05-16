@@ -14,12 +14,12 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 import yaml
 
 from agents.kb_librarian import EnhancedKBLibrarian
+from autobot_shared.logging_manager import get_logger
 from knowledge_base import KnowledgeBase
 
 logger = get_logger(__name__)

@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Coroutine, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.ttl_constants import TTL_7_DAYS
 
@@ -34,7 +35,6 @@ from .archive import Archive
 from .config import AutoResearchConfig
 from .models import VariantArchiveEntry
 from .scorers import PromptScorer
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

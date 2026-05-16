@@ -28,12 +28,12 @@ from autobot_shared.logging_manager import get_logger
 
 from __future__ import annotations
 
-from autobot_shared.ssot_config import config
 import asyncio
 import logging
 import time
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.ssot_config import config
 from llm_interface_pkg.model_param_registry import apply_model_defaults, apply_prompt_prefix
 from llm_interface_pkg.models import LLMRequest
 from prepared_facts import ProviderRuntimeFact

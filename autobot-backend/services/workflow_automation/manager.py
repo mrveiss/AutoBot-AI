@@ -10,6 +10,7 @@ Main coordinator for workflow automation using composition.
 import uuid
 from typing import Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from orchestrator import Orchestrator
 from orchestrator import get_orchestrator_sync as get_orchestrator
 from services.notification_service import NotificationService
@@ -27,7 +28,6 @@ from .models import (
     WorkflowStep,
 )
 from .templates import WorkflowTemplateManager
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

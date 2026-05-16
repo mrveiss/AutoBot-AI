@@ -31,9 +31,7 @@ Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
-from autobot_shared.ssot_config import config
 import logging
 import os
 import re
@@ -43,6 +41,8 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from constants.model_constants import (
     ANTHROPIC_CLAUDE3_OPUS_DATED,
     ANTHROPIC_CLAUDE35_HAIKU,

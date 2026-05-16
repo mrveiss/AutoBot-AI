@@ -13,7 +13,6 @@ import json
 import logging
 from enum import Enum
 from typing import Any, Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -28,6 +27,7 @@ from api.schemas_workflows import (
 )
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
 

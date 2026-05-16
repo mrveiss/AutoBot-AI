@@ -13,8 +13,8 @@ import logging
 import pkgutil
 import threading
 from typing import Any, Dict, List, Optional, Set, Type
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from prepared_facts import SkillRoutingIndex
 from skills.base_skill import BaseSkill, SkillHealth, SkillManifest, SkillStatus

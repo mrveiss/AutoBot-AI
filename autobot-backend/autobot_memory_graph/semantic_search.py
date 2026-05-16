@@ -15,7 +15,6 @@ Architecture:
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import logging
@@ -25,6 +24,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
 
 from .core import ENTITY_TYPES as _ENTITY_TYPES  # noqa: F401 — re-exported via package

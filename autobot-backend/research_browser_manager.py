@@ -26,11 +26,11 @@ try:
 except ImportError:
     Browser = BrowserContext = Page = async_playwright = None  # type: ignore[assignment]
     PLAYWRIGHT_AVAILABLE = False
+from autobot_shared.logging_manager import get_logger
 from constants.security_constants import SecurityConstants
 from constants.threshold_constants import TimingConstants
 from source_attribution import SourceType, track_source
 from utils.display_utils import get_playwright_config
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

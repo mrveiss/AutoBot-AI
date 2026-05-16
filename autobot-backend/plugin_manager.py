@@ -18,12 +18,12 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
 from plugin_install import install_from_git, install_from_zip
 from plugin_sdk.base import PluginRegistry
 from plugin_sdk.loader import PluginLoader
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

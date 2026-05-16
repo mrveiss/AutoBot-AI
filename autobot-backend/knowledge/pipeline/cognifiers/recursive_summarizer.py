@@ -14,6 +14,7 @@ Issue #1383: Follow-up from #1373.
 from typing import Dict, List, Optional
 from uuid import UUID
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.cognifiers.llm_utils import (
     build_entity_map,
@@ -27,7 +28,6 @@ from knowledge.pipeline.registry import TaskRegistry
 from rlm.evaluator import ResponseQualityEvaluator
 from rlm.types import RLMConfig
 from services.llm_service import get_llm_service
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

@@ -9,8 +9,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from constants.threshold_constants import TimingConstants
 from autobot_shared.logging_manager import get_logger
+from constants.threshold_constants import TimingConstants
 
 logger = get_logger(__name__)
 

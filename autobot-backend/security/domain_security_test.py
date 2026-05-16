@@ -22,8 +22,8 @@ Test matrix:
 
 from unittest.mock import MagicMock, patch
 
-from security.domain_security import DomainSecurityConfig, DomainSecurityManager
 from autobot_shared.logging_manager import get_logger
+from security.domain_security import DomainSecurityConfig, DomainSecurityManager
 
 logger = get_logger(__name__)
 

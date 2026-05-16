@@ -10,11 +10,11 @@ that populates it from DEFAULT_AGENT_CONFIGS at startup.
 
 import logging
 from typing import Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.logging_manager import get_logger
 from models.agent import Agent, AgentStatus
 
 logger = get_logger(__name__)

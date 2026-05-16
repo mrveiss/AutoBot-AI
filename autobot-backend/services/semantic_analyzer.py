@@ -10,6 +10,7 @@ Detects frameworks, coding patterns, and AutoBot conventions.
 import ast
 import re
 from typing import List, Set
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

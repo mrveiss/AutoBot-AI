@@ -11,8 +11,8 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from typing import ClassVar, List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from media.core.types import MediaInput, MediaType, PipelineMetrics, ProcessingResult
 
 

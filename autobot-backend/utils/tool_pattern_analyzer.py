@@ -25,8 +25,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, FrozenSet, List, Optional
 
-from constants.ttl_constants import TTL_5_MINUTES
 from autobot_shared.logging_manager import get_logger
+from constants.ttl_constants import TTL_5_MINUTES
 
 logger = get_logger(__name__)
 

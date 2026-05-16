@@ -26,12 +26,12 @@ from typing import Any, Optional
 
 import websockets
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 from config import config_manager
 from constants.threshold_constants import TimingConstants
 from task_execution_tracker import TaskPriority, get_task_tracker
-from autobot_shared.logging_manager import get_logger
 
 # Type aliases for clarity
 SessionDict = dict[str, Any]

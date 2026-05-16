@@ -16,8 +16,8 @@ import yaml
 from cachetools import TTLCache
 
 from autobot_shared.http_client import get_http_client
-from constants.path_constants import PATH
 from autobot_shared.logging_manager import get_logger
+from constants.path_constants import PATH
 
 logger = get_logger(__name__)
 

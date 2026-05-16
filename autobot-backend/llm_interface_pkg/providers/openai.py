@@ -18,7 +18,6 @@ Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import logging
 import os
@@ -28,6 +27,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
+from autobot_shared.logging_manager import get_logger
 from circuit_breaker import circuit_breaker_async
 from constants.model_constants import OPENAI_O1_MINI  # used in _OPENAI_MODELS list
 from constants.model_constants import (

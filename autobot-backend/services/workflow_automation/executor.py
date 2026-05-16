@@ -13,8 +13,8 @@ import re
 import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable, Dict, FrozenSet, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 from monitoring.prometheus_metrics import get_metrics_manager
 from services.workflow_secret_service import get_workflow_secret_service

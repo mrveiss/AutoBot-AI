@@ -13,9 +13,10 @@ import logging
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
-from autobot_shared.logging_manager import get_logger
 
 import pytest
+
+from autobot_shared.logging_manager import get_logger
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))

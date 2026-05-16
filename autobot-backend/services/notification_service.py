@@ -34,7 +34,6 @@ import smtplib
 import ssl
 import time
 import uuid
-from autobot_shared.ssot_config import config
 from dataclasses import dataclass, field
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -45,6 +44,7 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_7_DAYS
 
 logger = get_logger(__name__)

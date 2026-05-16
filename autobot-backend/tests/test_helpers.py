@@ -1,7 +1,8 @@
 """Shared helpers for backend e2e/integration tests."""
 
-from autobot_shared.ssot_config import config
 import os
+
+from autobot_shared.ssot_config import config
 
 
 def get_test_backend_url() -> str:

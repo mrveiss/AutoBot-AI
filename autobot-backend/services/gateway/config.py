@@ -9,8 +9,9 @@ Contains configuration settings for the Gateway service.
 """
 
 import os
-from autobot_shared.ssot_config import config
 from dataclasses import dataclass
+
+from autobot_shared.ssot_config import config
 
 
 @dataclass

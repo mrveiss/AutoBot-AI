@@ -28,16 +28,16 @@ Observability:
     and wall-clock duration.
 """
 
-from autobot_shared.ssot_config import config
 import asyncio
 import json
 import logging
 import os
 import time
 from typing import Any, Dict, List, Optional, Tuple
-from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from services.run_jwt import validate_run_jwt
 
 logger = get_logger(__name__)

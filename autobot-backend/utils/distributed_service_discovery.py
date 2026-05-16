@@ -18,11 +18,11 @@ from typing import Any, Dict, Optional
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import ServiceDiscoveryConfig, TimingConstants
 from utils.async_initializable import AsyncInitializable
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

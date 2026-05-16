@@ -18,6 +18,7 @@ SKIP_WEBSOCKET_PERSISTENCE_TYPES in backend/type_defs/common.py
 import time
 import uuid
 from typing import Any, Dict, List, Optional
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

@@ -10,8 +10,8 @@ summarization, and structured data extraction.
 
 from typing import Any, Dict
 
-from skills.base_skill import BaseSkill, SkillConfigField, SkillManifest
 from autobot_shared.logging_manager import get_logger
+from skills.base_skill import BaseSkill, SkillConfigField, SkillManifest
 
 logger = get_logger(__name__)
 

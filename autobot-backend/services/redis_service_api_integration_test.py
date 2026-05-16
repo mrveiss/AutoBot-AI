@@ -18,9 +18,10 @@ import asyncio
 import logging
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
-from autobot_shared.logging_manager import get_logger
 
 import pytest
+
+from autobot_shared.logging_manager import get_logger
 
 try:
     from httpx import AsyncClient, HTTPStatusError

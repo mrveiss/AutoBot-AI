@@ -26,9 +26,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
+from autobot_shared.logging_manager import get_logger
 from services.workflow_permission_service import WorkflowPermissionService
 from user_management.config import DeploymentMode, get_deployment_config
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

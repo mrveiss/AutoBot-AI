@@ -10,12 +10,12 @@ Issue #3398: enhanced validation — startup warnings, conflict detection,
 """
 
 import os
-from autobot_shared.ssot_config import config
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
-from config.loader import ENV_VAR_MAPPINGS
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
+from config.loader import ENV_VAR_MAPPINGS
 
 logger = get_logger(__name__)
 

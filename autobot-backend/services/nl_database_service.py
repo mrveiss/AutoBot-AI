@@ -24,12 +24,12 @@ import os
 import re
 import sqlite3
 import time
-from autobot_shared.ssot_config import config
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
 
 logger = get_logger(__name__)

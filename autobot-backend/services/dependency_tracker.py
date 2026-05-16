@@ -9,6 +9,7 @@ Tracks imports and dependencies for completion suggestions.
 
 import ast
 from typing import Dict, List, Set
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

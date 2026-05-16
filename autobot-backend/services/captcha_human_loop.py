@@ -42,11 +42,11 @@ import os
 import threading
 import time
 import uuid
-from autobot_shared.ssot_config import config
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Optional
 
+from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
 
 try:

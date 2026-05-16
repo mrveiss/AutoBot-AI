@@ -23,9 +23,9 @@ Design decisions:
 """
 
 import logging
-from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 from celery_app import celery_app
 
 logger = get_logger(__name__)

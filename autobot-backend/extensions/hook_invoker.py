@@ -16,10 +16,10 @@ This module provides:
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from extensions.base import HookContext
 from extensions.hooks import HookPoint
 from extensions.manager import ExtensionManager
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

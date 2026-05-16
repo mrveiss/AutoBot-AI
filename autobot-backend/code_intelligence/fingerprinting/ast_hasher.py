@@ -15,8 +15,8 @@ import ast
 import hashlib
 from typing import Any, Dict, Tuple
 
-from code_intelligence.fingerprinting.ast_normalizer import ASTNormalizer
 from autobot_shared.logging_manager import get_logger
+from code_intelligence.fingerprinting.ast_normalizer import ASTNormalizer
 
 logger = get_logger(__name__)
 

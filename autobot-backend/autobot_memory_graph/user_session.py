@@ -16,10 +16,10 @@ Secret management is in secrets.py module.
 
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 
 from .core import VALID_ACTIVITY_TYPES, AutoBotMemoryGraphCore
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

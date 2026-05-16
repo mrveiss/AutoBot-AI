@@ -12,6 +12,7 @@ Issue #4344: Provider-based memory architecture with external provider support
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

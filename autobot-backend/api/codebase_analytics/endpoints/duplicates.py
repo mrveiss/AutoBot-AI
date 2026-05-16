@@ -18,12 +18,12 @@ import asyncio
 import logging
 from pathlib import Path
 from typing import Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import AnalyticsConfig
 from utils.background_task_manager import BackgroundTaskManager
 from utils.chromadb_client import get_all_paginated

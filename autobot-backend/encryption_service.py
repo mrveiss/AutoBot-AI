@@ -15,20 +15,20 @@ Security Features:
 - Environment variable-based key management
 """
 
-from autobot_shared.ssot_config import config
 import base64
 import hashlib
 import logging
 import os
 import secrets
 from typing import Optional, Union
-from autobot_shared.logging_manager import get_logger
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 

@@ -3,11 +3,12 @@
 Test the new workflow scheduler and queue management system
 """
 
-from autobot_shared.ssot_config import config
 import asyncio
 import os
 import sys
 from datetime import datetime, timedelta
+
+from autobot_shared.ssot_config import config
 
 sys.path.append(config.project_root)
 

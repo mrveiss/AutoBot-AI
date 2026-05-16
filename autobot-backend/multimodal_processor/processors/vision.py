@@ -10,7 +10,6 @@ Part of Issue #381 - God Class Refactoring
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import io
@@ -18,6 +17,7 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any, Dict
 
+from autobot_shared.logging_manager import get_logger
 from config import get_config_section
 
 from ..base import BaseModalProcessor

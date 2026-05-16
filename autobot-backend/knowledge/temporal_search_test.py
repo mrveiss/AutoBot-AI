@@ -13,8 +13,8 @@ from uuid import uuid4
 
 import pytest
 
-from knowledge.temporal_search import TemporalSearchService
 from autobot_shared.logging_manager import get_logger
+from knowledge.temporal_search import TemporalSearchService
 
 logger = get_logger(__name__)
 

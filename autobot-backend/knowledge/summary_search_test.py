@@ -12,8 +12,8 @@ from uuid import uuid4
 
 import pytest
 
-from knowledge.summary_search import SummarySearchService
 from autobot_shared.logging_manager import get_logger
+from knowledge.summary_search import SummarySearchService
 
 logger = get_logger(__name__)
 

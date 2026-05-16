@@ -10,7 +10,6 @@ REST API for team management operations.
 import logging
 import uuid
 from typing import List, Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -31,6 +30,7 @@ from api.user_management.dependencies import (
     require_org_context,
     require_user_management_enabled,
 )
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from user_management.services import TeamService, TenantContext
 from user_management.services.team_service import (

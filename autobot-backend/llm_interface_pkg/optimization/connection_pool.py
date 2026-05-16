@@ -25,8 +25,8 @@ except ImportError as _e:
     HTTPX_AVAILABLE = False
     httpx = _MissingDep("httpx", _e)  # type: ignore[assignment]
 
-from autobot_shared.ssot_config import config as _ssot_config
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config as _ssot_config
 
 logger = get_logger(__name__)
 

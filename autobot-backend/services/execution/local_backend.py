@@ -13,8 +13,8 @@ import logging
 import os
 import sys
 from typing import Dict, Tuple
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from services.execution.base_backend import (
     BackendType,

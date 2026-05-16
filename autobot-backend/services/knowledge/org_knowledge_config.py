@@ -23,7 +23,6 @@ unavailable.
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import json
 import logging
@@ -31,6 +30,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 
 logger = get_logger(__name__)

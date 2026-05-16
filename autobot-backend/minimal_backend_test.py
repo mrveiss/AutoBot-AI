@@ -4,10 +4,11 @@ Minimal backend to test basic FastAPI functionality
 """
 
 import logging
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from autobot_shared.logging_manager import get_logger
 
 # Set up minimal logging
 logging.basicConfig(level=logging.INFO)

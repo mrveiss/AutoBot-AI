@@ -9,8 +9,8 @@ LLM judge integration for evaluating workflow steps.
 
 import logging
 from typing import Set
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from type_defs.common import Metadata
 
 from .models import ActiveWorkflow, WorkflowStep, WorkflowStepStatus

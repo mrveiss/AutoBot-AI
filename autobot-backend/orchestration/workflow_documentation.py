@@ -12,8 +12,9 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from .types import AgentProfile, DocumentationType, WorkflowDocumentation
 from autobot_shared.logging_manager import get_logger
+
+from .types import AgentProfile, DocumentationType, WorkflowDocumentation
 
 logger = get_logger(__name__)
 

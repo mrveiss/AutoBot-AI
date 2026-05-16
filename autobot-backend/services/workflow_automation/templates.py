@@ -9,8 +9,9 @@ Pre-defined workflow templates for common automation tasks.
 
 from typing import Callable, Dict, List
 
-from .models import WorkflowStep
 from autobot_shared.logging_manager import get_logger
+
+from .models import WorkflowStep
 
 logger = get_logger(__name__)
 

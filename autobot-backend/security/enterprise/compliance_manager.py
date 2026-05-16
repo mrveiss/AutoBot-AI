@@ -22,9 +22,9 @@ import aiofiles
 import yaml
 from cryptography.fernet import Fernet
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.path_constants import PATH
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

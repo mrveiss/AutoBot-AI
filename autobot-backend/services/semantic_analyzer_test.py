@@ -9,8 +9,8 @@ Tests for framework detection and coding pattern analysis.
 
 import ast
 
-from services.semantic_analyzer import SemanticAnalyzer
 from autobot_shared.logging_manager import get_logger
+from services.semantic_analyzer import SemanticAnalyzer
 
 
 def test_semantic_analyzer_initialization():

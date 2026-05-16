@@ -17,6 +17,7 @@ import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, AsyncGenerator, Dict, List, Optional
+
 from autobot_shared.logging_manager import get_logger
 
 # #7127: running this file directly cannot work — top-level project imports

@@ -12,8 +12,8 @@ import re
 import subprocess  # nosec B404 - elevation wrapper requires subprocess
 from typing import Dict, Tuple
 
-from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = get_logger(__name__)
 

@@ -15,7 +15,6 @@ Features:
 - Advanced RAG optimization with hybrid search
 """
 
-from autobot_shared.ssot_config import config
 import asyncio
 import glob
 import hashlib
@@ -29,6 +28,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import aiofiles
+
+from autobot_shared.ssot_config import config
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

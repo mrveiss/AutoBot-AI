@@ -13,6 +13,7 @@ Part of Issue #381 - God Class Refactoring
 import asyncio
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from enhanced_memory_manager_async import TaskPriority
 from task_execution_tracker import get_task_tracker
 
@@ -22,7 +23,6 @@ from ..types import DEFAULT_USER_PREFERENCES, ContextType, DecisionType
 from .audio import AudioContextCollector
 from .system import SystemContextCollector
 from .visual import VisualContextCollector
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

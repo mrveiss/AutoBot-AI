@@ -15,8 +15,8 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.config_revision import ConfigRevision
 from autobot_shared.logging_manager import get_logger
+from models.config_revision import ConfigRevision
 
 logger = get_logger(__name__)
 

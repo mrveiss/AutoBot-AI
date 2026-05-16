@@ -12,11 +12,12 @@ Issue #281: Refactored from 716 lines of repetitive try/except blocks to
 data-driven configuration pattern for improved maintainability.
 """
 
-from autobot_shared.ssot_config import config
 import importlib
 import os
 from typing import Any, Dict, List, Tuple
+
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 

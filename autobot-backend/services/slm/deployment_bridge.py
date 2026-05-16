@@ -14,7 +14,6 @@ Related to Issue #3407.
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import enum
 import logging
@@ -23,6 +22,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Optional
 
+from autobot_shared.logging_manager import get_logger
 from models.infrastructure import (
     DeploymentStrategy,
     DockerContainerSpec,

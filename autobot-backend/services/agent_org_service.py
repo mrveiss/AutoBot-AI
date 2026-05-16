@@ -14,8 +14,8 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.agent_org import AgentOrgNode, OrgRole
 from autobot_shared.logging_manager import get_logger
+from models.agent_org import AgentOrgNode, OrgRole
 
 logger = get_logger(__name__)
 

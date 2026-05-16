@@ -10,8 +10,8 @@ Issue #369: Added async ChromaDB operations to prevent event loop blocking.
 import logging
 import re
 from pathlib import Path
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.backends import get_async_default_client, get_default_client
 
 logger = get_logger(__name__)

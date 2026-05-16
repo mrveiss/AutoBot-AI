@@ -16,8 +16,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from autobot_shared.async_compat import run_or_schedule
-from constants.ttl_constants import TTL_1_HOUR
 from autobot_shared.logging_manager import get_logger
+from constants.ttl_constants import TTL_1_HOUR
 
 logger = get_logger(__name__)
 

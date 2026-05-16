@@ -17,11 +17,11 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.time_utils import now_utc
 from llm_interface_pkg.types import LLMType
 from services.llm_service import get_llm_service
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

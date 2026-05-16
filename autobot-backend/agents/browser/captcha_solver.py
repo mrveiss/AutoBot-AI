@@ -32,7 +32,6 @@ Related: Issue #1974
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import hashlib
 import io
@@ -42,6 +41,8 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+
+from autobot_shared.logging_manager import get_logger
 
 if TYPE_CHECKING:
     pass  # Playwright Page — only needed for type annotations, imported lazily

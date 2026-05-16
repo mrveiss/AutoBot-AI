@@ -12,6 +12,7 @@ import json
 import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Pattern
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

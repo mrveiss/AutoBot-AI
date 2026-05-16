@@ -19,6 +19,7 @@ from api.approval_gates import router as approval_gates_router  # #1402
 from api.audit import router as audit_router
 from api.auth import router as auth_router
 from api.browser_mcp import router as browser_mcp_router
+from api.canvas import router as canvas_router  # MVA-359
 from api.chat import router as chat_router
 from api.chat_compare import router as chat_compare_router  # Issue #4414
 from api.collaboration import router as collaboration_router
@@ -77,7 +78,6 @@ from api.structured_thinking_mcp import router as structured_thinking_mcp_router
 from api.system import router as system_router
 from api.usage import router as usage_router  # Issue #1807
 from api.user_management.router import router as user_management_router  # Issue #1801
-from api.canvas import router as canvas_router  # MVA-359
 from api.vnc_manager import router as vnc_router
 from api.vnc_mcp import router as vnc_mcp_router
 from api.vnc_proxy import router as vnc_proxy_router

@@ -53,7 +53,6 @@ Configuration
 from __future__ import annotations
 
 import os
-from autobot_shared.ssot_config import config
 import time
 import uuid
 from datetime import timedelta
@@ -66,9 +65,10 @@ from autobot_shared.auth.jwt_core import (
     encode_jwt,
 )
 from autobot_shared.fire_and_forget import run_redis_write
-from autobot_shared.redis_client import get_async_redis_client
-from services.audit.audit_log import AuditAction, audit_record
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.ssot_config import config
+from services.audit.audit_log import AuditAction, audit_record
 
 
 class JWTRefreshConflictError(Exception):

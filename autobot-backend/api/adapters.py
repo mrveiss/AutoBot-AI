@@ -17,8 +17,8 @@ from api.schemas_common import DataResponse
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from llm_interface_pkg.adapters.registry import get_adapter_registry
 from autobot_shared.logging_manager import get_logger
+from llm_interface_pkg.adapters.registry import get_adapter_registry
 
 logger = get_logger(__name__)
 

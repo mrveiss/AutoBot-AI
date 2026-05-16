@@ -10,10 +10,10 @@ Machine learning component for workflow optimization.
 from datetime import datetime, timezone
 from typing import List
 
+from autobot_shared.logging_manager import get_logger
 from type_defs.common import Metadata
 
 from .models import SmartWorkflowStep
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

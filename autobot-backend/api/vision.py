@@ -11,13 +11,13 @@ Author: mrveiss
 
 import logging
 from typing import Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.system_health import register_singleton_probe
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from computer_vision_system import ElementType, InteractionType, ScreenAnalyzer
 
 router = APIRouter(tags=["vision", "gui-automation"])

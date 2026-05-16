@@ -9,7 +9,6 @@ Provides native API access to containerized Playwright functionality
 import base64
 import logging
 from typing import Optional
-from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
@@ -37,6 +36,7 @@ from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
 from research_browser_manager import get_research_browser_manager
 from services.playwright_service import (

@@ -14,9 +14,9 @@ import shlex
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
-from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
 from security.command_patterns import (
     FORBIDDEN_COMMANDS,

@@ -15,6 +15,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Coroutine, Dict
 
+from autobot_shared.logging_manager import get_logger
+
 from ..models import LLMRequest, LLMResponse
 from ..types import ProviderType
 from .cloud_batcher import CloudRequestBatcher
@@ -22,7 +24,6 @@ from .connection_pool import ConnectionPoolManager, PoolConfig
 from .prompt_compressor import CompressionConfig, PromptCompressor
 from .rate_limiter import RateLimitConfig, RateLimitHandler
 from .router import OptimizationCategory, OptimizationConfig, get_optimization_router
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

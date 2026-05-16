@@ -23,9 +23,9 @@ from api.schemas_system import (
     ProjectStatusResponse,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from project_state_manager import get_project_state_manager
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

@@ -8,12 +8,13 @@ Pin the regression: chat:session:* keys must use a configurable TTL with
 #4 of issue #6743.
 """
 
-from autobot_shared.ssot_config import config
 import importlib
 import logging
 import os
 
 import pytest
+
+from autobot_shared.ssot_config import config
 
 
 def _reload_cache_with_env(env_value):

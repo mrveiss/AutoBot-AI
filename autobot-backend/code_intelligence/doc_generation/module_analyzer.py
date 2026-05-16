@@ -13,9 +13,9 @@ Part of god class refactoring initiative.
 import ast
 import os
 from typing import List, Optional, Set, Union
-from autobot_shared.logging_manager import get_logger
 
 import code_intelligence.doc_generation.helpers as helpers  # direct submodule (#1210)
+from autobot_shared.logging_manager import get_logger
 from code_intelligence.doc_generation.docstring_parser import DocstringParser
 from code_intelligence.doc_generation.models import (
     ClassDoc,

@@ -15,8 +15,8 @@ from .knowledge_tasks import (
     cleanup_orphan_documents,
     full_man_page_index,
     prune_sync_queue_done,
-    reindex_knowledge_base,
     refresh_system_knowledge,
+    reindex_knowledge_base,
     scan_man_page_changes,
 )
 from .memory_tasks import (

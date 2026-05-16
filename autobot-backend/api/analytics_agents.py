@@ -15,7 +15,6 @@ Related Issues: #59 (Advanced Analytics & Business Intelligence)
 
 import logging
 from typing import Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, Query
 
@@ -35,6 +34,7 @@ from api.schemas_analytics import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from services.agent_analytics import AgentType, TaskStatus, get_agent_analytics
 
 logger = get_logger(__name__)

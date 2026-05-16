@@ -12,10 +12,10 @@ import asyncio
 import logging
 import time
 from typing import Any, Dict, List
-from autobot_shared.logging_manager import get_logger
 
 import numpy as np
 
+from autobot_shared.logging_manager import get_logger
 from enhanced_memory_manager_async import TaskPriority
 from task_execution_tracker import get_task_tracker
 from voice_processing.models import AudioInput, SpeechRecognitionResult

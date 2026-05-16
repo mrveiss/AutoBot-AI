@@ -11,7 +11,6 @@ streaming logs, sending signals, and listing processes per agent.
 import logging
 import os
 from typing import Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -25,6 +24,7 @@ from api.schemas_system import (
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_utils import safe_http_detail
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 from services.process_adapter_service import ProcessAdapterService
 

@@ -17,10 +17,10 @@ from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple
 import aiofiles
 import yaml
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from intelligence.os_detector import get_os_detector
 from utils.command_utils import execute_command
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

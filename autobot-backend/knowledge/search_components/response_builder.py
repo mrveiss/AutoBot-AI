@@ -10,8 +10,8 @@ Contains response building and clustering functionality.
 
 import logging
 from typing import Any, Dict, List, Optional, Tuple
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from models.task_context import SearchResponseContext
 

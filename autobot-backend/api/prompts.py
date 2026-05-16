@@ -6,7 +6,6 @@ import logging
 import os
 import time
 from typing import Dict, Optional
-from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException
@@ -19,6 +18,7 @@ from api.schemas_workflows import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
 from constants.ttl_constants import TTL_5_MINUTES
 

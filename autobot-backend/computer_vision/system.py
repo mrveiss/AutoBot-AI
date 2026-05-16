@@ -12,12 +12,12 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
+from autobot_shared.logging_manager import get_logger
 from memory import EnhancedMemoryManager, TaskPriority
 from task_execution_tracker import get_task_tracker
 
 from .screen_analyzer import ScreenAnalyzer
 from .types import ScreenState
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

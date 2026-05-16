@@ -9,7 +9,6 @@ Provides intelligent model selection, performance tracking, and optimization sug
 import logging
 import time
 from typing import List
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -35,6 +34,7 @@ from api.schemas_agent import (
 from api.system_health import register_singleton_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from config.manager import get_config_manager
 from services.llm_service import get_llm_service
 from utils.model_optimizer import TaskRequest, get_model_optimizer

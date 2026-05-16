@@ -14,10 +14,10 @@ import logging
 import re
 import uuid
 from typing import Any, Optional
-from autobot_shared.logging_manager import get_logger
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from models.activities import (
     BrowserActivityModel,

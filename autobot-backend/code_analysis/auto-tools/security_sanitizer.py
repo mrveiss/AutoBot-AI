@@ -18,6 +18,7 @@ Version: 1.0.0
 """
 
 import logging
+
 from autobot_shared.logging_manager import get_logger
 
 # Configure logging

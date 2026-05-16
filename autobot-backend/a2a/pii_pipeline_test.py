@@ -20,12 +20,12 @@ import unittest
 from unittest.mock import patch
 
 from a2a.pii_pipeline import (
+    _DEFAULT_POLICY,
     PIIAction,
     PIIBlocked,
     PIIPipeline,
     PIIType,
     ScrubResult,
-    _DEFAULT_POLICY,
     _high_entropy,
     _luhn,
     scrub_outbound,

@@ -7,6 +7,7 @@ to the HTML files and tests the protection mechanisms.
 """
 
 import logging
+
 from autobot_shared.logging_manager import get_logger
 
 # Configure logging

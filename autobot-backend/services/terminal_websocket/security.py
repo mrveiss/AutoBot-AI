@@ -13,8 +13,8 @@ from api.schemas_terminal import (
     CommandRiskLevel,
     SecurityLevel,
 )
-from constants.terminal_constants import MODERATE_RISK_PATTERNS, RISKY_COMMAND_PATTERNS
 from autobot_shared.logging_manager import get_logger
+from constants.terminal_constants import MODERATE_RISK_PATTERNS, RISKY_COMMAND_PATTERNS
 
 logger = get_logger(__name__)
 

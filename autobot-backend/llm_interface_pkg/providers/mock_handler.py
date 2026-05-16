@@ -10,11 +10,11 @@ Extracted from llm_interface.py as part of Issue #381 god class refactoring.
 import asyncio
 import time
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
 from ..mock_providers import local_llm
 from ..models import LLMRequest, LLMResponse
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

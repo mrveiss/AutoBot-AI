@@ -9,7 +9,6 @@ Provides API endpoints for managing enterprise-grade features.
 import asyncio
 import logging
 from typing import Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -23,6 +22,7 @@ from api.schemas_workflows import (
 from api.system_health import register_singleton_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from enterprise_feature_manager import (
     FeatureCategory,
     FeatureStatus,

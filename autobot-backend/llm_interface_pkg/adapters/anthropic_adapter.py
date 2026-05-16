@@ -10,12 +10,13 @@ think-block stripping, OTel tracing).  This adapter's sole responsibility is the
 ``test_environment()`` diagnostic method used by ``api/adapters.py``.
 """
 
-from autobot_shared.ssot_config import config
 import logging
 import os
 import time
 from typing import List, Optional
+
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 from ..models import LLMRequest, LLMResponse
 from .base import (

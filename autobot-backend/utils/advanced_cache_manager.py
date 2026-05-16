@@ -16,8 +16,8 @@ from dataclasses import dataclass
 from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 from autobot_shared.ssot_constants import TTL_24_HOURS
 from constants.ttl_constants import TTL_1_HOUR, TTL_5_MINUTES

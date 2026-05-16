@@ -14,10 +14,10 @@ import json
 
 import aiohttp
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientLockedMixin
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

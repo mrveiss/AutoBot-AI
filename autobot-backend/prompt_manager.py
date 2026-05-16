@@ -15,11 +15,11 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 import yaml
 from jinja2 import Environment, FileSystemLoader, Template
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.ttl_constants import TTL_24_HOURS
 

@@ -10,10 +10,10 @@ Extracted from voice_processing_system.py as part of Issue #381 god class refact
 
 import asyncio
 import logging
-from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 
+from autobot_shared.logging_manager import get_logger
 from task_execution_tracker import get_task_tracker
 from voice_processing.models import SpeechSynthesisRequest
 

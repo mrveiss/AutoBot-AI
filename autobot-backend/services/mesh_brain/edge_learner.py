@@ -7,6 +7,7 @@ import json
 from datetime import datetime, timezone
 from itertools import combinations
 from typing import Protocol
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

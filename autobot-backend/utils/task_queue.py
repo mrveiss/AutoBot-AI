@@ -31,8 +31,8 @@ except ImportError as _e:
     RedisError = Exception  # Fallback if redis not available
     get_redis_client = _MissingDep("get_redis_client", _e)  # type: ignore[assignment]
 
-from constants.threshold_constants import RetryConfig, TimingConstants
 from autobot_shared.logging_manager import get_logger
+from constants.threshold_constants import RetryConfig, TimingConstants
 
 # Temporary implementations until proper modules are created
 # try:

@@ -14,10 +14,10 @@ import asyncio
 from typing import Dict, List, Optional
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from services.skill_management.skill_extractor import ExtractedSkill
 from services.slm_client import get_slm_client
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

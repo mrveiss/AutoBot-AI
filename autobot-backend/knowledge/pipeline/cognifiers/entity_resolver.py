@@ -12,10 +12,10 @@ Phase 3 — Entity Resolution: Deduplicate entities across documents (e.g., "Aut
 from difflib import SequenceMatcher
 from typing import Dict, Iterable, List, Optional, Set
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.models.entity import Entity
 from knowledge.pipeline.registry import TaskRegistry
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

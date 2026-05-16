@@ -9,13 +9,13 @@ Generates smart workflow steps with AI enhancements.
 
 from typing import List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_types import TaskComplexity
 from orchestrator import Orchestrator
 from orchestrator import get_orchestrator_sync as get_orchestrator
 from type_defs.common import Metadata
 
 from .models import SmartWorkflowStep, WorkflowIntent
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

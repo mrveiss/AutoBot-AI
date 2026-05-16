@@ -15,8 +15,8 @@ import json
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from autobot_shared.time_utils import utc_timestamp
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import utc_timestamp
 
 logger = get_logger(__name__)
 

@@ -16,11 +16,11 @@ from typing import Callable
 from fastapi import HTTPException
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import RetryConfig, exponential_backoff_delay
 
 from .boundary_manager import get_error_boundary_manager
 from .types import APIErrorResponse, ErrorCategory, ErrorContext, RecoveryStrategy
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

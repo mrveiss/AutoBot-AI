@@ -9,13 +9,13 @@ ChromaDB for semantic knowledge search over experiment findings.
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import json
 import logging
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 
 from .config import AutoResearchConfig

@@ -18,8 +18,9 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 if TYPE_CHECKING:
     import aioredis
     import redis
-from autobot_shared.time_utils import now_utc
+
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import now_utc
 
 logger = get_logger(__name__)
 

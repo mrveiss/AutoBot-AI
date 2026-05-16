@@ -8,10 +8,10 @@ Provides singleton-like behavior with app.state integration for optimal performa
 """
 
 import logging
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import Request
 
+from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
 
 logger = get_logger(__name__)

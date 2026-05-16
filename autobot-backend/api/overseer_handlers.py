@@ -27,8 +27,8 @@ from api.schemas_common import DataResponse
 from api.schemas_system import OverseerStatusResponse
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from chat_history import ChatHistoryManager
 from autobot_shared.logging_manager import get_logger
+from chat_history import ChatHistoryManager
 
 logger = get_logger(__name__)
 

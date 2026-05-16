@@ -22,13 +22,13 @@ from datetime import timedelta
 from enum import Enum
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.status_enums import TaskStatus
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.ttl_constants import TTL_1_HOUR, TTL_30_DAYS
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

@@ -9,13 +9,14 @@ Contains enums, dataclasses, and type definitions for model optimization.
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
+
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

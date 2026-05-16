@@ -17,9 +17,10 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional
-from autobot_shared.logging_manager import get_logger
 
 import redis.asyncio as redis
+
+from autobot_shared.logging_manager import get_logger
 
 from .types import LongRunningOperation, OperationProgress
 

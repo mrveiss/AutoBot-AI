@@ -16,12 +16,12 @@ Issue: Extend DAG executor with causal validation and effect tracing.
 
 from typing import Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from orchestration.causal_models import (
     CausalEffectType,
     CausalMetadata,
 )
 from orchestration.dag_executor import WorkflowDAG
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

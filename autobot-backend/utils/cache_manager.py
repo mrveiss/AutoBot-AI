@@ -24,11 +24,12 @@ from typing import Any, Optional
 
 from fastapi import Request
 
+from autobot_shared.logging_manager import get_logger
+
 # Import centralized Redis client utility
 from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_5_MINUTES
 from type_defs.common import Metadata
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

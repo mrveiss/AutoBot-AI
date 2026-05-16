@@ -9,8 +9,8 @@ Handles WebSocket communication for workflow status updates.
 
 from typing import Any, Dict
 
-from type_defs.common import Metadata
 from autobot_shared.logging_manager import get_logger
+from type_defs.common import Metadata
 
 logger = get_logger(__name__)
 

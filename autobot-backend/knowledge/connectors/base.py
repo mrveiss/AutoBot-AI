@@ -13,8 +13,8 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.connectors.models import (
     ChangeInfo,
     ConnectorConfig,

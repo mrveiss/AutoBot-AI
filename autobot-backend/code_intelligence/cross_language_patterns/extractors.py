@@ -14,8 +14,9 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Pattern, Set
 
-from .models import PatternCategory, PatternLocation, PatternType
 from autobot_shared.logging_manager import get_logger
+
+from .models import PatternCategory, PatternLocation, PatternType
 
 logger = get_logger(__name__)
 

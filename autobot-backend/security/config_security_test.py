@@ -6,10 +6,10 @@ Tests security aspects of configuration loading, environment variables, and sens
 import os
 import tempfile
 from unittest.mock import patch
-from autobot_shared.logging_manager import get_logger
 
 import pytest
 
+from autobot_shared.logging_manager import get_logger
 from config.manager import ConfigManager as ConfigManager
 
 

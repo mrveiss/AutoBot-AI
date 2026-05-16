@@ -11,6 +11,7 @@ Contains the AST visitor that analyzes code for performance patterns.
 import ast
 import logging
 from typing import Dict, List, Optional, Set
+
 from autobot_shared.logging_manager import get_logger
 
 from .patterns import (

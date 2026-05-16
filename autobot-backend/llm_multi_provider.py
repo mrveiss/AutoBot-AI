@@ -20,6 +20,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Union
 
+from autobot_shared.logging_manager import get_logger
+
 # ---------------------------------------------------------------------------
 # Re-export the plugin registry and base classes from canonical location
 # ---------------------------------------------------------------------------
@@ -41,7 +43,6 @@ from llm_interface_pkg.providers import (
     VLLMProvider,
 )
 from llm_interface_pkg.types import LLMType, ProviderType
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

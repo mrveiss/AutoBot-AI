@@ -10,9 +10,9 @@ Main service class that composes all agent terminal functionality.
 import logging
 import time
 from typing import Optional
-from autobot_shared.logging_manager import get_logger
 
 from autobot_logging.terminal_logger import TerminalLogger
+from autobot_shared.logging_manager import get_logger
 from chat_history import ChatHistoryManager
 from monitoring.prometheus_metrics import get_metrics_manager
 from secure_command_executor import SecureCommandExecutor, SecurityPolicy

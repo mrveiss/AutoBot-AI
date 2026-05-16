@@ -21,10 +21,10 @@ INSTALLATION:
 
 from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from enhanced_security_layer import EnhancedSecurityLayer
 from security.prompt_injection_detector import get_prompt_injection_detector
 from security.secure_llm_command_parser import get_secure_llm_parser
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

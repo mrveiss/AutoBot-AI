@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 
+from autobot_shared.logging_manager import get_logger
 from integrations.base import (
     BaseIntegration,
     IntegrationAction,
@@ -29,7 +30,6 @@ from integrations.rate_limiter import (
     IntegrationRateLimiter,
 )
 from integrations.rate_limiter import integration_rate_limiter as _shared_rate_limiter
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

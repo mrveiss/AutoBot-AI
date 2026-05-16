@@ -25,9 +25,9 @@ from api.schemas_common import DataResponse
 from api.schemas_workflows import CaptchaResolutionRequest, CaptchaResolutionResponse
 from api.system_health import register_singleton_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from services.captcha_human_loop import CaptchaResolutionStatus, get_captcha_human_loop
-from autobot_shared.logging_manager import get_logger
 
 router = APIRouter(prefix="/captcha", tags=["captcha"])
 logger = get_logger(__name__)

@@ -14,9 +14,10 @@ from typing import Any, Dict, Optional
 from fastapi import WebSocket
 from starlette.websockets import WebSocketState
 
+from autobot_shared.logging_manager import get_logger
+
 from ..types import ChannelType, GatewaySession, MessageType, UnifiedMessage
 from .base import BaseChannelAdapter
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

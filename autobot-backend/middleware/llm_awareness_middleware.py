@@ -14,9 +14,9 @@ from typing import Any, Dict, Optional
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_5_MINUTES
 from llm_self_awareness import get_llm_self_awareness
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

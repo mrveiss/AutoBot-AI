@@ -44,6 +44,7 @@ from api.schemas_analytics import (
     PromptCategory,
     UsageRecordRequest,
 )
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.model_constants import (
@@ -52,7 +53,6 @@ from constants.model_constants import (
     MODEL_COSTS_PER_1M_TOKENS,
     OPENAI_GPT4O,
 )
-from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_30_DAYS
 
 # Prefix provided by analytics_routers.py registry (#1032)

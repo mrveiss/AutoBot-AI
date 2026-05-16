@@ -11,13 +11,13 @@ Extracted from llm_interface.py as part of Issue #381 god class refactoring.
 Updated in Issue #453 to use real Ollama integration.
 """
 
-from autobot_shared.ssot_config import config
 import asyncio
 import logging
 import os
 from typing import Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TIMEOUT_HTTP_LONG
 

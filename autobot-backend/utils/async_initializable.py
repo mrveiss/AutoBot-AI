@@ -121,9 +121,9 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional
-from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.error_boundaries import error_boundary
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

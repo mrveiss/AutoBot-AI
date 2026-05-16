@@ -9,10 +9,10 @@ Manages classification rules and keywords in Redis for dynamic updates
 import json
 import logging
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 import redis
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_types import TaskComplexity
 from constants.threshold_constants import StringParsingConstants

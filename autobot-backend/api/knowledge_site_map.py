@@ -34,8 +34,8 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from web_fetch.site_mapper import SiteMapEntry, SiteMapper, SiteMapResult
 from autobot_shared.logging_manager import get_logger
+from web_fetch.site_mapper import SiteMapEntry, SiteMapper, SiteMapResult
 
 logger = get_logger(__name__)
 

@@ -6,7 +6,6 @@ Memory Optimization Utilities for AutoBot
 Provides memory usage optimization and monitoring capabilities
 """
 
-from autobot_shared.ssot_config import config
 import gc
 import logging
 import os
@@ -19,7 +18,9 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, TypeVar, Union
 
 import psutil
+
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 

@@ -27,10 +27,8 @@ Features:
 import logging
 import os
 import threading
-from autobot_shared.ssot_config import config
 from contextlib import contextmanager
 from typing import Any, Dict, Optional
-from autobot_shared.logging_manager import get_logger
 
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
@@ -49,6 +47,8 @@ from opentelemetry.sdk.trace.sampling import (
 from opentelemetry.trace import SpanKind, Status, StatusCode
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from constants.network_constants import NetworkConstants
 
 logger = get_logger(__name__)

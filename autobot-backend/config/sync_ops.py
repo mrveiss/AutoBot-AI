@@ -10,9 +10,10 @@ import json
 import logging
 import time
 from typing import Any, Dict
-from autobot_shared.logging_manager import get_logger
 
 import yaml
+
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

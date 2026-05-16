@@ -11,8 +11,8 @@ from datetime import datetime
 from typing import List, Optional, Set
 from uuid import UUID
 
-from autobot_shared.time_utils import parse_utc_iso
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import parse_utc_iso
 
 logger = get_logger(__name__)
 

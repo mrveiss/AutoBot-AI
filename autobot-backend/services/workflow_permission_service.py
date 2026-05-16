@@ -20,9 +20,9 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.logging_manager import get_logger
 from models.workflow_audit import WorkflowAuditLog
 from models.workflow_permission import WorkflowPermission
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

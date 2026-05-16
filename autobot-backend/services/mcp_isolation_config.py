@@ -18,12 +18,12 @@ Environment variables (read lazily so tests can override):
 
 from __future__ import annotations
 
-from autobot_shared.ssot_config import config
-
 import os
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List
+
+from autobot_shared.ssot_config import config
 
 
 class IsolationMode(str, Enum):

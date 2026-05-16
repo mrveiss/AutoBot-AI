@@ -24,6 +24,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
+from autobot_shared.logging_manager import get_logger
+
 from .attention_backend import (
     AttentionBackendSelector,
 )
@@ -32,7 +34,6 @@ from .hf_quantizer import HfQuantizerWrapper
 from .kv_cache import KVCacheConfig, KVCacheManager, LayerKVCache
 from .layer_inference import LayerInferenceConfig, LayerInferenceEngine
 from .meta_eviction import MetaDeviceEvictionManager, clean_memory
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

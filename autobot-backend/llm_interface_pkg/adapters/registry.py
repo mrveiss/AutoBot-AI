@@ -10,8 +10,9 @@ and runtime adapter switching per agent/task.
 
 from typing import Dict, List, Optional
 
-from .base import AdapterBase, EnvironmentTestResult
 from autobot_shared.logging_manager import get_logger
+
+from .base import AdapterBase, EnvironmentTestResult
 
 logger = get_logger(__name__)
 

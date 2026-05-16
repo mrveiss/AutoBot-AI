@@ -19,7 +19,6 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -33,6 +32,7 @@ from api.schemas_code import (
 from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_path
 from code_intelligence.merge_conflict_resolver import (
     ConflictBlock,

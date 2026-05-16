@@ -13,9 +13,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
 from .coordinator import WorkflowCoordinator
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

@@ -9,7 +9,6 @@ Issue #679: Organization-level knowledge policies, analytics, and controls.
 
 import logging
 from typing import Dict
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
@@ -23,6 +22,7 @@ from api.schemas_knowledge import (
 )
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from knowledge.ownership import VisibilityLevel
 from knowledge_factory import get_or_create_knowledge_base
 

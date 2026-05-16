@@ -27,6 +27,7 @@ from api.schemas_system import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from constants.error_constants import ERR_ASSESSMENT_NOT_FOUND
 from services.security_tool_parsers import parse_tool_output
 from services.security_workflow_manager import (
@@ -39,7 +40,6 @@ from services.security_workflow_manager import (
 
 # Issue #756: Consolidated from src/utils/request_utils.py
 from utils.request_utils import generate_request_id
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

@@ -12,8 +12,8 @@ from typing import Optional
 
 from fastapi import HTTPException, status
 
-from utils.error_catalog import get_error
 from autobot_shared.logging_manager import get_logger
+from utils.error_catalog import get_error
 
 logger = get_logger(__name__)
 

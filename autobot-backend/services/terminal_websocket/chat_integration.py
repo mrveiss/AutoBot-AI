@@ -14,9 +14,9 @@ from typing import Optional
 
 import aiofiles
 
+from autobot_shared.logging_manager import get_logger
 from chat_history import ChatHistoryManager
 from utils.encoding_utils import is_terminal_prompt, strip_ansi_codes
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

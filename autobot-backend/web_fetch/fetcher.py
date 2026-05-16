@@ -17,7 +17,6 @@ Jina circuit breaker from media.link.pipeline is reused via _try_jina / _record_
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import logging
@@ -25,6 +24,7 @@ import time
 from typing import Optional
 from urllib.parse import urlparse
 
+from autobot_shared.logging_manager import get_logger
 from web_fetch.cache import WEB_FETCH_MAX_BYTES, get_cached_result, set_cached_result
 from web_fetch.extractors import _MIN_CONTENT_CHARS, extract_markdown, is_spa_content
 

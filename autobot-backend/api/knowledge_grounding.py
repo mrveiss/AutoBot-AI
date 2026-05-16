@@ -24,7 +24,6 @@ Rate limiting: 50 req/min per user for ground-response, 100 req/min for verify-c
 
 import logging
 from typing import Any, Dict, Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 
@@ -40,6 +39,7 @@ from api.schemas_knowledge import (
 )
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import QueryDefaults
 from services.grounded_agent import (
     Claim,

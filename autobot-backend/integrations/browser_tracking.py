@@ -14,8 +14,8 @@ from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from utils.activity_tracker import track_browser_activity
 from autobot_shared.logging_manager import get_logger
+from utils.activity_tracker import track_browser_activity
 
 logger = get_logger(__name__)
 

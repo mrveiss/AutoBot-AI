@@ -30,9 +30,10 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
-from autobot_shared.logging_manager import get_logger
 
 import aiohttp
+
+from autobot_shared.logging_manager import get_logger
 
 # Import canonical Redis client pattern
 from autobot_shared.redis_client import get_redis_client

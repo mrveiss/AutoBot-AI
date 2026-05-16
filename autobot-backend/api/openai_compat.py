@@ -15,7 +15,6 @@ default.
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import inspect
@@ -41,6 +40,7 @@ from api.schemas_code import (
 )
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from llm_interface_pkg import get_provider_registry
 from llm_interface_pkg.models import LLMRequest
 from llm_interface_pkg.tiered_routing.tier_router import get_tiered_router

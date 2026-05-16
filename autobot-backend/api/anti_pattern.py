@@ -12,7 +12,6 @@ Issue: #221
 """
 
 import logging
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
@@ -24,6 +23,7 @@ from api.schemas_code import (
     SeveritySummary,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
 router = APIRouter()
 logger = get_logger(__name__)

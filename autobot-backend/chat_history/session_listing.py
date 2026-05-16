@@ -20,8 +20,8 @@ from typing import Any, Dict, List
 
 import aiofiles
 
-from chat_history.file_io import run_in_chat_io_executor
 from autobot_shared.logging_manager import get_logger
+from chat_history.file_io import run_in_chat_io_executor
 
 logger = get_logger(__name__)
 

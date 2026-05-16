@@ -11,10 +11,10 @@ This judge evaluates workflow steps before execution to ensure quality, safety, 
 import json
 from typing import Any, Dict, FrozenSet, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from constants import WorkflowThresholds
 
 from . import BaseLLMJudge, JudgmentDimension, JudgmentResult
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

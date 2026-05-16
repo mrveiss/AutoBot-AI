@@ -28,8 +28,8 @@ from api.schemas_system import (
 )
 from api.system_health import register_singleton_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from services.causal_inference_engine import CausalInferenceEngine
 from autobot_shared.logging_manager import get_logger
+from services.causal_inference_engine import CausalInferenceEngine
 
 logger = get_logger(__name__)
 

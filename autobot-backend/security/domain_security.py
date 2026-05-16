@@ -12,19 +12,19 @@ import asyncio
 import ipaddress
 import logging
 import os
-from autobot_shared.ssot_config import config
 import re
 import socket
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
 from urllib.parse import urlparse
-from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 import yaml
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from constants.security_constants import SecurityConstants
 from security.threat_intelligence import (
     ThreatIntelligenceService,

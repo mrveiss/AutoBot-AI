@@ -32,8 +32,8 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 
-from constants.network_constants import ServiceURLs
 from autobot_shared.logging_manager import get_logger
+from constants.network_constants import ServiceURLs
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")

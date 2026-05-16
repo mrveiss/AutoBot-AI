@@ -21,8 +21,8 @@ import sys
 import tempfile
 from typing import Any, Dict
 
-from services.tool_output_filter import get_tool_output_filter
 from autobot_shared.logging_manager import get_logger
+from services.tool_output_filter import get_tool_output_filter
 
 logger = get_logger(__name__)
 

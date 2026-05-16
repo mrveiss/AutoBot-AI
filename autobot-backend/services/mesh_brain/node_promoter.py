@@ -5,6 +5,7 @@
 
 from dataclasses import dataclass, field
 from typing import Callable, Coroutine, Protocol
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

@@ -6,7 +6,6 @@ import logging
 import os
 import tempfile
 from typing import Any, Dict, List
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
@@ -20,6 +19,7 @@ from api.schemas_code import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from services.tts_client import get_tts_client
 
 router = APIRouter(

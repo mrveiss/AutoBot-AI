@@ -20,7 +20,6 @@ Usage:
     python tests/test_monitoring_and_alerts.py [--alerts] [--metrics] [--dashboards]
 """
 
-from autobot_shared.ssot_config import config
 import argparse
 import asyncio
 import json
@@ -37,12 +36,14 @@ from typing import Dict, List, Optional
 
 import requests
 
+from autobot_shared.ssot_config import config
+
 # Add AutoBot paths
 sys.path.append(config.project_root)
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from tests.test_helpers import get_test_backend_url
 from autobot_shared.logging_manager import get_logger
+from tests.test_helpers import get_test_backend_url
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = get_logger(__name__)

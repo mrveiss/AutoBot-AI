@@ -18,7 +18,6 @@ import logging
 import shlex
 import time
 from typing import List, Optional
-from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -44,6 +43,7 @@ from api.schemas_agent import (
 from api.schemas_common import AgentMessageResponse, DataResponse
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from constants.threshold_constants import TimingConstants
 from dependencies import get_config, get_knowledge_base

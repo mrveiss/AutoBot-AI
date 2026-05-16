@@ -9,6 +9,7 @@ Static type analysis for better completion suggestions.
 
 import ast
 from typing import Dict, Optional, Set
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

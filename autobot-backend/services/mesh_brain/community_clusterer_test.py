@@ -6,10 +6,10 @@
 import sys
 from types import ModuleType
 from unittest.mock import AsyncMock, patch
-from autobot_shared.logging_manager import get_logger
 
 import pytest
 
+from autobot_shared.logging_manager import get_logger
 from services.mesh_brain.community_clusterer import CommunityClusterer, cluster_graph
 
 

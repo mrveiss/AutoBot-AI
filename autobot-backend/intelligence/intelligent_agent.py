@@ -33,6 +33,7 @@ from intelligence.goal_processor import GoalProcessor, ProcessedGoal
 # Issue #380: Module-level frozenset for package managers requiring sudo
 _SUDO_PACKAGE_MANAGERS: FrozenSet[str] = frozenset({"apt", "yum", "dn", "pacman", "zypper"})
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
 # Import our new intelligent agent components
@@ -48,7 +49,6 @@ from reasoning.causal_reasoning import CAUSAL_REASONING_SNIPPET
 
 # Import existing AutoBot components
 from utils.command_validator import CommandValidator
-from autobot_shared.logging_manager import get_logger
 from worker_node import WorkerNode
 
 logger = get_logger(__name__)

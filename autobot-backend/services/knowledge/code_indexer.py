@@ -21,8 +21,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
 
 logger = get_logger(__name__)

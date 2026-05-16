@@ -29,8 +29,8 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
 
 logger = get_logger(__name__)
 

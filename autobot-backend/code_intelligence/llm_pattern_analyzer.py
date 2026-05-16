@@ -27,8 +27,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from code_intelligence.llm_pattern_analysis.calculators import (
     CostCalculator,
     TokenTracker,

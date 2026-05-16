@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
+from autobot_shared.logging_manager import get_logger
 from enhanced_memory_manager_async import TaskPriority
 from memory import EnhancedMemoryManager
 from task_execution_tracker import get_task_tracker
@@ -23,7 +24,6 @@ from .nlp_processor import NaturalLanguageProcessor
 from .speech_recognition import SpeechRecognitionEngine
 from .tts_engine import TextToSpeechEngine
 from .types import VoiceCommand
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

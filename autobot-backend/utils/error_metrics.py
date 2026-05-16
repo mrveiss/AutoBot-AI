@@ -13,9 +13,9 @@ import logging
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.error_boundaries import ErrorCategory
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 
 logger = get_logger(__name__)

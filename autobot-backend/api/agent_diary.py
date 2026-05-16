@@ -16,9 +16,9 @@ from fastapi import APIRouter, Depends, Query
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from memory.agent_diary import AgentDiaryService, list_with_diaries
 from utils.response_helpers import create_success_response
-from autobot_shared.logging_manager import get_logger
 
 router = APIRouter()
 logger = get_logger(__name__)

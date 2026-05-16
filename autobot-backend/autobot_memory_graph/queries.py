@@ -15,8 +15,9 @@ Part of the modular autobot_memory_graph package (Issue #716).
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from .core import AutoBotMemoryGraphCore
 from autobot_shared.logging_manager import get_logger
+
+from .core import AutoBotMemoryGraphCore
 
 logger = get_logger(__name__)
 

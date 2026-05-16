@@ -18,9 +18,9 @@ from typing import Any, Dict, List, Optional
 
 import aiosqlite
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.status_enums import TaskStatus
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

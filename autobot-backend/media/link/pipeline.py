@@ -39,11 +39,10 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 from urllib.parse import urljoin
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from media.core.pipeline import BasePipeline
 from media.core.types import MediaInput, MediaType, ProcessingResult
-
-from autobot_shared.logging_manager import get_logger
 
 # aiohttp for async HTTP
 try:

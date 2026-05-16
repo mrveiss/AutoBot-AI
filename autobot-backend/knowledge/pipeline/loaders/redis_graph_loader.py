@@ -11,13 +11,13 @@ Issue #3230: Also writes into PropertyGraph for queryable typed-edge traversal.
 from typing import List
 
 from autobot_memory_graph.property_graph import PropertyGraph
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from knowledge.pipeline.base import BaseLoader, PipelineContext
 from knowledge.pipeline.models.entity import Entity
 from knowledge.pipeline.models.event import TemporalEvent
 from knowledge.pipeline.models.relationship import Relationship
 from knowledge.pipeline.registry import TaskRegistry
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

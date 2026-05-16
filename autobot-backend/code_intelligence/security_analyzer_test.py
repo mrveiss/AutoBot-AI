@@ -15,12 +15,12 @@ Tests the detection of security vulnerabilities including:
 Part of Issue #219 - Security Pattern Analyzer
 """
 
-from autobot_shared.ssot_config import config
 import tempfile
 import textwrap
 
 import pytest
 
+from autobot_shared.ssot_config import config
 from code_intelligence.security_analyzer import (
     SecurityAnalyzer,
     SecuritySeverity,

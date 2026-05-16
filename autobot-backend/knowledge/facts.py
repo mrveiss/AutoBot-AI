@@ -15,9 +15,10 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 from llama_index.core import Document
+
+from autobot_shared.logging_manager import get_logger
 
 if TYPE_CHECKING:
     import aioredis

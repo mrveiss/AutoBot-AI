@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.error_constants import ERR_WORKFLOW_NOT_FOUND
 from services.notification_service import NotificationConfig
@@ -30,7 +31,6 @@ from .models import (
     WorkflowStep,
 )
 from .persistence import load_notification_config, save_notification_config
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

@@ -9,13 +9,14 @@ import json
 import os
 import sys
 import time
-from autobot_shared.ssot_config import config
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 
 import requests
+
+from autobot_shared.ssot_config import config
 
 # Add AutoBot paths
 sys.path.append(config.project_root)

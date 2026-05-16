@@ -13,7 +13,6 @@ segments as path parameters.
 
 import logging
 from typing import Dict, Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -34,6 +33,7 @@ from api.schemas_code import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_types import TaskComplexity
 from constants.error_constants import ERR_TEMPLATE_NOT_FOUND
 from utils.advanced_cache_manager import smart_cache

@@ -17,6 +17,7 @@ from abc import ABC, abstractmethod
 from typing import Any, AsyncIterator, Dict, Optional
 
 import aiohttp
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

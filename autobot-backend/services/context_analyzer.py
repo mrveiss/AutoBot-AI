@@ -13,13 +13,13 @@ import json
 import uuid
 from typing import Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_constants import TTL_1_HOUR
 from models.completion_context import CompletionContext
 from services.dependency_tracker import DependencyTracker
 from services.semantic_analyzer import SemanticAnalyzer
 from services.type_inference import TypeInferencer
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

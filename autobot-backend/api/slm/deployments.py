@@ -28,6 +28,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from auth_middleware import get_current_user
+from autobot_shared.logging_manager import get_logger
 from models.infrastructure import (
     DeploymentActionResponse,
     DeploymentCreateRequest,
@@ -43,7 +44,6 @@ from services.slm.deployment_bridge import (
     get_orchestrator,
 )
 from services.slm_client import get_slm_client
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

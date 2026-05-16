@@ -9,6 +9,7 @@
 
 from typing import Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from media.audio.pipeline import AudioPipeline
 from media.core.pipeline import MediaPipeline
 from media.core.types import MediaInput, MediaType, ProcessingResult
@@ -16,7 +17,6 @@ from media.document.pipeline import DocumentPipeline
 from media.image.pipeline import ImagePipeline
 from media.link.pipeline import LinkPipeline
 from media.video.pipeline import VideoPipeline
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

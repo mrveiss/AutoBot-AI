@@ -12,7 +12,6 @@ Includes metrics and health tracking (Issue #4339).
 
 import logging
 from typing import Any, Dict, Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
@@ -43,6 +42,7 @@ from api.schemas_workflows import (
 )
 from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from skills.manager import SkillManager
 from skills.registry import get_skill_registry
 

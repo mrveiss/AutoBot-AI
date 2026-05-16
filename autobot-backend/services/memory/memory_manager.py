@@ -5,9 +5,10 @@
 
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
+
 from .external_provider_factory import ExternalProviderFactory
 from .postgres_provider import PostgresMemoryProvider
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

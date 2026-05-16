@@ -11,8 +11,8 @@ import csv
 import io
 from typing import Dict, List
 
-from type_defs.common import Metadata
 from autobot_shared.logging_manager import get_logger
+from type_defs.common import Metadata
 
 logger = get_logger(__name__)
 

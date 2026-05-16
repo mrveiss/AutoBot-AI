@@ -16,7 +16,6 @@ aggregator.
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import logging
@@ -26,6 +25,8 @@ from typing import Awaitable, Callable, Literal, Optional
 
 from fastapi import Request
 from pydantic import BaseModel
+
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

@@ -9,7 +9,6 @@ Endpoints for pattern extraction and code completion.
 
 import logging
 from typing import Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -17,6 +16,7 @@ from sqlalchemy import create_engine, desc, func
 from sqlalchemy.orm import sessionmaker
 
 from autobot_shared.db_session import session_scope
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 from models.code_pattern import CodePattern

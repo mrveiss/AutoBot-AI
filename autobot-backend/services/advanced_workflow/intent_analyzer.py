@@ -10,11 +10,11 @@ AI-driven user intent analysis for workflow generation.
 import json
 from typing import List
 
+from autobot_shared.logging_manager import get_logger
 from services.llm_service import get_llm_service
 from type_defs.common import Metadata
 
 from .models import WorkflowComplexity, WorkflowIntent
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

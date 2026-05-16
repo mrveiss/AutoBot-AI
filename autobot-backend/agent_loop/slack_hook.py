@@ -17,11 +17,12 @@ Environment variables:
                                   (default: same as SLACK_NOTIFICATIONS_CHANNEL)
 """
 
-from autobot_shared.ssot_config import config
 import logging
 import os
 from typing import Any, Dict, Optional
+
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 

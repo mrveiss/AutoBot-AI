@@ -9,6 +9,6 @@ MIGRATION (Issue #GH7440):
 """
 
 from autobot_shared.ssot_constants import (  # noqa: F401,F403
-    RISKY_COMMAND_PATTERNS,
     MODERATE_RISK_PATTERNS,
+    RISKY_COMMAND_PATTERNS,
 )

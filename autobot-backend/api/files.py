@@ -18,7 +18,6 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
-from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
@@ -41,6 +40,7 @@ from api.schemas_system import (
 )
 from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
 from constants.error_constants import (
     ERR_DIRECTORY_NOT_FOUND,

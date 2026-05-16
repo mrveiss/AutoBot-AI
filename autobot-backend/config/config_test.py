@@ -7,10 +7,11 @@ terminal input functions to prevent hanging in automated test environments.
 
 import os
 import sys
-from autobot_shared.ssot_config import config
 from typing import List
 
 import pytest
+
+from autobot_shared.ssot_config import config
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

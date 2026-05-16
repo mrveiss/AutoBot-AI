@@ -10,14 +10,13 @@ and auto-revokes keys whose expires_at has passed.
 
 from __future__ import annotations
 
-from autobot_shared.ssot_config import config
-
 import os
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from services.llm_api_key_service import get_llm_api_key_service
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
+from services.llm_api_key_service import get_llm_api_key_service
 
 logger = get_logger(__name__)
 

@@ -27,8 +27,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from constants.threshold_constants import TimingConstants
 from autobot_shared.logging_manager import get_logger
+from constants.threshold_constants import TimingConstants
 
 logger = get_logger(__name__)
 

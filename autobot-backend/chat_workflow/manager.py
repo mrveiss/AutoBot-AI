@@ -17,10 +17,10 @@ import logging
 import re
 import uuid
 from typing import Any, Dict, FrozenSet, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
 from constants.model_constants import ModelConfig
 from constants.ttl_constants import TIMEOUT_HTTP_DEFAULT, TTL_24_HOURS
