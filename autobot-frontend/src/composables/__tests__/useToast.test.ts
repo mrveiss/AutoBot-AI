@@ -146,8 +146,8 @@ describe('useToast — acceptance criteria #3283', () => {
       expect(TOAST_DURATIONS.info).toBe(4000)
     })
 
-    it('warning default duration is 4000 ms', () => {
-      expect(TOAST_DURATIONS.warning).toBe(4000)
+    it('warning default duration is 6000 ms', () => {
+      expect(TOAST_DURATIONS.warning).toBe(6000)
     })
 
     it('error default duration is 0 (persistent)', () => {

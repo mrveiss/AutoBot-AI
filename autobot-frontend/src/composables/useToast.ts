@@ -57,7 +57,7 @@ export const MAX_TOASTS = 5
 export const TOAST_DURATIONS: Record<ToastType, number> = {
   success: 4000,
   info: 4000,
-  warning: 4000,
+  warning: 6000,  // canonical: extra reading time for warnings
   error: 0,  // errors are persistent until manually dismissed
 }
 
