@@ -6,13 +6,14 @@ Covers:
 - PUT /api/canvas/{id}: autosave, 403 cross-user
 - POST /api/canvas/{id}/cells: add user-owned cell, 403 cross-user
 - PATCH /api/canvas/{id}/cells/{cellId}: accept/edit/discard, trust contract,
-  state machine enforcement
+  state machine enforcement (including committed → terminal)
 - POST /api/canvas/{id}/export: md/json/html/pdf, include toggles
-- WebSocket canvas_cell and canvas_cancel (MVA-370)
+- WebSocket canvas_cell and canvas_cancel (MVA-370): ownership check, cross-user rejection
 """
 
 import asyncio
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -366,6 +367,19 @@ class TestTransitionCell:
             )
         assert resp.status_code == 422
 
+    def test_committed_cell_is_terminal(self, app):
+        """committed is a terminal state — discard/accept must return 409."""
+        canvas = _make_canvas()
+        cell = _make_cell(owner="agent", state=CellState.committed)
+        self._setup_app(app, canvas, cell)
+
+        with TestClient(app) as client:
+            resp = client.patch(
+                f"/api/canvas/{_CANVAS_ID}/cells/{_CELL_ID}",
+                json={"action": "discard"},
+            )
+        assert resp.status_code == 409
+
     def test_transition_403_cross_user(self, app):
         canvas = _make_canvas(user_id="user-alice")
         session = _mock_session()
@@ -448,6 +462,24 @@ class TestExportHelpers:
 # ---------------------------------------------------------------------------
 
 
+def _make_cancel_db_mock(cell_user_id: str):
+    """Return an async context manager that yields a session returning a cell owned by cell_user_id."""
+    mock_cell = MagicMock(spec=CanvasCell)
+    mock_cell.user_id = cell_user_id
+
+    session = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = mock_cell
+    session.execute = AsyncMock(return_value=result)
+    session.commit = AsyncMock()
+
+    @asynccontextmanager
+    async def _ctx():
+        yield session
+
+    return _ctx
+
+
 class TestCanvasWebSocketStreaming:
     @pytest.mark.asyncio
     async def test_register_and_unregister_streaming_task(self):
@@ -481,6 +513,7 @@ class TestCanvasWebSocketStreaming:
 
         canvas_id = str(uuid.uuid4())
         cell_id = str(uuid.uuid4())
+        owner_id = "user-alice"
 
         async def mock_stream():
             try:
@@ -493,8 +526,8 @@ class TestCanvasWebSocketStreaming:
 
         assert not task.done()
 
-        # Send canvas_cancel
-        await _handle_canvas_cancel({"cellId": cell_id, "canvasId": canvas_id})
+        with patch("user_management.database.db_session_context", _make_cancel_db_mock(owner_id)):
+            await _handle_canvas_cancel({"cellId": cell_id, "canvasId": canvas_id}, owner_id)
 
         # Task should be cancelled
         await asyncio.sleep(0.01)  # Give task time to process cancellation
@@ -512,6 +545,7 @@ class TestCanvasWebSocketStreaming:
         canvas_id = str(uuid.uuid4())
         cell_id_1 = str(uuid.uuid4())
         cell_id_2 = str(uuid.uuid4())
+        owner_id = "user-alice"
 
         async def mock_stream():
             try:
@@ -525,8 +559,8 @@ class TestCanvasWebSocketStreaming:
         await register_canvas_streaming_task(canvas_id, cell_id_1, task1)
         await register_canvas_streaming_task(canvas_id, cell_id_2, task2)
 
-        # Cancel only cell_id_1
-        await _handle_canvas_cancel({"cellId": cell_id_1, "canvasId": canvas_id})
+        with patch("user_management.database.db_session_context", _make_cancel_db_mock(owner_id)):
+            await _handle_canvas_cancel({"cellId": cell_id_1, "canvasId": canvas_id}, owner_id)
 
         await asyncio.sleep(0.01)
         assert task1.done()
@@ -536,6 +570,46 @@ class TestCanvasWebSocketStreaming:
         task2.cancel()
         try:
             await task2
+        except asyncio.CancelledError:
+            pass
+
+    @pytest.mark.asyncio
+    async def test_canvas_cancel_cross_user_rejected(self):
+        """User B cannot cancel User A's streaming task (MVA-362 security fix)."""
+        from api.websockets import (
+            register_canvas_streaming_task,
+            _handle_canvas_cancel,
+            _canvas_streaming_tasks,
+        )
+
+        canvas_id = str(uuid.uuid4())
+        cell_id = str(uuid.uuid4())
+        owner_id = "user-alice"
+        attacker_id = "user-bob"
+
+        async def mock_stream():
+            try:
+                await asyncio.sleep(10)
+            except asyncio.CancelledError:
+                pass
+
+        task = asyncio.create_task(mock_stream())
+        await register_canvas_streaming_task(canvas_id, cell_id, task)
+
+        assert not task.done()
+
+        # user-bob tries to cancel user-alice's cell — DB returns alice's cell
+        with patch("user_management.database.db_session_context", _make_cancel_db_mock(owner_id)):
+            await _handle_canvas_cancel({"cellId": cell_id, "canvasId": canvas_id}, attacker_id)
+
+        await asyncio.sleep(0.01)
+        # Task must NOT be cancelled
+        assert not task.done()
+
+        # Cleanup
+        task.cancel()
+        try:
+            await task
         except asyncio.CancelledError:
             pass
 

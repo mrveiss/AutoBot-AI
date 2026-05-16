@@ -10,7 +10,9 @@ between the backend and frontend clients.
 
 import asyncio
 import json
-from typing import Callable, Dict, Tuple
+import logging
+import uuid
+from typing import Callable, Dict, Optional, Tuple
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
@@ -328,13 +330,15 @@ def get_canvas_cell_event(cell_id: str, seq: int, delta: str, state: str, canvas
     }
 
 
-async def _handle_canvas_cancel(data: dict) -> None:
+async def _handle_canvas_cancel(data: dict, current_user_id: str) -> None:
     """Handle canvas_cancel message from client (MVA-370).
 
-    Cancels the streaming task for the specified cell and marks it as cancelled.
+    Cancels the streaming task for the specified cell. Verifies that the
+    requesting user owns the cell before cancelling (MVA-362 security fix).
 
     Args:
         data: The message data with cellId
+        current_user_id: Authenticated user ID from the WebSocket session
     """
     try:
         cell_id = data.get("cellId")
@@ -342,6 +346,32 @@ async def _handle_canvas_cancel(data: dict) -> None:
 
         if not cell_id:
             logger.warning("canvas_cancel message missing cellId")
+            return
+
+        # Validate cellId format before DB lookup
+        try:
+            cell_uuid = uuid.UUID(cell_id)
+        except ValueError:
+            logger.warning("canvas_cancel: invalid cellId format")
+            return
+
+        # Verify ownership: only the cell owner may cancel their streaming task
+        from canvas.models import CanvasCell
+        from sqlalchemy import select
+        from user_management.database import db_session_context
+
+        async with db_session_context() as session:
+            result = await session.execute(
+                select(CanvasCell).where(CanvasCell.id == cell_uuid)
+            )
+            cell = result.scalar_one_or_none()
+
+        if cell is None or cell.user_id != current_user_id:
+            logger.warning(
+                "canvas_cancel: forbidden - cell %s not owned by user %s",
+                cell_id,
+                current_user_id,
+            )
             return
 
         # Try to find and cancel the streaming task
@@ -463,11 +493,12 @@ async def _create_broadcast_event_handler(websocket: WebSocket, chat_history_man
     return broadcast_event
 
 
-async def _websocket_message_receive_loop(websocket: WebSocket) -> None:
+async def _websocket_message_receive_loop(websocket: WebSocket, current_user_id: str) -> None:
     """Main message receive loop for WebSocket (Issue #315 - extracted).
 
     Args:
         websocket: The WebSocket connection
+        current_user_id: Authenticated user ID for ownership checks
     """
     while True:
         # Check connection state before each operation
@@ -493,15 +524,16 @@ async def _websocket_message_receive_loop(websocket: WebSocket) -> None:
                 continue
 
         # Issue #336: Use extracted helper for message handling
-        await _handle_websocket_message(websocket, message)
+        await _handle_websocket_message(websocket, message, current_user_id)
 
 
-async def _handle_websocket_message(websocket: WebSocket, message: str) -> None:
+async def _handle_websocket_message(websocket: WebSocket, message: str, current_user_id: str) -> None:
     """Handle incoming WebSocket message (Issue #336 - extracted helper).
 
     Args:
         websocket: The WebSocket connection
         message: The raw message string
+        current_user_id: Authenticated user ID from the WebSocket session
     """
     try:
         data = json.loads(message)
@@ -514,7 +546,7 @@ async def _handle_websocket_message(websocket: WebSocket, message: str) -> None:
         elif msg_type == "command_approval":
             await _handle_command_approval(websocket, data)
         elif msg_type == "canvas_cancel":
-            await _handle_canvas_cancel(data)
+            await _handle_canvas_cancel(data, current_user_id)
     except json.JSONDecodeError:
         logger.warning("Received invalid JSON via WebSocket: %s", message)
 
@@ -659,6 +691,9 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.close(code=4001, reason="Authentication required")
         return
 
+    # Extract stable user ID for ownership checks (mirrors canvas.py _user_id())
+    current_user_id: str = user.get("user_id") or user.get("id") or user.get("username", "")
+
     try:
         await websocket.accept()
         logger.info("WebSocket connected from client: %s", websocket.client)
@@ -682,7 +717,7 @@ async def websocket_endpoint(websocket: WebSocket):
     _register_event_manager_broadcast(broadcast_event)
 
     try:
-        await _websocket_message_receive_loop(websocket)
+        await _websocket_message_receive_loop(websocket, current_user_id)
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected normally")
     except Exception as e:

@@ -345,14 +345,14 @@ async def transition_cell(
         await _get_canvas_owned(canvas_id, uid, session)
         cell = await _get_cell_owned(cell_id, canvas_id, uid, session)
 
-        # State machine: complete → committed or cancelled only
-        if cell.state not in (CellState.complete, CellState.committed):
+        target_state = _ACTION_TO_TARGET_STATE[body.action]
+
+        # Enforce the state machine: committed is terminal, only complete allows transitions
+        if target_state not in _VALID_TRANSITIONS.get(cell.state, set()):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Cell in state '{cell.state}' cannot be accepted/edited/discarded.",
+                detail=f"Cannot transition cell from state '{cell.state}' with action '{body.action}'.",
             )
-
-        target_state = _ACTION_TO_TARGET_STATE[body.action]
         now = datetime.now(tz=timezone.utc)
 
         cell.state = target_state
