@@ -134,6 +134,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ("api.templates", "/templates", ["templates"], "templates"),
     # Security and sandbox
     ("api.sandbox", "/sandbox", ["sandbox"], "sandbox"),
+    # GH#7409: Sandbox-scoped file CRUD surface
+    ("api.sandbox_files", "/sandbox/files", ["sandbox", "files"], "sandbox_files"),
     ("api.security", "/security", ["security"], "security"),
     # SEC-2 Phase 3 (#6473): run-JWT refresh endpoint
     ("api.run_jwt_router", "", ["security", "run-jwt"], "run_jwt"),
