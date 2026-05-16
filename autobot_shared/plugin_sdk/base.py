@@ -8,6 +8,7 @@ Core plugin infrastructure including manifest schema, base plugin class,
 and plugin registry for managing plugin lifecycle.
 
 Issue #730 - Plugin SDK for extensible tool architecture.
+Issue #6971 - PluginLoadError for declarative required_env validation.
 """
 
 import logging
@@ -19,6 +20,10 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
+
+
+class PluginLoadError(RuntimeError):
+    """Raised when a plugin fails to load due to missing required configuration."""
 
 
 class RequiredEnvVar(BaseModel):

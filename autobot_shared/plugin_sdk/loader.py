@@ -7,6 +7,8 @@ Plugin Loader
 Dynamic plugin discovery and loading system.
 
 Issue #730 - Plugin SDK for extensible tool architecture.
+Issue #6970 - Validate declared hooks against HOOK_REGISTRY on load.
+Issue #6971 - Raise PluginLoadError for missing required env vars.
 """
 
 import importlib
@@ -17,7 +19,8 @@ import os
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Type
 
-from plugin_sdk.base import BasePlugin, PluginManifest, PluginRegistry, PluginStatus
+from plugin_sdk.base import BasePlugin, PluginLoadError, PluginManifest, PluginRegistry, PluginStatus
+from plugin_sdk.hooks import validate_hook_names
 from plugin_sdk.unified_registry import get_unified_registry
 
 logger = logging.getLogger(__name__)
@@ -96,15 +99,17 @@ class PluginLoader:
                 )
                 return None
 
-            # Check required environment variables
+            # Validate declared hooks against HOOK_REGISTRY (GH#6970)
+            if manifest.hooks:
+                validate_hook_names(manifest.hooks, plugin_name=manifest.name)
+
+            # Check required environment variables (GH#6971)
             missing_required, missing_optional = self._check_required_env(manifest)
             if missing_required:
-                logger.error(
-                    "Cannot load plugin %s: required env vars not set: %s",
-                    manifest.name,
-                    missing_required,
+                raise PluginLoadError(
+                    f"Cannot load plugin '{manifest.name}': "
+                    f"required env vars not set: {missing_required}"
                 )
-                return None
             if missing_optional:
                 logger.info(
                     "Plugin %s loaded with optional env vars unset: %s",
