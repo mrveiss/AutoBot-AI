@@ -121,6 +121,62 @@ except ImportError:
     _schedules_stub.crontab = _StubCrontab
     sys.modules["celery.schedules"] = _schedules_stub
 
+# celery_app stub — issue #7766.  The production celery_app.py pulls in the
+# full Redis / config dependency chain which causes a circular import in the
+# test environment.  We inject a lightweight in-process Celery app so that
+# ``from celery_app import celery_app`` in task modules succeeds and the
+# ``@celery_app.task`` decorators register tasks on a real (but isolated) app.
+#
+# Strategy: use the real celery package if it is installed (it is in the dev
+# venv — see the ``try`` block above); otherwise use the stub _StubCelery.
+# Either way the resulting object must support .task() as a decorator and must
+# maintain a .tasks dict so that test_task_registration.py can introspect it.
+if "celery_app" not in sys.modules:
+    _celery_app_mod = types.ModuleType("celery_app")
+    try:
+        import celery as _cel_pkg  # noqa: F401
+        _test_app = _cel_pkg.Celery(
+            "test_autobot", broker="memory://", backend="cache+memory://"
+        )
+    except (ImportError, Exception):
+        # Fall back to the stub Celery that is already in sys.modules["celery"]
+        _StubCeleryClass = sys.modules["celery"].Celery
+        _test_app = _StubCeleryClass("test_autobot")
+    _celery_app_mod.celery_app = _test_app  # type: ignore[attr-defined]
+    sys.modules["celery_app"] = _celery_app_mod
+
+# autobot_shared.redis_management stubs — the real package tries to open
+# sockets at import time; tests must not do that.
+for _redis_sub in [
+    "autobot_shared.redis_management",
+    "autobot_shared.redis_management.types",
+    "autobot_shared.redis_management.connection_manager",
+]:
+    if _redis_sub not in sys.modules:
+        _redis_stub = types.ModuleType(_redis_sub)
+        _redis_stub.__path__ = []
+        _redis_stub.__package__ = _redis_sub.rpartition(".")[0]
+        _redis_stub.DATABASE_MAPPING = {  # type: ignore[attr-defined]
+            "celery_broker": 0,
+            "celery_results": 1,
+        }
+        _redis_stub.__getattr__ = lambda attr: MagicMock()  # type: ignore[attr-defined]
+        sys.modules[_redis_sub] = _redis_stub
+
+# autobot_shared.logging_manager.get_logger stub — issue #7766.
+# get_logger() tries to open a log file which requires the config/Redis stack
+# and hangs in the test environment.  Patch it to return a stdlib logger so
+# that task modules that call ``logger = get_logger(__name__)`` at module load
+# time proceed instantly.
+try:
+    import logging as _stdlib_logging
+    import autobot_shared.logging_manager as _lm_mod
+    if not getattr(_lm_mod, "_get_logger_patched_for_tests", False):
+        _lm_mod.get_logger = lambda name, *_a, **_k: _stdlib_logging.getLogger(name)
+        _lm_mod._get_logger_patched_for_tests = True  # type: ignore[attr-defined]
+except Exception:
+    pass
+
 # Package stubs for SQLAlchemy and alembic sub-packages (need __path__ so
 # dotted sub-module imports like ``sqlalchemy.dialects.postgresql`` resolve).
 _PKG_STUBS = [
