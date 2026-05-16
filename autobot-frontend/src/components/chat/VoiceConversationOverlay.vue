@@ -58,9 +58,9 @@
                 class="voice-overlay__ws-indicator"
                 :class="{
                   'voice-overlay__ws-indicator--connected':
-                    voiceConversation.wsConnected.value,
+                    wsConnected.value,
                 }"
-                :title="voiceConversation.wsConnected.value
+                :title="wsConnected.value
                   ? $t('chat.voice.connected') : $t('chat.voice.disconnected')"
               ></div>
 
@@ -247,6 +247,7 @@ import {
 } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useVoiceConversation } from '@/composables/useVoiceConversation'
+import { useVoiceOutput } from '@/composables/useVoiceOutput'
 
 const emit = defineEmits<{
   (e: 'close'): void
@@ -254,6 +255,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const voiceConversation = useVoiceConversation()
+const { wsConnected } = useVoiceOutput()
 const overlayRef = ref<HTMLElement | null>(null)
 const conversationRef = ref<HTMLElement | null>(null)
 
