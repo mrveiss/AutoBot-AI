@@ -11,7 +11,6 @@ import pytest
 from plugin_sdk.manifest_contract import ManifestContract
 from plugin_sdk.unified_registry import UnifiedRegistry, get_unified_registry
 
-
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
 # ---------------------------------------------------------------------------

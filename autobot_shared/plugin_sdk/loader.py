@@ -107,8 +107,7 @@ class PluginLoader:
             missing_required, missing_optional = self._check_required_env(manifest)
             if missing_required:
                 raise PluginLoadError(
-                    f"Cannot load plugin '{manifest.name}': "
-                    f"required env vars not set: {missing_required}"
+                    f"Cannot load plugin '{manifest.name}': " f"required env vars not set: {missing_required}"
                 )
             if missing_optional:
                 logger.info(
