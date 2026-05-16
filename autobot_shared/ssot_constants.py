@@ -157,12 +157,60 @@ FALLBACK_GOOGLE_MODEL = GOOGLE_GEMINI_PRO
 
 @dataclass(frozen=True)
 class ModelConfig:
-    """Model configuration settings"""
+    """Model configuration settings — generation parameters and limits."""
 
     DEFAULT_CONTEXT_LENGTH: int = 8192
     MAX_CONTEXT_LENGTH: int = 32768
+    MAX_HISTORY_TOKENS: int = 3000
+
+    # RAG context-length optimization (by complexity score)
+    RAG_CONTEXT_HIGH_COMPLEXITY: int = 3000
+    RAG_CONTEXT_MEDIUM_COMPLEXITY: int = 2500
+    RAG_CONTEXT_LOW_COMPLEXITY: int = 2000
+
+    # RAG chunk-count optimization
+    RAG_CHUNKS_HIGH_COMPLEXITY: int = 8
+    RAG_CHUNKS_MEDIUM_COMPLEXITY: int = 6
+    RAG_CHUNKS_LOW_COMPLEXITY: int = 5
+
+    # Model-size thresholds (MB)
+    MODEL_SIZE_LIGHTWEIGHT_THRESHOLD_MB: int = 1000
+    MODEL_SIZE_MODERATE_THRESHOLD_MB: int = 3000
+
+    # Generation parameters
     DEFAULT_TEMPERATURE: float = 0.7
     DEFAULT_TOP_P: float = 0.9
+    DEFAULT_TOP_K: int = 40
+    DEFAULT_REPEAT_PENALTY: float = 1.1
+    DEFAULT_MAX_TOKENS: int = 2048
+    DEFAULT_NUM_CTX: int = 4096
+    CHAT_NUM_CTX: int = 8192
+
+    # Timeouts (seconds)
+    DEFAULT_TIMEOUT: int = 120
+    LONG_GENERATION_TIMEOUT: int = 120
+
+    # Retry settings
+    MAX_RETRIES: int = 3
+    RETRY_DELAY: int = 2
+
+    # Performance settings
+    DEFAULT_CONNECTION_POOL_SIZE: int = 20
+    DEFAULT_MAX_CONCURRENT_REQUESTS: int = 8
+    DEFAULT_CACHE_TTL: int = 300  # TTL_5_MINUTES — hardcoded to avoid forward-ref
+    DEFAULT_MAX_CHUNKS: int = 1000
+
+    # RAG search settings
+    RAG_DEFAULT_MAX_RESULTS: int = 5
+    RAG_MAX_RESULTS_PER_STAGE: int = 20
+    RAG_HYBRID_WEIGHT_SEMANTIC: float = 0.7
+    RAG_HYBRID_WEIGHT_KEYWORD: float = 0.3
+    RAG_DIVERSITY_THRESHOLD: float = 0.85
+    RAG_DEFAULT_CONTEXT_LENGTH: int = 2000
+    RAG_MAX_CONTEXT_LENGTH: int = 5000
+
+    # MMR diversity scoring (0.0 = pure relevance, 1.0 = pure diversity)
+    RAG_MMR_LAMBDA: float = 0.0
 
 
 class ModelConstants:
@@ -190,6 +238,131 @@ class ModelConstants:
     PROVIDER_LM_STUDIO: str = "lm_studio"
 
     CURRENT_PROVIDER: str = "ollama"
+
+    @staticmethod
+    def get_ollama_url() -> str:
+        """Get Ollama service URL (lazy import to avoid circular imports)."""
+        from config.registry import ConfigRegistry  # noqa: PLC0415
+        from constants.network_constants import NetworkConstants  # noqa: PLC0415
+
+        host = ConfigRegistry.get("vm.ollama", NetworkConstants.AI_STACK_VM_IP)
+        port = ConfigRegistry.get("port.ollama", str(NetworkConstants.OLLAMA_PORT))
+        return f"http://{host}:{port}"
+
+    @staticmethod
+    def get_lm_studio_url() -> str:
+        """Get LM Studio service URL."""
+        from autobot_shared.ssot_config import config as _cfg  # noqa: PLC0415
+
+        return _cfg.llm.lmstudio_host
+
+
+# ============================================================================
+# MODEL PRICING (GH#7750: missing from original GH#7440 migration)
+# ============================================================================
+
+MODEL_PRICING_PER_1M_TOKENS: Dict[str, Dict[str, float]] = {
+    ANTHROPIC_CLAUDE_OPUS4: {"input": 15.00, "output": 75.00},
+    ANTHROPIC_CLAUDE_HAIKU4_5: {"input": 0.80, "output": 4.00},
+    ANTHROPIC_CLAUDE_SONNET4: {"input": 3.00, "output": 15.00},
+    ANTHROPIC_CLAUDE35_SONNET: {"input": 3.00, "output": 15.00},
+    ANTHROPIC_CLAUDE35_HAIKU: {"input": 0.80, "output": 4.00},
+    ANTHROPIC_CLAUDE3_OPUS_DATED: {"input": 15.00, "output": 75.00},
+    ANTHROPIC_CLAUDE3_SONNET_DATED: {"input": 3.00, "output": 15.00},
+    ANTHROPIC_CLAUDE3_HAIKU_DATED: {"input": 0.25, "output": 1.25},
+    OPENAI_GPT41: {"input": 2.00, "output": 8.00},
+    OPENAI_GPT41_MINI: {"input": 0.40, "output": 1.60},
+    OPENAI_GPT41_NANO: {"input": 0.10, "output": 0.40},
+    OPENAI_GPT4O: {"input": 2.50, "output": 10.00},
+    OPENAI_GPT4O_MINI: {"input": 0.15, "output": 0.60},
+    OPENAI_GPT4_TURBO: {"input": 10.00, "output": 30.00},
+    OPENAI_GPT4: {"input": 30.00, "output": 60.00},
+    OPENAI_GPT35_TURBO: {"input": 0.50, "output": 1.50},
+    OPENAI_O1: {"input": 15.00, "output": 60.00},
+    OPENAI_O1_MINI: {"input": 3.00, "output": 12.00},
+    OPENAI_O3: {"input": 2.00, "output": 8.00},
+    OPENAI_O3_MINI: {"input": 1.10, "output": 4.40},
+    OPENAI_O4_MINI: {"input": 1.10, "output": 4.40},
+    GOOGLE_GEMINI25_PRO: {"input": 1.25, "output": 10.00},
+    GOOGLE_GEMINI25_FLASH: {"input": 0.15, "output": 0.60},
+    GOOGLE_GEMINI20_FLASH: {"input": 0.10, "output": 0.40},
+    GOOGLE_GEMINI15_PRO: {"input": 1.25, "output": 5.00},
+    GOOGLE_GEMINI15_FLASH: {"input": 0.075, "output": 0.30},
+    DEEPSEEK_V3: {"input": 0.27, "output": 1.10},
+    DEEPSEEK_R1_API: {"input": 0.55, "output": 2.19},
+    LOCAL_LLAMA3: {"input": 0.0, "output": 0.0},
+    LOCAL_LLAMA31: {"input": 0.0, "output": 0.0},
+    LOCAL_LLAMA32: {"input": 0.0, "output": 0.0},
+    LOCAL_LLAMA33: {"input": 0.0, "output": 0.0},
+    LOCAL_MISTRAL: {"input": 0.0, "output": 0.0},
+    LOCAL_MIXTRAL: {"input": 0.0, "output": 0.0},
+    LOCAL_CODELLAMA: {"input": 0.0, "output": 0.0},
+    LOCAL_QWEN25: {"input": 0.0, "output": 0.0},
+    LOCAL_QWEN3: {"input": 0.0, "output": 0.0},
+    LOCAL_DEEPSEEK_CODER: {"input": 0.0, "output": 0.0},
+    LOCAL_DEEPSEEK_R1: {"input": 0.0, "output": 0.0},
+    LOCAL_PHI3: {"input": 0.0, "output": 0.0},
+    LOCAL_PHI4: {"input": 0.0, "output": 0.0},
+    LOCAL_GEMMA2: {"input": 0.0, "output": 0.0},
+    LOCAL_GEMMA3: {"input": 0.0, "output": 0.0},
+}
+
+MODEL_PRICING_PER_1K_TOKENS: Dict[str, Dict[str, float]] = {
+    OPENAI_GPT4: {"prompt": 0.03, "completion": 0.06},
+    OPENAI_GPT4_TURBO: {"prompt": 0.01, "completion": 0.03},
+    OPENAI_GPT4O: {"prompt": 0.005, "completion": 0.015},
+    OPENAI_GPT35_TURBO: {"prompt": 0.0015, "completion": 0.002},
+    ANTHROPIC_CLAUDE3_OPUS: {"prompt": 0.015, "completion": 0.075},
+    ANTHROPIC_CLAUDE3_SONNET: {"prompt": 0.003, "completion": 0.015},
+    ANTHROPIC_CLAUDE3_HAIKU: {"prompt": 0.00025, "completion": 0.00125},
+    ANTHROPIC_CLAUDE_SONNET4_SHORT: {"prompt": 0.003, "completion": 0.015},
+    "ollama": {"prompt": 0.0, "completion": 0.0},
+    "default": {"prompt": 0.001, "completion": 0.002},
+}
+
+MODEL_COSTS_PER_1M_TOKENS: Dict[str, Dict[str, float]] = {
+    ANTHROPIC_CLAUDE3_OPUS: {"input": 15.00, "output": 75.00},
+    ANTHROPIC_CLAUDE3_SONNET: {"input": 3.00, "output": 15.00},
+    ANTHROPIC_CLAUDE3_HAIKU: {"input": 0.25, "output": 1.25},
+    ANTHROPIC_CLAUDE_SONNET4_SHORT: {"input": 3.00, "output": 15.00},
+    OPENAI_GPT4O: {"input": 2.50, "output": 10.00},
+    OPENAI_GPT4O_MINI: {"input": 0.15, "output": 0.60},
+    OPENAI_GPT4_TURBO: {"input": 10.00, "output": 30.00},
+    OPENAI_GPT35_TURBO: {"input": 0.50, "output": 1.50},
+    GOOGLE_GEMINI15_PRO: {"input": 1.25, "output": 5.00},
+    GOOGLE_GEMINI15_FLASH: {"input": 0.075, "output": 0.30},
+    LOCAL_LLAMA3: {"input": 0.0, "output": 0.0},
+    LOCAL_MISTRAL: {"input": 0.0, "output": 0.0},
+    LOCAL_CODELLAMA: {"input": 0.0, "output": 0.0},
+}
+
+# Singleton instances (backward compat with constants.model_constants imports)
+model_constants = ModelConstants()
+model_config = ModelConfig()
+
+
+@lru_cache(maxsize=8)
+def get_default_model(provider: Optional[str] = None) -> str:
+    """Get the default model for a specific provider or the system default."""
+    if provider == ModelConstants.PROVIDER_OLLAMA:
+        return ModelConstants.DEFAULT_OLLAMA_MODEL
+    elif provider == ModelConstants.PROVIDER_OPENAI:
+        return ModelConstants.DEFAULT_OPENAI_MODEL
+    elif provider == ModelConstants.PROVIDER_ANTHROPIC:
+        return ModelConstants.DEFAULT_ANTHROPIC_MODEL
+    elif provider == ModelConstants.PROVIDER_GOOGLE:
+        return ModelConstants.DEFAULT_GOOGLE_MODEL
+    return ModelConstants.DEFAULT_OLLAMA_MODEL
+
+
+@lru_cache(maxsize=8)
+def get_model_endpoint(provider: str) -> str:
+    """Get the endpoint URL for a specific provider."""
+    if provider == ModelConstants.PROVIDER_OLLAMA:
+        return ModelConstants.get_ollama_url()
+    elif provider == ModelConstants.PROVIDER_LM_STUDIO:
+        return ModelConstants.get_lm_studio_url()
+    raise ValueError(f"Unknown provider: {provider}")
 
 
 # ============================================================================

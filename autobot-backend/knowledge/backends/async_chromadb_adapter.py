@@ -201,10 +201,15 @@ class AsyncChromaDBClient(AsyncBaseClient):
         metadata: Optional[Metadata] = None,
         embedding_function: Optional[Any] = None,
     ) -> AsyncBaseCollection:
+        from datetime import datetime, timezone
+
+        provenance: dict = {"created_at": datetime.now(timezone.utc).isoformat()}
+        if metadata:
+            provenance.update(metadata)
         try:
             raw_col = await self._raw.create_collection(
                 name=name,
-                metadata=metadata,
+                metadata=provenance,
                 embedding_function=embedding_function,
             )
         except Exception as exc:

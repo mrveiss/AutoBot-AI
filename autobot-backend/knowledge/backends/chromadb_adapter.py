@@ -210,9 +210,12 @@ class ChromaDBClient(BaseClient):
         metadata: Optional[Metadata] = None,
         embedding_function: Optional[Any] = None,
     ) -> BaseCollection:
-        kwargs: dict = {"name": name}
-        if metadata is not None:
-            kwargs["metadata"] = metadata
+        from datetime import datetime, timezone
+
+        provenance: dict = {"created_at": datetime.now(timezone.utc).isoformat()}
+        if metadata:
+            provenance.update(metadata)
+        kwargs: dict = {"name": name, "metadata": provenance}
         if embedding_function is not None:
             kwargs["embedding_function"] = embedding_function
         try:
