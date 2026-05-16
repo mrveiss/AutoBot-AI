@@ -13,6 +13,8 @@ data-driven configuration pattern for improved maintainability.
 """
 
 import importlib
+import json
+import os
 from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
@@ -25,6 +27,103 @@ logger = get_logger(__name__)
 # scraping logs. Each entry: {"name": str, "module": str, "loaded": bool,
 # "error": str | None}.
 _LOAD_RESULTS: List[Dict[str, Any]] = []
+
+# #6808: Redis key prefix and TTL for cross-worker aggregation.
+# Each uvicorn worker publishes its results under its PID so the health
+# endpoint can show a unified view regardless of which worker handles the poll.
+_REDIS_KEY_PREFIX = "autobot:feature_routers:"
+_REDIS_TTL_SECONDS = 600  # 10 min — survives rolling restarts
+
+
+def _publish_load_results_to_redis(results: List[Dict[str, Any]]) -> None:
+    """Best-effort: publish this worker's load results to Redis (#6808).
+
+    Uses the PID as the worker discriminator so the health endpoint can
+    aggregate across all workers with ``KEYS autobot:feature_routers:*``.
+    Never raises — Redis unavailability must not block startup.
+    """
+    try:
+        from autobot_shared.redis_client import get_redis_client
+
+        redis = get_redis_client(database="main")
+        if redis is None:
+            return
+        key = f"{_REDIS_KEY_PREFIX}{os.getpid()}"
+        redis.set(key, json.dumps(results), ex=_REDIS_TTL_SECONDS)
+    except Exception:
+        logger.debug("Could not publish feature-router results to Redis (#6808)", exc_info=True)
+
+
+def get_cross_worker_load_results() -> Dict[str, Any]:
+    """Aggregate load results from all uvicorn workers via Redis (#6808).
+
+    Returns a dict with:
+      - ``workers``: mapping of PID → per-worker result list
+      - ``aggregated``: union of all workers' results (by router name)
+      - ``worker_count``: number of live workers seen
+      - ``redis_available``: whether aggregation succeeded
+
+    Falls back to the local ``_LOAD_RESULTS`` when Redis is unavailable.
+    """
+    try:
+        from autobot_shared.redis_client import get_redis_client
+
+        redis = get_redis_client(database="main")
+        if redis is None:
+            raise RuntimeError("Redis client unavailable")
+
+        # Scan for all worker keys (KEYS is fine here — small keyspace, admin op)
+        keys = redis.keys(f"{_REDIS_KEY_PREFIX}*")
+        workers: Dict[str, List[Dict[str, Any]]] = {}
+        for key in keys:
+            pid = key.decode() if isinstance(key, bytes) else key
+            pid = pid.removeprefix(_REDIS_KEY_PREFIX)
+            raw = redis.get(f"{_REDIS_KEY_PREFIX}{pid}")
+            if raw:
+                workers[pid] = json.loads(raw)
+
+        if not workers:
+            # No Redis data yet — fall back to local (boot race window)
+            return {
+                "workers": {str(os.getpid()): _LOAD_RESULTS},
+                "aggregated": _LOAD_RESULTS,
+                "worker_count": 1,
+                "redis_available": True,
+                "note": "local-only: no other worker keys found in Redis yet",
+            }
+
+        # Build union: for each router name, collect all worker statuses
+        by_name: Dict[str, Dict[str, Any]] = {}
+        for pid, results in workers.items():
+            for entry in results:
+                name = entry["name"]
+                if name not in by_name:
+                    by_name[name] = dict(entry)
+                    by_name[name]["worker_statuses"] = {}
+                by_name[name]["worker_statuses"][pid] = {
+                    "loaded": entry["loaded"],
+                    "error": entry["error"],
+                }
+                # Mark as failed if any worker failed to load this router
+                if not entry["loaded"]:
+                    by_name[name]["loaded"] = False
+                    by_name[name]["error"] = entry["error"]
+
+        aggregated = sorted(by_name.values(), key=lambda r: r["name"])
+        return {
+            "workers": workers,
+            "aggregated": aggregated,
+            "worker_count": len(workers),
+            "redis_available": True,
+        }
+    except Exception:
+        logger.debug("Redis aggregation failed, falling back to local results (#6808)", exc_info=True)
+        return {
+            "workers": {str(os.getpid()): _LOAD_RESULTS},
+            "aggregated": _LOAD_RESULTS,
+            "worker_count": 1,
+            "redis_available": False,
+        }
 
 
 # Issue #281: Router configurations as data instead of repetitive code blocks
@@ -651,4 +750,7 @@ def load_feature_routers() -> List[Tuple]:
             )
     else:
         logger.info("📊 Loaded %s/%s feature routers", loaded, expected)
+    # #6808: publish this worker's results to Redis so the health endpoint can
+    # aggregate across all workers instead of returning a per-worker snapshot.
+    _publish_load_results_to_redis(_LOAD_RESULTS)
     return optional_routers
