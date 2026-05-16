@@ -1,0 +1,33 @@
+import type { Meta } from '@storybook/vue3';
+import type { StoryObj } from '@storybook/vue3';
+import PerformanceAnalysisDashboard from './PerformanceAnalysisDashboard.vue';
+
+const meta = {
+  title: 'Components/Analytics/PerformanceAnalysisDashboard',
+  component: PerformanceAnalysisDashboard,
+  tags: ['autodocs'],
+} as Meta<typeof PerformanceAnalysisDashboard>;
+
+export default meta;
+// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
+type Story = StoryObj<any>;
+
+export const Default: Story = {
+  args: {},
+};
+
+export const Loading: Story = {
+  args: {},
+};
+
+export const WithResults: Story = {
+  args: {},
+  render: () => ({
+    template: '<PerformanceAnalysisDashboard />',
+    components: { PerformanceAnalysisDashboard },
+  }),
+};
+
+export const Empty: Story = {
+  args: {},
+};
