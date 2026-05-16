@@ -51,7 +51,7 @@ on:
           - 'true'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || 'ci' }}
   cancel-in-progress: true
 
 env:
@@ -133,8 +133,11 @@ jobs:
             npm run test:visual -- --update-snapshots
             echo "first_run=true" >> "$GITHUB_OUTPUT"
           else
-            # Baselines exist: enforce diffs. Visual changes will fail this check.
-            npm run test:visual
+            # Baselines exist: enforce diffs for existing stories. Auto-create
+            # baselines for new stories added since last committed update
+            # (--update-snapshots=missing creates missing files without
+            # overwriting existing ones, preserving regression detection).
+            npm run test:visual -- --update-snapshots=missing
             echo "first_run=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -162,6 +165,18 @@ jobs:
           name: visual-regression-generated-baselines-${{ github.run_id }}
           path: autobot-frontend/tests/visual/__screenshots__/
           if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload newly-created baselines on push/PR (new stories)
+        # When --update-snapshots=missing ran and created new baselines,
+        # upload them so a maintainer can download and commit to enable
+        # future diff enforcement for those stories.
+        if: steps.visual.outputs.first_run == 'false' && success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-regression-new-baselines-${{ github.run_id }}
+          path: autobot-frontend/tests/visual/__screenshots__/
+          if-no-files-found: ignore
           retention-days: 14
 
       - name: Upload Playwright HTML report on failure
