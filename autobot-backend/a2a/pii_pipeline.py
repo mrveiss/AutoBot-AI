@@ -46,10 +46,10 @@ logger = logging.getLogger(__name__)
 class PIIAction(str, Enum):
     """What to do when a PII match is found."""
 
-    BLOCK = "block"    # Reject the entire outbound send
+    BLOCK = "block"  # Reject the entire outbound send
     REDACT = "redact"  # Replace with [REDACTED:type]
-    HASH = "hash"      # Replace with SHA-256 prefix (non-reversible)
-    PASS = "pass"      # Allow through unchanged (opt-out)
+    HASH = "hash"  # Replace with SHA-256 prefix (non-reversible)
+    PASS = "pass"  # Allow through unchanged (opt-out)
 
 
 class PIIType(str, Enum):
@@ -71,20 +71,20 @@ class PIIType(str, Enum):
 
 # Default policy — most sensitive types BLOCK; PII types REDACT.
 _DEFAULT_POLICY: Dict[PIIType, PIIAction] = {
-    PIIType.EMAIL:               PIIAction.REDACT,
-    PIIType.PHONE:               PIIAction.REDACT,
-    PIIType.SSN:                 PIIAction.BLOCK,
-    PIIType.CREDIT_CARD:         PIIAction.BLOCK,
-    PIIType.API_KEY:             PIIAction.BLOCK,
-    PIIType.JWT:                 PIIAction.BLOCK,
-    PIIType.AWS_ACCESS_KEY:      PIIAction.BLOCK,
-    PIIType.IP_ADDRESS:          PIIAction.REDACT,
-    PIIType.MAC_ADDRESS:         PIIAction.REDACT,
-    PIIType.INTERNAL_HOSTNAME:   PIIAction.REDACT,
-    PIIType.CUSTOMER_ID:         PIIAction.REDACT,
+    PIIType.EMAIL: PIIAction.REDACT,
+    PIIType.PHONE: PIIAction.REDACT,
+    PIIType.SSN: PIIAction.BLOCK,
+    PIIType.CREDIT_CARD: PIIAction.BLOCK,
+    PIIType.API_KEY: PIIAction.BLOCK,
+    PIIType.JWT: PIIAction.BLOCK,
+    PIIType.AWS_ACCESS_KEY: PIIAction.BLOCK,
+    PIIType.IP_ADDRESS: PIIAction.REDACT,
+    PIIType.MAC_ADDRESS: PIIAction.REDACT,
+    PIIType.INTERNAL_HOSTNAME: PIIAction.REDACT,
+    PIIType.CUSTOMER_ID: PIIAction.REDACT,
     PIIType.HIGH_ENTROPY_STRING: PIIAction.HASH,
-    PIIType.BEARER_TOKEN:        PIIAction.BLOCK,
-    PIIType.PRIVATE_IP:          PIIAction.REDACT,
+    PIIType.BEARER_TOKEN: PIIAction.BLOCK,
+    PIIType.PRIVATE_IP: PIIAction.REDACT,
 }
 
 # ---------------------------------------------------------------------------
@@ -156,9 +156,7 @@ _DetectorEntry = Tuple[PIIType, re.Pattern, Optional[Callable[[str], bool]]]
 def _build_detectors() -> List[_DetectorEntry]:
     """Construct the ordered list of regex + validator pairs."""
     # JWT — three base64url segments (header.payload.signature)
-    jwt_re = re.compile(
-        r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"
-    )
+    jwt_re = re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b")
 
     # Bearer token in Authorization header value
     bearer_re = re.compile(
@@ -182,17 +180,15 @@ def _build_detectors() -> List[_DetectorEntry]:
     )
 
     # SSN (US format — excludes 000, 666, 900–999 first segment)
-    ssn_re = re.compile(
-        r"\b(?!000|666|9\d\d)\d{3}[-\s](?!00)\d{2}[-\s](?!0000)\d{4}\b"
-    )
+    ssn_re = re.compile(r"\b(?!000|666|9\d\d)\d{3}[-\s](?!00)\d{2}[-\s](?!0000)\d{4}\b")
 
     # Credit card (major card brands) + Luhn validation
     cc_re = re.compile(
         r"\b(?:"
-        r"4[0-9]{12}(?:[0-9]{3})?"            # Visa
-        r"|5[1-5][0-9]{14}"                    # Mastercard
-        r"|3[47][0-9]{13}"                     # Amex
-        r"|6(?:011|5[0-9]{2})[0-9]{12}"       # Discover
+        r"4[0-9]{12}(?:[0-9]{3})?"  # Visa
+        r"|5[1-5][0-9]{14}"  # Mastercard
+        r"|3[47][0-9]{13}"  # Amex
+        r"|6(?:011|5[0-9]{2})[0-9]{12}"  # Discover
         r")\b"
     )
 
@@ -200,9 +196,7 @@ def _build_detectors() -> List[_DetectorEntry]:
     email_re = re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b")
 
     # Phone (E.164 / US national)
-    phone_re = re.compile(
-        r"(?<!\d)\+?1?[-.\s]?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}(?!\d)"
-    )
+    phone_re = re.compile(r"(?<!\d)\+?1?[-.\s]?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}(?!\d)")
 
     # Private IPv4 (RFC1918)
     private_ip_re = re.compile(
@@ -226,18 +220,18 @@ def _build_detectors() -> List[_DetectorEntry]:
     )
 
     return [
-        (PIIType.JWT,                jwt_re,     None),
-        (PIIType.BEARER_TOKEN,       bearer_re,  None),
-        (PIIType.AWS_ACCESS_KEY,     aws_re,     None),
-        (PIIType.API_KEY,            api_key_re, None),
-        (PIIType.SSN,                ssn_re,     None),
-        (PIIType.CREDIT_CARD,        cc_re,      _luhn),
-        (PIIType.EMAIL,              email_re,   None),
-        (PIIType.PHONE,              phone_re,   None),
-        (PIIType.PRIVATE_IP,         private_ip_re, None),
-        (PIIType.IP_ADDRESS,         ip_re,      None),
-        (PIIType.MAC_ADDRESS,        mac_re,     None),
-        (PIIType.INTERNAL_HOSTNAME,  hostname_re, None),
+        (PIIType.JWT, jwt_re, None),
+        (PIIType.BEARER_TOKEN, bearer_re, None),
+        (PIIType.AWS_ACCESS_KEY, aws_re, None),
+        (PIIType.API_KEY, api_key_re, None),
+        (PIIType.SSN, ssn_re, None),
+        (PIIType.CREDIT_CARD, cc_re, _luhn),
+        (PIIType.EMAIL, email_re, None),
+        (PIIType.PHONE, phone_re, None),
+        (PIIType.PRIVATE_IP, private_ip_re, None),
+        (PIIType.IP_ADDRESS, ip_re, None),
+        (PIIType.MAC_ADDRESS, mac_re, None),
+        (PIIType.INTERNAL_HOSTNAME, hostname_re, None),
     ]
 
 
@@ -264,6 +258,7 @@ def _load_policy() -> Dict[PIIType, PIIAction]:
     """Load per-type policy overrides from ssot_config."""
     try:
         from autobot_shared.ssot_config import config as _cfg
+
         overrides = getattr(_cfg, "a2a_pii_policy", {}) or {}
     except Exception:
         overrides = {}
@@ -346,7 +341,7 @@ class PIIPipeline:
                     digest = hashlib.sha256(span.encode()).hexdigest()[:8]
                     replacement = f"[HASH-{digest}]"
                     hashed_types.append(pii_type)
-                result_text = result_text[: m.start()] + replacement + result_text[m.end():]
+                result_text = result_text[: m.start()] + replacement + result_text[m.end() :]
 
             self._audit(pii_type, action, len(hits), peer_id, message_id)
 

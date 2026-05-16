@@ -309,11 +309,7 @@ class TestIntegration(unittest.TestCase):
         """Payload with AWS key + email + private IP: AWS and email+IP handled per policy."""
         p = PIIPipeline()
         # AWS key → BLOCK, email → REDACT, private IP → REDACT
-        payload = (
-            "Credentials: AKIAIOSFODNN7EXAMPLE\n"
-            "Contact: admin@company.com\n"
-            "DB: 10.0.0.5\n"
-        )
+        payload = "Credentials: AKIAIOSFODNN7EXAMPLE\n" "Contact: admin@company.com\n" "DB: 10.0.0.5\n"
         result = p.scrub(payload, peer_id="test-peer", message_id="test-msg-1")
         # AWS key is BLOCK policy — should be blocked
         self.assertTrue(result.blocked)

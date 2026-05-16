@@ -85,8 +85,13 @@ async def execute_a2a_task(
             manager.update_state(task_id, TaskState.FAILED, message="Blocked: PII detected in request")
             manager.publish_event(
                 task_id,
-                {"event": "state_change", "state": "failed", "terminal": True,
-                 "task_id": task_id, "message": "pii_blocked"},
+                {
+                    "event": "state_change",
+                    "state": "failed",
+                    "terminal": True,
+                    "task_id": task_id,
+                    "message": "pii_blocked",
+                },
             )
             return
 
@@ -111,8 +116,13 @@ async def execute_a2a_task(
             manager.update_state(task_id, TaskState.FAILED, message="Blocked: PII detected in response")
             manager.publish_event(
                 task_id,
-                {"event": "state_change", "state": "failed", "terminal": True,
-                 "task_id": task_id, "message": "pii_blocked_response"},
+                {
+                    "event": "state_change",
+                    "state": "failed",
+                    "terminal": True,
+                    "task_id": task_id,
+                    "message": "pii_blocked_response",
+                },
             )
             return
         artifact_text = TaskArtifact(artifact_type="text", content=response_text)
