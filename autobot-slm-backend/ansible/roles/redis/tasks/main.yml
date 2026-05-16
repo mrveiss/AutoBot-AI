@@ -278,7 +278,7 @@
   debug:
     msg:
       - "=== Redis Stack Configuration Complete ==="
-      - "Redis Host: {{ ansible_facts['default_ipv4'].address }}"
+      - "Redis Host: {{ ansible_facts['default_ipv4'].address | default(ansible_host) }}"
       - "Redis Port: {{ redis_port }}"
       - "RedisInsight Port: {{ redis_insight_port }}"
       - "Memory Limit: {{ redis_memory_limit }}"

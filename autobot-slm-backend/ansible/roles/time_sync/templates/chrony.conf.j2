@@ -31,7 +31,7 @@ rtcsync
 #minsources 2
 
 # Allow NTP client access from local network.
-{% if ansible_facts['default_ipv4'].network is defined %}
+{% if ansible_facts['default_ipv4'] is defined and ansible_facts['default_ipv4'].network is defined %}
 allow {{ ansible_facts['default_ipv4'].network }}/{{ ansible_facts['default_ipv4'].netmask }}
 {% endif %}
 
