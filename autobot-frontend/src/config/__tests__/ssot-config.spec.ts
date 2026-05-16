@@ -17,8 +17,8 @@
  * Author: mrveiss
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { reloadConfig } from '../ssot-config';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { reloadConfig, runtimeHttpProto } from '../ssot-config';
 
 // Note: In a real test environment, we would need to mock import.meta.env
 // For now, these tests validate the TypeScript structure and default values
@@ -500,6 +500,27 @@ describe('SSOT Config runtimeHttpProto() — protocol detection', () => {
       if (result.startsWith('/')) return;
       expect(result).toMatch(/^http:\/\//);
     });
+  });
+});
+
+describe('runtimeHttpProto', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('returns "https" when window.location.protocol is "https:"', () => {
+    vi.stubGlobal('window', { location: { protocol: 'https:', host: 'example.com' } });
+    expect(runtimeHttpProto()).toBe('https');
+  });
+
+  it('returns "http" when window.location.protocol is "http:"', () => {
+    vi.stubGlobal('window', { location: { protocol: 'http:', host: 'example.com' } });
+    expect(runtimeHttpProto()).toBe('http');
+  });
+
+  it('falls back to VITE_HTTP_PROTOCOL env var in SSR (no window)', () => {
+    vi.stubGlobal('window', undefined);
+    expect(runtimeHttpProto()).toBe('http'); // default from getEnv fallback
   });
 });
 
