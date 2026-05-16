@@ -2,6 +2,13 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 # src/gui_controller_dummy.py
+"""
+No-op GUI controller used when pyautogui is unavailable.
+
+Drops all GUI automation calls silently, allowing the backend to start
+in headless or server environments without a display.
+"""
+
 import asyncio
 from typing import Any, Dict, Tuple
 

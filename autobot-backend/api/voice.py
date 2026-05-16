@@ -1,6 +1,13 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+"""
+Voice/TTS and STT API endpoints.
+
+Handles audio file upload for speech-to-text and text-to-speech synthesis,
+bridging the FastAPI layer with the TTS/STT backend services.
+"""
+
 import asyncio
 import os
 import tempfile

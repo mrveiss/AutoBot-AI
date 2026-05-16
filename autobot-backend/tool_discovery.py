@@ -1,6 +1,13 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+"""
+System tool availability scanner.
+
+Detects which CLI tools (bash, git, docker, nmap, etc.) are installed
+and accessible on the host, returning a structured capability manifest.
+"""
+
 import json
 import shutil
 import subprocess

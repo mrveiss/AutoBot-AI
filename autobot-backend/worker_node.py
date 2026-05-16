@@ -1,6 +1,13 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+"""
+Worker-node hardware profiler and resource reporter.
+
+Collects CPU, RAM, GPU, and NPU capabilities at startup and exposes
+the node profile via REST so the scheduler can route workloads appropriately.
+"""
+
 import asyncio
 import json
 import os

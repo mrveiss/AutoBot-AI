@@ -1,6 +1,13 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+"""
+Prompt template management endpoints.
+
+Provides CRUD for system prompt templates stored on disk, including
+async file I/O and per-request timing instrumentation.
+"""
+
 import asyncio
 import os
 import time

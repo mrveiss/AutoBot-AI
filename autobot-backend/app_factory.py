@@ -1,6 +1,13 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+"""
+FastAPI application factory for the AutoBot backend.
+
+Builds and configures the FastAPI app, registers all routers, middleware,
+and startup/shutdown lifecycle hooks. Entry point for all HTTP/WebSocket requests.
+"""
+
 import os
 import sys
 from pathlib import Path

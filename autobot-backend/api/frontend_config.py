@@ -1,6 +1,13 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+"""
+Frontend configuration delivery endpoint.
+
+Returns per-environment runtime config (backend URL, feature flags, etc.)
+so the Vue frontend does not need to bundle env-specific values.
+"""
+
 from typing import Any, Dict
 
 from fastapi import APIRouter

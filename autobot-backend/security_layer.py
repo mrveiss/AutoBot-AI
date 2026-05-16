@@ -1,6 +1,13 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+"""
+Security validation and configuration enforcement layer.
+
+Validates YAML-based security rules, manages authentication tokens, and
+enforces platform-level access policies for all AutoBot services.
+"""
+
 import datetime
 import json
 import os

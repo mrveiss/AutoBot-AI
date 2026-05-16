@@ -1,6 +1,13 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+"""
+OS-level integration helpers: shell commands, Markdown conversion.
+
+Provides utilities for executing system commands, reading platform info,
+and converting HTML/Markdown content via the optional markdownify dep.
+"""
+
 import json
 import os
 import platform

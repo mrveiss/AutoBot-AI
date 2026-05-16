@@ -1,14 +1,15 @@
 # AutoBot - AI-Powered Automation Platform
-import uuid
-
-# Copyright (c) 2025 mrveiss
-# Author: mrveiss
 """
 Data Analysis Agent - Specialized for data analysis, statistics, and pattern detection.
 
 Handles data analysis tasks using LLM to identify patterns, compute statistics,
 and provide insights from structured and unstructured data.
 """
+
+import uuid
+
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 
 from typing import Any, Dict, List
 
@@ -26,7 +27,6 @@ from .base_agent import AgentRequest, DeploymentMode
 from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_logger(__name__)
-
 
 class DataAnalysisAgent(StandardizedAgent):
     """Agent specialized for data analysis, statistics, and pattern detection."""
@@ -164,7 +164,6 @@ class DataAnalysisAgent(StandardizedAgent):
             if "content" in response:
                 return str(response["content"]).strip()
         return str(response)
-
 
 get_data_analysis_agent = lazy_singleton(DataAnalysisAgent)
 """Get the singleton Data Analysis Agent instance (thread-safe)."""

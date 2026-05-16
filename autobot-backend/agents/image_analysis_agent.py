@@ -1,8 +1,4 @@
 # AutoBot - AI-Powered Automation Platform
-import uuid
-
-# Copyright (c) 2025 mrveiss
-# Author: mrveiss
 """
 Image Analysis Agent - Specialized for vision tasks and image understanding.
 
@@ -10,6 +6,11 @@ Handles image analysis, object detection, and scene description using
 LLM-based vision capabilities. Accepts image descriptions or base64-encoded
 image data for analysis.
 """
+
+import uuid
+
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 
 from typing import Any, Dict, List
 
@@ -27,7 +28,6 @@ from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_logger(__name__)
-
 
 class ImageAnalysisAgent(StandardizedAgent):
     """Agent specialized for image analysis and vision tasks."""
@@ -168,6 +168,5 @@ class ImageAnalysisAgent(StandardizedAgent):
             if "content" in response:
                 return str(response["content"]).strip()
         return str(response)
-
 
 get_image_analysis_agent = lazy_singleton(ImageAnalysisAgent)

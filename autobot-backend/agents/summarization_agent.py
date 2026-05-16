@@ -1,14 +1,15 @@
 # AutoBot - AI-Powered Automation Platform
-import uuid
-
-# Copyright (c) 2025 mrveiss
-# Author: mrveiss
 """
 Summarization Agent - Specialized for document and text summarization.
 
 Handles text summarization with configurable length, key point extraction,
 and structured summary generation.
 """
+
+import uuid
+
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 
 from typing import Any, Dict, List
 
@@ -26,7 +27,6 @@ from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_logger(__name__)
-
 
 class SummarizationAgent(StandardizedAgent):
     """Agent specialized for document and text summarization."""
@@ -158,7 +158,6 @@ class SummarizationAgent(StandardizedAgent):
             if "content" in response:
                 return str(response["content"]).strip()
         return str(response)
-
 
 get_summarization_agent = lazy_singleton(SummarizationAgent)
 """Get the singleton Summarization Agent instance (thread-safe)."""

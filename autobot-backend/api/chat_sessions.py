@@ -2,6 +2,13 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 
+"""
+REST endpoints for chat session lifecycle management.
+
+Exposes CRUD operations over persistent chat sessions, delegating
+storage to the chat_history subsystem.
+"""
+
 import json
 from typing import Dict, List
 
