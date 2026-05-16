@@ -331,7 +331,7 @@ async def _add_to_chat_history(chat_history_manager, message_type: str, raw_data
     # Issue #350 Root Cause Fix: Skip message types that are explicitly persisted elsewhere
     if text and chat_history_manager and message_type not in SKIP_WEBSOCKET_PERSISTENCE_TYPES:
         try:
-            await chat_history_manager.add_message(sender, text, message_type, raw_data)
+            await chat_history_manager.add_message(sender=sender, text=text, message_type=message_type, raw_data=raw_data)
         except Exception as e:
             logger.error("Failed to add message to chat history: %s", e)
 

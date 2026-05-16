@@ -25,7 +25,7 @@ Usage:
 
     manager = ChatHistoryManager()
     await manager.create_session()
-    await manager.add_message("user", "Hello!")
+    await manager.add_message(sender="user", text="Hello!")
 """
 
 from typing import Any, Dict

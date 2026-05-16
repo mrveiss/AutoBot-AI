@@ -143,6 +143,7 @@ class MessagesMixin:
 
     async def add_message(
         self,
+        *,
         sender: str,
         text: str,
         message_type: str = "default",
