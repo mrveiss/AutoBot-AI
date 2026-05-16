@@ -118,9 +118,7 @@ async def view_file(request: Request, file_path: str):
     operation="sandbox_rename_file",
     error_code_prefix="SANDBOX_FILES",
 )
-async def rename_file_or_directory(
-    request: Request, path: str = Form(...), new_name: str = Form(...)
-):
+async def rename_file_or_directory(request: Request, path: str = Form(...), new_name: str = Form(...)):
     """Rename a file or directory within the sandbox."""
     _check_permission(request, "upload")
 
@@ -135,9 +133,7 @@ async def rename_file_or_directory(
     target_path = source_path.parent / new_name
 
     if await run_in_file_executor(target_path.exists):
-        raise HTTPException(
-            status_code=409, detail="A file or directory with that name already exists"
-        )
+        raise HTTPException(status_code=409, detail="A file or directory with that name already exists")
 
     await run_in_file_executor(source_path.rename, target_path)
 
@@ -268,9 +264,7 @@ async def get_directory_tree(request: Request, path: str = ""):
     def build_tree(directory: Path) -> list:
         try:
             items = []
-            for item in sorted(
-                directory.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())
-            ):
+            for item in sorted(directory.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
                 try:
                     rel = str(item.relative_to(SANDBOX_FILES_ROOT))
                     entry: dict = {

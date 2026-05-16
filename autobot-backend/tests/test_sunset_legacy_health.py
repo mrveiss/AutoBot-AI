@@ -152,9 +152,7 @@ def test_legacy_hit_increments_counter():
     with patch.object(mw, "autobot_legacy_health_hits_total", mock_counter):
         client.get("/api/redis/health", headers={"User-Agent": "prometheus/2.x"})
 
-    mock_counter.labels.assert_called_once_with(
-        path="/api/redis/health", user_agent="prometheus/2.x"
-    )
+    mock_counter.labels.assert_called_once_with(path="/api/redis/health", user_agent="prometheus/2.x")
     mock_labels.inc.assert_called_once()
 
 

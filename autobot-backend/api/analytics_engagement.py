@@ -64,9 +64,7 @@ async def get_engagement_metrics():
                 "total_features_tracked": len(feature_counts),
                 "total_interactions": sum(feature_counts.values()),
                 "average_interactions_per_feature": (
-                    sum(feature_counts.values()) // len(feature_counts)
-                    if feature_counts
-                    else 0
+                    sum(feature_counts.values()) // len(feature_counts) if feature_counts else 0
                 ),
             },
             feature_popularity=feature_popularity,

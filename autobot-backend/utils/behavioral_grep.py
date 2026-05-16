@@ -170,11 +170,7 @@ def behavioral_grep(
     for dirpath, dirnames, filenames in os.walk(root):
         # Prune excluded directories in-place to prevent os.walk from descending.
         dirnames[:] = [
-            d
-            for d in dirnames
-            if not _matches_any(
-                os.path.relpath(os.path.join(dirpath, d), root), exclude_globs
-            )
+            d for d in dirnames if not _matches_any(os.path.relpath(os.path.join(dirpath, d), root), exclude_globs)
         ]
 
         for filename in filenames:
@@ -243,8 +239,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="behavioral_grep",
         description=(
-            "Behavioral-grep audit utility. "
-            "Finds all sites implementing a behavior pattern across a directory tree."
+            "Behavioral-grep audit utility. " "Finds all sites implementing a behavior pattern across a directory tree."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
@@ -310,12 +305,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     include_globs = args.include_globs if args.include_globs else ["*.py"]
-    exclude_globs = args.exclude_globs if args.exclude_globs else [
-        "*/__pycache__/*",
-        "*.pyc",
-        "*/.git/*",
-        "*/node_modules/*",
-    ]
+    exclude_globs = (
+        args.exclude_globs
+        if args.exclude_globs
+        else [
+            "*/__pycache__/*",
+            "*.pyc",
+            "*/.git/*",
+            "*/node_modules/*",
+        ]
+    )
 
     label = args.before_label or args.after_label  # CLI provides one at a time
 

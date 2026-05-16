@@ -30,7 +30,7 @@ jobs:
   # Job 1: Unit and Integration Tests
   unit-tests:
     name: Unit & Integration Tests
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
 
     steps:
       - name: Checkout code
@@ -119,7 +119,7 @@ jobs:
   # Job 2: Security Scanning
   security-scan:
     name: Security Scan
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
 
     steps:
       - name: Checkout code
@@ -163,7 +163,7 @@ jobs:
   # Job 3: Build Test
   build-test:
     name: Build Test
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     needs: unit-tests
 
     steps:
@@ -201,7 +201,7 @@ jobs:
   # Job 4: Test Summary and Reporting
   test-summary:
     name: Test Summary
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     needs: [unit-tests, security-scan, build-test]
     if: always()
 

@@ -750,10 +750,7 @@ async def test_load_plugin_raises_plugin_load_error_when_required_env_missing(mo
         if missing_required:
             from plugin_sdk.base import PluginLoadError as _PLE
 
-            raise _PLE(
-                f"Cannot load plugin '{manifest.name}': "
-                f"required env vars not set: {missing_required}"
-            )
+            raise _PLE(f"Cannot load plugin '{manifest.name}': " f"required env vars not set: {missing_required}")
 
 
 @pytest.mark.asyncio
