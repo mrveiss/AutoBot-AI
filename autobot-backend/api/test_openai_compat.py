@@ -39,7 +39,7 @@ _SYNTHETIC_USER = {"username": "test", "role": "user"}
 
 def _make_mock_registry(content: str = "Hello from AutoBot", models: list = None):
     """Return a mocked ProviderRegistry with one provider."""
-    from llm_interface_pkg.models import LLMResponse
+    from llm_shared.models import LLMResponse
 
     models = models or ["autobot-model-1"]
 

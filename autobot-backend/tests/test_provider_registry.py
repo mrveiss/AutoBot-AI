@@ -20,8 +20,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from llm_interface_pkg import BaseProvider, ProviderRegistry
-from llm_interface_pkg.models import ChatMessage, LLMRequest, LLMResponse
+from llm_shared import BaseProvider, ProviderRegistry
+from llm_shared.models import ChatMessage, LLMRequest, LLMResponse
 from services.llm_cost_tracker import LLMCostTracker
 
 # ============================================================================

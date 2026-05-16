@@ -58,7 +58,7 @@ def _get_cache_registry() -> List[Tuple[str, str, Callable[[], CacheProtocol]]]:
         return EmbeddingCache()
 
     def _llm_cache_factory() -> CacheProtocol:
-        from llm_interface_pkg.cache import LLMResponseCache
+        from llm_shared.cache import LLMResponseCache
 
         return LLMResponseCache()
 
@@ -75,7 +75,7 @@ def _get_cache_registry() -> List[Tuple[str, str, Callable[[], CacheProtocol]]]:
     return [
         ("src.memory.cache", "LRUCacheManager", _lru_cache_factory),
         ("src.knowledge.embedding_cache", "EmbeddingCache", _embedding_cache_factory),
-        ("src.llm_interface_pkg.cache", "LLMResponseCache", _llm_cache_factory),
+        ("src.llm_shared.cache", "LLMResponseCache", _llm_cache_factory),
         ("src.code_intelligence.shared.ast_cache", "ASTCache", _ast_cache_factory),
         (
             "src.code_intelligence.shared.file_cache",

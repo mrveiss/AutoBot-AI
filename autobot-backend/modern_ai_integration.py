@@ -603,7 +603,7 @@ class LocalModelProvider(BaseAIProvider):
     def _initialize_client(self):
         """Initialize LLMInterface for OllamaProvider delegation."""
         try:
-            from llm_interface_pkg import LLMInterface
+            from llm_shared import LLMInterface
 
             self._llm_interface = LLMInterface()
             logger.info("LocalModelProvider initialized via OllamaProvider delegation")
@@ -619,7 +619,7 @@ class LocalModelProvider(BaseAIProvider):
             return self._create_error_response(request, "LLMInterface not available")
 
         try:
-            from llm_interface_pkg.models import LLMRequest
+            from llm_shared.models import LLMRequest
 
             messages = []
             if request.system_message:

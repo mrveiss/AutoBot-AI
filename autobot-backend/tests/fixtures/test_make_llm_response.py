@@ -7,7 +7,7 @@ Pins the canonical LLMResponse-stub factory's behavior so the 7+ ad-hoc
 test patterns that exist today can be migrated onto it with confidence.
 
 Why a fixture-test exists at all: the factory's whole value comes from
-returning the **real** ``LLMResponse`` from ``llm_interface_pkg.models``
+returning the **real** ``LLMResponse`` from ``llm_shared.models``
 when importable. If a future field rename or type change happens on
 that dataclass, this test fails first — the migration target is broken,
 not silently producing wrong-shape mocks.
@@ -26,9 +26,9 @@ def test_returns_real_llmresponse_when_importable() -> None:
     the result must be an instance of the real LLMResponse.
     """
     try:
-        from llm_interface_pkg.models import LLMResponse
+        from llm_shared.models import LLMResponse
     except ImportError:
-        pytest.skip("llm_interface_pkg.models not importable — fallback path is fine")
+        pytest.skip("llm_shared.models not importable — fallback path is fine")
 
     response = make_llm_response(content="hello")
     assert isinstance(response, LLMResponse)

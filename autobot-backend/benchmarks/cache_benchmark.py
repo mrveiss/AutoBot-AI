@@ -15,7 +15,7 @@ from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
-from llm_interface_pkg.cache import CachedResponse, LLMResponseCache
+from llm_shared.cache import CachedResponse, LLMResponseCache
 
 logger = get_logger(__name__)
 

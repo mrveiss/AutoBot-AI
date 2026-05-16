@@ -24,7 +24,7 @@ from autobot_shared.ssot_config import (
     get_agent_provider_explicit,
 )
 from config.manager import get_config_manager as _get_config_manager
-from llm_interface_pkg.types import LLMType
+from llm_shared.types import LLMType
 from models.atomic_fact import AtomicFact, FactExtractionResult, FactType, TemporalType
 from services.llm_service import get_llm_service
 

@@ -41,8 +41,8 @@ _make_anthropic_stub()
 _make_xxhash_stub()
 
 
-from llm_interface_pkg.models import LLMRequest  # noqa: E402
-from llm_interface_pkg.providers.anthropic import (  # noqa: E402  (import after stub)
+from llm_shared.models import LLMRequest  # noqa: E402
+from llm_shared.providers.anthropic import (  # noqa: E402  (import after stub)
     AnthropicProvider,
     _build_api_kwargs,
     _extract_text_content,
