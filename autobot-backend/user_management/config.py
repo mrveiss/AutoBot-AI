@@ -177,7 +177,7 @@ def get_deployment_config() -> DeploymentConfig:
     postgres_enabled = mode != DeploymentMode.SINGLE_USER
 
     # Load PostgreSQL configuration from environment (uses SSOT fallback)
-    postgres_host = config.postgres_host)
+    postgres_host = config.postgres_host
     postgres_port = int(config.postgres_port)
     postgres_db = config.postgres_db
     postgres_user = config.postgres_user

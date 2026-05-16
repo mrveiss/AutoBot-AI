@@ -80,8 +80,8 @@ class _ConfigStub:
 
         return {
             "enabled": config.redis_enabled.lower() == "true",
-            "host": config.redis_host),
-            "port": int(config.redis_port)),
+            "host": config.redis_host,
+            "port": int(config.redis_port),
             "db": int(config.redis_db_main),
         }
 
