@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.prompt_rules import LEDGER_VS_EXECUTOR_RULE
 from memory.manager import UnifiedMemoryManager
 from prompt_manager import get_language_instruction, resolve_language
 
@@ -143,15 +144,16 @@ class StandardizedAgent(BaseAgent):
         return None, handler_config, handler_method
 
     def _get_localized_system_prompt(self, language=None):
-        """Get system prompt with language instruction appended.
+        """Get system prompt with language instruction and rules appended.
 
         Issue #1327: Wraps _get_system_prompt() with language injection.
+        Issue #7380: Injects LEDGER_VS_EXECUTOR rule to clarify coordination semantics.
         Resolves language from request param > personality > 'en'.
         English adds no extra instruction.
         """
         base = self._get_system_prompt()
         lang_code = resolve_language(language)
-        return base + get_language_instruction(lang_code)
+        return base + "\n\n" + LEDGER_VS_EXECUTOR_RULE + "\n\n" + get_language_instruction(lang_code)
 
     def _build_success_response(self, request: AgentRequest, result: Any, processing_time: float) -> AgentResponse:
         """Build successful response (Issue #398: extracted)."""
