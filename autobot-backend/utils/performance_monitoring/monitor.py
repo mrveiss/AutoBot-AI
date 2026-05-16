@@ -18,6 +18,7 @@ import time
 from dataclasses import asdict
 from typing import Any, Callable, Dict, List
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import TTL_1_HOUR
 
 # Issue #469: Import Prometheus metrics manager
 from monitoring.prometheus_metrics import get_metrics_manager
@@ -451,7 +452,7 @@ class PerformanceMonitor:
                 key = "performance_alerts"
                 for alert in alerts:
                     self.redis_client.zadd(key, {json.dumps(alert): time.time()})
-                self.redis_client.expire(key, 3600)
+                self.redis_client.expire(key, TTL_1_HOUR)
 
             await asyncio.to_thread(_store_alerts)
         except Exception as e:

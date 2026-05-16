@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.ssot_constants import TTL_1_HOUR
 
 # Add AutoBot root to path for imports
 autobot_root = Path(__file__).parent.parent.parent
@@ -801,7 +802,7 @@ class FrontendAnalyzer:
         await self._ensure_redis()
         if self.redis_client:
             try:
-                await self.redis_client.setex(self.FRONTEND_KEY, 3600, json.dumps(results, default=str))
+                await self.redis_client.setex(self.FRONTEND_KEY, TTL_1_HOUR, json.dumps(results, default=str))
             except Exception as e:
                 logger.warning(f"Failed to cache results: {e}")
 

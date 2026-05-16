@@ -22,6 +22,7 @@ from security_analyzer import SecurityAnalyzer
 from testing_coverage_analyzer import TestingCoverageAnalyzer
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.ssot_constants import TTL_1_HOUR
 from constants.ttl_constants import TTL_30_DAYS
 
 logger = get_logger(__name__)
@@ -726,7 +727,7 @@ class CodeQualityDashboard:
         await self._ensure_redis()
         if self.redis_client:
             try:
-                await self.redis_client.setex(self.DASHBOARD_KEY, 3600, json.dumps(report, default=str))  # 1 hour
+                await self.redis_client.setex(self.DASHBOARD_KEY, TTL_1_HOUR, json.dumps(report, default=str))  # 1 hour
             except Exception as e:
                 logger.warning(f"Failed to cache dashboard report: {e}")
 

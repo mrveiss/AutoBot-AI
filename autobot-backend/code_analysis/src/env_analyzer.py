@@ -23,6 +23,7 @@ from typing import Any
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.ssot_config import QUALITY_MODEL
+from autobot_shared.ssot_constants import TTL_1_HOUR
 
 # Issue #542: Handle imports for both standalone execution and backend import
 # When imported from backend, project root is in sys.path
@@ -1240,7 +1241,7 @@ class EnvironmentAnalyzer:
             try:
                 key = self.RECOMMENDATIONS_KEY
                 value = json.dumps(results, default=str)
-                await self.redis_client.setex(key, 3600, value)  # 1 hour TTL
+                await self.redis_client.setex(key, TTL_1_HOUR, value)  # 1 hour TTL
             except Exception as e:
                 logger.warning(f"Failed to cache results: {e}")
 

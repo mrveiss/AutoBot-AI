@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import TTL_1_HOUR
 
 from autobot_shared.redis_mixin import AsyncRedisClientLockedMixin
 
@@ -1038,7 +1039,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
             cache_key = f"cross_lang_analysis:{analysis.analysis_id}"
             cache_data = json.dumps(analysis.to_dict(), default=str)
 
-            await redis.setex(cache_key, 3600, cache_data)  # 1 hour TTL
+            await redis.setex(cache_key, TTL_1_HOUR, cache_data)  # 1 hour TTL
             logger.info("Cached analysis results: %s", cache_key)
         except Exception as e:
             logger.warning("Failed to cache results: %s", e)
