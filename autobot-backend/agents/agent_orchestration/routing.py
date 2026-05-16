@@ -10,12 +10,15 @@ Issue #2092: Added Q-learning RL router between pattern-match and LLM fallback.
 """
 
 import json
+import os
 import time
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import LLMDefaults
 
+from .topology import AgentTopology, InMemoryTopologyDB
+from .topology_routing import TopologyAwareRouter
 from .types import (
     AUDIO_PROCESSING_PATTERNS,
     CODE_GENERATION_PATTERNS,
@@ -59,6 +62,12 @@ class AgentRouter:
         # Issue #2092: Q-learning RL router (lazy-initialised on first use).
         self._rl_router = None
         self.rl_routing_enabled: bool = True
+        # Issue #6821: topology-aware router (lazy-initialised on first use).
+        # Gated by env var TOPOLOGY_ROUTING_ENABLED (default: False).
+        self._topology_router: TopologyAwareRouter | None = None
+        self.topology_routing_enabled: bool = (
+            os.environ.get("TOPOLOGY_ROUTING_ENABLED", "false").lower() in {"1", "true", "yes"}
+        )
 
     async def _check_learned_strategy(
         self, request: str, context: Dict[str, Any] | None = None
@@ -125,6 +134,13 @@ class AgentRouter:
             self._rl_router = RLRouter()
         return self._rl_router
 
+    def _get_topology_router(self) -> TopologyAwareRouter:
+        """Lazily initialise and return the TopologyAwareRouter singleton (Issue #6821)."""
+        if self._topology_router is None:
+            topology = AgentTopology(db=InMemoryTopologyDB())
+            self._topology_router = TopologyAwareRouter(topology=topology, base_router=self)
+        return self._topology_router
+
     def _available_agent_ids(self) -> List[str]:
         """Return all known AgentType values as string IDs."""
         return [at.value for at in self.agent_capabilities]
@@ -164,6 +180,61 @@ class AgentRouter:
         except Exception as exc:
             logger.warning("RL routing error: %s", exc)
             return None
+
+    async def _maybe_augment_with_topology(
+        self,
+        request: str,
+        context: Dict[str, Any] | None,
+        routing_decision: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Optionally augment *routing_decision* with topology collaborators.
+
+        Issue #6821: When ``TOPOLOGY_ROUTING_ENABLED`` is set and the routing
+        decision indicates a complex/multi-hop/multi-step task, consults
+        ``TopologyAwareRouter`` to add historically effective collaborator
+        agents to the result.
+
+        Args:
+            request: The original user request.
+            context: Optional routing context dict.
+            routing_decision: The primary routing decision to augment.
+
+        Returns:
+            The (possibly augmented) routing decision dict.
+        """
+        if not self.topology_routing_enabled:
+            return routing_decision
+
+        primary_agent = routing_decision.get("primary_agent")
+        if primary_agent is None:
+            return routing_decision
+
+        primary_agent_id = primary_agent.value if hasattr(primary_agent, "value") else str(primary_agent)
+        topo_context = dict(context or {})
+        # Derive complexity from the routing strategy when not set in context.
+        if "complexity" not in topo_context:
+            strategy = routing_decision.get("strategy", "single_agent")
+            topo_context["complexity"] = "complex" if strategy != "single_agent" else "simple"
+
+        try:
+            topo_router = self._get_topology_router()
+            topo_result = await topo_router.route_with_collaborators(
+                request=request,
+                context=topo_context,
+                primary_agent_id=primary_agent_id,
+            )
+            if topo_result.get("topology_consulted"):
+                routing_decision["topology_collaborators"] = topo_result.get("collaborators", [])
+                routing_decision["topology_pattern"] = topo_result.get("pattern")
+                logger.info(
+                    "Topology augmentation: primary=%s collaborators=%s",
+                    primary_agent_id,
+                    routing_decision["topology_collaborators"],
+                )
+        except Exception as exc:
+            logger.warning("Topology augmentation failed: %s", exc)
+
+        return routing_decision
 
     def _resolve_agent_type(self, approach: str) -> AgentType:
         """Map a learned approach string to an AgentType enum (#2105)."""
@@ -227,6 +298,11 @@ class AgentRouter:
 
             # Parse routing decision
             routing_decision = self._parse_routing_response(response)
+
+            # Issue #6821: augment with topology collaborators when enabled.
+            routing_decision = await self._maybe_augment_with_topology(
+                request, context, routing_decision
+            )
 
             return routing_decision
 
