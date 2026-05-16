@@ -55,7 +55,7 @@
         repo: "{{ github_repo }}"
         dest: "{{ git_repo_root }}"
         version: "{{ deploy_ref }}"
-        force: yes
+        force: true
         depth: 1
 
     - name: "[PRE-FLIGHT] Get current git branch"

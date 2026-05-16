@@ -32,9 +32,9 @@
 - name: Enable and start monitoring timer
   systemd:
     name: autobot-access-monitor.timer
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
+    daemon_reload: true
 
 - name: Display monitoring status
   debug:

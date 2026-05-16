@@ -63,8 +63,8 @@
         repo: "{{ github_repo }}"
         dest: "{{ git_repo_root }}"
         version: "{{ deploy_ref }}"
-        update: yes
-      ignore_errors: yes
+        update: true
+      ignore_errors: true
       register: github_sync
       tags: [always]
 

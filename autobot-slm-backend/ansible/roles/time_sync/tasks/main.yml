@@ -79,20 +79,20 @@
       systemd:
         name: systemd-timesyncd
         state: stopped
-        enabled: no
+        enabled: false
 
     - name: "Time Sync | Configure chrony"
       template:
         src: chrony.conf.j2
         dest: "/etc/chrony/chrony.conf"
-        backup: yes
+        backup: true
       notify: restart chrony
 
     - name: "Time Sync | Enable and start chrony"
       systemd:
         name: chrony
         state: started
-        enabled: yes
+        enabled: true
 
   when: time_sync.ntp.use_chrony | default(false)
   tags: ['time_sync', 'chrony']
@@ -103,7 +103,7 @@
       systemd:
         name: chrony
         state: stopped
-        enabled: no
+        enabled: false
       # (#2872) Intentional: chrony may not be installed; this is a
       # cleanup task when switching from chrony to systemd-timesyncd.
       failed_when: false
@@ -112,14 +112,14 @@
       template:
         src: timesyncd.conf.j2
         dest: "/etc/systemd/timesyncd.conf"
-        backup: yes
+        backup: true
       notify: restart systemd-timesyncd
 
     - name: "Time Sync | Enable and start systemd-timesyncd"
       systemd:
         name: systemd-timesyncd
         state: started
-        enabled: yes
+        enabled: true
 
   when: not (time_sync.ntp.use_chrony | default(false))
   tags: ['time_sync', 'systemd-timesyncd']
@@ -203,7 +203,7 @@
   systemd:
     name: cron
     state: started
-    enabled: yes
+    enabled: true
   tags: ['time_sync', 'monitoring']
 
 - name: "Time Sync | Add cron job for time sync monitoring"

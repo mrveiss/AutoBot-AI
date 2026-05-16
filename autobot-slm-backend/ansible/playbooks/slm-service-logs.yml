@@ -5,8 +5,8 @@
 
 - name: "SLM Get Service Logs"
   hosts: target
-  gather_facts: no
-  become: yes
+  gather_facts: false
+  become: true
 
   vars:
     service_name: "{{ service | mandatory }}"

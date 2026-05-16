@@ -4,18 +4,18 @@
 
 - name: Deploy Development Frontend on VM1
   hosts: frontend
-  become: yes
+  become: true
 
   tasks:
     - name: Stop any existing services
       systemd:
         name: "{{ item }}"
         state: stopped
-        enabled: no
+        enabled: false
       loop:
         - autobot-frontend-dev
         - nginx
-      ignore_errors: yes
+      ignore_errors: true
 
     - name: Install Node.js 20 for development
       block:
@@ -35,7 +35,7 @@
               - nodejs
               - npm
             state: present
-            update_cache: yes
+            update_cache: true
 
     - name: Copy frontend source files from deployment directory
       copy:
@@ -100,16 +100,16 @@
           [Install]
           WantedBy=multi-user.target
         dest: /etc/systemd/system/autobot-frontend-dev.service
-        backup: yes
+        backup: true
 
     - name: Reload systemd daemon
       systemd:
-        daemon_reload: yes
+        daemon_reload: true
 
     - name: Enable and start development frontend service
       systemd:
         name: autobot-frontend-dev
-        enabled: yes
+        enabled: true
         state: started
 
     - name: Configure firewall for development frontend
@@ -146,14 +146,14 @@
 
 - name: Verify development services are running
   hosts: backend
-  become: yes
+  become: true
 
   tasks:
     - name: Ensure autobot-backend service is running
       systemd:
         name: autobot-backend
         state: started
-        enabled: yes
+        enabled: true
 
 # Display final status
 - name: Development Setup Complete

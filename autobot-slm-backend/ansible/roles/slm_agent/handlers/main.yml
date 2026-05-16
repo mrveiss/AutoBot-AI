@@ -6,29 +6,29 @@
 
 - name: Reload systemd
   systemd:
-    daemon_reload: yes
-  become: yes
+    daemon_reload: true
+  become: true
 
 - name: Restart SLM agent
   systemd:
     name: slm-agent
     state: restarted
-  become: yes
+  become: true
 
 - name: Stop SLM agent
   systemd:
     name: slm-agent
     state: stopped
-  become: yes
+  become: true
 
 - name: Start SLM agent
   systemd:
     name: slm-agent
     state: started
-  become: yes
+  become: true
 
 - name: Restart node_exporter
   ansible.builtin.systemd:
     name: node_exporter
     state: restarted
-  become: yes
+  become: true

@@ -8,7 +8,7 @@ all:
     localhost:
       ansible_connection: local
       ansible_user: "{{ ansible_user_id }}"
-      ansible_become: yes
+      ansible_become: true
       ansible_become_method: sudo
 
   children:

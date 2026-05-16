@@ -75,7 +75,7 @@
 
 - name: Reload systemd daemon first
   ansible.builtin.systemd:
-    daemon_reload: yes
+    daemon_reload: true
 
 - name: Check if service unit file exists
   ansible.builtin.stat:

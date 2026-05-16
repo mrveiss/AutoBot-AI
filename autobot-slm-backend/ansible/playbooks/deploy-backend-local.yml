@@ -17,8 +17,8 @@
 - name: Deploy Backend Services to Main Machine
   hosts: localhost
   connection: local
-  become: yes
-  gather_facts: yes
+  become: true
+  gather_facts: true
 
   vars:
     # Backend configuration

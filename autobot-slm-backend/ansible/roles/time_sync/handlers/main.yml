@@ -5,14 +5,14 @@
   systemd:
     name: systemd-timesyncd
     state: restarted
-    daemon_reload: yes
+    daemon_reload: true
   tags: ['time_sync', 'handlers']
 
 - name: restart chrony
   systemd:
     name: chrony
     state: restarted
-    daemon_reload: yes
+    daemon_reload: true
   tags: ['time_sync', 'handlers']
 
 - name: restart rsyslog
@@ -35,5 +35,5 @@
 
 - name: reload systemd
   systemd:
-    daemon_reload: yes
+    daemon_reload: true
   tags: ['time_sync', 'handlers']

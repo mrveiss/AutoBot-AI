@@ -21,7 +21,7 @@
 - name: Enable dnsmasq service
   systemd:
     name: dnsmasq
-    enabled: yes
+    enabled: true
     state: started
 
 - name: Configure resolv.conf to use dnsmasq
