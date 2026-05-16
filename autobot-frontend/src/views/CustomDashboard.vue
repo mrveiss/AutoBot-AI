@@ -29,7 +29,7 @@
               {{ dash.name }}
             </option>
           </select>
-          <button @click="createNewDashboard" class="icon-btn" :title="$t('views.customDashboard.createNewDashboard')">
+          <button @click="createNewDashboard" class="icon-btn" :title="$t('views.customDashboard.createNewDashboard')" :aria-label="$t('views.customDashboard.createNewDashboard')">
             <Icon name="plus" />
           </button>
         </div>
@@ -79,16 +79,16 @@
             {{ widget.title }}
           </h3>
           <div class="widget-actions" v-if="isEditMode">
-            <button @click="configureWidget(widget)" :title="$t('views.customDashboard.configure')">
+            <button @click="configureWidget(widget)" :title="$t('views.customDashboard.configure')" :aria-label="$t('views.customDashboard.configure')">
               <Icon name="cog" />
             </button>
-            <button @click="resizeWidget(widget, 'expand')" :title="$t('views.customDashboard.expand')">
+            <button @click="resizeWidget(widget, 'expand')" :title="$t('views.customDashboard.expand')" :aria-label="$t('views.customDashboard.expand')">
               <Icon name="expand-alt" />
             </button>
-            <button @click="resizeWidget(widget, 'shrink')" :title="$t('views.customDashboard.shrink')">
+            <button @click="resizeWidget(widget, 'shrink')" :title="$t('views.customDashboard.shrink')" :aria-label="$t('views.customDashboard.shrink')">
               <Icon name="compress-alt" />
             </button>
-            <button @click="removeWidget(widget.id)" class="remove-btn" :title="$t('views.customDashboard.remove')">
+            <button @click="removeWidget(widget.id)" class="remove-btn" :title="$t('views.customDashboard.remove')" :aria-label="$t('views.customDashboard.remove')">
               <Icon name="times" />
             </button>
           </div>
