@@ -137,9 +137,7 @@ async def get_canvas(
         canvas = await _get_canvas_owned(canvas_id, uid, session)
 
         cells_result = await session.execute(
-            select(CanvasCell)
-            .where(CanvasCell.canvas_id == canvas_id)
-            .order_by(CanvasCell.position)
+            select(CanvasCell).where(CanvasCell.canvas_id == canvas_id).order_by(CanvasCell.position)
         )
         cells = cells_result.scalars().all()
 
@@ -343,17 +341,15 @@ async def export_canvas(
 
         canvas = await _get_canvas_owned(canvas_id, uid, session)
         cells_result = await session.execute(
-            select(CanvasCell)
-            .where(CanvasCell.canvas_id == canvas_id)
-            .order_by(CanvasCell.position)
+            select(CanvasCell).where(CanvasCell.canvas_id == canvas_id).order_by(CanvasCell.position)
         )
         all_cells = cells_result.scalars().all()
 
         # Apply include filters
         filtered = [
-            c for c in all_cells
-            if (c.owner == "agent" and body.include.agent)
-            or (c.owner == "user" and body.include.user)
+            c
+            for c in all_cells
+            if (c.owner == "agent" and body.include.agent) or (c.owner == "user" and body.include.user)
         ]
 
         content_type = _EXPORT_CONTENT_TYPES[body.format]
@@ -435,6 +431,7 @@ def _export_html(canvas: Canvas, cells: list[CanvasCell]) -> str:
 
         def _sanitize(text: str) -> str:
             return bleach.clean(text, tags=[], strip=True)
+
     except ImportError:
         # Fallback: basic escaping without bleach
         import html as html_lib
