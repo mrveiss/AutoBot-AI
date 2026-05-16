@@ -11,7 +11,7 @@
 #   2. Local branches (any prefix) for closed issues
 #   3. Remote branches for closed issues (squash-merge aware)
 #
-# Fixes: #2508
+# Fixes: #7104, #2508
 
 set -euo pipefail
 
