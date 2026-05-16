@@ -5,6 +5,7 @@ import type {
   ChatSession,
   WorkflowApproval
 } from '@/types/api'
+import type { UserResponse, TeamResponse } from '@/types/api-contract'
 import apiClient from '@/utils/ApiClient'
 import type { RequestOptions } from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
@@ -261,11 +262,11 @@ class ApiService {
   }
 
   // User Management API
-  async getUserById(userId: string): Promise<ApiResponse> {
+  async getUserById(userId: string): Promise<UserResponse> {
     return this.get(`${getApiBase()}/user-management/users/${userId}`)
   }
 
-  async getGroupById(groupId: string): Promise<ApiResponse> {
+  async getGroupById(groupId: string): Promise<TeamResponse> {
     return this.get(`${getApiBase()}/user-management/teams/${groupId}`)
   }
 }
