@@ -81,7 +81,7 @@ class CellCreateRequest(BaseModel):
     content: str = ""
     position: int = 0
     # Phase 2: optional rich payload for chart/code cells
-    rich_payload: Optional[Any] = None
+    rich_payload: Any | None = None
 
 
 # CellOut serves as the 201 response for cell creation.
@@ -104,7 +104,7 @@ class CellTransitionResponse(BaseModel):
     state: str
     version: int
     content: str
-    rich_payload: Optional[Any] = None
+    rich_payload: Any | None = None
     updated_at: datetime
 
     model_config = {"from_attributes": True}
