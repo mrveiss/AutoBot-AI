@@ -28,7 +28,6 @@ import pytest
 from fastapi import FastAPI, Query
 from fastapi.testclient import TestClient
 
-
 # ---------------------------------------------------------------------------
 # Local re-definition of the enums (same values as api/marketplace.py #6534)
 # ---------------------------------------------------------------------------
@@ -139,9 +138,7 @@ class TestInvalidCategory422:
     )
     def test_various_invalid_categories_return_422(self, client: TestClient, bad_value: str):
         resp = client.get(f"/catalog?category={bad_value}")
-        assert resp.status_code == 422, (
-            f"Expected 422 for category={bad_value!r}, got {resp.status_code}"
-        )
+        assert resp.status_code == 422, f"Expected 422 for category={bad_value!r}, got {resp.status_code}"
 
 
 # ---------------------------------------------------------------------------
@@ -178,9 +175,7 @@ class TestInvalidSortBy422:
     )
     def test_various_invalid_sort_by_return_422(self, client: TestClient, bad_value: str):
         resp = client.get(f"/catalog?sort_by={bad_value}")
-        assert resp.status_code == 422, (
-            f"Expected 422 for sort_by={bad_value!r}, got {resp.status_code}"
-        )
+        assert resp.status_code == 422, f"Expected 422 for sort_by={bad_value!r}, got {resp.status_code}"
 
 
 # ---------------------------------------------------------------------------

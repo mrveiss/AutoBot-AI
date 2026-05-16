@@ -140,9 +140,7 @@ class TestAssignRoleCacheInvalidation:
         assert str(user_id) in payload
 
     @pytest.mark.asyncio
-    async def test_assign_role_already_assigned_skips_cache_clear(
-        self, user_service, mock_session, sample_ids
-    ):
+    async def test_assign_role_already_assigned_skips_cache_clear(self, user_service, mock_session, sample_ids):
         """When the role is already assigned, no cache invalidation occurs."""
         user_id = sample_ids["user_id"]
         role_id = sample_ids["role_id"]
@@ -304,9 +302,7 @@ class TestConcurrentRoleMutations:
     """GH#7609 — concurrent assign/revoke do not corrupt cache state."""
 
     @pytest.mark.asyncio
-    async def test_concurrent_assign_and_revoke_both_invalidate(
-        self, user_service, mock_session, sample_ids
-    ):
+    async def test_concurrent_assign_and_revoke_both_invalidate(self, user_service, mock_session, sample_ids):
         """Parallel assign and revoke each trigger independent cache clears."""
         user_id = sample_ids["user_id"]
         role_id_a = uuid.uuid4()
@@ -314,8 +310,8 @@ class TestConcurrentRoleMutations:
 
         # assign: no existing; revoke: existing role found
         side_effects = [
-            _mock_execute_result(scalar_return=None),        # assign call
-            _mock_execute_result(scalar_return=MagicMock()), # revoke call
+            _mock_execute_result(scalar_return=None),  # assign call
+            _mock_execute_result(scalar_return=MagicMock()),  # revoke call
         ]
         mock_session.execute.side_effect = side_effects
 
