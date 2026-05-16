@@ -29,6 +29,7 @@ from enum import Enum
 from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.prompt_rules import LEDGER_VS_EXECUTOR_RULE
 from config.manager import get_config_manager as _get_config_manager
 from constants.threshold_constants import LLMDefaults, TimingConstants
 from enhanced_orchestration.agent_router import AgentRouter
@@ -716,6 +717,8 @@ class Orchestrator:
 
         Available agents and their capabilities:
         {capabilities_json}
+
+        {LEDGER_VS_EXECUTOR_RULE}
 
         Create a workflow plan with:
         1. Required agents and their specific tasks

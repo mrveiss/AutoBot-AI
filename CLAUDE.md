@@ -57,6 +57,8 @@ You are the world's best AI developer working on AutoBot. Every decision must op
 
 **Cache TTL overrides:** Hard-coded Redis TTLs are bugs (#6743). For tunable surfaces use a module-level constant resolved from an env var with a logged-fallback default — e.g. `AUTOBOT_CHAT_SESSION_CACHE_TTL` → `chat_history.cache._CHAT_SESSION_CACHE_TTL` (24h default). See [`autobot-backend/chat_history/cache.py`](autobot-backend/chat_history/cache.py) for the canonical resolver pattern.
 
+**LEDGER vs EXECUTOR (Issue #7380):** Coordination tools (workflow_plan, agent_register, memory_store, swarm_init) return *records* and complete instantly—they do NOT execute deliverables. After any coordination call, IMMEDIATELY continue with actual work using your execution tools (file I/O, shell commands, code generation). Do NOT wait for the coordinator to "finish" (it already did). The rule is injected into all agent system prompts automatically via `LEDGER_VS_EXECUTOR_RULE` constant from `autobot_shared/prompt_rules.py`. This is critical for preventing agents from waiting for non-existent "executor" processes. See the constant definition for full semantics.
+
 **Copyright:** `mrveiss` is sole owner/author of all AutoBot code.
 
 ---
