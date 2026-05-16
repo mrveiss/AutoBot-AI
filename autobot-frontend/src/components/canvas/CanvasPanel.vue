@@ -35,11 +35,14 @@
       class="flex-1 overflow-y-auto p-4"
       role="list"
       aria-label="Canvas cells"
+      data-testid="canvas-cells-list"
     >
       <canvas-cell
         v-for="cell in store.cells"
         :key="cell.id"
         :cell="cell"
+        :data-testid="`canvas-cell-${cell.id}`"
+        :data-owner="cell.owner"
         role="listitem"
         @accept="onAccept(cell.id)"
         @edit="onEdit(cell.id)"

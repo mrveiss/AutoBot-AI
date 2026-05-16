@@ -11,7 +11,7 @@
       aria-labelledby="export-sheet-title"
     >
       <div class="absolute inset-0 bg-bg-overlay" @click="$emit('close')" />
-      <div class="relative bg-bg-card border border-border-default rounded-t-xl sm:rounded-xl w-full max-w-md p-6 shadow-xl z-10">
+      <div data-testid="canvas-export-modal" class="relative bg-bg-card border border-border-default rounded-t-xl sm:rounded-xl w-full max-w-md p-6 shadow-xl z-10">
         <h2 id="export-sheet-title" class="text-lg font-semibold mb-4">Export Canvas</h2>
 
         <!-- Format selection -->

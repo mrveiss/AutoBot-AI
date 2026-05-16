@@ -7,6 +7,7 @@
     aria-label="Canvas toolbar"
   >
     <button
+      data-testid="canvas-undo-btn"
       aria-label="Undo (⌘Z)"
       :disabled="!canUndo"
       class="p-1.5 rounded hover:bg-bg-hover disabled:opacity-40 disabled:cursor-not-allowed"
@@ -16,6 +17,7 @@
     </button>
 
     <button
+      data-testid="canvas-redo-btn"
       aria-label="Redo (⌘⇧Z)"
       :disabled="!canRedo"
       class="p-1.5 rounded hover:bg-bg-hover disabled:opacity-40 disabled:cursor-not-allowed"
@@ -27,6 +29,7 @@
     <div class="w-px h-5 bg-border-default mx-1" role="separator" aria-hidden="true" />
 
     <button
+      data-testid="canvas-add-cell-btn"
       aria-label="Add cell"
       class="p-1.5 rounded hover:bg-bg-hover flex items-center gap-1 text-sm"
       @click="store.addCell('user')"
@@ -39,6 +42,7 @@
 
     <!-- Auto-save status indicator -->
     <span
+      data-testid="canvas-save-status"
       :class="['text-xs', saveStatusClass]"
       aria-live="polite"
       aria-atomic="true"
@@ -58,6 +62,7 @@
     <div class="w-px h-5 bg-border-default mx-1" role="separator" aria-hidden="true" />
 
     <button
+      data-testid="canvas-export-btn"
       aria-label="Export canvas (⌘⇧E)"
       class="p-1.5 rounded hover:bg-bg-hover flex items-center gap-1 text-sm"
       @click="$emit('export')"

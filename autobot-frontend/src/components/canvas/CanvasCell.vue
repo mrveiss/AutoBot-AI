@@ -40,7 +40,7 @@
     <!-- Skeleton shimmer state -->
     <div
       v-else-if="cell.streamState === 'skeleton'"
-      data-testid="skeleton-shimmer"
+      data-testid="cell-skeleton"
       :class="[
         'space-y-2',
         !prefersReducedMotion && 'animate-pulse',
@@ -58,6 +58,7 @@
       <!-- eslint-disable-next-line vue/no-v-html -->
       <div class="message-text prose prose-sm max-w-none" v-html="renderedContent" />
       <span
+        data-testid="cell-cursor"
         class="inline-block w-0.5 h-4 bg-current animate-[blink_1s_step-end_infinite] ml-0.5"
         aria-hidden="true"
       />
@@ -92,6 +93,7 @@
     <!-- Complete agent controls -->
     <div
       v-if="cell.streamState === 'complete' && isAgentCell"
+      data-testid="cell-controls"
       class="mt-2 flex gap-2 flex-wrap"
     >
       <button

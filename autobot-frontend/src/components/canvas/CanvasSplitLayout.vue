@@ -2,7 +2,7 @@
 <!-- Copyright (c) 2025 mrveiss | Author: mrveiss -->
 <template>
   <!-- Mobile (≤390px): tabbed fallback -->
-  <div v-if="isMobile" class="flex flex-col h-full">
+  <div v-if="isMobile" data-testid="canvas-tabbed-layout" class="flex flex-col h-full">
     <div class="flex border-b border-border-default" role="tablist">
       <button
         v-for="tab in tabs"
@@ -25,6 +25,7 @@
   <!-- Desktop: split panel -->
   <div
     v-else
+    data-testid="canvas-split-layout"
     class="flex h-full overflow-hidden select-none"
     @mousemove="onGutterDrag"
     @mouseup="stopDrag"
