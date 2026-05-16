@@ -19,13 +19,14 @@ mid-flight failure could leave a half-applied state. The fix wraps all writes
 in a single MULTI/EXEC pipeline (``transaction=True``).
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from api import onboarding as onboarding_api
 from auth_middleware import check_admin_permission, get_current_user
+from tests.fixtures import make_async_redis, make_redis_pipeline
 
 
 def _build_app() -> FastAPI:
@@ -59,19 +60,14 @@ def _deny_admin(app: FastAPI) -> None:
     app.dependency_overrides[check_admin_permission] = _raise
 
 
-def _make_mock_pipe() -> MagicMock:
-    """Return a mock Redis pipeline that records set() calls and awaits execute()."""
-    pipe = MagicMock()
-    pipe.set = MagicMock()
-    pipe.execute = AsyncMock(return_value=[True])
-    return pipe
+def _make_mock_pipe():
+    """Return a canonical pipeline mock that records set() calls and awaits execute() (#7280)."""
+    return make_redis_pipeline(execute_returns=[True])
 
 
-def _make_mock_redis(pipe: MagicMock) -> MagicMock:
-    """Return a mock Redis client whose pipeline() returns *pipe*."""
-    redis = MagicMock()
-    redis.pipeline = MagicMock(return_value=pipe)
-    return redis
+def _make_mock_redis(pipe):
+    """Return a canonical Redis mock whose pipeline() returns *pipe* (#7280)."""
+    return make_async_redis(pipeline=pipe)
 
 
 class TestPresetsAuth:

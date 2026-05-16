@@ -175,9 +175,14 @@ class AsyncChromaDBClient(AsyncBaseClient):
         metadata: Optional[Metadata] = None,
         embedding_function: Optional[Any] = None,
     ) -> AsyncBaseCollection:
+        from datetime import datetime, timezone
+
+        provenance: dict = {"created_at": datetime.now(timezone.utc).isoformat()}
+        if metadata:
+            provenance.update(metadata)
         raw_col = await self._raw.get_or_create_collection(
             name=name,
-            metadata=metadata,
+            metadata=provenance,
             embedding_function=embedding_function,
         )
         return AsyncChromaDBCollection(raw_col)

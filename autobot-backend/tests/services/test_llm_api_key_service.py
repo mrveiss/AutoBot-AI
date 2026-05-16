@@ -11,6 +11,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from tests.fixtures import make_async_redis
+
 from services.llm_api_key_service import (
     LLMApiKeyRecord,
     LLMApiKeyService,
@@ -129,10 +131,7 @@ async def test_issue_key():
 
 @pytest.mark.asyncio
 async def test_revoke_key_found():
-    mock_redis = AsyncMock()
-    mock_redis.exists = AsyncMock(return_value=1)
-    mock_redis.hset = AsyncMock()
-
+    mock_redis = make_async_redis(exists_returns=1)
     svc = LLMApiKeyService.__new__(LLMApiKeyService)
     svc._redis = mock_redis
 
@@ -143,9 +142,7 @@ async def test_revoke_key_found():
 
 @pytest.mark.asyncio
 async def test_revoke_key_not_found():
-    mock_redis = AsyncMock()
-    mock_redis.exists = AsyncMock(return_value=0)
-
+    mock_redis = make_async_redis(exists_returns=0)
     svc = LLMApiKeyService.__new__(LLMApiKeyService)
     svc._redis = mock_redis
 
@@ -173,9 +170,7 @@ async def test_check_budget_unlimited():
 async def test_check_budget_within():
     rec = _make_record(monthly_budget_usd=10.0)
     svc = LLMApiKeyService.__new__(LLMApiKeyService)
-    mock_redis = AsyncMock()
-    mock_redis.get = AsyncMock(return_value="3.0")
-    svc._redis = mock_redis
+    svc._redis = make_async_redis(get_returns="3.0")
 
     allowed, remaining = await svc.check_budget(rec)
     assert allowed is True
@@ -186,9 +181,7 @@ async def test_check_budget_within():
 async def test_check_budget_exceeded():
     rec = _make_record(monthly_budget_usd=5.0)
     svc = LLMApiKeyService.__new__(LLMApiKeyService)
-    mock_redis = AsyncMock()
-    mock_redis.get = AsyncMock(return_value="6.0")
-    svc._redis = mock_redis
+    svc._redis = make_async_redis(get_returns="6.0")
 
     allowed, remaining = await svc.check_budget(rec)
     assert allowed is False
@@ -209,9 +202,7 @@ async def test_authenticate_key_valid():
     rec = _make_record(key_id="abcd1234", key_hash=key_hash)
 
     svc = LLMApiKeyService.__new__(LLMApiKeyService)
-    mock_redis = AsyncMock()
-    mock_redis.hgetall = AsyncMock(return_value=rec.to_redis_hash())
-    svc._redis = mock_redis
+    svc._redis = make_async_redis(hgetall_returns=rec.to_redis_hash())
 
     result = await svc.authenticate_key(raw)
     assert result is not None
@@ -222,9 +213,7 @@ async def test_authenticate_key_valid():
 async def test_authenticate_key_wrong_hash():
     svc = LLMApiKeyService.__new__(LLMApiKeyService)
     rec = _make_record(key_id="abcd1234", key_hash="wronghash" * 7 + "wronghas")
-    mock_redis = AsyncMock()
-    mock_redis.hgetall = AsyncMock(return_value=rec.to_redis_hash())
-    svc._redis = mock_redis
+    svc._redis = make_async_redis(hgetall_returns=rec.to_redis_hash())
 
     result = await svc.authenticate_key("sk-abcd1234-" + "z" * 32)
     assert result is None
@@ -239,9 +228,7 @@ async def test_authenticate_key_revoked():
     rec = _make_record(key_id="abcd1234", key_hash=key_hash, revoked=True)
 
     svc = LLMApiKeyService.__new__(LLMApiKeyService)
-    mock_redis = AsyncMock()
-    mock_redis.hgetall = AsyncMock(return_value=rec.to_redis_hash())
-    svc._redis = mock_redis
+    svc._redis = make_async_redis(hgetall_returns=rec.to_redis_hash())
 
     result = await svc.authenticate_key(raw)
     assert result is None
@@ -255,7 +242,7 @@ async def test_authenticate_key_revoked():
 @pytest.mark.asyncio
 async def test_publish_usage_event_swallows_error():
     svc = LLMApiKeyService.__new__(LLMApiKeyService)
-    mock_redis = AsyncMock()
+    mock_redis = make_async_redis()
     mock_redis.xadd = AsyncMock(side_effect=Exception("Redis down"))
     svc._redis = mock_redis
 

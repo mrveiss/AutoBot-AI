@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from models.document import AIDocument
+from tests.fixtures import make_async_redis, make_redis_pipeline
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -25,18 +26,9 @@ def _make_doc(**kwargs) -> AIDocument:
 
 @pytest.fixture()
 def mock_redis():
-    """Async Redis mock with pipeline support."""
-    redis = AsyncMock()
-    pipe = AsyncMock()
-    pipe.__aenter__ = AsyncMock(return_value=pipe)
-    pipe.__aexit__ = AsyncMock(return_value=False)
-    pipe.set = MagicMock()
-    pipe.sadd = MagicMock()
-    pipe.delete = MagicMock()
-    pipe.srem = MagicMock()
-    pipe.execute = AsyncMock(return_value=[True, True])
-    redis.pipeline = MagicMock(return_value=pipe)
-    return redis
+    """Async Redis mock with pipeline support (#7280)."""
+    pipe = make_redis_pipeline(execute_returns=[True, True])
+    return make_async_redis(pipeline=pipe)
 
 
 # ---------------------------------------------------------------------------

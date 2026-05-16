@@ -21,6 +21,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
+from tests.fixtures import make_async_redis
+
 from api.marketplace import (
     _BUILTIN_CATALOG,
     _CATALOG_KEY,
@@ -75,11 +77,8 @@ def _make_redis(
     #7366: installed_by_source maps source_id -> set[name] for multi-source tests.
     The legacy ``installed`` kwarg seeds the builtin source key for backward compat.
     """
-    redis = AsyncMock()
-    if catalog is not None:
-        redis.get.return_value = json.dumps(catalog).encode()
-    else:
-        redis.get.return_value = None
+    get_returns = json.dumps(catalog).encode() if catalog is not None else None
+    redis = make_async_redis(get_returns=get_returns)
 
     # Build per-source mapping
     by_source: dict[str, set[str]] = {}
@@ -107,10 +106,6 @@ def _make_redis(
         return await _smembers(key)
 
     redis.smembers.side_effect = _smembers_with_legacy
-    redis.set.return_value = True
-    redis.sadd.return_value = 1
-    redis.srem.return_value = 1
-    redis.delete.return_value = 1
     return redis
 
 
