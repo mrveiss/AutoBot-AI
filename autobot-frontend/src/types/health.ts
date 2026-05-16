@@ -1,0 +1,24 @@
+/**
+ * AutoBot - AI-Powered Automation Platform
+ * Copyright (c) 2025 mrveiss
+ * Author: mrveiss
+ *
+ * Shared health-response types (#6920 — deduplicate *HealthResponse interfaces).
+ */
+
+/**
+ * Vocabulary used by legacy per-module health endpoints and the
+ * probe-backed health helpers. Mirrors the backend's `_PROBE_TO_LEGACY`
+ * dict values so the two sides stay in sync.
+ */
+export type LegacyHealthStatus = 'healthy' | 'unavailable' | 'error'
+
+/**
+ * Fields shared by every per-module health response. Module-specific
+ * interfaces must extend this type rather than redeclaring these fields.
+ */
+export interface BaseModuleHealthResponse {
+  status: LegacyHealthStatus
+  redis_connected: boolean
+  message?: string
+}

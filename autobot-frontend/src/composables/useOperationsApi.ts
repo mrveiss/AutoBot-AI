@@ -24,7 +24,7 @@ import type {
 } from '@/types/operations'
 import { isTerminalStatus } from '@/types/operations'
 import { getApiBase } from '@/config/ssot-config'
-import { useProbeBackedHealth } from '@/composables/useProbeBackedHealth'
+import { useProbeBackedHealth, probeStatusToLegacy } from '@/composables/useProbeBackedHealth'
 
 const logger = createLogger('useOperationsApi')
 
@@ -89,7 +89,7 @@ export function useOperationsApi() {
     getHealth: useProbeBackedHealth<OperationsHealthResponse>({
       probeName: 'long_running',
       buildHealthy: (probe, data) => ({
-        status: 'healthy',
+        status: probeStatusToLegacy(probe.status),
         active_operations: Number(data.active_operations ?? 0),
         total_operations: Number(data.total_operations ?? 0),
         redis_connected: Boolean(data.redis_connected),
@@ -97,7 +97,7 @@ export function useOperationsApi() {
         message: probe.detail,
       }),
       buildUnavailable: (message) => ({
-        status: 'unavailable',
+        status: 'unavailable' as const,
         active_operations: 0,
         total_operations: 0,
         redis_connected: false,
