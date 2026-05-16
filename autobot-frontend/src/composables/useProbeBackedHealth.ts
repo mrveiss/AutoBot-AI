@@ -37,8 +37,21 @@ import { findProbeByName, type ProbeResponse } from '@/composables/useHealthProb
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import type { LegacyHealthStatus } from '@/types/health'
 
 const logger = createLogger('useProbeBackedHealth')
+
+/**
+ * Maps a backend probe status string to the legacy per-module health vocab.
+ * Mirrors the backend's `_PROBE_TO_LEGACY` dict so the two sides stay in sync.
+ *
+ * @example
+ * probeStatusToLegacy('ok')          // → 'healthy'
+ * probeStatusToLegacy('degraded')    // → 'unavailable'
+ */
+export function probeStatusToLegacy(status: ProbeResponse['status']): LegacyHealthStatus {
+  return status === 'ok' ? 'healthy' : 'unavailable'
+}
 
 export interface ProbeBackedHealthOptions<R> {
   /** Probe name to look up in `/api/system/health` payload (e.g. `'batch_jobs'`). */

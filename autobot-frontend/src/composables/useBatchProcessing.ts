@@ -31,7 +31,7 @@ import type {
 } from '@/types/batch-processing'
 import { isTerminalStatus } from '@/types/batch-processing'
 import { getApiBase } from '@/config/ssot-config'
-import { useProbeBackedHealth } from '@/composables/useProbeBackedHealth'
+import { useProbeBackedHealth, probeStatusToLegacy } from '@/composables/useProbeBackedHealth'
 import { PROBE_NAMES } from '@/types/probe-names'
 
 const logger = createLogger('useBatchProcessing')
@@ -188,14 +188,14 @@ export function useBatchProcessingApi() {
     getHealth: useProbeBackedHealth<BatchHealthResponse>({
       probeName: PROBE_NAMES.BATCH_JOBS,
       buildHealthy: (probe, data) => ({
-        status: 'healthy',
+        status: probeStatusToLegacy(probe.status),
         active_jobs: 0,
         total_jobs: 0,
         redis_connected: Boolean(data.redis_connected),
         message: probe.detail,
       }),
       buildUnavailable: (message) => ({
-        status: 'unavailable',
+        status: 'unavailable' as const,
         active_jobs: 0,
         total_jobs: 0,
         redis_connected: false,

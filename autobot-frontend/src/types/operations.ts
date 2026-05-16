@@ -7,6 +7,8 @@
  * Issue #591 - Long-Running Operations Tracker
  */
 
+import type { BaseModuleHealthResponse } from './health'
+
 /**
  * Operation status enum matching backend OperationStatus
  */
@@ -73,13 +75,10 @@ export interface OperationsListResponse {
 /**
  * Operation health check response
  */
-export interface OperationsHealthResponse {
-  status: 'healthy' | 'unavailable' | 'error'
+export interface OperationsHealthResponse extends BaseModuleHealthResponse {
   active_operations: number
   total_operations: number
-  redis_connected: boolean
   background_processor_running: boolean
-  message?: string
 }
 
 /**
