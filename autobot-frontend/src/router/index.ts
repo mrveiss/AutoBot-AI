@@ -215,6 +215,16 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
+        // MVA-344: 4-tab web research panel (Fetch Page / Crawl Site / Find Pages / Get Data)
+        path: 'web-research',
+        name: 'knowledge-web-research',
+        component: () => import('@/components/knowledge/WebResearchPanel.vue'),
+        meta: {
+          title: 'Web Research',
+          parent: 'knowledge'
+        }
+      },
+      {
         path: 'manpages',
         redirect: () => ({
           path: '/knowledge/categories',

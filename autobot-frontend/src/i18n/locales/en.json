@@ -2373,7 +2373,9 @@
       "maintenance": "Maintenance",
       "maintenanceAriaLabel": "Knowledge base maintenance",
       "analytics": "Analytics",
-      "statistics": "Statistics"
+      "statistics": "Statistics",
+      "webResearch": "Web Research",
+      "webResearchAriaLabel": "4-tab web research panel"
     },
     "backup": {
       "title": "Backup & Restore",
@@ -3677,6 +3679,81 @@
       "selectedCount": "Selected count",
       "title": "Title",
       "untitled": "Untitled"
+    },
+    "webResearch": {
+      "title": "Web Research",
+      "subtitle": "Fetch, crawl, discover, and extract data from the web",
+      "navLabel": "Web Research",
+      "navAriaLabel": "Web research panel",
+      "settingsNavLabel": "Research Settings",
+      "settingsNavAriaLabel": "Web research settings",
+      "tabListAriaLabel": "Web research tabs",
+      "renderLabel": "Render Mode",
+      "renderAuto": "Auto",
+      "renderFast": "Fast (no JS)",
+      "renderPlaywright": "Full JS (Playwright)",
+      "ingestLabel": "Save to Knowledge Base",
+      "respectRobotsLabel": "Respect robots.txt",
+      "reset": "Clear",
+      "retry": "Retry",
+      "fetching": "Fetching…",
+      "crawling": "Crawling…",
+      "discovering": "Discovering…",
+      "extracting": "Extracting…",
+      "indexed": "Saved to KB",
+      "failed": "Failed",
+      "schemaValid": "Schema Valid",
+      "schemaInvalid": "Schema Invalid",
+      "filterPlaceholder": "Filter URLs…",
+      "filterLabel": "Filter URLs",
+      "noFilterResults": "No URLs match the current filter.",
+      "depthLabel": "Depth {depth}",
+      "errorGeneric": "An unexpected error occurred. Please try again.",
+      "tabs": {
+        "scrape": "Fetch Page",
+        "scrapeAriaLabel": "Fetch Page — extract text from a single URL",
+        "crawl": "Crawl Site",
+        "crawlAriaLabel": "Crawl Site — follow links and index multiple pages",
+        "siteMap": "Find Pages",
+        "siteMapAriaLabel": "Find Pages — discover all URLs on a domain",
+        "extract": "Get Data",
+        "extractAriaLabel": "Get Data — extract structured data using a schema"
+      },
+      "scrape": {
+        "urlLabel": "URL",
+        "urlPlaceholder": "https://example.com/page",
+        "formatLabel": "Output Format",
+        "submitLabel": "Fetch Page",
+        "emptyState": "Enter a URL above and click Fetch Page to extract its text content."
+      },
+      "crawl": {
+        "seedLabel": "Seed URL",
+        "seedPlaceholder": "https://example.com",
+        "depthLabel": "Max Depth",
+        "maxPagesLabel": "Max Pages",
+        "sameOriginLabel": "Same origin only",
+        "submitLabel": "Crawl Site",
+        "emptyState": "Enter a starting URL and click Crawl Site to follow its links.",
+        "resultTitle": "{count} pages crawled",
+        "urlListLabel": "Crawled pages"
+      },
+      "siteMap": {
+        "domainLabel": "Domain",
+        "domainPlaceholder": "example.com",
+        "maxUrlsLabel": "Max URLs",
+        "submitLabel": "Find Pages",
+        "emptyState": "Enter a domain name and click Find Pages to discover its URLs.",
+        "resultTitle": "{count} URLs found on {domain}",
+        "urlListLabel": "Discovered URLs"
+      },
+      "extract": {
+        "urlLabel": "URL",
+        "urlPlaceholder": "https://example.com/page",
+        "schemaLabel": "JSON Schema",
+        "submitLabel": "Get Data",
+        "emptyState": "Enter a URL and a JSON Schema, then click Get Data to extract structured information.",
+        "resultTitle": "Extracted Data"
+      }
     }
   },
   "workflow": {
