@@ -1003,11 +1003,13 @@ class AntiPatternDetector:
         # Report param groups that appear multiple times
         for params, methods in param_groups.items():
             if len(methods) >= 3:  # Appears in 3+ methods
+                _cls_name = methods[0].split(".")[0] if methods else ""
+                _cls = next((v for v in self.classes.values() if v.name == _cls_name), None)
                 issues.append(
                     AntiPatternInstance(
                         pattern_type=AntiPatternType.DATA_CLUMP,
                         severity=Severity.MEDIUM if len(methods) > 5 else Severity.LOW,
-                        file_path=(self.classes[methods[0].split(".")[0]].file_path if methods else ""),
+                        file_path=(_cls.file_path if _cls else ""),
                         line_number=1,
                         entity_name=", ".join(params),
                         description=(f"Parameter group ({', '.join(params)}) appears in {len(methods)} methods"),
@@ -1254,8 +1256,8 @@ class AntiPatternDetector:
                             line_number=child_method.lineno,
                             entity_name=f"{child.name}.{child_method.name}",
                             description=(
-                                f"Override of {parent.name}.{child_method.name} accepts "
-                                f"{child_total_positional} positional args but the parent "
+                                f"Override of {parent.name}.{child_method.name} drops required positional params: "
+                                f"accepts {child_total_positional} positional args but the parent "
                                 f"requires {parent_required}. A factory call like "
                                 "``cls(arg1, arg2)`` against the parent contract will "
                                 "crash with TypeError on this subclass."
