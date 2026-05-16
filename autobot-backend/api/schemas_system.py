@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Union
 from pydantic import BaseModel, Field, field_validator
 
 from api.schemas_common import SuccessDataResponse, SuccessMessageResponse
+from api.system_health import HealthStatus
 from constants.threshold_constants import RetryConfig
 from services.audit_logger import AuditResult
 from services.feature_flags import EnforcementMode
@@ -35,13 +36,14 @@ class SystemFrontendConfigResponse(BaseModel):
 class SystemHealthResponse(BaseModel):
     """Response for GET /health and GET /system/health.
 
-    Shape varies between healthy/degraded/unhealthy paths — extra fields
-    (cpu_percent, memory_percent, services, etc.) are allowed through.
+    Issue #6909: status uses probe vocabulary ("ok"/"degraded"/"down") — the
+    legacy "healthy"/"unhealthy" mapping was removed. Extra fields
+    (cpu_percent, memory_percent, probes, etc.) are allowed through.
     """
 
     model_config = {"extra": "allow"}
 
-    status: str
+    status: HealthStatus
     timestamp: str
 
 
