@@ -128,9 +128,12 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     """
     session_factory = get_async_session_factory()
     async with session_factory() as session:
+        session.info["_post_commit_cbs"] = []
         try:
             yield session
             await session.commit()
+            for cb in session.info.pop("_post_commit_cbs", []):
+                await cb()
         except Exception:
             await session.rollback()
             raise
@@ -149,9 +152,12 @@ async def db_session_context() -> AsyncGenerator[AsyncSession, None]:
     """
     session_factory = get_async_session_factory()
     async with session_factory() as session:
+        session.info["_post_commit_cbs"] = []
         try:
             yield session
             await session.commit()
+            for cb in session.info.pop("_post_commit_cbs", []):
+                await cb()
         except Exception:
             await session.rollback()
             raise

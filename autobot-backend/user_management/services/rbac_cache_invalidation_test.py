@@ -63,6 +63,9 @@ def mock_session():
     session.flush = AsyncMock()
     session.add = MagicMock()
     session.delete = AsyncMock()
+    # Empty info dict → no _post_commit_cbs key → clear_cache fires immediately (fallback path).
+    # Integration tests with a real session exercise the post-commit path (GH#7605).
+    session.info = {}
     return session
 
 

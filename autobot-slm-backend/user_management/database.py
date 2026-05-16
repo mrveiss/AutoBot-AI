@@ -148,9 +148,12 @@ async def get_slm_session() -> AsyncGenerator[AsyncSession, None]:
     """Get SLM database session (context manager)."""
     session_maker = get_slm_session_maker()
     async with session_maker() as session:
+        session.info["_post_commit_cbs"] = []
         try:
             yield session
             await session.commit()
+            for cb in session.info.pop("_post_commit_cbs", []):
+                await cb()
         except Exception:
             await session.rollback()
             raise
@@ -161,9 +164,12 @@ async def get_autobot_session() -> AsyncGenerator[AsyncSession, None]:
     """Get AutoBot database session (context manager)."""
     session_maker = get_autobot_session_maker()
     async with session_maker() as session:
+        session.info["_post_commit_cbs"] = []
         try:
             yield session
             await session.commit()
+            for cb in session.info.pop("_post_commit_cbs", []):
+                await cb()
         except Exception:
             await session.rollback()
             raise

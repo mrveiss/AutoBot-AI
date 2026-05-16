@@ -683,7 +683,14 @@ class UserService(BaseService):
         # Lazy import avoids the circular dependency: rbac_middleware → UserService → rbac_middleware
         from user_management.middleware.rbac_middleware import rbac_middleware as _rbac  # noqa: PLC0415
 
-        await _rbac.clear_cache(user_id)
+        # Schedule cache invalidation after commit to avoid the flush→publish→stale-re-cache race (GH#7605).
+        # Falls back to immediate clear when session.info is unavailable (e.g. unit tests with mock sessions).
+        _uid = user_id
+        post_cbs = self.session.info.get("_post_commit_cbs")
+        if post_cbs is not None:
+            post_cbs.append(lambda: _rbac.clear_cache(_uid))
+        else:
+            await _rbac.clear_cache(user_id)
 
         await self._audit_log(
             action=AuditAction.ROLE_ASSIGNED,
@@ -718,7 +725,13 @@ class UserService(BaseService):
         # Lazy import avoids the circular dependency: rbac_middleware → UserService → rbac_middleware
         from user_management.middleware.rbac_middleware import rbac_middleware as _rbac  # noqa: PLC0415
 
-        await _rbac.clear_cache(user_id)
+        # Schedule cache invalidation after commit to avoid the flush→publish→stale-re-cache race (GH#7605).
+        _uid = user_id
+        post_cbs = self.session.info.get("_post_commit_cbs")
+        if post_cbs is not None:
+            post_cbs.append(lambda: _rbac.clear_cache(_uid))
+        else:
+            await _rbac.clear_cache(user_id)
 
         await self._audit_log(
             action=AuditAction.ROLE_REVOKED,
