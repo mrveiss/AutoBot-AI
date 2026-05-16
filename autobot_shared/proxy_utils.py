@@ -63,7 +63,7 @@ def _build_default_trusted_proxies() -> frozenset:
     autobot_shared/network_constants.py itself depends on autobot-backend's
     config.registry at runtime.
     """
-    raw = os.getenv("AUTOBOT_TRUSTED_PROXIES", "")
+    raw = os.getenv("AUTOBOT_TRUSTED_PROXIES", "")  # ssot-config-exempt: pre-ssot shim
     if raw:
         return frozenset(ip.strip() for ip in raw.split(",") if ip.strip())
 

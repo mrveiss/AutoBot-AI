@@ -1588,7 +1588,7 @@ class WindowsNPUWorker:
 
             # Issue #640: Pass our persistent worker_id to prevent duplicates
             # Issue #3084: Use AUTOBOT_BACKEND_HOST env var; fallback to localhost (no hardcoded IPs)
-            default_backend_host = os.environ.get("AUTOBOT_BACKEND_HOST", "localhost")
+            default_backend_host = os.environ.get("AUTOBOT_BACKEND_HOST", "localhost")  # ssot-config-exempt: NPU worker
             bootstrap = await fetch_bootstrap_config(
                 backend_host=backend_config.get("host") or default_backend_host,
                 backend_port=backend_config.get("port", 8001),
@@ -2331,19 +2331,19 @@ def main():
     tls_config = config.get("tls", {})
     tls_enabled = (
         tls_config.get("enabled", False)
-        or os.environ.get("NPU_WORKER_TLS_ENABLED", "false").lower() == "true"
+        or os.environ.get("NPU_WORKER_TLS_ENABLED", "false").lower() == "true"  # ssot-config-exempt: NPU worker
     )
     ssl_keyfile = None
     ssl_certfile = None
 
     if tls_enabled:
         cert_dir = tls_config.get(
-            "cert_dir", os.environ.get("AUTOBOT_TLS_CERT_DIR", "certs")
+            "cert_dir", os.environ.get("AUTOBOT_TLS_CERT_DIR", "certs")  # ssot-config-exempt: NPU worker
         )
         ssl_keyfile = os.path.join(cert_dir, "server-key.pem")
         ssl_certfile = os.path.join(cert_dir, "server-cert.pem")
         port = tls_config.get(
-            "port", int(os.environ.get("NPU_WORKER_TLS_PORT", "8444"))
+            "port", int(os.environ.get("NPU_WORKER_TLS_PORT", "8444"))  # ssot-config-exempt: NPU worker
         )
         logger.info(f"TLS enabled - using HTTPS on port {port}")
 

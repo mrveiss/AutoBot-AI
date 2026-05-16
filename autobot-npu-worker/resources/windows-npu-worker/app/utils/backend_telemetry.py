@@ -388,15 +388,15 @@ def _load_service_credentials(config: dict) -> tuple[str | None, str | None]:
         Tuple of (service_id, service_key) or (None, None) if not found
     """
     # Try environment variables first
-    service_id = os.environ.get("SERVICE_ID")
-    service_key = os.environ.get("SERVICE_KEY")
+    service_id = os.environ.get("SERVICE_ID")  # ssot-config-exempt: NPU worker SERVICE_* namespace
+    service_key = os.environ.get("SERVICE_KEY")  # ssot-config-exempt: NPU worker SERVICE_* namespace
 
     if service_id and service_key:
         logger.info("Loaded service credentials from environment variables")
         return service_id, service_key
 
     # Try SERVICE_KEY_FILE environment variable
-    key_file = os.environ.get("SERVICE_KEY_FILE")
+    key_file = os.environ.get("SERVICE_KEY_FILE")  # ssot-config-exempt: NPU worker SERVICE_* namespace
     if not key_file:
         # Try config file
         backend_config = config.get("backend", {})

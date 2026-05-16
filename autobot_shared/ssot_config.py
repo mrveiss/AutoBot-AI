@@ -56,7 +56,7 @@ def _find_project_root() -> Path:
         if (parent / ".env").exists():
             return parent
     # Fallback to runtime location (env var or /opt/autobot)
-    return Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"))
+    return Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"))  # ssot-config-exempt: bootstrap self-reference
 
 
 PROJECT_ROOT = _find_project_root()
@@ -1788,14 +1788,14 @@ class _EnvVarAccessor:
         env_var = name.upper()
 
         # Try exact match first
-        value = os.environ.get(env_var)
+        value = os.environ.get(env_var)  # ssot-config-exempt: dynamic env var name
         if value is not None:
             return value
 
         # Try with AUTOBOT_ prefix if not already there
         if not env_var.startswith("AUTOBOT_"):
             env_var = f"AUTOBOT_{env_var}"
-            value = os.environ.get(env_var)
+            value = os.environ.get(env_var)  # ssot-config-exempt: dynamic env var name
             if value is not None:
                 return value
 

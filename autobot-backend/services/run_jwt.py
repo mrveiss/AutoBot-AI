@@ -247,7 +247,7 @@ async def _is_denied(jti: str) -> bool:
     """
     redis = await get_async_redis_client(database="main")
     if redis is None:
-        if os.environ.get(_ENV_FAIL_OPEN) == "1":
+        if os.environ.get(_ENV_FAIL_OPEN) == "1":  # ssot-config-exempt: dynamic env var name
             logger.warning("run_jwt: Redis unavailable — denylist check skipped (RUN_JWT_REDIS_FAIL_OPEN=1)")
             return False
         raise JWTDecodeError(
@@ -424,7 +424,7 @@ async def refresh_run_jwt(token: str, run_id: str) -> str:
     # availability is more critical than the revocation guarantee.
     redis = await get_async_redis_client(database="main")
     if redis is None:
-        if os.environ.get(_ENV_FAIL_OPEN) == "1":
+        if os.environ.get(_ENV_FAIL_OPEN) == "1":  # ssot-config-exempt: dynamic env var name
             logger.warning("run_jwt: Redis unavailable — refresh denylist skipped (RUN_JWT_REDIS_FAIL_OPEN=1)")
         else:
             raise JWTDecodeError(

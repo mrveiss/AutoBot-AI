@@ -139,7 +139,7 @@ def check_npu_worker_registry() -> CheckResult:
         import os
         import urllib.request
         npu_host = os.environ.get("NPU_WORKER_HOST", "localhost")
-        npu_port = os.environ.get("NPU_WORKER_PORT", "8080")
+        npu_port = os.environ.get("NPU_WORKER_PORT", "8080")  # ssot-config-exempt: diagnostic CLI, NPU_* namespace
         url = f"http://{npu_host}:{npu_port}/health"
         with urllib.request.urlopen(url, timeout=2) as resp:
             if resp.status == 200:

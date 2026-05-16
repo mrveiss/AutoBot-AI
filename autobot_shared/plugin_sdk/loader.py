@@ -249,7 +249,7 @@ class PluginLoader:
             return None
         return {
             env.name: {
-                "configured": bool(os.environ.get(env.name)),
+                "configured": bool(os.environ.get(env.name))  # ssot-config-exempt: dynamic env var name,
                 "secret": env.secret,
                 "required": env.required,
                 "description": env.description,
