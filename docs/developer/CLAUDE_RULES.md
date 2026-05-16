@@ -98,6 +98,54 @@ Use **Extract Method** pattern: create `_helper_function()` with docstring refer
 
 **UTF-8 Encoding:** Always use `encoding='utf-8'` explicitly.
 
+**Cache TTL Overrides — never hard-code Redis TTLs (#6743):**
+
+Hard-coded Redis TTLs are bugs. For any surface where operators may need to tune
+memory pressure, declare a module-level constant resolved from an env var with a
+logged-fallback default.
+
+Known tunable TTL env vars:
+
+| Env var | Default | Controls | Code location |
+|---------|---------|----------|---------------|
+| `AUTOBOT_CHAT_SESSION_CACHE_TTL` | `86400` (24 h) | TTL (seconds) for `chat:session:*` Redis keys | `autobot-backend/chat_history/cache.py` — `_resolve_chat_session_cache_ttl()` |
+
+Canonical resolver pattern (copy for every new tunable TTL surface):
+
+```python
+# module-level constant — resolved once at import time
+_CHAT_SESSION_CACHE_TTL = _resolve_chat_session_cache_ttl()
+
+def _resolve_chat_session_cache_ttl() -> int:
+    """Return TTL seconds for chat:session:* Redis keys."""
+    raw = config.chat_session_cache_ttl  # reads AUTOBOT_CHAT_SESSION_CACHE_TTL
+    if raw is None:
+        return TTL_24_HOURS  # from constants/ttl_constants.py
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning(
+            "AUTOBOT_CHAT_SESSION_CACHE_TTL=%r is not an integer; falling back to %ds (24h)",
+            raw, TTL_24_HOURS,
+        )
+        return TTL_24_HOURS
+    if value <= 0:
+        logger.warning(
+            "AUTOBOT_CHAT_SESSION_CACHE_TTL=%d must be positive; falling back to %ds (24h)",
+            value, TTL_24_HOURS,
+        )
+        return TTL_24_HOURS
+    return value
+```
+
+Rules:
+- Env var name: `AUTOBOT_<AREA>_<RESOURCE>_TTL` (screaming-snake, `AUTOBOT_` prefix)
+- Always log a warning with the invalid value and the fallback when env var is absent or invalid
+- Constant must be positive; reject zero or negative with warning + fallback to default
+- Never call `int(os.getenv(...))` inline at call sites — use a named `_resolve_*` function
+
+> Violation: Hard-coding `expire(key, 3600)` or reading the env var inline at call sites.
+
 **Logging:**
 
 ```python
