@@ -39,6 +39,8 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from constants.status_enums import TaskStatus
 
+from .success_criteria import SuccessCriteriaEvaluator
+
 logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -107,6 +109,7 @@ class DAGExecutionContext:
     step_outputs: Dict[str, Any] = field(default_factory=dict)
     status: str = "in_progress"
     error: str | None = None
+    criteria_evaluation: Dict[str, Any] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -332,8 +335,13 @@ class DAGExecutor:
             results are merged by DAGExecutor after the call returns.
     """
 
-    def __init__(self, step_executor_callback: StepExecutorCallback) -> None:
+    def __init__(
+        self,
+        step_executor_callback: StepExecutorCallback,
+        criteria_evaluator: SuccessCriteriaEvaluator | None = None,
+    ) -> None:
         self._execute_step = step_executor_callback
+        self._criteria_evaluator = criteria_evaluator
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -396,6 +404,13 @@ class DAGExecutor:
             ctx.status = TaskStatus.COMPLETED.value
         else:
             ctx.status = TaskStatus.PARTIALLY_COMPLETED.value
+
+        if self._criteria_evaluator and context and context.get("structured_criteria"):
+            eval_result = await self._criteria_evaluator.evaluate(
+                context["structured_criteria"], ctx.step_results
+            )
+            ctx.criteria_evaluation = eval_result.to_dict()
+
         logger.info("Workflow %s DAG execution finished: status=%s", workflow_id, ctx.status)
         return ctx
 

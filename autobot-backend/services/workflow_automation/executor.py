@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, FrozenSet
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 from monitoring.prometheus_metrics import get_metrics_manager
+from orchestration.success_criteria import SuccessCriteriaEvaluator
 from services.workflow_secret_service import get_workflow_secret_service
 from type_defs.common import Metadata
 
@@ -187,11 +188,14 @@ class WorkflowExecutor:
         self,
         messenger: "WorkflowMessenger",
         notification_service: "NotificationService" | None = None,
+        criteria_evaluator: SuccessCriteriaEvaluator | None = None,
     ) -> None:
         """Initialize executor with messenger and step evaluator."""
         self.messenger = messenger
         # Issue #3101: Notification service for workflow lifecycle events.
         self._notification_service = notification_service
+        # GH #7887: optional success criteria evaluator (injected from manager in prod)
+        self._criteria_evaluator = criteria_evaluator
         self.step_evaluator = WorkflowStepEvaluator()
         self.prometheus_metrics = get_metrics_manager()
         # Issue #390: Track pending plan approvals
