@@ -356,11 +356,11 @@ const getCurrentLLMDisplay = (): string => {
   const providerType = llmConfig.provider_type || 'local'
   if (providerType === 'local') {
     const provider = llmConfig.local?.provider || 'ollama'
-    const model = llmConfig.local?.providers?.[provider]?.selected_model || 'Not selected'
+    const model = (llmConfig.local?.providers?.[provider] as { selected_model?: string } | undefined)?.selected_model || 'Not selected'
     return `${provider.toUpperCase()}: ${model}`
   } else {
     const provider = llmConfig.cloud?.provider || 'openai'
-    const model = llmConfig.cloud?.providers?.[provider]?.selected_model || 'Not selected'
+    const model = (llmConfig.cloud?.providers?.[provider] as { selected_model?: string } | undefined)?.selected_model || 'Not selected'
     return `${provider.toUpperCase()}: ${model}`
   }
 }

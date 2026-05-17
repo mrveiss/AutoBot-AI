@@ -5,7 +5,7 @@ import apiClient from '@/utils/ApiClient'
 import type { ChatSession } from '@/stores/useChatStore'
 import { createLogger } from '@/utils/debugUtils'
 import { extractErrorMessage, extractApiErrorMessage } from '@/utils/errorExtract'
-import type { ChatMessageDisplayType } from '@/types/api'
+import type { ChatMessage, ChatMessageDisplayType } from '@/types/api'
 import { requestQueue } from '@/composables/useRequestQueue'
 
 const logger = createLogger('ChatController')
@@ -254,7 +254,7 @@ export class ChatController {
     if (!this._pendingStreamUpdate) return
     const { messageId, content, type, metadata } = this._pendingStreamUpdate
     this._pendingStreamUpdate = null
-    this.chatStore.updateMessage(messageId, { content, type, metadata })
+    this.chatStore.updateMessage(messageId, { content, type, metadata: metadata as ChatMessage["metadata"] })
   }
 
   /**
@@ -382,6 +382,7 @@ export class ChatController {
           content: '',
           sender: 'assistant'
         })
+        if (!errorMsgId) return fallbackMessageId
         this.chatStore.updateMessage(errorMsgId, {
           content: `Error: ${data.content || data.message || 'Unknown error'}`,
           status: 'error'
@@ -407,7 +408,7 @@ export class ChatController {
       } else if (!backendMessageId && fallbackMessageId) {
         // No backend ID but we already have a fallback — reuse it
         // Prevents duplicate messages when chunks lack message_id
-        frontendMessageId = fallbackMessageId
+        frontendMessageId = fallbackMessageId as string
       } else {
         // New message - create it with type set immediately to prevent filter flicker (#1364)
         const sender = data.type === 'terminal_output' ? 'system' : 'assistant'
@@ -415,7 +416,7 @@ export class ChatController {
           content: '',
           sender,
           type: messageType
-        })
+        }) as string
         if (backendMessageId) {
           messageIdMap.set(backendMessageId, frontendMessageId)
         }
@@ -581,7 +582,7 @@ export class ChatController {
           content: msg.text || msg.content || '',
           sender: (msg.sender as 'user' | 'assistant' | 'system') || 'assistant',
           type: msg.type, // This enables filtering
-          metadata: msg.metadata || {}
+          metadata: (msg.metadata || {}) as ChatMessage["metadata"]
         })
       })
     }
@@ -601,12 +602,7 @@ export class ChatController {
           model: data.model,
           tokens: data.tokens_used,
           duration: data.response_time || data.processing_time,
-          message_type: data.message_type,
-          knowledge_status: data.knowledge_status,
-          sources: data.sources,
-          librarian_engaged: data.librarian_engaged,
-          mcp_used: data.mcp_used
-        }
+        } as ChatMessage["metadata"]
       })
     }
   }

@@ -442,7 +442,7 @@ export function useKnowledgeVectorization() {
         setDocumentStatus(result.id, 'vectorized', 100)
         succeeded.push(result.id)
       } else {
-        setDocumentStatus(result.id, 'failed', 0, result.error)
+        setDocumentStatus(result.id, 'failed', 0, result.error ?? undefined)
         failed.push(result.id)
       }
     }

@@ -252,7 +252,7 @@
       <!-- Workflow Progress Widget -->
       <div v-if="showWorkflowProgress" class="workflow-progress-widget">
         <WorkflowProgressWidget
-          :workflow-id="currentWorkflowId"
+          :workflow-id="currentWorkflowId ?? undefined"
           @close="showWorkflowProgress = false"
         />
       </div>

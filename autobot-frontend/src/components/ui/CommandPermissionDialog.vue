@@ -159,7 +159,7 @@ const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
-const { isOpen: showDialog } = useModal('command-permission-dialog')
+const { isOpen: showDialog } = useModal({ id: 'command-permission-dialog' })
 const rememberForSession = ref(false)
 const showCommentInput = ref(false)
 const commentText = ref('')
@@ -268,8 +268,8 @@ watch(() => props.show, (newValue) => {
   showDialog.value = newValue ?? false
 }, { immediate: true })
 
-const getRiskVariant = (riskLevel: string) => {
-  const variantMap: Record<string, string> = { LOW: 'success', MEDIUM: 'warning', HIGH: 'danger', CRITICAL: 'danger' }
+const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'primary' | 'secondary' | 'danger' | undefined => {
+  const variantMap: Record<string, 'success' | 'warning' | 'danger' | 'secondary'> = { LOW: 'success', MEDIUM: 'warning', HIGH: 'danger', CRITICAL: 'danger' }
   return variantMap[riskLevel] ?? 'secondary'
 }
 </script>
