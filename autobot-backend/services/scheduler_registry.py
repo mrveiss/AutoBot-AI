@@ -85,12 +85,13 @@ REGISTRY: list[ScheduledJob] = [
     ),
     ScheduledJob(
         name="BackupScheduler",
-        interval_seconds="unknown",
+        interval_seconds=86400,
         owner_file="backup/scheduler.py",
         runtime="asyncio_per_worker",
         description=(
-            "Database backup scheduler referenced in lifespan.py. "
-            "WARNING: owner_file is missing from the repository. See discovery issue filed for GH#6594."
+            "Daily knowledge-base backup. Wakes once per day at AUTOBOT_BACKUP_SCHEDULE_HOUR "
+            "(default 02:00 UTC) and calls KnowledgeBase.create_backup(). "
+            "Implemented in GH#7912."
         ),
     ),
     ScheduledJob(
