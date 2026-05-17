@@ -6,7 +6,6 @@ Ollama Provider - Handler for Ollama LLM requests with streaming support.
 
 Extracted from llm_interface.py as part of Issue #381 god class refactoring.
 Issue #551: Added proper async cancellation handling and timeout fixes.
-Issue #697: Added OpenTelemetry tracing spans for LLM inference.
 """
 
 import asyncio
@@ -15,8 +14,6 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 import aiohttp
-from opentelemetry import trace
-from opentelemetry.trace import SpanKind, Status, StatusCode
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
@@ -26,13 +23,11 @@ from config.manager import get_config_manager
 from constants.api_constants import PATH_OLLAMA_CHAT
 
 from ..models import LLMRequest, LLMResponse, LLMSettings
+from ..observability import registry as obs_registry
 from ..streaming import StreamingManager
 
 logger = get_logger(__name__)
 config = get_config_manager()
-
-# Issue #697: Get tracer for LLM operations
-_tracer = trace.get_tracer("autobot.llm.ollama", "2.0.0")
 
 
 class OllamaProvider:
@@ -175,20 +170,6 @@ class OllamaProvider:
             "error": str(error),
         }
 
-    def _record_success_span_attributes(self, span, processing_time: float, content: str) -> None:
-        """
-        Record success attributes on OpenTelemetry span. Issue #620.
-
-        Args:
-            span: OpenTelemetry span
-            processing_time: Time taken to process request
-            content: Response content
-        """
-        if span.is_recording():
-            span.set_attribute("llm.duration_ms", processing_time * 1000)
-            span.set_attribute("llm.response_length", len(content))
-            span.set_status(Status(StatusCode.OK))
-
     def _build_span_attributes(self, model: str, use_streaming: bool, request: LLMRequest) -> dict:
         """
         Build span attributes for OpenTelemetry tracing. Issue #620.
@@ -272,9 +253,6 @@ class OllamaProvider:
 
         response = self.build_error_response(model, error)
         content = self.extract_content(response)
-
-        if span.is_recording():
-            span.set_attribute("llm.fallback_used", True)
 
         return self.build_response(
             content,
@@ -432,19 +410,6 @@ class OllamaProvider:
 
         return url, headers, model, use_streaming, data, span_attrs
 
-    def _record_error_span_attributes(self, span, error: Exception) -> None:
-        """
-        Record error attributes on OpenTelemetry span. Issue #620.
-
-        Args:
-            span: OpenTelemetry span
-            error: Exception that occurred
-        """
-        if span.is_recording():
-            span.set_status(Status(StatusCode.ERROR, str(error)))
-            span.record_exception(error)
-            span.set_attribute("llm.error", True)
-
     @circuit_breaker_async(
         "ollama_service",
         failure_threshold=config.get("circuit_breaker.ollama.failure_threshold", 3),
@@ -455,7 +420,6 @@ class OllamaProvider:
         """
         Enhanced Ollama chat completion with improved streaming.
 
-        Issue #697: Added OpenTelemetry tracing for LLM inference monitoring.
         Issue #620: Refactored to use helper methods for reduced complexity.
 
         Args:
@@ -470,25 +434,31 @@ class OllamaProvider:
             model,
             use_streaming,
             data,
-            span_attrs,
+            _span_attrs,
         ) = self._prepare_chat_request(request)
 
-        with _tracer.start_as_current_span("llm.inference", kind=SpanKind.CLIENT, attributes=span_attrs) as span:
-            start_time = time.time()
-
+        start_time = time.time()
+        try:
+            response = await self._execute_request(url, headers, data, request.request_id, model, use_streaming)
+            processing_time = time.time() - start_time
+            content = self.extract_content(response)
+            llm_response = self.build_response(content, response, model, processing_time, request.request_id)
             try:
-                response = await self._execute_request(url, headers, data, request.request_id, model, use_streaming)
-                processing_time = time.time() - start_time
-                content = self.extract_content(response)
-                self._record_success_span_attributes(span, processing_time, content)
+                asyncio.get_running_loop().create_task(
+                    obs_registry.notify_response(llm_response, processing_time * 1000, 0.0)
+                )
+            except RuntimeError:
+                pass
+            return llm_response
 
-                return self.build_response(content, response, model, processing_time, request.request_id)
-
-            except Exception as e:
-                self._record_error_span_attributes(span, e)
-                if use_streaming:
-                    return self._handle_streaming_error(span, model, start_time, request.request_id, e)
-                raise e
+        except Exception as e:
+            try:
+                asyncio.get_running_loop().create_task(obs_registry.notify_error(e, request))
+            except RuntimeError:
+                pass
+            if use_streaming:
+                return self._handle_streaming_error(None, model, start_time, request.request_id, e)
+            raise e
 
 
 __all__ = [

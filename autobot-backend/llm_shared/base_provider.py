@@ -11,12 +11,15 @@ are already defined in llm_shared.models.
 
 from __future__ import annotations
 
+import asyncio
+import time
 from abc import ABC, abstractmethod
 from typing import Any, AsyncIterator, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
 from .models import LLMRequest, LLMResponse
+from .observability import registry as obs_registry
 
 logger = get_logger(__name__)
 
@@ -26,7 +29,7 @@ class BaseProvider(ABC):
     Abstract base class for all LLM provider implementations.
 
     Concrete providers must implement:
-      - chat_completion(request) -> LLMResponse
+      - _chat_completion_impl(request) -> LLMResponse
       - stream_completion(request) -> AsyncIterator[str]
       - is_available() -> bool
       - list_models() -> List[str]
@@ -52,10 +55,38 @@ class BaseProvider(ABC):
         self._total_errors = 0
         logger.debug("Initialized %s provider", self.provider_name)
 
-    @abstractmethod
     async def chat_completion(self, request: LLMRequest) -> LLMResponse:
         """
         Execute a chat completion and return a fully populated LLMResponse.
+
+        Wraps ``_chat_completion_impl`` with observer fan-out (GH#6593).
+        Errors are returned via ``LLMResponse.error`` so the registry can
+        perform fallback — implementations must not raise.
+        """
+        start = time.monotonic()
+        try:
+            response = await self._chat_completion_impl(request)
+            latency_ms = (time.monotonic() - start) * 1000
+            try:
+                asyncio.get_running_loop().create_task(
+                    obs_registry.notify_response(response, latency_ms, 0.0)
+                )
+            except RuntimeError:
+                pass
+            return response
+        except Exception as exc:
+            try:
+                asyncio.get_running_loop().create_task(
+                    obs_registry.notify_error(exc, request)
+                )
+            except RuntimeError:
+                pass
+            raise
+
+    @abstractmethod
+    async def _chat_completion_impl(self, request: LLMRequest) -> LLMResponse:
+        """
+        Provider-specific chat completion implementation.
 
         Implementations must not raise — errors are returned via
         ``LLMResponse.error`` so the registry can perform fallback.

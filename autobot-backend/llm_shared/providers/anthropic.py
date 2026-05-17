@@ -24,9 +24,6 @@ Extended thinking (#3258):
   Thinking blocks are stripped from the returned ``content`` unless
   ``preserve_reasoning=True`` is present in ``api_kwargs``.
 
-OTel tracing (#697): spans are emitted for every inference call. Tracing
-was restored in MVA-178 (GH#7637) after being dropped in #3145.
-
 Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
@@ -35,9 +32,6 @@ from __future__ import annotations
 import re
 import time
 from typing import Any, AsyncIterator, Dict, List
-
-from opentelemetry import trace
-from opentelemetry.trace import SpanKind, Status, StatusCode
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -56,9 +50,6 @@ from ..base_provider import BaseProvider
 from .cache_utils import sorted_for_cache
 
 logger = get_logger(__name__)
-
-# Issue #697: tracer for LLM operations
-_tracer = trace.get_tracer("autobot.llm.anthropic", "2.0.0")
 
 _ANTHROPIC_MODELS = [
     ANTHROPIC_CLAUDE_OPUS4_6,
@@ -217,79 +208,57 @@ class AnthropicProvider(BaseProvider):
 
         return kwargs, extra_headers, preserve_reasoning
 
-    async def chat_completion(self, request: LLMRequest) -> LLMResponse:
+    async def _chat_completion_impl(self, request: LLMRequest) -> LLMResponse:
         """Execute a non-streaming chat completion via Anthropic.
 
-        Emits an OpenTelemetry span (Issue #697).
         Supports extended thinking when ``request.metadata["api_kwargs"]``
         contains a ``thinking`` key.
         """
         self._total_requests += 1
         start = time.time()
         model = request.model_name or self._get_setting("default_model", ANTHROPIC_CLAUDE_SONNET4_6)
-        span_attrs: Dict[str, Any] = {
-            "llm.provider": self.provider_name,
-            "llm.model": model,
-            "llm.request_id": request.request_id,
-            "llm.temperature": request.temperature,
-            "llm.max_tokens": request.max_tokens or 0,
-            "llm.prompt_messages": len(request.messages),
-        }
-        with _tracer.start_as_current_span("llm.inference", kind=SpanKind.CLIENT, attributes=span_attrs) as span:
-            try:
-                client = self._ensure_client()
-                kwargs, extra_headers, preserve_reasoning = self._build_request_kwargs(model, request)
+        try:
+            client = self._ensure_client()
+            kwargs, extra_headers, preserve_reasoning = self._build_request_kwargs(model, request)
 
-                call_kwargs: Dict[str, Any] = dict(kwargs)
-                if extra_headers:
-                    call_kwargs["extra_headers"] = extra_headers
-                call_kwargs = sorted_for_cache(call_kwargs)
+            call_kwargs: Dict[str, Any] = dict(kwargs)
+            if extra_headers:
+                call_kwargs["extra_headers"] = extra_headers
+            call_kwargs = sorted_for_cache(call_kwargs)
 
-                response = await client.messages.create(**call_kwargs)
-                content = _extract_text_content(response.content, preserve_reasoning)
-                total_tokens = response.usage.input_tokens + response.usage.output_tokens
-                processing_time = time.time() - start
+            response = await client.messages.create(**call_kwargs)
+            content = _extract_text_content(response.content, preserve_reasoning)
+            total_tokens = response.usage.input_tokens + response.usage.output_tokens
+            processing_time = time.time() - start
 
-                if span.is_recording():
-                    span.set_attribute("llm.duration_ms", processing_time * 1000)
-                    span.set_attribute("llm.response_length", len(content))
-                    span.set_attribute("llm.prompt_tokens", response.usage.input_tokens)
-                    span.set_attribute("llm.completion_tokens", response.usage.output_tokens)
-                    span.set_attribute("llm.total_tokens", total_tokens)
-                    span.set_status(Status(StatusCode.OK))
-
-                return LLMResponse(
-                    content=content,
-                    model=response.model,
-                    provider=self.provider_name,
-                    processing_time=processing_time,
-                    request_id=request.request_id,
-                    usage={
-                        "prompt_tokens": response.usage.input_tokens,
-                        "completion_tokens": response.usage.output_tokens,
-                        "total_tokens": total_tokens,
-                    },
-                    provider_metadata=self._build_provider_metadata(
-                        model_api_name=response.model,
-                        api_kwargs_applied=call_kwargs,
-                        total_tokens=total_tokens,
-                    ),
-                )
-            except Exception as exc:
-                self._total_errors += 1
-                logger.error("Anthropic chat_completion error: %s", exc)
-                if span.is_recording():
-                    span.set_status(Status(StatusCode.ERROR, str(exc)))
-                    span.record_exception(exc)
-                    span.set_attribute("llm.error", True)
-                return LLMResponse(
-                    content="",
-                    model=model,
-                    provider=self.provider_name,
-                    processing_time=time.time() - start,
-                    request_id=request.request_id,
-                    error=str(exc),
-                )
+            return LLMResponse(
+                content=content,
+                model=response.model,
+                provider=self.provider_name,
+                processing_time=processing_time,
+                request_id=request.request_id,
+                usage={
+                    "prompt_tokens": response.usage.input_tokens,
+                    "completion_tokens": response.usage.output_tokens,
+                    "total_tokens": total_tokens,
+                },
+                provider_metadata=self._build_provider_metadata(
+                    model_api_name=response.model,
+                    api_kwargs_applied=call_kwargs,
+                    total_tokens=total_tokens,
+                ),
+            )
+        except Exception as exc:
+            self._total_errors += 1
+            logger.error("Anthropic chat_completion error: %s", exc)
+            return LLMResponse(
+                content="",
+                model=model,
+                provider=self.provider_name,
+                processing_time=time.time() - start,
+                request_id=request.request_id,
+                error=str(exc),
+            )
 
     async def stream_completion(self, request: LLMRequest) -> AsyncIterator[str]:
         """Stream a chat completion from Anthropic, yielding text chunks.
