@@ -85,6 +85,17 @@
       <div class="text-xs text-autobot-text-muted">
         {{ Math.round(zoomLevel) }}% | {{ pageLoadTime }}ms
       </div>
+      <!-- Region-marking toggle (#5136 / #6446) -->
+      <button
+        @click="toggleRegionMarking"
+        :disabled="isSnapshotLoading || !sessionId || sessionId === 'manual-browser'"
+        class="nav-btn"
+        :class="{ 'text-color-primary': markRegionsMode }"
+        :title="markRegionsMode ? $t('desktop.popoutBrowser.exitRegionMode') : $t('desktop.popoutBrowser.markRegions')"
+        :aria-label="markRegionsMode ? $t('desktop.popoutBrowser.exitRegionMode') : $t('desktop.popoutBrowser.markRegions')"
+      >
+        <i class="fas" :class="isSnapshotLoading ? 'fa-spinner fa-spin' : 'fa-vector-square'"></i>
+      </button>
     </div>
 
     <!-- Playwright Automation Panel -->
@@ -215,12 +226,23 @@
         <!-- VNC iframe for live browser display with headed Playwright -->
         <!-- Using v-if instead of v-show to prevent iframe from loading at all -->
         <iframe
-          v-if="vncUrl && (browserStatus === 'connected' || browserStatus === 'ready')"
+          v-if="vncUrl && (browserStatus === 'connected' || browserStatus === 'ready') && !markRegionsMode"
           ref="vncIframe"
           :src="vncUrl"
           class="w-full h-full border-none"
           allow="clipboard-read; clipboard-write"
         ></iframe>
+
+        <!-- Region-marking overlay (#5136 / #6446): replaces VNC when active -->
+        <div v-if="markRegionsMode && regionSnapshot" class="absolute inset-0 z-20 bg-autobot-bg-primary">
+          <InteractiveScreenshot
+            :screenshot="regionSnapshot"
+            :regions="pageRegions"
+            :mark-regions-mode="true"
+            :interactive="false"
+            @regions-selected="handleRegionsSelected"
+          />
+        </div>
       </div>
 
       <!-- Playwright Automation Status Panel -->
@@ -357,7 +379,8 @@ import type { Ref } from 'vue'
 import type { AutomationResults, SearchData, TestData, MessageData } from '@/types/browser'
 import appConfig from '@/config/AppConfig.js'
 import { useBrowserSessionData } from '@/composables/desktop/useBrowserSessionData'
-import type { PlaywrightNavigationResponse } from '@/composables/desktop/useBrowserSessionData'
+import type { PlaywrightNavigationResponse, PageRegion, SnapshotWithRegionsResult } from '@/composables/desktop/useBrowserSessionData'
+import InteractiveScreenshot from '@/components/browser/InteractiveScreenshot.vue'
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
@@ -382,7 +405,8 @@ export default {
     UnifiedLoadingView,
     EmptyState,
     StatusBadge,
-    BaseButton
+    BaseButton,
+    InteractiveScreenshot,
   },
   props: {
     sessionId: {
@@ -452,6 +476,12 @@ export default {
     const vncIframe: Ref<HTMLIFrameElement | null> = ref(null)
     const webview: Ref<any | null> = ref(null)
     const remoteIframe: Ref<HTMLIFrameElement | null> = ref(null)
+
+    // Region-marking state (#5136 / #6446) — snapshot-with-regions wire-in
+    const markRegionsMode = ref(false)
+    const pageRegions = ref<PageRegion[]>([])
+    const regionSnapshot = ref<string | null>(null)
+    const isSnapshotLoading = ref(false)
 
     // Computed styles with responsive sizing
     const browserContentStyle = computed(() => ({
@@ -799,6 +829,35 @@ export default {
       interactionMessage.value = ''
     }
 
+    // Region-marking toggle (#5136 / #6446)
+    const toggleRegionMarking = async (): Promise<void> => {
+      if (markRegionsMode.value) {
+        markRegionsMode.value = false
+        pageRegions.value = []
+        regionSnapshot.value = null
+        return
+      }
+      isSnapshotLoading.value = true
+      try {
+        const result: SnapshotWithRegionsResult = await browserApi.snapshotWithRegions(props.sessionId)
+        regionSnapshot.value = result.screenshot
+        pageRegions.value = result.regions
+        markRegionsMode.value = true
+        logger.info(`Region snapshot: ${result.regions.length} regions detected`)
+      } catch (e) {
+        logger.warn('Region snapshot failed:', e)
+        addConsoleLog('warn', `Region snapshot failed: ${e instanceof Error ? e.message : String(e)}`)
+      } finally {
+        isSnapshotLoading.value = false
+      }
+    }
+
+    const handleRegionsSelected = (selected: Array<{ selector: string; xpath: string; label: string }>): void => {
+      logger.info(`Regions selected: ${selected.length}`)
+      emit('interact', { action: 'regions_selected', sessionId: props.sessionId, regions: selected })
+      markRegionsMode.value = false
+    }
+
     // Utility functions
     const getLogColor = (level: string): string => {
       switch (level) {
@@ -948,6 +1007,14 @@ export default {
       hideInteractionOverlay,
       addConsoleLog,
       getLogColor,
+
+      // Region-marking (#5136 / #6446)
+      markRegionsMode,
+      pageRegions,
+      regionSnapshot,
+      isSnapshotLoading,
+      toggleRegionMarking,
+      handleRegionsSelected,
 
       // UnifiedLoadingView event handlers
       handlePlaywrightConnected,
