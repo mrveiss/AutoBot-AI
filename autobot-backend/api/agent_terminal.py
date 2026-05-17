@@ -1,8 +1,4 @@
 # AutoBot - AI-Powered Automation Platform
-from autobot_shared.logging_manager import get_logger
-
-# Copyright (c) 2025 mrveiss
-# Author: mrveiss
 """
 Agent Terminal API - Chat Terminal with Command Approval Workflow
 
@@ -227,6 +223,11 @@ See Also:
 - docs/architecture/TERMINAL_ARCHITECTURE_DIAGRAM.md - System architecture
 """
 
+from autobot_shared.logging_manager import get_logger
+
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+
 from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -272,18 +273,15 @@ logger = get_logger(__name__)
 # Create router
 router = APIRouter(prefix="/agent-terminal", tags=["agent-terminal"])
 
-
 # Dependency for AgentTerminalService
 # CRITICAL: Use singleton pattern to maintain sessions across requests
 
 _agent_terminal_service_instance: AgentTerminalService | None = None
 
-
 # Thread-safe lock for singleton
 import threading
 
 _agent_terminal_service_lock = threading.Lock()
-
 
 def get_agent_terminal_service(
     redis_client=Depends(get_redis_client),
@@ -305,9 +303,7 @@ def get_agent_terminal_service(
 
     return _agent_terminal_service_instance
 
-
 # API Endpoints
-
 
 @router.post("/sessions", response_model=AgentTerminalSessionCreateResponse)
 @with_error_handling(
@@ -361,7 +357,6 @@ async def create_agent_terminal_session(
         "pty_session_id": (session.pty_session_id),  # CRITICAL: Frontend needs this for WebSocket connection
     }
 
-
 @router.get("/sessions", response_model=AgentTerminalSessionListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -408,7 +403,6 @@ async def list_agent_terminal_sessions(
         ],
     }
 
-
 @router.get("/sessions/{session_id}", response_model=AgentTerminalSessionDetailResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -435,7 +429,6 @@ async def get_agent_terminal_session(
         **session_info,
     }
 
-
 @router.delete("/sessions/{session_id}", response_model=AgentTerminalSessionDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -461,7 +454,6 @@ async def delete_agent_terminal_session(
         "status": "deleted",
         "session_id": session_id,
     }
-
 
 @router.post("/execute", response_model=AgentTerminalExecuteResponse)
 @with_error_handling(
@@ -499,7 +491,6 @@ async def execute_agent_command(
     )
 
     return result
-
 
 @router.post("/sessions/{session_id}/approve", response_model=AgentTerminalApproveResponse)
 @with_error_handling(
@@ -539,7 +530,6 @@ async def approve_agent_command(
     logger.info(f"[API] Approval result: {result.get('status')}, error={result.get('error')}")
     return result
 
-
 @router.post("/tools/approve/{approval_id}", response_model=AgentTerminalToolApprovalResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -578,7 +568,6 @@ async def submit_tool_approval(
     )
     return {"status": "ok", "approval_id": approval_id, "approved": request.approved}
 
-
 @router.post("/sessions/{session_id}/interrupt", response_model=AgentTerminalInterruptResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -609,7 +598,6 @@ async def interrupt_agent_session(
 
     return result
 
-
 @router.post("/sessions/{session_id}/resume", response_model=AgentTerminalResumeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -630,7 +618,6 @@ async def resume_agent_session(
     """
     result = await service.agent_resume(session_id=session_id)
     return result
-
 
 @router.get("/commands/{command_id}", response_model=AgentTerminalCommandStateResponse)
 @with_error_handling(
@@ -702,7 +689,6 @@ async def get_command_state(
         "approval_comment": command.approval_comment,
     }
 
-
 @router.get("/", response_model=AgentTerminalInfoResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -752,7 +738,6 @@ async def agent_terminal_info(
         },
     }
 
-
 # ============================================================================
 # Host Selection API Endpoints
 # ============================================================================
@@ -766,7 +751,6 @@ from datetime import datetime, timezone
 # In-memory store for pending host selection requests
 # In production, this would use Redis for persistence
 _pending_host_selections: Dict[str, Dict] = {}
-
 
 @router.post("/host-selection/request", response_model=AgentTerminalHostSelectionRequestResponse)
 @with_error_handling(
@@ -821,7 +805,6 @@ async def request_host_selection(
         "message": "Host selection dialog should be shown to user",
     }
 
-
 @router.get("/host-selection/{request_id}", response_model=AgentTerminalHostSelectionGetResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -857,7 +840,6 @@ async def get_host_selection(
         "created_at": selection["created_at"],
         "updated_at": selection["updated_at"],
     }
-
 
 @router.post("/host-selection/{request_id}/select", response_model=AgentTerminalHostSelectionSubmitResponse)
 @with_error_handling(
@@ -924,7 +906,6 @@ async def submit_host_selection(
         "connection_info": selection["connection_info"],
     }
 
-
 @router.post("/host-selection/{request_id}/cancel", response_model=AgentTerminalHostSelectionCancelResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -963,7 +944,6 @@ async def cancel_host_selection(
         "status": "cancelled",
         "request_id": request_id,
     }
-
 
 @router.get("/host-selection", response_model=AgentTerminalPendingSelectionsResponse)
 @with_error_handling(

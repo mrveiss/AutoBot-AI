@@ -2,6 +2,13 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 # src/event_manager.py
+"""
+Async event pub/sub manager for cross-component signalling.
+
+Publishes named events to all registered async callbacks; supports
+both fire-and-forget and awaitable delivery patterns.
+"""
+
 import asyncio  # Added back asyncio import
 from typing import Any, Awaitable, Callable, Dict
 

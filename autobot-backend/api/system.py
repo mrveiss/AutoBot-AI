@@ -1,6 +1,13 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+"""
+System-level diagnostic and module-inspection endpoints.
+
+Exposes health, uptime, loaded-router enumeration, and dynamic module
+inspection to aid observability and debugging.
+"""
+
 import asyncio
 import importlib
 import sys

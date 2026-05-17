@@ -1,14 +1,15 @@
 # AutoBot - AI-Powered Automation Platform
-import uuid
-
-# Copyright (c) 2025 mrveiss
-# Author: mrveiss
 """
 Code Generation Agent - Specialized for programming assistance and code generation.
 
 Handles code generation from natural language descriptions, code explanation,
 and multi-language programming support.
 """
+
+import uuid
+
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 
 from typing import Any, Dict, List
 
@@ -26,7 +27,6 @@ from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_logger(__name__)
-
 
 class CodeGenerationAgent(StandardizedAgent):
     """Agent specialized for code generation and programming assistance."""
@@ -155,7 +155,6 @@ class CodeGenerationAgent(StandardizedAgent):
             if "content" in response:
                 return str(response["content"]).strip()
         return str(response)
-
 
 get_code_generation_agent = lazy_singleton(CodeGenerationAgent)
 """Get the singleton Code Generation Agent instance (thread-safe)."""

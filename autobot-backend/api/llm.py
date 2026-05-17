@@ -1,6 +1,13 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+"""
+LLM configuration and model-listing endpoints.
+
+Exposes GET/POST routes for querying available language models, reading
+current LLM config, and selecting the active model.
+"""
+
 import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException

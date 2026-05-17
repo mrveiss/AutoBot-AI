@@ -1,6 +1,13 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+"""
+GUI automation controller via pyautogui.
+
+Wraps platform mouse/keyboard automation for tasks that require desktop
+interaction, with configurable safety settings and fail-safes.
+"""
+
 import asyncio
 import os
 import subprocess

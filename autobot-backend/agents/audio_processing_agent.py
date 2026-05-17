@@ -1,14 +1,15 @@
 # AutoBot - AI-Powered Automation Platform
-import uuid
-
-# Copyright (c) 2025 mrveiss
-# Author: mrveiss
 """
 Audio Processing Agent - Specialized for audio transcription and analysis.
 
 Handles audio content analysis, transcription processing, and audio metadata
 interpretation using LLM capabilities.
 """
+
+import uuid
+
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 
 from typing import Any, Dict, List
 
@@ -26,7 +27,6 @@ from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_logger(__name__)
-
 
 class AudioProcessingAgent(StandardizedAgent):
     """Agent specialized for audio transcription and analysis."""
@@ -162,7 +162,6 @@ class AudioProcessingAgent(StandardizedAgent):
             if "content" in response:
                 return str(response["content"]).strip()
         return str(response)
-
 
 get_audio_processing_agent = lazy_singleton(AudioProcessingAgent)
 """Get the singleton Audio Processing Agent instance (thread-safe)."""

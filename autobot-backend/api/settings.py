@@ -1,6 +1,13 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+"""
+Application settings read/write endpoints.
+
+Manages the mutable runtime configuration store, supporting live reload
+of settings without restarting the backend process.
+"""
+
 import asyncio
 import copy
 import datetime

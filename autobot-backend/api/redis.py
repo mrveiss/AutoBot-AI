@@ -2,6 +2,13 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 
+"""
+Redis health, connection-status, and configuration endpoints.
+
+Exposes diagnostic routes for inspecting Redis connectivity, memory usage,
+and runtime configuration without direct redis-cli access.
+"""
+
 from fastapi import APIRouter, HTTPException
 
 from api.schemas_system import (
