@@ -539,7 +539,7 @@ export default {
     // Reactive data (non-status related)
     const showMobileNav = ref(false);
     const showProfileModal = ref(false);
-    let notificationCleanup: number | null = null;
+    let notificationCleanup: ReturnType<typeof setInterval> | null = null;
 
     // Computed properties
     const isLoading = computed(() => appStore?.isLoading || false);

@@ -64,7 +64,7 @@ import { ref, nextTick, onMounted, onUnmounted, computed, watch } from 'vue'
 // Extend Window interface to include custom properties
 declare global {
   interface Window {
-    terminalFocusInterval?: number | null
+    terminalFocusInterval?: ReturnType<typeof setInterval> | null
   }
 }
 

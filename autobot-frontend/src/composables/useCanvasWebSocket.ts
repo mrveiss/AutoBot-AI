@@ -14,13 +14,12 @@ export function useCanvasWebSocket(canvasId: string) {
   const store = useCanvasStore()
   const wsUrl = `${getBackendUrl().replace(/^http/, 'ws')}/api/canvas/${canvasId}/ws`
 
-  const { messages, connect, disconnect, status } = useWebSocket(wsUrl, {
+  const { lastMessage, connect, disconnect, isConnected } = useWebSocket(wsUrl, {
     autoConnect: true,
     autoReconnect: true,
   })
 
-  watch(messages, (msgs) => {
-    const latest = msgs[msgs.length - 1]
+  watch(lastMessage, (latest) => {
     if (!latest) return
     try {
       const msg = JSON.parse(latest as string) as CanvasWsMessage
@@ -39,5 +38,5 @@ export function useCanvasWebSocket(canvasId: string) {
     }
   })
 
-  return { connect, disconnect, status }
+  return { connect, disconnect, isConnected }
 }

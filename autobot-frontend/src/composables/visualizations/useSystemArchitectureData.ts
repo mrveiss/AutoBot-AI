@@ -32,7 +32,7 @@ export function useSystemArchitectureData() {
   async function fetchArchitectureHealth(): Promise<ServiceHealthMap> {
     try {
       const response = await apiClient.get<HealthApiResponse>(`${getApiBase()}/monitoring/services/health`)
-      return response?.data?.services ?? (response?.services as ServiceHealthMap | undefined) ?? {}
+      return (response?.services as ServiceHealthMap | undefined) ?? {}
     } catch (error) {
       logger.error('Failed to fetch architecture data:', error)
       return {}

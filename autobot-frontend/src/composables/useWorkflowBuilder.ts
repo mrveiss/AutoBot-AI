@@ -612,9 +612,9 @@ export function useWorkflowBuilder() {
     autoConnect: false,
     autoReconnect: false,
     parseJSON: false,
-    onMessage: (data: string) => {
+    onMessage: (data: unknown) => {
       try {
-        handleWebSocketMessage(JSON.parse(data));
+        handleWebSocketMessage(JSON.parse(data as string));
       } catch (e) {
         logger.error('Failed to parse WebSocket message:', e);
       }

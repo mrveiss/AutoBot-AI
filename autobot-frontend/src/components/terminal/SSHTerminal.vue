@@ -76,9 +76,9 @@ const { send: wsSend, connect: wsConnect, disconnect: wsDisconnect, isConnected:
     connectionState.value = 'connected'
     emit('connected')
   },
-  onMessage: (data: string) => {
+  onMessage: (data: unknown) => {
     try {
-      handleMessage(JSON.parse(data))
+      handleMessage(JSON.parse(data as string))
     } catch (e) {
       logger.error('Failed to parse SSH message:', e)
     }
@@ -275,7 +275,7 @@ watch(() => props.hostId, (newHostId, oldHostId) => {
 onMounted(() => {
   initTerminal()
   connect()
-  startHeartbeat()
+  startHeartbeat('ssh-heartbeat')
   window.addEventListener('resize', handleResize)
 })
 

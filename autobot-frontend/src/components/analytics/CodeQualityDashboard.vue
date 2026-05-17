@@ -584,9 +584,9 @@ const {
     logger.error('WebSocket error:', error);
     wsConnected.value = false;
   },
-  onMessage: (data: string) => {
+  onMessage: (data: unknown) => {
     try {
-      handleWebSocketMessage(JSON.parse(data));
+      handleWebSocketMessage(JSON.parse(data as string));
     } catch (error) {
       logger.error('Failed to parse WebSocket message:', error);
     }

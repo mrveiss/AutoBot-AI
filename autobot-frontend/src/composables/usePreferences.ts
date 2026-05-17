@@ -149,7 +149,8 @@ async function loadLanguageFromBackend(): Promise<void> {
     const res = await apiClient.get<any>(`${getApiBase()}/personality/active`)
     const code: string | undefined = res.data?.language_code
     if (code && code !== language.value) {
-      await setLanguage(code)
+      language.value = code
+      await setLocale(code)
       logger.debug(`Language loaded from backend: ${code}`)
     }
   } catch (error) {

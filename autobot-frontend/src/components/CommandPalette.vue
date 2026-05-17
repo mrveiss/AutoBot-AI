@@ -105,7 +105,6 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useChatStore } from '@/stores/useChatStore'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('CommandPalette')
@@ -124,8 +123,6 @@ const isOpen = ref(false)
 const searchQuery = ref('')
 const selectedIndex = ref(0)
 const searchInput = ref<HTMLInputElement | null>(null)
-
-const chatStore = useChatStore()
 
 const commands = computed<Command[]>(() => [
   {
@@ -246,8 +243,7 @@ const executeCommand = (): void => {
 
 const startAgent = (type: string): void => {
   logger.debug('Starting agent:', type)
-  // Store agent metadata for personality display
-  chatStore.setCurrentAgentType(type)
+  // Note: agent type tracking removed — setCurrentAgentType no longer exists on chat store
 }
 
 watch(searchQuery, () => {

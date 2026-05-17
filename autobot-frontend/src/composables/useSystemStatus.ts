@@ -77,6 +77,7 @@ export interface UseSystemStatusReturn {
 
   // Computed-like getters
   getSystemStatusTooltip: () => string
+  getSystemStatusAriaLabel: () => string
   getSystemStatusText: () => string
   getSystemStatusDescription: () => string
 

@@ -25,17 +25,33 @@ interface VectorizationStatusResponse {
 }
 
 /** Response shape from /knowledge_base/vectorize_fact/:id and /knowledge_base/vectorize_documents */
+interface VectorizationDocumentResult {
+  id: string
+  status: string
+  error?: string | null
+  [key: string]: unknown
+}
+
 interface VectorizationJobResponse {
   job_id?: string
   status?: string
+  results?: VectorizationDocumentResult[]
   [key: string]: unknown
 }
 
 /** Response shape from /knowledge_base/vectorize_job/:id */
+interface VectorizationJobDetail {
+  status?: string
+  error?: string | null
+  progress?: number
+  [key: string]: unknown
+}
+
 interface VectorizationJobStatusResponse {
   status?: string
   progress?: number
   error?: string
+  job?: VectorizationJobDetail
   [key: string]: unknown
 }
 

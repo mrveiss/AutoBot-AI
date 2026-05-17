@@ -62,8 +62,13 @@ export const fetchMainCategories = (): Promise<MainCategoriesResponse> =>
 /**
  * Fetch all knowledge facts grouped by category for the browser tree.
  */
-export const fetchFactsByCategory = (): Promise<Record<string, unknown>> =>
-  apiClient.get<Record<string, unknown>>(`${getApiBase()}/knowledge_base/facts/by_category`)
+interface FactsByCategoryResponse {
+  categories?: Record<string, unknown[]>
+  [key: string]: unknown
+}
+
+export const fetchFactsByCategory = (): Promise<FactsByCategoryResponse> =>
+  apiClient.get<FactsByCategoryResponse>(`${getApiBase()}/knowledge_base/facts/by_category`)
 
 /**
  * Fetch a paginated page of user knowledge entries.

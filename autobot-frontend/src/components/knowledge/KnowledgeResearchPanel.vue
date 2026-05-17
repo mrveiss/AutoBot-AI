@@ -70,9 +70,9 @@ const {
       board_id: selectedBoardId.value !== '__global__' ? selectedBoardId.value : undefined,
     }))
   },
-  onMessage: (data: string) => {
+  onMessage: (data: unknown) => {
     try {
-      _handleEvent(JSON.parse(data) as Record<string, unknown>)
+      _handleEvent(JSON.parse(data as string) as Record<string, unknown>)
     } catch (e) {
       logger.warn('Failed to parse WS message:', e)
     }

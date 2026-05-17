@@ -64,7 +64,7 @@
         v-if="vncUrl"
         class="control-btn"
         :title="$t('desktop.interface.openInNewWindow')"
-        @click="window.open(vncUrl, '_blank', 'noopener')"
+        @click="openInNewWindow()"
       >
         {{ $t('desktop.interface.openInNewWindow') }}
       </button>
@@ -235,7 +235,7 @@ const isFullscreen = ref(false)
 const connectionStatus = ref('Connecting...')
 
 const connectionStatusDisplay = computed(() => {
-  const statusMap = {
+  const statusMap: Record<string, string> = {
     'Connecting...': t('desktop.interface.statusConnecting'),
     'Connected': t('desktop.interface.statusConnected'),
     'Disconnected': t('desktop.interface.statusDisconnected'),
@@ -401,16 +401,20 @@ const checkConnection = async () => {
 }
 
 // UnifiedLoadingView event handlers
+const openInNewWindow = () => {
+  window.open(vncUrl.value, '_blank', 'noopener')
+}
+
 const handleDesktopConnected = () => {
   loading.value = false
   connectionStatus.value = 'Connected'
 }
 
-const handleDesktopError = (error) => {
+const handleDesktopError = (err: Error | unknown) => {
   logger.error('Desktop connection error:', error)
   loading.value = false
   connectionStatus.value = 'Error'
-  error.value = t('desktop.interface.errorVncConnection', { error: error.message || error })
+  error.value = t('desktop.interface.errorVncConnection', { error: err instanceof Error ? err.message : String(err) })
 }
 
 const handleDesktopTimeout = () => {
@@ -429,8 +433,8 @@ onMounted(async () => {
   // Load dynamic VNC URL first - wrapped in try-catch for safety
   try {
     await loadVncUrl()
-  } catch (error) {
-    logger.error('Critical error in loadVncUrl:', error)
+  } catch (loadError) {
+    logger.error('Critical error in loadVncUrl:', loadError)
     // Fallback to default state
     loading.value = false
     connectionStatus.value = 'Configuration Error'
