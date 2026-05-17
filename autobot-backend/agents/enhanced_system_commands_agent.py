@@ -209,7 +209,11 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
                 "security_checked": True,
                 "validation_level": "strict",
             },
-            **{k: v for k, v in command_info.items() if k not in {"command", "explanation", "is_safe", "security_concerns", "suggested_alternatives"}},
+            **{
+                k: v
+                for k, v in command_info.items()
+                if k not in {"command", "explanation", "is_safe", "security_concerns", "suggested_alternatives"}
+            },
         ).model_dump()
 
     def _build_error_response(self, error: Exception) -> Dict[str, Any]:
