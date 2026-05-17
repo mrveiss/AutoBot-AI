@@ -66,6 +66,7 @@ analysis/**/output.txt
 *.pem
 *.key
 *.pub
+!cosign.pub  # Exception: cosign public key must be tracked for image verification (#6597)
 *.ppk
 *.p12
 *.pfx

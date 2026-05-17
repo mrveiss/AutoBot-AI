@@ -8,7 +8,7 @@ on:
   push:
     branches: [ main, dev, Dev_new_gui ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, Dev_new_gui ]  # Issue #6597: Semgrep blocks merge on all feature PRs
   schedule:
     # Run security scans daily at 2 AM UTC
     - cron: '0 2 * * *'
