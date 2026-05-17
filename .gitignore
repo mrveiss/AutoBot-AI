@@ -397,6 +397,7 @@ config/service-keys/
 .console-cleanup-backups/
 .sidebar-backups/
 backup/
+!autobot-backend/backup/
 backups/
 
 # === ADDITIONAL CLOUD PROVIDER CREDENTIALS ===
