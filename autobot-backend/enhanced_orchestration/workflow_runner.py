@@ -5,6 +5,13 @@
 
 Structural refactor (#6393/#6392): collaboration and agent-routing responsibilities
 moved to CollaborationCoordinator and AgentRouter collaborators respectively.
+
+Executor scope (#6826): WorkflowRunner is the **enhanced/multi-agent strategy engine**.
+It executes WorkflowPlan objects via pluggable ExecutionStrategy instances and delegates
+agent routing and collaboration to injected collaborators.  It does not handle DAG graphs
+or step-level checkpoints — those remain in orchestration.WorkflowExecutor and
+CheckpointResumer.  WorkflowRunner is the post-#5058 successor for the multi-agent path;
+orchestration.WorkflowExecutor remains canonical for the legacy step-based path.
 """
 
 import asyncio

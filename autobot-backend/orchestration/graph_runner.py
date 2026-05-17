@@ -6,6 +6,10 @@ UnifiedGraph / AutoBotGraph — shared graph execution model.
 
 Issue #3228: unify DAG workflow executor and chat LangGraph into a single
 graph model so checkpoint, retry, and step-event logic are implemented once.
+Issue #6826: #3228 was closed prematurely; GraphRunner is the intended
+**future canonical engine** for DAG and chat workflows.  It is used in tests
+and via DAGGraphAdapter but not yet wired into production WorkflowExecutor
+(missing parallel fan-out support — see #6826).
 
 Design
 ------
@@ -41,7 +45,7 @@ That graph can be migrated in three steps once this module stabilises:
 
 The ``interrupt()`` mechanism used for command approval would be replaced by
 a first-class ``GraphRunner.pause()`` / ``GraphRunner.resume()`` pair
-(tracked in issue #3228 as a future enhancement).
+(tracked in issue #6826 as a future enhancement; #3228 was closed prematurely).
 
 Public surface
 --------------

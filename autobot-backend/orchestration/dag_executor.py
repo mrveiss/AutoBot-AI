@@ -8,6 +8,13 @@ Issue #2140: Upgrade WorkflowExecutor to support condition nodes and
 branching execution.  Linear workflows continue to use the existing
 sequential path in WorkflowExecutor for full backward compatibility.
 
+Executor scope (#6826): DAGExecutor is the **production DAG engine**.  It
+owns asyncio-based parallel fan-out for independent branches and condition/
+branch routing.  The intended successor (GraphRunner via DAGGraphAdapter) is
+not yet in production because parallel fan-out is not yet supported there
+(tracked in #6826).  Until that gap closes, ``WorkflowExecutor`` delegates
+here for all DAG workflows.
+
 Key classes
 -----------
 WorkflowDAG

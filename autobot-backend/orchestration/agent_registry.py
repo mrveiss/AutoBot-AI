@@ -99,11 +99,15 @@ def get_default_agents() -> List[AgentProfile]:
 
 
 class AgentRegistry:
-    """
-    Manages agent registration and lookup.
+    """Static profile registry for orchestration agent capabilities.
 
-    Provides methods to register, find, and manage agent profiles
-    for the orchestration system.
+    Scope (#6828): holds in-memory AgentProfile + AgentCapability catalogue
+    populated at orchestrator startup from DEFAULT_AGENT_CONFIGS.  This is
+    the **what-can-each-agent-do** registry — it does not track live health or
+    database persistence.  See also:
+    - agents.agent_client.AgentRegistry — health-tracking runtime registry
+    - services.agent_registry_service.AgentRegistryService — DB-backed CRUD
+    - agents.agent_orchestration.distributed_management.DistributedAgentManager — dynamic/distributed
     """
 
     def __init__(self, initialize_defaults: bool = True):
