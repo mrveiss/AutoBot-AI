@@ -186,5 +186,3 @@ async def get_pending_captchas() -> JSONResponse:
 
 
 register_singleton_probe("captcha", get_captcha_human_loop)
-
-

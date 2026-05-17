@@ -1324,5 +1324,3 @@ async def detect_infinite_loops(
             "potential_infinite": sum(1 for i in loop_issues if i["issue_type"] == "potential_infinite_loop"),
         },
     )
-
-

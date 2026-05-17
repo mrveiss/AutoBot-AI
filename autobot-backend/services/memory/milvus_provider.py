@@ -72,9 +72,7 @@ class MilvusMemoryProvider:
         except Exception as e:
             logger.error(f"Error syncing to Milvus: {e}")
 
-    async def search(
-        self, query: str, limit: int = 10, filters: Dict[str, Any] | None = None
-    ) -> List[Dict[str, Any]]:
+    async def search(self, query: str, limit: int = 10, filters: Dict[str, Any] | None = None) -> List[Dict[str, Any]]:
         if not self.client:
             logger.warning("Milvus not initialized for search")
             return []

@@ -42,8 +42,7 @@ REGISTRY: list[ScheduledJob] = [
         owner_file="services/heartbeat_scheduler.py",
         runtime="asyncio_per_worker",
         description=(
-            "Fires agent heartbeat runs on per-agent intervals persisted in the DB; "
-            "minimum enforced floor is 10 s."
+            "Fires agent heartbeat runs on per-agent intervals persisted in the DB; " "minimum enforced floor is 10 s."
         ),
     ),
     ScheduledJob(
@@ -72,10 +71,7 @@ REGISTRY: list[ScheduledJob] = [
         interval_seconds=300,
         owner_file="services/skill_management/skill_health_scheduler.py",
         runtime="asyncio_per_worker",
-        description=(
-            "Checks skill health every 300 s. "
-            "NOTE: not initialized in lifespan.py — currently inert."
-        ),
+        description=("Checks skill health every 300 s. " "NOTE: not initialized in lifespan.py — currently inert."),
     ),
     ScheduledJob(
         name="LLMKeyRotationScheduler",

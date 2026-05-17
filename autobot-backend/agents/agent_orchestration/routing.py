@@ -65,9 +65,11 @@ class AgentRouter:
         # Issue #6821: topology-aware router (lazy-initialised on first use).
         # Gated by env var TOPOLOGY_ROUTING_ENABLED (default: False).
         self._topology_router: TopologyAwareRouter | None = None
-        self.topology_routing_enabled: bool = (
-            os.environ.get("TOPOLOGY_ROUTING_ENABLED", "false").lower() in {"1", "true", "yes"}
-        )
+        self.topology_routing_enabled: bool = os.environ.get("TOPOLOGY_ROUTING_ENABLED", "false").lower() in {
+            "1",
+            "true",
+            "yes",
+        }
 
     async def _check_learned_strategy(
         self, request: str, context: Dict[str, Any] | None = None
@@ -300,9 +302,7 @@ class AgentRouter:
             routing_decision = self._parse_routing_response(response)
 
             # Issue #6821: augment with topology collaborators when enabled.
-            routing_decision = await self._maybe_augment_with_topology(
-                request, context, routing_decision
-            )
+            routing_decision = await self._maybe_augment_with_topology(request, context, routing_decision)
 
             return routing_decision
 

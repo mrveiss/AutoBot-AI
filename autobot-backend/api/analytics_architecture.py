@@ -1261,5 +1261,3 @@ async def check_consistency(
         "consistency_results": [c.model_dump() for c in consistency],
         "total_checked": len(consistency),
     }
-
-

@@ -213,9 +213,7 @@ class ScreenAnalyzer:
             metadata={"session_id": session_id, "context": "screen_analysis"},
         )
 
-    async def _combine_multimodal_results(
-        self, processing_results: List[Any], session_id: str | None
-    ) -> Any | None:
+    async def _combine_multimodal_results(self, processing_results: List[Any], session_id: str | None) -> Any | None:
         """Combine multimodal results if available. Issue #281: Extracted helper."""
         combined_input = MultiModalInput(
             input_id=f"screen_combined_{int(time.time())}",

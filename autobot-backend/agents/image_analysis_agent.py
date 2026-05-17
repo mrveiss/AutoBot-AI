@@ -29,6 +29,7 @@ from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_logger(__name__)
 
+
 class ImageAnalysisAgent(StandardizedAgent):
     """Agent specialized for image analysis and vision tasks."""
 
@@ -168,5 +169,6 @@ class ImageAnalysisAgent(StandardizedAgent):
             if "content" in response:
                 return str(response["content"]).strip()
         return str(response)
+
 
 get_image_analysis_agent = lazy_singleton(ImageAnalysisAgent)

@@ -770,9 +770,7 @@ class Phase9PerformanceMonitor:
             health_score=health_score,
         )
 
-    async def _collect_single_service_metrics(
-        self, service_config: Dict[str, Any]
-    ) -> ServicePerformanceMetrics | None:
+    async def _collect_single_service_metrics(self, service_config: Dict[str, Any]) -> ServicePerformanceMetrics | None:
         """
         Collect metrics for a single service.
 
@@ -1073,9 +1071,7 @@ class Phase9PerformanceMonitor:
                 }
             )
 
-    def _analyze_service_performance(
-        self, services: List[Dict[str, Any]] | None, alerts: List[Dict[str, Any]]
-    ) -> None:
+    def _analyze_service_performance(self, services: List[Dict[str, Any]] | None, alerts: List[Dict[str, Any]]) -> None:
         """Analyze service metrics and append alerts. Issue #620."""
         if not services:
             return

@@ -372,17 +372,20 @@ def _build_inventory_dict(
 
 async def _fetch_inventory_data(
     node_ids: list[str] | None,
-) -> tuple[
-    list,
-    dict[str, dict],
-    dict[str, str],
-    dict[str, str],
-    list,
-    list,
-    dict[str, str],
-    set,
-    list[str],
-] | None:
+) -> (
+    tuple[
+        list,
+        dict[str, dict],
+        dict[str, str],
+        dict[str, str],
+        list,
+        list,
+        dict[str, str],
+        set,
+        list[str],
+    ]
+    | None
+):
     """Load all DB data needed to build the Ansible inventory (#2823).
 
     Returns (db_nodes, hosts, node_id_to_hostname, node_id_to_ip,

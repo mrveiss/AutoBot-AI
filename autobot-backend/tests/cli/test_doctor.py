@@ -5,6 +5,7 @@
 
 Issue #7371: each repair is a discrete idempotent function with a unit test.
 """
+
 import pytest
 from unittest.mock import patch, MagicMock
 
@@ -38,11 +39,7 @@ def test_check_env_file_missing(tmp_path):
 
 def test_check_env_file_ok(tmp_path):
     env = tmp_path / ".env"
-    env.write_text(
-        "OLLAMA_HOST=http://localhost:11434\n"
-        "REDIS_URL=redis://localhost\n"
-        "CHROMADB_HOST=localhost\n"
-    )
+    env.write_text("OLLAMA_HOST=http://localhost:11434\n" "REDIS_URL=redis://localhost\n" "CHROMADB_HOST=localhost\n")
     result = check_env_file(str(env))
     assert result.ok
 
@@ -94,6 +91,7 @@ def test_run_doctor_fix_fixable(capsys, monkeypatch):
 
 def test_run_doctor_fix_manual_items_return_1(capsys, monkeypatch):
     """--fix should still return 1 when non-fixable failures remain."""
+
     def fake_check():
         return CheckResult(name="manual", ok=False, message="manual fix needed", fixable=False)
 
@@ -105,6 +103,7 @@ def test_run_doctor_fix_manual_items_return_1(capsys, monkeypatch):
 def test_check_redis_schemas_import_error(monkeypatch):
     """If redis is not importable, check returns ok=False."""
     import builtins
+
     real_import = builtins.__import__
 
     def mock_import(name, *args, **kwargs):

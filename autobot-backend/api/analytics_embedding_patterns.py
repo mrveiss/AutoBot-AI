@@ -581,5 +581,3 @@ async def probe_analytics_embedding_patterns(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-

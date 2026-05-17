@@ -135,9 +135,8 @@ if "celery_app" not in sys.modules:
     _celery_app_mod = types.ModuleType("celery_app")
     try:
         import celery as _cel_pkg  # noqa: F401
-        _test_app = _cel_pkg.Celery(
-            "test_autobot", broker="memory://", backend="cache+memory://"
-        )
+
+        _test_app = _cel_pkg.Celery("test_autobot", broker="memory://", backend="cache+memory://")
     except (ImportError, Exception):
         # Fall back to the stub Celery that is already in sys.modules["celery"]
         _StubCeleryClass = sys.modules["celery"].Celery
@@ -171,6 +170,7 @@ for _redis_sub in [
 try:
     import logging as _stdlib_logging
     import autobot_shared.logging_manager as _lm_mod
+
     if not getattr(_lm_mod, "_get_logger_patched_for_tests", False):
         _lm_mod.get_logger = lambda name, *_a, **_k: _stdlib_logging.getLogger(name)
         _lm_mod._get_logger_patched_for_tests = True  # type: ignore[attr-defined]

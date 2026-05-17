@@ -32,6 +32,7 @@ Configuration via environment variables:
 
 import logging
 import os
+
 logger = logging.getLogger(__name__)
 
 # Lazy-loaded OpenTelemetry imports (graceful degradation if not installed)

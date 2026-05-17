@@ -42,12 +42,16 @@ def _get_config_value(key: str, default: str) -> str:
     """
     try:
         from config.registry import ConfigRegistry
+
         return ConfigRegistry.get(key, default)
     except (ImportError, ModuleNotFoundError):
         return default
 
+
 # Deprecation flag - set to True to enable deprecation warnings
-_SHOW_DEPRECATION_WARNINGS = os.getenv("AUTOBOT_SHOW_DEPRECATION_WARNINGS", "").lower() == "true"  # ssot-config-exempt: module-level init
+_SHOW_DEPRECATION_WARNINGS = (
+    os.getenv("AUTOBOT_SHOW_DEPRECATION_WARNINGS", "").lower() == "true"
+)  # ssot-config-exempt: module-level init
 
 
 def _emit_deprecation_warning(old_pattern: str, new_pattern: str) -> None:

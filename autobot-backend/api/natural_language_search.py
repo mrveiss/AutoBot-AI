@@ -1255,5 +1255,3 @@ async def probe_natural_language_search(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-

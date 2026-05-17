@@ -499,9 +499,7 @@ class ClaudeAPIOptimizationSuite:
         """Determine if request type should be considered for batching"""
         return any(btype in request_type.lower() for btype in _BATCHABLE_TYPES)  # Issue #380
 
-    async def _attempt_request_batching(
-        self, request_data: Dict[str, Any], request_type: str
-    ) -> Dict[str, Any] | None:
+    async def _attempt_request_batching(self, request_data: Dict[str, Any], request_type: str) -> Dict[str, Any] | None:
         """Attempt to batch the request with similar pending requests"""
         try:
             batchable_request = BatchableRequest(

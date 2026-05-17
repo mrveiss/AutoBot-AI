@@ -59,10 +59,12 @@ _NO_TEMPERATURE_MODELS: frozenset[str] = frozenset({"o1", "o1-mini", "o3", "o3-m
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 def _yaml_path() -> Path:
     """Return the path to llm_models.yaml (overridable in tests via env var)."""
     override = config.llm_models_yaml
     return Path(override) if override else _YAML_PATH
+
 
 @lru_cache(maxsize=1)
 def _load_registry() -> Dict[str, Any]:
@@ -101,9 +103,11 @@ def _load_registry() -> Dict[str, Any]:
     logger.debug("Loaded %d model entries from %s", len(registry) - 1, path)
     return registry
 
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def resolve_model_name(model: str) -> str:
     """
@@ -115,6 +119,7 @@ def resolve_model_name(model: str) -> str:
     reg = _load_registry()
     aliases: Dict[str, str] = reg.get("_aliases", {})
     return aliases.get(model, model)
+
 
 def get_model_kwargs(
     model: str,
@@ -156,6 +161,7 @@ def get_model_kwargs(
         merged.pop("temperature", None)
     return merged
 
+
 def get_provider_model_id(
     model: str,
     provider: str,
@@ -179,6 +185,7 @@ def get_provider_model_id(
         return model
     api_name: Dict[str, str] = entry.get("api_name") or {}
     return api_name.get(provider, canonical)
+
 
 def apply_model_defaults(
     model: str,
@@ -208,6 +215,7 @@ def apply_model_defaults(
         base.update(caller_kwargs)
     return base
 
+
 def get_prompt_prefix(model: str) -> str | None:
     """
     Return the ``prompt_prefix`` configured for *model* in the YAML registry,
@@ -220,6 +228,7 @@ def get_prompt_prefix(model: str) -> str | None:
         return None
     prefix = entry.get("prompt_prefix")
     return str(prefix) if prefix else None
+
 
 def apply_prompt_prefix(
     model: str,
@@ -245,6 +254,7 @@ def apply_prompt_prefix(
             )
             break
     return messages
+
 
 __all__ = [
     "resolve_model_name",

@@ -52,9 +52,7 @@ class SyncOrchestrator:
         self.cache_dir = CODE_CACHE_DIR
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    async def _get_node_and_role_info(
-        self, node_id: str, role_name: str
-    ) -> Tuple[bool, str, SyncNodeContext | None]:
+    async def _get_node_and_role_info(self, node_id: str, role_name: str) -> Tuple[bool, str, SyncNodeContext | None]:
         """
         Get node and role information from database.
 

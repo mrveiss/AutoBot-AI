@@ -410,9 +410,7 @@ class SSOIntegrationFramework:
         """Disable an SSO provider"""
         return self.update_provider(provider_id, {"enabled": False})
 
-    async def initiate_sso_authentication(
-        self, provider_id: str, redirect_uri: str, state: str | None = None
-    ) -> Dict:
+    async def initiate_sso_authentication(self, provider_id: str, redirect_uri: str, state: str | None = None) -> Dict:
         """Initiate SSO authentication flow"""
 
         if provider_id not in self.providers:

@@ -31,7 +31,6 @@ import pytest
 
 from tests.fixtures.mocks import make_stateful_redis
 
-
 # ---------------------------------------------------------------------------
 # TaskExecutionTracker.update_progress / get_progress
 # ---------------------------------------------------------------------------

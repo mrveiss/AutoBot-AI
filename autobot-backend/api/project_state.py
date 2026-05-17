@@ -256,5 +256,3 @@ async def auto_progress_phases():
 
 
 register_singleton_probe("project_state", get_project_state_manager)
-
-

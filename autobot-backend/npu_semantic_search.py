@@ -1133,9 +1133,7 @@ class NPUSemanticSearch:
             logger.error("Failed to store code embedding: %s", e)
             return None
 
-    def _build_code_search_filter(
-        self, language: str | None, element_type: str | None
-    ) -> Dict[str, Any] | None:
+    def _build_code_search_filter(self, language: str | None, element_type: str | None) -> Dict[str, Any] | None:
         """Build ChromaDB where filter for code search. Issue #620.
 
         Args:

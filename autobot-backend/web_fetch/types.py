@@ -12,6 +12,8 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from enum import Enum
+
+
 class RenderMode(str, Enum):
     """How to render the page when fetching.
 

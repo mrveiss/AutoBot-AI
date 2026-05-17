@@ -12,6 +12,7 @@ Usage:
     python -m autobot_backend.cli.doctor --check  # report only
     python -m autobot_backend.cli.doctor --fix    # check + auto-repair
 """
+
 from __future__ import annotations
 
 import argparse
@@ -33,6 +34,7 @@ def check_redis_schemas() -> CheckResult:
     """Verify required Redis key-space schemas are present."""
     try:
         import redis  # noqa: F401 — presence check only
+
         # Check connection and basic schema presence.
         # A real implementation would inspect specific key patterns;
         # connection reachability is sufficient as a boot-time gate.
@@ -55,6 +57,7 @@ def check_chromadb_collections() -> CheckResult:
     """Verify required ChromaDB collections exist."""
     try:
         import chromadb
+
         client = chromadb.HttpClient(host="localhost", port=8000)
         collections = {c.name for c in client.list_collections()}
         expected = {"autobot_docs", "code_kb"}
@@ -83,6 +86,7 @@ def check_chromadb_collections() -> CheckResult:
 
 def _bootstrap_chromadb_collections(missing: set[str]) -> None:
     import chromadb
+
     client = chromadb.HttpClient(host="localhost", port=8000)
     for name in missing:
         client.get_or_create_collection(name)
@@ -91,6 +95,7 @@ def _bootstrap_chromadb_collections(missing: set[str]) -> None:
 def check_env_file(env_path: str = "/opt/autobot/autobot-backend/.env") -> CheckResult:
     """Validate required environment variables are present."""
     import os
+
     required_vars = [
         "OLLAMA_HOST",
         "REDIS_URL",
@@ -107,9 +112,7 @@ def check_env_file(env_path: str = "/opt/autobot/autobot-backend/.env") -> Check
         with open(env_path) as f:
             content = f.read()
         defined = {
-            line.split("=")[0].strip()
-            for line in content.splitlines()
-            if "=" in line and not line.startswith("#")
+            line.split("=")[0].strip() for line in content.splitlines() if "=" in line and not line.startswith("#")
         }
         missing = [v for v in required_vars if v not in defined]
         if missing:
@@ -138,6 +141,7 @@ def check_npu_worker_registry() -> CheckResult:
     try:
         import os
         import urllib.request
+
         npu_host = os.environ.get("NPU_WORKER_HOST", "localhost")
         npu_port = os.environ.get("NPU_WORKER_PORT", "8080")  # ssot-config-exempt: diagnostic CLI, NPU_* namespace
         url = f"http://{npu_host}:{npu_port}/health"

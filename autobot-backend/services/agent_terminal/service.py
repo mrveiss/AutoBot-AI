@@ -142,9 +142,7 @@ class AgentTerminalService:
     # Helper Methods for execute_command (Issue #281)
     # ============================================================================
 
-    def _validate_session_for_execution(
-        self, session: AgentTerminalSession | None, session_id: str
-    ) -> Metadata | None:
+    def _validate_session_for_execution(self, session: AgentTerminalSession | None, session_id: str) -> Metadata | None:
         """Validate session exists and is not user-controlled (Issue #281: extracted)."""
         if not session:
             return {

@@ -330,5 +330,3 @@ async def probe_elevation(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-

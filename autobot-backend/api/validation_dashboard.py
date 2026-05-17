@@ -93,9 +93,7 @@ def _try_create_dashboard_generator() -> (
     return None
 
 
-def get_dashboard_generator() -> (
-    ValidationDashboardGenerator | None
-):  # #6794: _MissingDep handles stub | None safely
+def get_dashboard_generator() -> ValidationDashboardGenerator | None:  # #6794: _MissingDep handles stub | None safely
     """Get or create dashboard generator instance (thread-safe)"""
     global _dashboard_generator
 

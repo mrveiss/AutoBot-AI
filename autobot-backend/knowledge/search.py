@@ -359,9 +359,7 @@ class SearchMixin:
             "message": "No facts match the specified tags",
         }
 
-    async def _get_tag_filtered_ids(
-        self, tags: List[str] | None, tags_match_any: bool, processed_query: str
-    ) -> tuple:
+    async def _get_tag_filtered_ids(self, tags: List[str] | None, tags_match_any: bool, processed_query: str) -> tuple:
         """Get tag-filtered fact IDs. Returns (filtered_ids, early_return_response or None)."""
         return await self._get_tag_filter().get_tag_filtered_ids(tags, tags_match_any, processed_query)
 

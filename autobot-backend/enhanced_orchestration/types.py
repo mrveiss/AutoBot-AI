@@ -65,5 +65,3 @@ class WorkflowDependencies:
     group_pipeline_stages: Callable
     enhance_task_for_collaboration: Callable
     coordinate_collaboration: Callable
-
-

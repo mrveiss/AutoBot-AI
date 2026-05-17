@@ -384,9 +384,7 @@ class JSONFormatterAgent(StandardizedAgent):
             warnings=[warning_msg],
         )
 
-    def _reconstruct_from_patterns(
-        self, text: str, expected_schema: Dict[str, Any] | None = None
-    ) -> JSONParseResult:
+    def _reconstruct_from_patterns(self, text: str, expected_schema: Dict[str, Any] | None = None) -> JSONParseResult:
         """Reconstruct JSON from known patterns like empty keys. Issue #620."""
         warnings = []
 
@@ -429,9 +427,7 @@ class JSONFormatterAgent(StandardizedAgent):
             warnings=warnings,
         )
 
-    def _extract_field_value_from_text(
-        self, text: str, field: str, expected_type: type, warnings: list
-    ) -> Any | None:
+    def _extract_field_value_from_text(self, text: str, field: str, expected_type: type, warnings: list) -> Any | None:
         """Extract field value from text (Issue #334 - extracted helper)."""
         pattern = rf'{field}["\s]*:\s*["\s]*([^",}}]+)'
         match = re.search(pattern, text, re.IGNORECASE)

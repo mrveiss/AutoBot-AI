@@ -78,9 +78,7 @@ class MemoryManager:
             except Exception as e:
                 logger.warning(f"External provider sync failed, continuing: {e}")
 
-    async def search(
-        self, query: str, limit: int = 10, filters: Dict[str, Any] | None = None
-    ) -> List[Dict[str, Any]]:
+    async def search(self, query: str, limit: int = 10, filters: Dict[str, Any] | None = None) -> List[Dict[str, Any]]:
         if self.external_enabled and self.external:
             try:
                 results = await self.external.search(query, limit, filters)

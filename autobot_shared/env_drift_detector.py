@@ -338,7 +338,9 @@ def _resolve_env_path(env_path: str | None) -> Path:
     for candidate in [current] + list(current.parents):
         if (candidate / ".env").exists():
             return candidate / ".env"
-    fallback = Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"))  # ssot-config-exempt: bootstrap before config available / ".env"
+    fallback = Path(
+        os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
+    )  # ssot-config-exempt: bootstrap before config available / ".env"
     return fallback
 
 

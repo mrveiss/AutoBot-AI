@@ -448,9 +448,7 @@ class SecurityAnalyzer:
 
         return None
 
-    def _analyze_dangerous_call(
-        self, node: ast.Call, file_path: str, lines: List[str]
-    ) -> SecurityVulnerability | None:
+    def _analyze_dangerous_call(self, node: ast.Call, file_path: str, lines: List[str]) -> SecurityVulnerability | None:
         """Analyze function calls for security issues"""
 
         call_name = self._get_call_name(node)

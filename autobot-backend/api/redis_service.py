@@ -299,5 +299,3 @@ async def probe_redis_service(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-

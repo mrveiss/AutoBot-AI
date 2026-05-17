@@ -28,6 +28,7 @@ from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_logger(__name__)
 
+
 class CodeGenerationAgent(StandardizedAgent):
     """Agent specialized for code generation and programming assistance."""
 
@@ -155,6 +156,7 @@ class CodeGenerationAgent(StandardizedAgent):
             if "content" in response:
                 return str(response["content"]).strip()
         return str(response)
+
 
 get_code_generation_agent = lazy_singleton(CodeGenerationAgent)
 """Get the singleton Code Generation Agent instance (thread-safe)."""

@@ -29,9 +29,7 @@ def _stable_key(obj: Any) -> str:
 
 
 def _content_hash(obj: Any) -> str:
-    return hashlib.sha256(
-        json.dumps(obj, sort_keys=True, default=str).encode("utf-8")
-    ).hexdigest()[:8]
+    return hashlib.sha256(json.dumps(obj, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:8]
 
 
 def _sort_payload_value(value: Any) -> Any:

@@ -77,9 +77,7 @@ class ManifestService(BaseModel):
 
     name: str = Field(description="systemd unit name (without .service suffix)")
     type: ServiceType = Field(default=ServiceType.SYSTEMD)
-    system_service: str | None = Field(
-        default=None, description="Underlying system service (e.g. nginx, postgresql)"
-    )
+    system_service: str | None = Field(default=None, description="Underlying system service (e.g. nginx, postgresql)")
     start_order: int = Field(default=1, description="Start order (lower = starts first)")
     exec_start: str | None = Field(default=None, description="Override ExecStart command")
     user: str | None = Field(default=None, description="Override service user (default: autobot-<role>)")

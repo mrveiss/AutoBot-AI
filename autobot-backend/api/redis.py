@@ -96,5 +96,3 @@ async def test_redis_connection():
 
 
 register_redis_probe("redis", database="main")
-
-

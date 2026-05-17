@@ -1,4 +1,5 @@
 """Tests for token-aware _score_length in TaskComplexityScorer (GH #7348)."""
+
 import pytest
 from llm_shared.tiered_routing.complexity_scorer import TaskComplexityScorer
 from llm_shared.tiered_routing.tier_config import TierConfig
@@ -32,6 +33,7 @@ def test_custom_tokenizer_is_used():
 
 def test_code_scores_higher_than_char_count_suggests():
     """CJK / dense content: 1 char ≈ 1 token, so char/4 underestimates."""
+
     # 500 CJK chars = ~500 tokens; char/4 = 125 tokens -> score 2.0 (125-250 range)
     # With actual tokenizer returning 500 -> score 3.0
     def cjk_tokenizer(text: str) -> int:

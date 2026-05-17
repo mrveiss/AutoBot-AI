@@ -54,9 +54,7 @@ class SubagentManager:
 
         return task.task_id
 
-    async def set_task_status(
-        self, task_id: str, status: TaskStatus, metadata: Dict[str, Any] | None = None
-    ) -> None:
+    async def set_task_status(self, task_id: str, status: TaskStatus, metadata: Dict[str, Any] | None = None) -> None:
         """Update task status."""
         if not self.redis:
             return

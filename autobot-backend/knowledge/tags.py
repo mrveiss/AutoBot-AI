@@ -662,9 +662,7 @@ class TagsMixin:
         "#F97316",  # Orange
     ]
 
-    def _build_style_data(
-        self, color: str | None, icon: str | None, description: str | None
-    ) -> Dict[str, str]:
+    def _build_style_data(self, color: str | None, icon: str | None, description: str | None) -> Dict[str, str]:
         """Build style data dict from optional params (Issue #398: extracted)."""
         style_data = {}
         if color is not None:

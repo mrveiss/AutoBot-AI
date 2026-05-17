@@ -74,7 +74,9 @@ def resolve_mode(bridge: str) -> IsolationMode:
     Precedence: per-bridge env override -> always-inprocess list ->
     high-risk default (subprocess) -> global default.
     """
-    override = os.environ.get(f"MCP_ISOLATION_MODE_{bridge.upper()}")  # ssot-config-exempt: dynamic env var name (f-string)
+    override = os.environ.get(
+        f"MCP_ISOLATION_MODE_{bridge.upper()}"
+    )  # ssot-config-exempt: dynamic env var name (f-string)
     if override:
         try:
             return IsolationMode(override.lower())

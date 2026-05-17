@@ -78,17 +78,13 @@ class AdaptiveStrategy(BaseExecutionStrategy):
 
         return current
 
-    async def _execute_parallel_batch(
-        self, pending_tasks: list, results: Dict[str, Any]
-    ) -> Tuple[int, int]:
+    async def _execute_parallel_batch(self, pending_tasks: list, results: Dict[str, Any]) -> Tuple[int, int]:
         """Execute tasks in parallel batch."""
         batch_size = min(self.max_parallel_tasks, len(pending_tasks))
         batch_tasks = pending_tasks[:batch_size]
         ready_tasks = [t for t in batch_tasks if self._parallel._dependencies_met(t, results)]
 
-        batch_results = await asyncio.gather(
-            *[self._safe_execute(task, results) for task in ready_tasks]
-        )
+        batch_results = await asyncio.gather(*[self._safe_execute(task, results) for task in ready_tasks])
 
         completed, failed = 0, 0
         for task, result in zip(ready_tasks, batch_results):
@@ -101,9 +97,7 @@ class AdaptiveStrategy(BaseExecutionStrategy):
 
         return completed, failed
 
-    async def _execute_sequential_step(
-        self, pending_tasks: list, results: Dict[str, Any]
-    ) -> Tuple[int, int]:
+    async def _execute_sequential_step(self, pending_tasks: list, results: Dict[str, Any]) -> Tuple[int, int]:
         """Execute one sequential task step."""
         for task in pending_tasks[:]:
             if not self._sequential._dependencies_met(task, results):

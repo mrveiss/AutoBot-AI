@@ -64,8 +64,7 @@ def test_all_expected_tasks_registered():
     # Retrieve the Celery app instance that conftest.py injected.
     celery_app_mod = sys.modules.get("celery_app")
     assert celery_app_mod is not None, (
-        "celery_app module not found in sys.modules — "
-        "check that conftest.py injected the stub correctly."
+        "celery_app module not found in sys.modules — " "check that conftest.py injected the stub correctly."
     )
     app = celery_app_mod.celery_app
     registered = set(app.tasks.keys())

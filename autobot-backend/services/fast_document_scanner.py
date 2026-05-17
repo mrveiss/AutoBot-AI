@@ -423,9 +423,7 @@ class FastDocumentScanner:
     # Issue #422: Enhanced methods for ManPageParser integration
     # =========================================================================
 
-    def get_parsed_man_page(
-        self, file_path: str, command: str, section: str | None = None
-    ) -> ManPageContent | None:
+    def get_parsed_man_page(self, file_path: str, command: str, section: str | None = None) -> ManPageContent | None:
         """
         Get parsed man page content with structured extraction.
 
