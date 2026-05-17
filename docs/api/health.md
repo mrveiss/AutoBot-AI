@@ -141,6 +141,34 @@ The factory functions `probe_singleton`, `probe_redis_db`, `probe_app_state`
 are also exported for callers that want a `ProbeFn` to compose with extra
 logic (e.g. pass to `register_health_probe(name)(...)` in a custom block).
 
+### Emitting module-specific data (Issue #6914)
+
+All three helpers accept an optional `data_callback` keyword that lets you
+attach module-specific fields to `probes[name].data` without hand-writing the
+probe body. The callback receives the resolved value and returns a `dict`; it
+is called on both success and failure paths so the frontend always gets a
+consistent shape.
+
+| Helper | Callback signature |
+|---|---|
+| `probe_singleton` / `register_singleton_probe` | `data_callback(instance: Any) -> dict` — `None` on failure |
+| `probe_redis_db` / `register_redis_probe` | `data_callback(ok: bool) -> dict` — `False` on client-unavailable or ping failure |
+| `probe_app_state` / `register_app_state_probe` | `data_callback(value: Any) -> dict` — `None` when attr missing or explicitly `None` |
+
+```python
+# autobot-backend/api/batch_jobs.py
+from api.system_health import register_redis_probe
+
+register_redis_probe(
+    "batch_jobs",
+    database="main",
+    data_callback=lambda ok: {"redis_connected": ok, "service": "batch_jobs_manager"},
+)
+```
+
+The frontend then reads `probes[name=batch_jobs].data.redis_connected` from
+`GET /api/system/health` — no separate `/api/batch-jobs/health` call needed.
+
 Probes with richer behaviour — counting items, mapping multi-valued state to
 `degraded`/`down`, calling multiple getters — stay hand-written with
 `@register_health_probe(name)`.
