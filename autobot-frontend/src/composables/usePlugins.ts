@@ -57,7 +57,10 @@ export function usePlugins() {
     error.value = null
     try {
       const data = await wrap(() => ApiClient.get<any>(`${getApiBase()}/plugins`))
-      plugins.value = data.plugins ?? []
+      // Backend returns {plugins:[...], total:N}. Guard against a bare array
+      // response to handle shape divergence between PluginListResponse and actual
+      // payload. (#6774)
+      plugins.value = Array.isArray(data) ? data : (data?.plugins ?? [])
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to list plugins'
       error.value = msg

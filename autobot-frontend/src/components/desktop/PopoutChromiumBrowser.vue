@@ -174,20 +174,17 @@
       <!-- VNC Browser with Playwright Integration -->
       <div v-if="browserMode === 'vnc'" class="w-full h-full relative">
         <!-- API Connection Status Overlay -->
-        <UnifiedLoadingView
+        <LoadingBoundary
           v-if="browserStatus === 'connecting'"
-          :is-loading="true"
-          :has-content="false"
+          :loading="true"
           :timeout-ms="10000"
-          @loading-complete="handlePlaywrightConnected"
-          @loading-error="handlePlaywrightError"
           @loading-timeout="handlePlaywrightTimeout"
           class="absolute inset-0 bg-autobot-bg-tertiary z-10"
         >
           <template #loading-message>
             <p class="text-sm text-autobot-text-secondary">{{ $t('desktop.popoutBrowser.connectingPlaywright') }}</p>
           </template>
-        </UnifiedLoadingView>
+        </LoadingBoundary>
 
         <!-- API Error Overlay -->
         <div v-if="browserStatus === 'error'" class="absolute inset-0 flex items-center justify-center z-10" style="background: var(--color-error-bg)">
@@ -312,13 +309,10 @@
       </div>
 
       <!-- Session Loading -->
-      <UnifiedLoadingView
+      <LoadingBoundary
         v-else-if="loading"
-        :is-loading="true"
-        :has-content="false"
+        :loading="true"
         :timeout-ms="15000"
-        @loading-complete="handleSessionInitialized"
-        @loading-error="handleSessionError"
         @loading-timeout="handleSessionTimeout"
         class="h-full"
       >
@@ -328,7 +322,7 @@
             <p class="text-sm text-autobot-text-muted mt-2">{{ $t('desktop.popoutBrowser.sessionId', { id: sessionId || $t('desktop.popoutBrowser.notAvailable') }) }}</p>
           </div>
         </template>
-      </UnifiedLoadingView>
+      </LoadingBoundary>
 
       <!-- Developer Tools Overlay -->
       <div v-if="showDevTools" class="absolute bottom-0 left-0 right-0 h-1/3 bg-gray-900 border-t border-gray-600">
@@ -381,7 +375,7 @@ import appConfig from '@/config/AppConfig.js'
 import { useBrowserSessionData } from '@/composables/desktop/useBrowserSessionData'
 import type { PlaywrightNavigationResponse, PageRegion, SnapshotWithRegionsResult } from '@/composables/desktop/useBrowserSessionData'
 import InteractiveScreenshot from '@/components/browser/InteractiveScreenshot.vue'
-import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
+import LoadingBoundary from '@/components/ui/LoadingBoundary.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -402,7 +396,7 @@ interface ConsoleLogEntry {
 export default {
   name: 'PopoutChromiumBrowser',
   components: {
-    UnifiedLoadingView,
+    LoadingBoundary,
     EmptyState,
     StatusBadge,
     BaseButton,
@@ -909,7 +903,7 @@ export default {
       }
     })
 
-    // UnifiedLoadingView event handlers
+    // LoadingBoundary event handlers
     const handlePlaywrightConnected = () => {
       browserStatus.value = 'connected'
     }
@@ -1016,7 +1010,7 @@ export default {
       toggleRegionMarking,
       handleRegionsSelected,
 
-      // UnifiedLoadingView event handlers
+      // LoadingBoundary event handlers
       handlePlaywrightConnected,
       handlePlaywrightError,
       handlePlaywrightTimeout,

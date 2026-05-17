@@ -154,7 +154,18 @@ export async function checkForUpdates(): Promise<boolean> {
     })
 
     if (response.ok) {
-      const { version, buildHash } = await response.json()
+      const data = await response.json()
+      const { version } = data
+      const buildHash: string | undefined = data.buildHash
+
+      // Guard: only compare when the backend provides a real buildHash string.
+      // If buildHash is absent (backend doesn't include it), storing undefined as
+      // the string "undefined" causes false-positive banners on every subsequent
+      // page load because "undefined" !== undefined is always true. (#6775)
+      if (!buildHash || typeof buildHash !== 'string') {
+        return false
+      }
+
       const currentBuildHash = localStorage.getItem('app-build-hash')
 
       if (currentBuildHash && currentBuildHash !== buildHash) {

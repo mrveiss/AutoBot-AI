@@ -10,10 +10,9 @@
     </div>
 
     <div class="desktop-container">
-      <UnifiedLoadingView
-        :is-loading="loading"
+      <LoadingBoundary
+        :loading="loading"
         :error="error"
-        :has-content="!loading && !error"
         :timeout-ms="15000"
         @loading-complete="handleDesktopConnected"
         @loading-error="handleDesktopError"
@@ -49,7 +48,7 @@
             allowfullscreen
           ></iframe>
         </div>
-      </UnifiedLoadingView>
+      </LoadingBoundary>
     </div>
 
     <div class="desktop-controls">
@@ -194,7 +193,7 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 // MIGRATED: Removed environment.js, using AppConfig.js only
 import appConfig from '@/config/AppConfig.js'
-import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
+import LoadingBoundary from '@/components/ui/LoadingBoundary.vue'
 import TouchFriendlyButton from '@/components/ui/TouchFriendlyButton.vue'
 import DesktopContextPanel from '@/components/desktop/DesktopContextPanel.vue'
 import { useLoadingState } from '@/composables/useLoadingState'
@@ -400,7 +399,7 @@ const checkConnection = async () => {
   });
 }
 
-// UnifiedLoadingView event handlers
+// LoadingBoundary event handlers
 const handleDesktopConnected = () => {
   loading.value = false
   connectionStatus.value = 'Connected'
@@ -544,7 +543,7 @@ onUnmounted(() => {
   contain: layout style paint;
 }
 
-/* Loading and error styles moved to UnifiedLoadingView */
+/* Loading and error styles handled by LoadingBoundary */
 
 .desktop-controls {
   padding: var(--spacing-3) var(--spacing-6);
