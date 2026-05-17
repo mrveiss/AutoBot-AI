@@ -8,6 +8,8 @@ Issue #1403: Provides registration, lookup by type, fallback behavior,
 and runtime adapter switching per agent/task.
 """
 
+from __future__ import annotations
+
 from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger

@@ -10,7 +10,7 @@ with caching, validation, and integration with error_boundaries.py
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 import yaml
 
@@ -367,7 +367,7 @@ def _parse_error_category(category_str: str, error_code: str) -> ErrorCategory:
         return ErrorCategory.SERVER_ERROR
 
 
-def _parse_single_error(error_code: str, error_data: dict) -> "ErrorDefinition" | None:
+def _parse_single_error(error_code: str, error_data: dict) -> Optional["ErrorDefinition"]:
     """Parse single error definition from catalog data. (Issue #315 - extracted)"""
     required_keys = ("category", "message", "status_code", "retry")
     if not all(key in error_data for key in required_keys):

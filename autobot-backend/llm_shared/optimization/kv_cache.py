@@ -17,6 +17,8 @@ matching the access pattern of layer-by-layer inference loops.
 Issue #1964: Layer-aligned KV cache management for sequential layer processing.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, Tuple
 

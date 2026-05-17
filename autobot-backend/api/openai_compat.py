@@ -357,6 +357,13 @@ async def chat_completions(
         # For streaming, cost cannot be determined accurately until stream completes
         # (token counts are not known upfront). Per acceptance criteria, header is
         # absent when cost cannot be determined. Non-streaming path includes the header.
+        stream_headers: Dict[str, str] = {
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+        if body.model in _AUTO_MODEL_NAMES:
+            stream_headers["x-llm-routed-from"] = body.model
         return StreamingResponse(
             _stream_generator(
                 provider,
@@ -368,11 +375,7 @@ async def chat_completions(
                 api_key_record=api_key_record,
             ),
             media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
+            headers=stream_headers,
         )
 
     # Non-streaming path
@@ -415,7 +418,11 @@ async def chat_completions(
 
     # Extract cost from hidden params and add as header
     response_cost = llm_response.hidden_params.get("response_cost", 0)
-    headers = {"x-llm-cost": str(response_cost)} if response_cost > 0 else {}
+    headers: Dict[str, str] = {}
+    if response_cost > 0:
+        headers["x-llm-cost"] = str(response_cost)
+    if body.model in _AUTO_MODEL_NAMES:
+        headers["x-llm-routed-from"] = body.model
 
     # Record per-key spend and publish usage event (#6590)
     if api_key_record is not None:

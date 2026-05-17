@@ -6,6 +6,8 @@ Singleton HTTP Client Manager
 Provides efficient aiohttp client session management to prevent resource exhaustion
 """
 
+from __future__ import annotations
+
 import asyncio
 import hashlib
 import hmac

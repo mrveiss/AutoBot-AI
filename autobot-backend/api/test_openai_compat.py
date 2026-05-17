@@ -139,6 +139,29 @@ async def test_non_streaming_usage_omits_cost_usd():
 
 
 @pytest.mark.asyncio
+async def test_non_streaming_x_llm_cost_header_present_and_numeric():
+    """Non-streaming response must include x-llm-cost header with a numeric value."""
+    mock_registry = _make_mock_registry("Hello")
+
+    with (
+        patch("api.openai_compat.get_provider_registry", return_value=mock_registry),
+        patch("api.openai_compat._get_user", return_value=_SYNTHETIC_USER),
+        patch("api.openai_compat.get_cost_tracker") as mock_tracker,
+    ):
+        mock_tracker.return_value.calculate_cost.return_value = 0.00123
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post(
+                "/v1/chat/completions",
+                json={"model": "autobot-model-1", "messages": [{"role": "user", "content": "Hi"}], "stream": False},
+            )
+
+    assert resp.status_code == 200
+    assert "x-llm-cost" in resp.headers, "x-llm-cost header must be present"
+    cost = float(resp.headers["x-llm-cost"])
+    assert cost > 0, "x-llm-cost must be a positive float"
+
+
+@pytest.mark.asyncio
 async def test_list_models_returns_model_list():
     """GET /v1/models must return {object: 'list', data: [{id, object, ...}]}."""
     mock_registry = _make_mock_registry(models=["gpt-autobot-1", "gpt-autobot-2"])
