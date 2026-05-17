@@ -31,6 +31,10 @@ from autobot_shared.missing_dep import MissingDep as _MissingDep
 from knowledge.backends import BaseClient, BaseCollection
 from utils.async_initializable import AsyncInitializable
 
+# FAISS and ChromaDB are imported as whole-module objects (faiss.IndexFlatL2(),
+# faiss.StandardGpuResources(), etc.) so optional_import() — which extracts
+# individual symbols — cannot replace these blocks without refactoring all
+# 15+ call sites.  MissingDep is applied at the module level below instead.
 # FAISS import with graceful fallback
 try:
     import faiss

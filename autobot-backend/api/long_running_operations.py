@@ -56,33 +56,29 @@ from constants.threshold_constants import TimingConstants
 sys.path.append(str(PATH.PROJECT_ROOT))
 
 # Import our long-running operations framework
-try:
-    from utils.long_running_operations_framework import OperationStatus, OperationType
-    from utils.operation_timeout_integration import (
-        CreateOperationRequest,
-        OperationMigrator,
-        operation_integration_manager,
-    )
+from autobot_shared.missing_dep import optional_import
 
-    _OPERATIONS_AVAILABLE = True
-except ImportError as _e:
-    from autobot_shared.missing_dep import MissingDep as _MissingDep
-
-    logging.warning(f"Long-running operations framework not available: {_e}")
-    OperationStatus = _MissingDep("OperationStatus", _e)  # type: ignore[assignment]
-    OperationType = _MissingDep("OperationType", _e)  # type: ignore[assignment]
-    CreateOperationRequest = _MissingDep("CreateOperationRequest", _e)  # type: ignore[assignment]
-    OperationMigrator = _MissingDep("OperationMigrator", _e)  # type: ignore[assignment]
-    operation_integration_manager = _MissingDep("operation_integration_manager", _e)  # type: ignore[assignment]
-    _OPERATIONS_AVAILABLE = False
+_lro = optional_import("utils.long_running_operations_framework", ["OperationStatus", "OperationType"])
+_lro_int = optional_import(
+    "utils.operation_timeout_integration",
+    ["CreateOperationRequest", "OperationMigrator", "operation_integration_manager"],
+)
+OperationStatus = _lro["OperationStatus"]  # type: ignore[assignment]
+OperationType = _lro["OperationType"]  # type: ignore[assignment]
+CreateOperationRequest = _lro_int["CreateOperationRequest"]  # type: ignore[assignment]
+OperationMigrator = _lro_int["OperationMigrator"]  # type: ignore[assignment]
+operation_integration_manager = _lro_int["operation_integration_manager"]  # type: ignore[assignment]
+_OPERATIONS_AVAILABLE = bool(OperationStatus)
+if not _OPERATIONS_AVAILABLE:
+    logging.warning("Long-running operations framework not available: %s", OperationStatus)
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["long-running-operations"])
 
 # Performance optimization: O(1) lookup for failed operation statuses (Issue #326)
-try:
+if _OPERATIONS_AVAILABLE:
     FAILED_OPERATION_STATUSES = {OperationStatus.FAILED, OperationStatus.TIMEOUT}
-except ImportError:
+else:
     FAILED_OPERATION_STATUSES = set()
 
 

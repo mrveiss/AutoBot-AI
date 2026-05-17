@@ -13,21 +13,18 @@ from fastapi.responses import JSONResponse
 from api.schemas_workflows import AgentRecommendationRequest, WorkflowRequest
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.missing_dep import optional_import
 
-try:
-    from orchestrator import create_and_execute_workflow, get_orchestrator_sync
-
-    # Issue #5040: Single Orchestrator conductor; provides all multi-agent
-    # workflow methods (create_workflow_plan, execute_workflow,
-    # get_performance_report, get_agent_recommendations, etc.).
-    orchestrator = get_orchestrator_sync()
+# Issue #5040: Single Orchestrator conductor; provides all multi-agent workflow
+# methods (create_workflow_plan, execute_workflow, get_performance_report, etc.).
+_orch = optional_import("orchestrator", ["create_and_execute_workflow", "get_orchestrator_sync"])
+create_and_execute_workflow = _orch["create_and_execute_workflow"]  # type: ignore[assignment]
+if _orch["get_orchestrator_sync"]:
+    orchestrator = _orch["get_orchestrator_sync"]()  # type: ignore[assignment]
     _ORCHESTRATOR_AVAILABLE = True
-except ImportError as _e:
-    from autobot_shared.missing_dep import MissingDep as _MissingDep
-
+else:
+    orchestrator = _orch["get_orchestrator_sync"]  # MissingDep stub  # type: ignore[assignment]
     _ORCHESTRATOR_AVAILABLE = False
-    create_and_execute_workflow = _MissingDep("create_and_execute_workflow", _e)  # type: ignore[assignment]
-    orchestrator = _MissingDep("orchestrator", _e)  # type: ignore[assignment]
     get_logger(__name__).warning("orchestrator module not available")
 
 from api.schemas_common import DataResponse
