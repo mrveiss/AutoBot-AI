@@ -2,32 +2,28 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Tiered Routing Package - Intelligent model tier selection based on task complexity.
+Tiered Routing Package — pluggable LLM routing strategies.
 
-Issue #748: Tiered Model Distribution Implementation.
+Issue #748: Complexity-based routing.
+Issue #6595: Strategy registry with cost-aware and latency-aware alternatives.
 
-This package provides:
-- TaskComplexityScorer: Rule-based complexity scoring for requests
-- TieredModelRouter: Routes requests to appropriate model tiers
-- Configuration and metrics for monitoring
+Usage (registry / config-driven):
+    from llm_shared.tiered_routing import route, get_active_router
+    model, result = route(messages)
 
-Usage:
-    from llm_shared.tiered_routing import (
-        TieredModelRouter,
-        get_tiered_router,
-        TierConfig,
-    )
+Usage (specific strategy):
+    from llm_shared.tiered_routing import ComplexityRouter, CostRouter, LatencyRouter
 
-    # Using singleton
-    router = get_tiered_router()
-    model, result = router.route(messages)
-
-    # Or with custom config
-    config = TierConfig(complexity_threshold=4.0)
-    router = TieredModelRouter(config)
+Backward-compat (original class name):
+    from llm_shared.tiered_routing import TieredModelRouter, get_tiered_router
 """
 
+from .base_strategy import RoutingStrategy
+from .complexity_router import ComplexityRouter
 from .complexity_scorer import TaskComplexityScorer
+from .cost_router import CostRouter
+from .latency_router import LatencyRouter
+from .registry import get_active_router, route
 from .tier_config import (
     ComplexityResult,
     TierConfig,
@@ -38,8 +34,16 @@ from .tier_config import (
 from .tier_router import TieredModelRouter, get_tiered_router
 
 __all__ = [
-    # Main classes
-    "TieredModelRouter",
+    # Protocol
+    "RoutingStrategy",
+    # Strategies
+    "ComplexityRouter",
+    "CostRouter",
+    "LatencyRouter",
+    # Registry
+    "get_active_router",
+    "route",
+    # Complexity scoring
     "TaskComplexityScorer",
     # Configuration
     "TierConfig",
@@ -48,6 +52,7 @@ __all__ = [
     # Results and metrics
     "ComplexityResult",
     "TierMetrics",
-    # Factory function
+    # Backward-compat
+    "TieredModelRouter",
     "get_tiered_router",
 ]
