@@ -11,7 +11,7 @@ should handle the request. Uses lightweight heuristics for fast scoring (~5ms).
 """
 
 import re
-from typing import Dict, List, Set
+from typing import Callable, Dict, List, Optional, Set
 
 from autobot_shared.logging_manager import get_logger
 
@@ -195,14 +195,19 @@ class TaskComplexityScorer:
         r"^tell\s+me\s+",
     ]
 
-    def __init__(self, config: TierConfig):
+    def __init__(self, config: TierConfig, tokenizer: Optional[Callable[[str], int]] = None):
         """
         Initialize complexity scorer.
 
         Args:
             config: Tier configuration with threshold settings
+            tokenizer: Optional callable that returns the token count for a string.
+                       When provided, _score_length uses it for accurate token counting.
+                       When None, falls back to len(content) // 4 (char/4 estimate).
         """
         self.config = config
+        # tokenizer callable for token-accurate length scoring; falls back to char/4
+        self._tokenizer = tokenizer
         self._compiled_code_patterns = [re.compile(p, re.IGNORECASE | re.MULTILINE) for p in self.CODE_PATTERNS]
         self._compiled_multistep_patterns = [
             re.compile(p, re.IGNORECASE | re.MULTILINE) for p in self.MULTISTEP_PATTERNS
@@ -252,13 +257,20 @@ class TaskComplexityScorer:
         return " ".join(user_messages)
 
     def _score_length(self, content: str) -> float:
-        """Score based on message length (0-3)."""
-        length = len(content)
-        if length < 100:
+        """Score based on message length in tokens (0-3).
+
+        Uses self._tokenizer if provided; falls back to char/4 estimate.
+        Thresholds are in tokens: 25, 125, 250.
+        """
+        if self._tokenizer is not None:
+            length = self._tokenizer(content)
+        else:
+            length = len(content) // 4
+        if length < 25:
             return 0.0
-        elif length < 500:
+        elif length < 125:
             return 1.0
-        elif length < 1000:
+        elif length < 250:
             return 2.0
         else:
             return 3.0
