@@ -23,6 +23,7 @@ from knowledge_base import KnowledgeBase
 from services.llm_service import get_llm_service
 
 from .base_agent import DeploymentMode
+from .payloads import AgentStatus, KnowledgeQueryPayload
 from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_logger(__name__)
@@ -167,33 +168,28 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
         processing_time: float,
         similarity_threshold: float,
     ) -> Dict[str, Any]:
-        """
-        Build the knowledge-retrieval-specific payload dict.
+        """Build the knowledge-retrieval-specific payload dict (#6650, #6703).
 
-        Returned as the ``result`` field of the AgentResponse the base class
-        ``StandardizedAgent._build_success_response`` constructs (#6650). The
-        prior name shadowed the base method with an incompatible signature,
-        so any AI Stack ``/agents/knowledge_retrieval/process`` request would
-        crash with a TypeError.
-
-        (Issue #398: extracted helper)
+        Constructs a typed KnowledgeQueryPayload then returns model_dump() so
+        the public API contract (Dict[str, Any]) is unchanged.
         """
-        return {
-            "status": "success",
-            "query": query,
-            "documents_found": processed_results["documents_found"],
-            "documents": processed_results["documents"],
-            "summary": summary,
-            "processing_time": processing_time,
-            "is_question": self._is_question(query),
-            "agent_type": "knowledge_retrieval",
-            "model_used": self.model_name,
-            "metadata": {
+        return KnowledgeQueryPayload(
+            status=AgentStatus.SUCCESS,
+            agent_type="knowledge_retrieval",
+            model_used=self.model_name,
+            query=query,
+            documents_found=processed_results["documents_found"],
+            documents=processed_results["documents"],
+            summary=summary,
+            processing_time=processing_time,
+            is_question=self._is_question(query),
+            similarity_threshold=similarity_threshold,
+            metadata={
                 "agent": "KnowledgeRetrievalAgent",
                 "search_type": "fast_lookup",
                 "similarity_threshold": similarity_threshold,
             },
-        }
+        ).model_dump()
 
     def _build_error_response(self, query: str, error: Exception) -> Dict[str, Any]:
         """

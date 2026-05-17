@@ -246,3 +246,69 @@ def test_no_duplicate_class_names_across_schema_modules() -> None:
         "schemas_*.py files will shadow on whichever import path resolves "
         "last. Rename one or add to INTENTIONAL_SHARED with justification:\n  - " + "\n  - ".join(collisions)
     )
+
+
+def test_no_new_hardcoded_status_strings_in_agents() -> None:
+    """Agent code must not add new 'status': 'success' / 'error' literals (#6703).
+
+    The AgentStatus enum in agents/payloads.py is the canonical source.
+    Hardcoded status strings bypass the type system — the structural cause of
+    #6648 / #6650.
+
+    This test is a regression guard: it asserts the total violation count does
+    not exceed the baseline recorded when agents/payloads.py was introduced.
+    Files already migrated to AgentStatus are listed in CONVERTED — violations
+    inside those files (which should be zero) fail hard. For non-converted files,
+    the test asserts no new violations have been added beyond the known baseline.
+
+    To migrate a file: convert its helpers to use AgentStatus, add it to
+    CONVERTED, and the baseline count decreases automatically.
+    """
+    import re as _re
+
+    _STATUS_LITERAL = _re.compile(r'"status"\s*:\s*"(success|error|warning|unavailable|rate_limited|disabled)"')
+
+    # Files fully migrated to AgentStatus — must have zero violations.
+    CONVERTED: set[str] = {
+        "agents/chat_agent.py",
+        "agents/knowledge_retrieval_agent.py",
+        "agents/enhanced_system_commands_agent.py",
+        "agents/rag_agent.py",
+        "agents/payloads.py",
+    }
+
+    # Baseline violation count in non-converted files at the time payloads.py
+    # was introduced (#6703). This number should only decrease as more files
+    # are migrated. If it increases, a new violation was introduced — fail.
+    KNOWN_BASELINE: int = 70
+
+    backend_root = Path(__file__).resolve().parent.parent
+    agents_dir = backend_root / "agents"
+    converted_violations: list[str] = []
+    baseline_violations: list[str] = []
+
+    for path in sorted(agents_dir.glob("*.py")):
+        rel = f"agents/{path.name}"
+        if path.name.endswith("_test.py") or path.name == "__init__.py":
+            continue
+        source = path.read_text(encoding="utf-8")
+        matches = [
+            f"{rel}:{lineno}: {line.strip()}"
+            for lineno, line in enumerate(source.splitlines(), 1)
+            if _STATUS_LITERAL.search(line)
+        ]
+        if rel in CONVERTED:
+            converted_violations.extend(matches)
+        else:
+            baseline_violations.extend(matches)
+
+    assert not converted_violations, (
+        "Hardcoded status strings in fully-migrated agent file(s). "
+        "Use AgentStatus enum from agents/payloads.py:\n  " + "\n  ".join(converted_violations)
+    )
+    assert len(baseline_violations) <= KNOWN_BASELINE, (
+        f"New hardcoded status string(s) added to agent code (#6703). "
+        f"Count {len(baseline_violations)} > baseline {KNOWN_BASELINE}. "
+        f"Use AgentStatus enum from agents/payloads.py instead. New violations:\n  "
+        + "\n  ".join(baseline_violations[KNOWN_BASELINE:])
+    )
