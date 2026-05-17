@@ -406,9 +406,7 @@ class DAGExecutor:
             ctx.status = TaskStatus.PARTIALLY_COMPLETED.value
 
         if self._criteria_evaluator and context and context.get("structured_criteria"):
-            eval_result = await self._criteria_evaluator.evaluate(
-                context["structured_criteria"], ctx.step_results
-            )
+            eval_result = await self._criteria_evaluator.evaluate(context["structured_criteria"], ctx.step_results)
             ctx.criteria_evaluation = eval_result.to_dict()
 
         logger.info("Workflow %s DAG execution finished: status=%s", workflow_id, ctx.status)
