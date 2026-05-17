@@ -377,6 +377,7 @@ class PathConstants:
     LOGS_DIR: Path = PROJECT_ROOT / "logs"
     DOCS_DIR: Path = PROJECT_ROOT / "docs"
     BACKEND_DIR: Path = PROJECT_ROOT / "autobot-backend"
+    STATIC_DIR: Path = PROJECT_ROOT / "autobot-backend" / "static"
     FRONTEND_DIR: Path = PROJECT_ROOT / "autobot-frontend"
     TESTS_DIR: Path = PROJECT_ROOT / "autobot-backend"
 

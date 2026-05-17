@@ -9,7 +9,6 @@ a model's *architecture* onto the meta device at zero memory cost.  The model
 skeleton is instantiated via ``AutoModelForCausalLM.from_config()`` inside the
 context so that no real tensors are allocated.  Parameter counts are read directly
 from the skeleton with ``sum(p.numel() for p in model.parameters())``, giving
-from autobot_shared.logging_manager import get_logger
 accurate counts for GQA (Llama 2/3, Mistral) and MoE (Mixtral) architectures.
 
 Architecture attributes (layer count, hidden size, attention heads, parameter count)
@@ -27,6 +26,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict
 
+from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_1_HOUR
 
 logger = get_logger(__name__)

@@ -15,6 +15,8 @@ tracking layers on top.
 Issue #2098: Active token budget optimization with context compaction.
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
 import threading

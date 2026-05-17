@@ -10,6 +10,8 @@ connections with HTTP/2 multiplexing support.
 Issue #717: Efficient Inference Design implementation.
 """
 
+from __future__ import annotations
+
 import asyncio
 import time
 from dataclasses import dataclass, field

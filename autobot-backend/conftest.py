@@ -144,12 +144,144 @@ if "celery_app" not in sys.modules:
     _celery_app_mod.celery_app = _test_app  # type: ignore[attr-defined]
     sys.modules["celery_app"] = _celery_app_mod
 
+# services.llm_api_key_service and services.llm_cost_tracker stubs —
+# services/__init__.py pulls in the full npu_client / Redis stack at import
+# time. The tests mock these via patch() so a lightweight stub is safe.
+for _svc_mod in [
+    "services",
+    "services.llm_api_key_service",
+    "services.llm_cost_tracker",
+]:
+    if _svc_mod not in sys.modules:
+        _svc_stub = _make_pkg_stub(_svc_mod)
+        sys.modules[_svc_mod] = _svc_stub
+# Make the specific symbols resolvable
+_svc_key_stub = sys.modules["services.llm_api_key_service"]
+_svc_key_stub.LLMApiKeyRecord = MagicMock()  # type: ignore[attr-defined]
+_svc_key_stub.get_llm_api_key_service = MagicMock()  # type: ignore[attr-defined]
+_svc_cost_stub = sys.modules["services.llm_cost_tracker"]
+
+# Provide a minimal cost-tracker stub whose calculate_cost() returns 0.0 so
+# that the ``response_cost > 0`` guard in openai_compat.py works correctly in
+# tests that don't patch get_cost_tracker themselves.
+class _StubCostTracker:
+    def calculate_cost(self, *_a, **_k) -> float:
+        return 0.0
+
+_svc_cost_stub.get_cost_tracker = lambda: _StubCostTracker()  # type: ignore[attr-defined]
+
+# llm_shared stub — llm_shared/__init__.py re-exports the entire provider stack
+# which pulls in Redis clients, config loaders, and optional heavy deps (torch,
+# sentence-transformers) that are not installed in the dev venv.  Tests that
+# exercise openai_compat patch get_provider_registry directly via
+# ``patch("api.openai_compat.get_provider_registry", ...)``, so a lightweight
+# top-level stub is safe.  llm_shared.models (LLMRequest / LLMResponse) is
+# loaded separately because tests instantiate those classes directly.
+if "llm_shared" not in sys.modules:
+    _llm_stub = _make_pkg_stub("llm_shared")
+    _llm_stub.get_provider_registry = MagicMock()  # type: ignore[attr-defined]
+    _llm_stub.ProviderRegistry = MagicMock()  # type: ignore[attr-defined]
+    _llm_stub.AdapterBase = MagicMock()  # type: ignore[attr-defined]
+    _llm_stub.AdapterRegistry = MagicMock()  # type: ignore[attr-defined]
+    _llm_stub.get_adapter_registry = MagicMock()  # type: ignore[attr-defined]
+    _llm_stub.BaseProvider = MagicMock()  # type: ignore[attr-defined]
+    _llm_stub.CachedResponse = MagicMock()  # type: ignore[attr-defined]
+    _llm_stub.LLMResponseCache = MagicMock()  # type: ignore[attr-defined]
+    _llm_stub.get_llm_cache = MagicMock()  # type: ignore[attr-defined]
+    _llm_stub.TORCH_AVAILABLE = False  # type: ignore[attr-defined]
+    _llm_stub.HardwareDetector = MagicMock()  # type: ignore[attr-defined]
+    _llm_stub.LLMType = MagicMock()  # type: ignore[attr-defined]
+    _llm_stub.ProviderType = MagicMock()  # type: ignore[attr-defined]
+    _llm_stub.StreamingManager = MagicMock()  # type: ignore[attr-defined]
+    sys.modules["llm_shared"] = _llm_stub
+
+    # Sub-package stubs for dotted imports used by openai_compat and its deps.
+    # llm_shared.types is needed by models.py (from .types import ...), so
+    # load it from the real file before models.py is loaded.
+    for _llm_sub in [
+        "llm_shared.adapters",
+        "llm_shared.providers",
+        "llm_shared.tiered_routing",
+        "llm_shared.tiered_routing.tier_router",
+        "llm_shared.optimization",
+    ]:
+        if _llm_sub not in sys.modules:
+            sys.modules[_llm_sub] = _make_pkg_stub(_llm_sub)
+
+    # Provide a real tiered_router.get_tiered_router MagicMock
+    _tr_stub = sys.modules.get("llm_shared.tiered_routing.tier_router") or _make_pkg_stub(
+        "llm_shared.tiered_routing.tier_router"
+    )
+    _tr_stub.get_tiered_router = MagicMock()  # type: ignore[attr-defined]
+    sys.modules["llm_shared.tiered_routing.tier_router"] = _tr_stub
+
+    # Load llm_shared.types (enums only) so models.py can do `from .types import`
+    import importlib.util as _ilu2
+
+    def _load_llm_sub(name: str, filename: str) -> None:
+        """Load a llm_shared sub-module from its actual source file."""
+        _spec = _ilu2.spec_from_file_location(name, str(backend_root / "llm_shared" / filename))
+        if _spec and _spec.loader:
+            _mod = _ilu2.module_from_spec(_spec)
+            _mod.__package__ = "llm_shared"
+            sys.modules[name] = _mod
+            _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
+
+    try:
+        _load_llm_sub("llm_shared.types", "types.py")
+    except Exception:
+        sys.modules["llm_shared.types"] = _make_pkg_stub("llm_shared.types")
+
+    # Load llm_shared.models from its actual source file so that LLMRequest
+    # and LLMResponse are real instantiatable dataclasses (tests call them).
+    try:
+        _load_llm_sub("llm_shared.models", "models.py")
+    except Exception as _models_exc:
+        # Fall back to a MagicMock stub if models.py has import issues
+        _models_stub = _make_pkg_stub("llm_shared.models")
+        _models_stub.LLMRequest = MagicMock()  # type: ignore[attr-defined]
+        _models_stub.LLMResponse = MagicMock()  # type: ignore[attr-defined]
+        _models_stub.ChatMessage = MagicMock()  # type: ignore[attr-defined]
+        _models_stub.LLMSettings = MagicMock()  # type: ignore[attr-defined]
+        sys.modules["llm_shared.models"] = _models_stub
+
+# auth_middleware stub — the real module pulls in the full config/Redis chain
+# at import time (config.manager, error_catalog, etc.) which fails in the dev
+# venv.  Tests that exercise openai_compat patch _get_user directly and never
+# call get_current_user, so a lightweight stub is safe here.
+if "auth_middleware" not in sys.modules:
+    _auth_stub = types.ModuleType("auth_middleware")
+    _auth_stub.__path__ = []  # type: ignore[attr-defined]
+    _auth_stub.__package__ = "auth_middleware"
+    _auth_stub.get_current_user = MagicMock()  # type: ignore[attr-defined]
+    _auth_stub.__getattr__ = lambda attr: MagicMock()  # type: ignore[attr-defined]
+    sys.modules["auth_middleware"] = _auth_stub
+
+# autobot_shared.redis_client stub — provides get_async_redis_client as a
+# proper coroutine returning None so that rate-limiters and other callers that
+# do ``redis = await get_async_redis_client()`` fall back to in-process logic
+# instead of awaiting a MagicMock (which raises TypeError).
+if "autobot_shared.redis_client" not in sys.modules:
+    import asyncio as _asyncio_stub
+
+    _redis_client_mod = types.ModuleType("autobot_shared.redis_client")
+
+    async def _get_async_redis_client_stub(*_a, **_k):
+        return None
+
+    _redis_client_mod.get_async_redis_client = _get_async_redis_client_stub  # type: ignore[attr-defined]
+    _redis_client_mod.__getattr__ = lambda attr: MagicMock()  # type: ignore[attr-defined]
+    sys.modules["autobot_shared.redis_client"] = _redis_client_mod
+
 # autobot_shared.redis_management stubs — the real package tries to open
 # sockets at import time; tests must not do that.
 for _redis_sub in [
     "autobot_shared.redis_management",
     "autobot_shared.redis_management.types",
     "autobot_shared.redis_management.connection_manager",
+    "autobot_shared.redis_management.cache_wrapper",
+    "autobot_shared.redis_management.config",
+    "autobot_shared.redis_management.statistics",
 ]:
     if _redis_sub not in sys.modules:
         _redis_stub = types.ModuleType(_redis_sub)
