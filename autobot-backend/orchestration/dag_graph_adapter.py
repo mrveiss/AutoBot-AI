@@ -7,6 +7,10 @@ DAG-to-AutoBotGraph adapter.
 Issue #3228: migrate the DAG workflow executor to use the unified
 ``AutoBotGraph`` / ``GraphRunner`` engine so checkpoint and step-event
 logic is shared rather than duplicated.
+Issue #6826: #3228 was closed prematurely; the migration is ongoing.
+Executor fragmentation scope: this adapter is the bridge layer intended
+to replace direct ``DAGExecutor`` usage in production once parallel
+fan-out support is complete (tracked in #6826).
 
 This module provides ``build_dag_graph`` which converts a ``WorkflowDAG``
 into an ``AutoBotGraph``.  Each DAG node becomes a graph node whose
@@ -297,7 +301,7 @@ class DAGGraphExecutor:
     - True parallel fan-out (multiple successors executed concurrently) is
       linearised in this implementation.  The original ``DAGExecutor`` uses
       ``asyncio.gather`` for independent branches.  Full parallel fan-out
-      support is tracked as a follow-up enhancement in issue #3228.
+      support is tracked as a follow-up enhancement in issue #6826.
     """
 
     def __init__(

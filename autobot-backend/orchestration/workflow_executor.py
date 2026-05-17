@@ -7,6 +7,13 @@ Workflow Executor
 Issue #381: Extracted from enhanced_orchestrator.py god class refactoring.
 Contains workflow execution, step coordination, and agent interaction handling.
 
+Executor scope (#6826): WorkflowExecutor is the **main linear/parallel workflow
+engine**.  It handles step dependency grouping, variable resolution, sub-workflow
+delegation, error handlers, and notifications.  For DAG/condition workflows it
+delegates to DAGExecutor; checkpoint logic delegates to CheckpointResumer (#6827).
+The long-term migration path (replacing DAGExecutor with GraphRunner) is tracked
+in #6826.
+
 Issue #2168: Added circuit breaker + retry decorators to step execution.
 Issue #2172: Added parallel execution for independent workflow steps.
 Issue #2140: DAG-based execution with condition evaluation and branch routing.
@@ -34,6 +41,7 @@ from constants.threshold_constants import (
 )
 from retry_mechanism import RetryStrategy, retry_async
 
+from .checkpoint_resumer import CheckpointResumer
 from .dag_executor import (
     DAGExecutionContext,
     DAGExecutor,
@@ -42,10 +50,8 @@ from .dag_executor import (
     workflow_has_condition_nodes,
 )
 from .error_handler import (
-    StepCheckpoint,
     StepErrorAction,
     StepErrorHandler,
-    WorkflowCheckpointManager,
 )
 from .execution_modes import DebugController, DryRunValidator, ExecutionMode
 from .sub_workflow import (
@@ -126,8 +132,8 @@ class WorkflowExecutor:
         self.memory = memory
         # Issue #2141: variable resolver for ${steps…} piping between steps
         self._variable_resolver = VariableResolver()
-        # Issue #2154: checkpoint manager and error handler
-        self._checkpoint_manager = WorkflowCheckpointManager()
+        # Issue #2154 / #6827: checkpoint logic delegated to CheckpointResumer.
+        self._checkpoint_resumer = CheckpointResumer()
         self._error_handler = StepErrorHandler()
         # Issue #2143: sub-workflow executor (None when fetcher not provided)
         self._sub_workflow_executor: SubWorkflowExecutor | None = (
@@ -553,21 +559,8 @@ class WorkflowExecutor:
             raise
 
     def _save_checkpoint(self, workflow_id: str, step_id: str, step_result: Dict[str, Any]) -> None:
-        """
-        Persist a checkpoint for *step_id* after successful execution.
-
-        Silently skips when *workflow_id* is empty (e.g. DAG adapter calls).
-
-        Issue #2154.
-        """
-        if not workflow_id:
-            return
-        checkpoint = StepCheckpoint(
-            step_id=step_id,
-            status=TaskStatus.COMPLETED.value,
-            output=step_result,
-        )
-        self._checkpoint_manager.save(workflow_id, checkpoint)
+        """Delegate to CheckpointResumer.save (#6827)."""
+        self._checkpoint_resumer.save(workflow_id, step_id, step_result)
 
     async def execute_coordinated_workflow(
         self,
@@ -733,7 +726,7 @@ class WorkflowExecutor:
             # Issue #3019: also clear shared memory — no longer needed once the
             # workflow reaches a terminal state.
             if execution_context.get("status") == TaskStatus.COMPLETED.value:
-                self._checkpoint_manager.clear(workflow_id)
+                self._checkpoint_resumer.clear(workflow_id)
                 shared_memory.clear()
 
             # Issue #3101: fire notification on terminal status.
@@ -755,39 +748,8 @@ class WorkflowExecutor:
         steps: List[Dict[str, Any]],
         execution_context: Dict[str, Any],
     ) -> None:
-        """
-        Load checkpoints from Redis and mark already-completed steps.
-
-        Mutates *steps* in-place (sets ``status="completed"``) and populates
-        ``execution_context["step_results"]`` and ``execution_context["step_outputs"]``
-        so variable resolution works correctly for resumed steps.
-
-        Issue #2154.
-        """
-        checkpoints = self._checkpoint_manager.load_all(workflow_id)
-        if not checkpoints:
-            return
-
-        # Issue #3231: refresh TTL at resume time so a workflow that was
-        # paused for human approval (potentially for days) gets a fresh
-        # 30-day window from this moment rather than from the last step save.
-        self._checkpoint_manager.refresh_ttl(workflow_id)
-
-        logger.info(
-            "Workflow %s: resuming with %d checkpointed steps: %s",
-            workflow_id,
-            len(checkpoints),
-            list(checkpoints.keys()),
-        )
-
-        for step in steps:
-            step_id = step["id"]
-            cp = checkpoints.get(step_id)
-            if cp is None:
-                continue
-            step["status"] = TaskStatus.COMPLETED.value
-            execution_context["step_results"][step_id] = cp.output
-            execution_context["step_outputs"][step_id] = StepOutput.from_step_result(cp.output)
+        """Delegate to CheckpointResumer.apply (#6827)."""
+        self._checkpoint_resumer.apply(workflow_id, steps, execution_context)
 
     async def _execute_debug_workflow(
         self,

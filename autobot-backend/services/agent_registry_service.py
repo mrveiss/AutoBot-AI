@@ -20,7 +20,16 @@ logger = get_logger(__name__)
 
 
 class AgentRegistryService:
-    """Central agent registry CRUD (#1754)."""
+    """Central agent registry CRUD (#1754).
+
+    Scope (#6828): database-backed CRUD for the agents table.  This is the
+    **persistence** registry — canonical source of truth for agent metadata at
+    startup/shutdown.  Does not track live health or in-process profile state.
+    See also:
+    - orchestration.agent_registry.AgentRegistry — static profile/capability registry
+    - agents.agent_client.AgentRegistry — health-tracking runtime registry
+    - agents.agent_orchestration.distributed_management.DistributedAgentManager — dynamic/distributed
+    """
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
