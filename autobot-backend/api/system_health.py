@@ -21,7 +21,7 @@ import asyncio
 import enum
 import time
 from datetime import datetime, timezone
-from typing import Awaitable, Callable, Literal
+from typing import Any, Awaitable, Callable, Literal
 
 from fastapi import Request
 from pydantic import BaseModel
@@ -200,11 +200,17 @@ def probe_singleton(
     getter: Callable,
     *,
     async_getter: bool = False,
+    data_callback: Callable[[Any], dict] | None = None,
 ) -> ProbeFn:
     """Build a probe that resolves a singleton via ``getter`` and reports ok if non-None.
 
     Use ``async_getter=True`` when the getter is an async function that needs
     to be awaited (e.g. ``get_async_redis_client`` style factories).
+
+    ``data_callback(instance)`` is called with the resolved instance (or
+    ``None`` on failure) and its return value is attached as ``data`` on the
+    ``ComponentHealth`` — use this instead of hand-writing the probe when you
+    need module-specific fields in ``probes[name].data`` (#6914).
     """
 
     async def _probe(request: Request | None = None) -> ComponentHealth:
@@ -215,23 +221,39 @@ def probe_singleton(
                     name=probe_name,
                     status="down",
                     detail="singleton returned None",
+                    data=data_callback(None) if data_callback else None,
                 )
-            return ComponentHealth(name=probe_name, status="ok")
+            return ComponentHealth(
+                name=probe_name,
+                status="ok",
+                data=data_callback(instance) if data_callback else None,
+            )
         except Exception as exc:
             return ComponentHealth(
                 name=probe_name,
                 status="down",
                 detail=f"probe error: {type(exc).__name__}",
+                data=data_callback(None) if data_callback else None,
             )
 
     return _probe
 
 
-def probe_redis_db(probe_name: str, *, database: str = "main") -> ProbeFn:
+def probe_redis_db(
+    probe_name: str,
+    *,
+    database: str = "main",
+    data_callback: Callable[[bool], dict] | None = None,
+) -> ProbeFn:
     """Build a probe that pings ``database`` via the async Redis client.
 
     Always uses ``await get_async_redis_client(...) + await client.ping()`` so
     no probe blocks the asyncio event loop (regression class fixed in PR #6870).
+
+    ``data_callback(ok)`` is called with ``True`` when the ping succeeds and
+    ``False`` otherwise; its return value is attached as ``data`` on the
+    ``ComponentHealth`` — use this to include module-specific fields such as
+    ``redis_connected`` without hand-writing the probe (#6914).
     """
 
     async def _probe(request: Request | None = None) -> ComponentHealth:
@@ -244,24 +266,44 @@ def probe_redis_db(probe_name: str, *, database: str = "main") -> ProbeFn:
                     name=probe_name,
                     status="down",
                     detail=f"redis client unavailable (database={database})",
+                    data=data_callback(False) if data_callback else None,
                 )
-            await client.ping()
-            return ComponentHealth(name=probe_name, status="ok")
+            ok = True
+            try:
+                await client.ping()
+            except Exception:
+                ok = False
+            return ComponentHealth(
+                name=probe_name,
+                status="ok" if ok else "down",
+                detail=None if ok else "redis ping failed",
+                data=data_callback(ok) if data_callback else None,
+            )
         except Exception as exc:
             return ComponentHealth(
                 name=probe_name,
                 status="down",
                 detail=f"probe error: {type(exc).__name__}",
+                data=data_callback(False) if data_callback else None,
             )
 
     return _probe
 
 
-def probe_app_state(probe_name: str, attr: str) -> ProbeFn:
+def probe_app_state(
+    probe_name: str,
+    attr: str,
+    *,
+    data_callback: Callable[[Any], dict] | None = None,
+) -> ProbeFn:
     """Build a probe that checks ``request.app.state.<attr>`` is initialized.
 
     Returns ``degraded`` when the attribute is missing (e.g. internal callers
     without a request context) and ``down`` when it is explicitly ``None``.
+
+    ``data_callback(value)`` is called with the attribute value (or ``None``
+    on failure) and its return value is attached as ``data`` on the
+    ``ComponentHealth`` (#6914).
     """
 
     async def _probe(request: Request | None = None) -> ComponentHealth:
@@ -270,6 +312,7 @@ def probe_app_state(probe_name: str, attr: str) -> ProbeFn:
                 name=probe_name,
                 status="degraded",
                 detail=f"app.state.{attr} not initialized",
+                data=data_callback(None) if data_callback else None,
             )
         try:
             value = getattr(request.app.state, attr)
@@ -278,28 +321,50 @@ def probe_app_state(probe_name: str, attr: str) -> ProbeFn:
                     name=probe_name,
                     status="down",
                     detail=f"app.state.{attr} is None",
+                    data=data_callback(None) if data_callback else None,
                 )
-            return ComponentHealth(name=probe_name, status="ok")
+            return ComponentHealth(
+                name=probe_name,
+                status="ok",
+                data=data_callback(value) if data_callback else None,
+            )
         except Exception as exc:
             return ComponentHealth(
                 name=probe_name,
                 status="down",
                 detail=f"probe error: {type(exc).__name__}",
+                data=data_callback(None) if data_callback else None,
             )
 
     return _probe
 
 
-def register_singleton_probe(name: str, getter: Callable, *, async_getter: bool = False) -> None:
+def register_singleton_probe(
+    name: str,
+    getter: Callable,
+    *,
+    async_getter: bool = False,
+    data_callback: Callable[[Any], dict] | None = None,
+) -> None:
     """One-line wrapper: build + register a singleton-resolve probe."""
-    register_health_probe(name)(probe_singleton(name, getter, async_getter=async_getter))
+    register_health_probe(name)(probe_singleton(name, getter, async_getter=async_getter, data_callback=data_callback))
 
 
-def register_redis_probe(name: str, *, database: str = "main") -> None:
+def register_redis_probe(
+    name: str,
+    *,
+    database: str = "main",
+    data_callback: Callable[[bool], dict] | None = None,
+) -> None:
     """One-line wrapper: build + register a Redis-ping probe."""
-    register_health_probe(name)(probe_redis_db(name, database=database))
+    register_health_probe(name)(probe_redis_db(name, database=database, data_callback=data_callback))
 
 
-def register_app_state_probe(name: str, attr: str) -> None:
+def register_app_state_probe(
+    name: str,
+    attr: str,
+    *,
+    data_callback: Callable[[Any], dict] | None = None,
+) -> None:
     """One-line wrapper: build + register an app.state.<attr> probe."""
-    register_health_probe(name)(probe_app_state(name, attr))
+    register_health_probe(name)(probe_app_state(name, attr, data_callback=data_callback))
