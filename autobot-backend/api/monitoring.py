@@ -347,15 +347,16 @@ ws_manager = MonitoringWebSocketManager()
 
 
 def _resolve_service_urls() -> tuple:
-    """Helper for get_services_health. Ref: #1088.
+    """Helper for get_services_health. Ref: #1088, #6769.
 
-    Resolve health-check URLs for NPU worker, browser, and Ollama from the
-    config manager, falling back to known static addresses on any error.
+    Resolve health-check URLs for NPU worker, browser, Ollama, and ChromaDB
+    from the config manager, falling back to known static addresses on any error.
     """
     try:
         npu_url = f"http://{_ssot.vm.npu}:{_ssot.port.npu}/health"
         browser_url = f"http://{_ssot.vm.browser}:{_ssot.port.browser}/health"
         ollama_url = f"http://{_ssot.vm.ollama}:{_ssot.port.ollama}/api/version"
+        chromadb_url = f"http://{_ssot.vm.aistack}:{_ssot.port.aistack}/api/v2/heartbeat"
     except Exception:
         # Issue #1229: Use ConfigRegistry (defaults from SSOT via registry_defaults)
         npu_host = ConfigRegistry.get("vm.npu")
@@ -364,10 +365,13 @@ def _resolve_service_urls() -> tuple:
         browser_port = ConfigRegistry.get("port.browser")
         ollama_host = ConfigRegistry.get("vm.llm")
         ollama_port = ConfigRegistry.get("port.ollama")
+        chromadb_host = ConfigRegistry.get("vm.aistack")
+        chromadb_port = ConfigRegistry.get("port.aistack")
         npu_url = f"http://{npu_host}:{npu_port}/health"
         browser_url = f"http://{browser_host}:{browser_port}/health"
         ollama_url = f"http://{ollama_host}:{ollama_port}/api/version"
-    return npu_url, browser_url, ollama_url
+        chromadb_url = f"http://{chromadb_host}:{chromadb_port}/api/v2/heartbeat"
+    return npu_url, browser_url, ollama_url, chromadb_url
 
 
 def _safe_result(res, default=("offline", "Error")):
@@ -390,7 +394,7 @@ def _to_service_entry(name: str, host: str, port: int, status: str, msg: str) ->
 
 
 def _build_service_list(results: list) -> list:
-    """Helper for get_services_health. Ref: #1088.
+    """Helper for get_services_health. Ref: #1088, #6769.
 
     Unpack asyncio.gather results into a ServicesSummary-compatible list.
     Each entry is a dict with name, host, port, status, response_time_ms,
@@ -400,6 +404,7 @@ def _build_service_list(results: list) -> list:
     npu_s, npu_m = _safe_result(results[1])
     ollama_s, ollama_m = _safe_result(results[2])
     browser_s, browser_m = _safe_result(results[3])
+    chromadb_s, chromadb_m = _safe_result(results[4])
 
     # Issue #1229/#2671: Use ConfigRegistry (defaults from SSOT via registry_defaults)
     return [
@@ -437,6 +442,13 @@ def _build_service_list(results: list) -> list:
             int(ConfigRegistry.get("port.browser")),
             browser_s,
             browser_m,
+        ),
+        _to_service_entry(
+            "ChromaDB",
+            ConfigRegistry.get("vm.aistack"),
+            int(ConfigRegistry.get("port.aistack")),
+            chromadb_s,
+            chromadb_m,
         ),
     ]
 
@@ -485,13 +497,14 @@ async def get_services_health():
     """
     from api.service_monitor import _check_http_health, _check_redis_health
 
-    npu_url, browser_url, ollama_url = _resolve_service_urls()
+    npu_url, browser_url, ollama_url, chromadb_url = _resolve_service_urls()
 
     results = await asyncio.gather(
         _check_redis_health(),
         _check_http_health(npu_url),
         _check_http_health(ollama_url),
         _check_http_health(browser_url),
+        _check_http_health(chromadb_url),
         return_exceptions=True,
     )
 

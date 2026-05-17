@@ -2274,7 +2274,20 @@
       "subtitle": "Subtitle",
       "title": "Title",
       "traditionalDesc": "Traditional desc",
-      "traditionalSearch": "Traditional search"
+      "traditionalSearch": "Traditional search",
+      "accessPlatform": "Platform",
+      "accessPublic": "Public",
+      "accessSystem": "System",
+      "accessUser": "User",
+      "clickToView": "Click to view full document",
+      "close": "Close",
+      "copyContent": "Copy Content",
+      "defaultDocTitle": "Untitled Document",
+      "foundResults": "Found {count} results for \"{query}\"",
+      "loadingDocument": "Loading document content...",
+      "matchScore": "{value}% match",
+      "noContent": "No content available",
+      "rerankScore": "{value}% rerank"
     },
     "upload": {
       "tagsPlaceholder": "Enter tags separated by commas...",
@@ -2323,7 +2336,14 @@
       "visShared": "Vis shared",
       "visSystem": "Vis system",
       "visibility": "Visibility",
-      "visibilityHint": "Visibility hint"
+      "visibilityHint": "Visibility hint",
+      "errorAddText": "Failed to add text to knowledge base",
+      "errorFileTooLarge": "File \"{name}\" exceeds the maximum size limit",
+      "errorImportUrl": "Failed to import URL content",
+      "errorUnsupportedFormat": "File \"{name}\" has an unsupported format",
+      "errorUploadFiles": "Failed to upload files",
+      "successTextAdded": "Text added to knowledge base successfully",
+      "successUrlImported": "URL content imported successfully"
     },
     "documents": "Documents",
     "categories": {
@@ -3245,7 +3265,8 @@
       "vectorFramework": "Vector framework",
       "vectorIndexHealth": "Vector index health",
       "vectorNotGenerated": "Vector not generated",
-      "vectorizedForRag": "Vectorized for rag"
+      "vectorizedForRag": "Vectorized for rag",
+      "confirmOptimize": "This will optimize the database. Continue?"
     },
     "summaries": {
       "search": {
@@ -3376,7 +3397,11 @@
       "decisionsApplied": "{count} decision(s) applied successfully",
       "compiledSuccess": "Chat compiled successfully",
       "failedToLoad": "Failed to load knowledge items",
-      "decisionsApplyFailed": "Failed to apply decisions"
+      "decisionsApplyFailed": "Failed to apply decisions",
+      "compileFailed": "Failed to compile conversation",
+      "suggestionAddToKb": "Suggested: Add to Knowledge Base",
+      "suggestionDelete": "Suggested: Delete",
+      "suggestionKeepTemporary": "Suggested: Keep Temporarily"
     },
     "systemKnowledge": {
       "vectorizeTooltip": "Generate vector embeddings for all knowledge base entries to enable semantic search",
@@ -3409,7 +3434,14 @@
       "success": "Success",
       "targetHost": "Target host",
       "totalFacts": "Total facts",
-      "vectorizing": "Vectorizing"
+      "vectorizing": "Vectorizing",
+      "confirmIndexDocs": "Do you want to force reindex existing documents?",
+      "confirmInitialize": "This will initialize system knowledge for the selected host. This may take several minutes. Continue?",
+      "confirmRefreshManPages": "This will refresh man pages for the selected host. Continue?",
+      "confirmReindex": "This will reindex all documents for the selected host. Continue?",
+      "confirmVectorize": "This will vectorize {totalFacts} facts. Currently {totalVectors} vectors exist, {needsVectorization} need vectorization. Continue?",
+      "vectorizeComplete": "Vectorize Facts (✓ {vectors} vectors from {facts} facts)",
+      "vectorizePending": "Vectorize Facts ({pending} pending)"
     },
     "vectorization": {
       "actionVectorize": "Vectorize",
@@ -3428,7 +3460,15 @@
       "noDocuments": "No documents",
       "progressTitle": "Progress title",
       "retryFailed": "Retry failed",
-      "total": "Total"
+      "total": "Total",
+      "statusFailed": "Failed",
+      "statusPending": "Pending",
+      "statusUnknown": "Unknown",
+      "statusVectorized": "Vectorized",
+      "tooltipFailed": "Vectorization failed for this document",
+      "tooltipPending": "Document is pending vectorization",
+      "tooltipUnknown": "Vectorization status unknown",
+      "tooltipVectorized": "Document has been vectorized and is searchable via RAG"
     },
     "batchSelection": {
       "selected": "{count} selected",
@@ -3468,7 +3508,15 @@
       "warnings": "Warnings"
     },
     "manager": {
-      "errorFallback": "Error fallback"
+      "errorFallback": "Error fallback",
+      "tabAdvanced": "Advanced",
+      "tabCategories": "Categories",
+      "tabManage": "Manage",
+      "tabPromptEditor": "Prompts",
+      "tabSearch": "Search",
+      "tabStatistics": "Statistics",
+      "tabSystemDocs": "System Docs",
+      "tabUpload": "Upload"
     },
     "memoryOrphan": {
       "activeSessions": "Active sessions",
@@ -3633,7 +3681,8 @@
       "user": "User",
       "write": "Write",
       "searchError": "Search failed",
-      "searchUnavailable": "Search unavailable"
+      "searchUnavailable": "Search unavailable",
+      "unsavedConfirm": "You have unsaved changes. Are you sure you want to close?"
     },
     "systemDocs": {
       "copied": "Copied",
@@ -3649,7 +3698,13 @@
       "selectDocument": "Select document",
       "subtitle": "Subtitle",
       "title": "Title",
-      "words": "Words"
+      "words": "Words",
+      "errorCopy": "Failed to copy to clipboard",
+      "errorExport": "Failed to export document",
+      "errorExportAll": "Failed to export all documents",
+      "errorLoadCategories": "Failed to load documentation categories",
+      "errorLoadContent": "Failed to load document content",
+      "errorLoadDocs": "Failed to load documents"
     },
     "treeNode": {
       "itemsCount": "Items count",
@@ -3678,7 +3733,11 @@
       "selectAll": "Select all",
       "selectedCount": "Selected count",
       "title": "Title",
-      "untitled": "Untitled"
+      "untitled": "Untitled",
+      "typeConnector": "Connector",
+      "typeResearch": "Web Research",
+      "typeUpload": "Manual Upload",
+      "typeUrl": "URL Fetch"
     },
     "webResearch": {
       "title": "Web Research",
