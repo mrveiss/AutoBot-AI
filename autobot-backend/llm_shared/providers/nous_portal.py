@@ -19,9 +19,6 @@ from __future__ import annotations
 import time
 from typing import Any, AsyncIterator, Dict, List
 
-from opentelemetry import trace
-from opentelemetry.trace import SpanKind, Status, StatusCode
-
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from llm_shared.models import LLMRequest, LLMResponse
@@ -29,7 +26,6 @@ from llm_shared.models import LLMRequest, LLMResponse
 from ..base_provider import BaseProvider
 
 logger = get_logger(__name__)
-_tracer = trace.get_tracer("autobot.llm.nous", "1.0.0")
 
 NOUS_MODELS = [
     "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO",
@@ -91,110 +87,91 @@ class NousPortalProvider(BaseProvider):
         self._client = AsyncOpenAI(api_key=api_key, base_url=base_url)
         logger.info("Nous Portal client initialized with base_url: %s", base_url)
 
-    async def chat_completion(self, request: LLMRequest) -> LLMResponse:
+    async def _chat_completion_impl(self, request: LLMRequest) -> LLMResponse:
         """Execute a chat completion via Nous models."""
-        with _tracer.start_as_current_span("nous.chat_completion", kind=SpanKind.CLIENT) as span:
-            try:
-                self._total_requests += 1
-                self._ensure_client()
+        try:
+            self._total_requests += 1
+            self._ensure_client()
 
-                messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
+            messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
 
-                api_kwargs = request.metadata.get("api_kwargs", {})
-                chat_kwargs = {
-                    "model": request.model_name or self._get_setting("default_model", NOUS_MODELS[0]),
-                    "messages": messages,
-                    "temperature": api_kwargs.get("temperature", 0.7),
-                    "max_tokens": api_kwargs.get("max_tokens", 2048),
-                    "top_p": api_kwargs.get("top_p", 0.95),
-                }
+            api_kwargs = request.metadata.get("api_kwargs", {})
+            chat_kwargs = {
+                "model": request.model_name or self._get_setting("default_model", NOUS_MODELS[0]),
+                "messages": messages,
+                "temperature": api_kwargs.get("temperature", 0.7),
+                "max_tokens": api_kwargs.get("max_tokens", 2048),
+                "top_p": api_kwargs.get("top_p", 0.95),
+            }
 
-                if "presence_penalty" in api_kwargs:
-                    chat_kwargs["presence_penalty"] = api_kwargs["presence_penalty"]
-                if "frequency_penalty" in api_kwargs:
-                    chat_kwargs["frequency_penalty"] = api_kwargs["frequency_penalty"]
-                if "stop" in api_kwargs:
-                    chat_kwargs["stop"] = api_kwargs["stop"]
+            if "presence_penalty" in api_kwargs:
+                chat_kwargs["presence_penalty"] = api_kwargs["presence_penalty"]
+            if "frequency_penalty" in api_kwargs:
+                chat_kwargs["frequency_penalty"] = api_kwargs["frequency_penalty"]
+            if "stop" in api_kwargs:
+                chat_kwargs["stop"] = api_kwargs["stop"]
 
-                start_time = time.monotonic()
-                response = await self._client.chat.completions.create(**chat_kwargs)
-                latency = time.monotonic() - start_time
+            response = await self._client.chat.completions.create(**chat_kwargs)
 
-                content = response.choices[0].message.content or ""
-                usage = {
-                    "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
-                    "completion_tokens": response.usage.completion_tokens if response.usage else 0,
-                }
+            content = response.choices[0].message.content or ""
+            usage = {
+                "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
+                "completion_tokens": response.usage.completion_tokens if response.usage else 0,
+            }
 
-                span.set_attribute("nous.model", chat_kwargs["model"])
-                span.set_attribute("nous.latency_ms", int(latency * 1000))
-                span.set_attribute("nous.tokens", usage["prompt_tokens"] + usage["completion_tokens"])
-                span.set_status(Status(StatusCode.OK))
+            return LLMResponse(
+                content=content,
+                model_name=request.model_name or chat_kwargs["model"],
+                provider_name=self.provider_name,
+                usage=usage,
+                provider_metadata=self._build_provider_metadata(
+                    model_api_name=chat_kwargs["model"],
+                    api_kwargs_applied=chat_kwargs,
+                    total_tokens=usage["prompt_tokens"] + usage["completion_tokens"],
+                ),
+            )
 
-                return LLMResponse(
-                    content=content,
-                    model_name=request.model_name or chat_kwargs["model"],
-                    provider_name=self.provider_name,
-                    usage=usage,
-                    provider_metadata=self._build_provider_metadata(
-                        model_api_name=chat_kwargs["model"],
-                        api_kwargs_applied=chat_kwargs,
-                        total_tokens=usage["prompt_tokens"] + usage["completion_tokens"],
-                    ),
-                )
-
-            except Exception as exc:
-                self._total_errors += 1
-                error_msg = f"Nous API error: {exc}"
-                logger.error(error_msg)
-                span.set_status(Status(StatusCode.ERROR))
-                span.record_exception(exc)
-                return LLMResponse(
-                    content="",
-                    model_name=request.model_name or "nous-model",
-                    provider_name=self.provider_name,
-                    error=error_msg,
-                )
+        except Exception as exc:
+            self._total_errors += 1
+            error_msg = f"Nous API error: {exc}"
+            logger.error(error_msg)
+            return LLMResponse(
+                content="",
+                model_name=request.model_name or "nous-model",
+                provider_name=self.provider_name,
+                error=error_msg,
+            )
 
     async def stream_completion(self, request: LLMRequest) -> AsyncIterator[str]:
         """Stream a chat completion from Nous models."""
-        with _tracer.start_as_current_span("nous.stream_completion", kind=SpanKind.CLIENT) as span:
-            try:
-                self._total_requests += 1
-                self._ensure_client()
+        try:
+            self._total_requests += 1
+            self._ensure_client()
 
-                messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
+            messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
 
-                api_kwargs = request.metadata.get("api_kwargs", {})
-                chat_kwargs = {
-                    "model": request.model_name or self._get_setting("default_model", NOUS_MODELS[0]),
-                    "messages": messages,
-                    "temperature": api_kwargs.get("temperature", 0.7),
-                    "max_tokens": api_kwargs.get("max_tokens", 2048),
-                    "top_p": api_kwargs.get("top_p", 0.95),
-                    "stream": True,
-                }
+            api_kwargs = request.metadata.get("api_kwargs", {})
+            chat_kwargs = {
+                "model": request.model_name or self._get_setting("default_model", NOUS_MODELS[0]),
+                "messages": messages,
+                "temperature": api_kwargs.get("temperature", 0.7),
+                "max_tokens": api_kwargs.get("max_tokens", 2048),
+                "top_p": api_kwargs.get("top_p", 0.95),
+                "stream": True,
+            }
 
-                if "stop" in api_kwargs:
-                    chat_kwargs["stop"] = api_kwargs["stop"]
+            if "stop" in api_kwargs:
+                chat_kwargs["stop"] = api_kwargs["stop"]
 
-                start_time = time.monotonic()
-                async with await self._client.chat.completions.create(**chat_kwargs) as stream:
-                    async for chunk in stream:
-                        if chunk.choices[0].delta.content:
-                            yield chunk.choices[0].delta.content
+            async with await self._client.chat.completions.create(**chat_kwargs) as stream:
+                async for chunk in stream:
+                    if chunk.choices[0].delta.content:
+                        yield chunk.choices[0].delta.content
 
-                latency = time.monotonic() - start_time
-                span.set_attribute("nous.model", chat_kwargs["model"])
-                span.set_attribute("nous.latency_ms", int(latency * 1000))
-                span.set_status(Status(StatusCode.OK))
-
-            except Exception as exc:
-                self._total_errors += 1
-                logger.error("Nous stream error: %s", exc)
-                span.set_status(Status(StatusCode.ERROR))
-                span.record_exception(exc)
-                yield f"Error: {exc}"
+        except Exception as exc:
+            self._total_errors += 1
+            logger.error("Nous stream error: %s", exc)
+            yield f"Error: {exc}"
 
     async def is_available(self) -> bool:
         """Check if Nous Portal is reachable and properly configured."""

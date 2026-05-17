@@ -26,6 +26,14 @@ What remains here is shared infra reused across the new stack:
 # Adapter registry (Issue #1403)
 from .adapters import AdapterBase, AdapterRegistry, get_adapter_registry
 
+# Pluggable LLM observability (GH#6593)
+from .observability import LLMObserver, register
+from .observability.otel_observer import OTELObserver
+from .observability.prometheus_observer import PrometheusObserver
+
+register(OTELObserver())
+register(PrometheusObserver())
+
 # Provider registry and base (canonical imports for MVA-62 consolidation)
 # These were in llm_providers/ but are now consolidated in llm_shared
 from .base_provider import BaseProvider
@@ -111,4 +119,7 @@ __all__ = [
     "apply_prompt_prefix",
     # Ollama helpers (MVA-178)
     "call_ollama_generate",
+    # Observability (GH#6593)
+    "LLMObserver",
+    "register",
 ]

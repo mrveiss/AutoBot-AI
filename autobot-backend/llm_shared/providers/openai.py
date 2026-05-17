@@ -5,8 +5,6 @@
 OpenAI provider for the multi-provider LLM layer (#1806).
 
 Supports chat completion and streaming for all GPT/o1 model families.
-OTel tracing spans are emitted for every inference call (Issue #697).
-
 API key is read (in priority order) from:
   1. ``settings["api_key"]``
   2. Environment variable ``OPENAI_API_KEY``
@@ -21,9 +19,6 @@ from __future__ import annotations
 
 import time
 from typing import Any, AsyncIterator, Dict, List
-
-from opentelemetry import trace
-from opentelemetry.trace import SpanKind, Status, StatusCode
 
 from autobot_shared.logging_manager import get_logger
 from circuit_breaker import circuit_breaker_async
@@ -42,9 +37,6 @@ from ..base_provider import BaseProvider
 from .cache_utils import sorted_for_cache
 
 logger = get_logger(__name__)
-
-# Issue #697: tracer for LLM operations
-_tracer = trace.get_tracer("autobot.llm.openai", "2.0.0")
 
 _OPENAI_MODELS = [
     OPENAI_GPT4O,
@@ -109,81 +101,60 @@ class OpenAIProvider(BaseProvider):
         return self._client
 
     @circuit_breaker_async("openai_service")
-    async def chat_completion(self, request: LLMRequest) -> LLMResponse:
+    async def _chat_completion_impl(self, request: LLMRequest) -> LLMResponse:
         """Execute a non-streaming chat completion via OpenAI.
 
-        Emits an OpenTelemetry span (Issue #697) and is protected by the
-        openai_service circuit breaker.  Errors are returned via
-        ``LLMResponse.error`` so the registry can perform fallback.
+        Protected by the openai_service circuit breaker.  Errors are returned
+        via ``LLMResponse.error`` so the registry can perform fallback.
         """
         self._total_requests += 1
         start = time.time()
         model = request.model_name or self._get_setting("default_model", OPENAI_GPT4O_MINI)
-        span_attrs: Dict[str, Any] = {
-            "llm.provider": self.provider_name,
-            "llm.model": model,
-            "llm.request_id": request.request_id,
-            "llm.temperature": request.temperature,
-            "llm.max_tokens": request.max_tokens or 0,
-            "llm.prompt_messages": len(request.messages),
-        }
-        with _tracer.start_as_current_span("llm.inference", kind=SpanKind.CLIENT, attributes=span_attrs) as span:
-            try:
-                client = self._ensure_client()
-                params: Dict[str, Any] = {
-                    "model": model,
-                    "messages": request.messages,
-                    "temperature": request.temperature,
-                    "top_p": request.top_p,
-                }
-                if request.max_tokens:
-                    params["max_tokens"] = request.max_tokens
-                if request.stop:
-                    params["stop"] = request.stop
-                params = sorted_for_cache(params)
-                response = await client.chat.completions.create(**params)
-                choice = response.choices[0]
-                processing_time = time.time() - start
-                if span.is_recording():
-                    span.set_attribute("llm.duration_ms", processing_time * 1000)
-                    span.set_attribute("llm.response_length", len(choice.message.content or ""))
-                    span.set_attribute("llm.prompt_tokens", response.usage.prompt_tokens)
-                    span.set_attribute("llm.completion_tokens", response.usage.completion_tokens)
-                    span.set_attribute("llm.total_tokens", response.usage.total_tokens)
-                    span.set_status(Status(StatusCode.OK))
-                return LLMResponse(
-                    content=choice.message.content or "",
-                    model=response.model,
-                    provider=self.provider_name,
-                    processing_time=processing_time,
-                    request_id=request.request_id,
-                    finish_reason=choice.finish_reason,
-                    usage={
-                        "prompt_tokens": response.usage.prompt_tokens,
-                        "completion_tokens": response.usage.completion_tokens,
-                        "total_tokens": response.usage.total_tokens,
-                    },
-                    provider_metadata=self._build_provider_metadata(
-                        model_api_name=response.model,
-                        api_kwargs_applied=params,
-                        total_tokens=response.usage.total_tokens,
-                    ),
-                )
-            except Exception as exc:
-                self._total_errors += 1
-                logger.error("OpenAI chat_completion error: %s", exc)
-                if span.is_recording():
-                    span.set_status(Status(StatusCode.ERROR, str(exc)))
-                    span.record_exception(exc)
-                    span.set_attribute("llm.error", True)
-                return LLMResponse(
-                    content="",
-                    model=model,
-                    provider=self.provider_name,
-                    processing_time=time.time() - start,
-                    request_id=request.request_id,
-                    error=str(exc),
-                )
+        try:
+            client = self._ensure_client()
+            params: Dict[str, Any] = {
+                "model": model,
+                "messages": request.messages,
+                "temperature": request.temperature,
+                "top_p": request.top_p,
+            }
+            if request.max_tokens:
+                params["max_tokens"] = request.max_tokens
+            if request.stop:
+                params["stop"] = request.stop
+            params = sorted_for_cache(params)
+            response = await client.chat.completions.create(**params)
+            choice = response.choices[0]
+            processing_time = time.time() - start
+            return LLMResponse(
+                content=choice.message.content or "",
+                model=response.model,
+                provider=self.provider_name,
+                processing_time=processing_time,
+                request_id=request.request_id,
+                finish_reason=choice.finish_reason,
+                usage={
+                    "prompt_tokens": response.usage.prompt_tokens,
+                    "completion_tokens": response.usage.completion_tokens,
+                    "total_tokens": response.usage.total_tokens,
+                },
+                provider_metadata=self._build_provider_metadata(
+                    model_api_name=response.model,
+                    api_kwargs_applied=params,
+                    total_tokens=response.usage.total_tokens,
+                ),
+            )
+        except Exception as exc:
+            self._total_errors += 1
+            logger.error("OpenAI chat_completion error: %s", exc)
+            return LLMResponse(
+                content="",
+                model=model,
+                provider=self.provider_name,
+                processing_time=time.time() - start,
+                request_id=request.request_id,
+                error=str(exc),
+            )
 
     async def stream_completion(self, request: LLMRequest) -> AsyncIterator[str]:
         """Stream a chat completion from OpenAI, yielding text chunks."""
