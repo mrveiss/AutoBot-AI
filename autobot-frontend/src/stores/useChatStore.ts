@@ -300,7 +300,7 @@ export const useChatStore = defineStore('chat', () => {
         ...message,
         metadata: {
           ...message.metadata,
-          ...metadataUpdates
+          ...(metadataUpdates as Record<string, string | number | boolean | undefined>)
         }
       }
       currentSession.value.updatedAt = new Date()
