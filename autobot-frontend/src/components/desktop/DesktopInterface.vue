@@ -406,8 +406,8 @@ const handleDesktopConnected = () => {
   connectionStatus.value = 'Connected'
 }
 
-const handleDesktopError = (error) => {
-  logger.error('Desktop connection error:', error)
+const handleDesktopError = (err: Error | unknown) => {
+  logger.error('Desktop connection error:', err)
   loading.value = false
   connectionStatus.value = 'Error'
   error.value = t('desktop.interface.errorVncConnection', { error: error.message || error })
