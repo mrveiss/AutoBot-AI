@@ -4,9 +4,23 @@
 """Issue #3333: registry behavior for the canonical health-probe aggregator."""
 
 import asyncio
+import sys
+import types
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+# autobot_shared.redis_client imports autobot_shared.redis_management.config which is
+# absent in the test environment. Pre-stub the module so patch() can target it without
+# triggering the real import chain. We also set it as a direct attribute on the package
+# because autobot_shared's custom __getattr__ rejects unknown submodule names.
+if "autobot_shared.redis_client" not in sys.modules:
+    import autobot_shared as _autobot_shared_pkg
+
+    _redis_client_stub = types.ModuleType("autobot_shared.redis_client")
+    _redis_client_stub.get_async_redis_client = AsyncMock()
+    sys.modules["autobot_shared.redis_client"] = _redis_client_stub
+    _autobot_shared_pkg.redis_client = _redis_client_stub  # type: ignore[attr-defined]
 
 from api.system_health import (
     _PROBE_TIMEOUT_S,
