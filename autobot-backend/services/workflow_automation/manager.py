@@ -11,6 +11,7 @@ import uuid
 from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from orchestration.success_criteria import SuccessCriteriaEvaluator
 from orchestrator import Orchestrator
 from orchestrator import get_orchestrator_sync as get_orchestrator
 from services.notification_service import NotificationService
@@ -47,7 +48,11 @@ class WorkflowAutomationManager:
         self.messenger = WorkflowMessenger()
         # Issue #3101: Wire notification service into executor.
         self._notification_service = NotificationService()
-        self.executor = WorkflowExecutor(self.messenger, notification_service=self._notification_service)
+        self.executor = WorkflowExecutor(
+            self.messenger,
+            notification_service=self._notification_service,
+            criteria_evaluator=SuccessCriteriaEvaluator(),
+        )
         # Issue #1367: Archive finished workflows to completed history
         self.executor.on_workflow_finished = self.archive_completed_workflow
         self.controller = WorkflowController(self.messenger, self.executor)

@@ -26,6 +26,9 @@ class CollaborationCoordinator:
     the redis_factory injection makes it worth keeping separate — tests can pass a mock
     factory without patching module-level globals. Inline only if a second caller never
     materialises.
+
+    # Intentionally single execution-path caller: WorkflowRunner via COLLABORATIVE strategy deps.
+    # A second caller requires a distinct multi-agent Redis coordination scenario (file as discovery if needed).
     """
 
     def __init__(self, redis_factory: Callable = get_async_redis_client) -> None:
