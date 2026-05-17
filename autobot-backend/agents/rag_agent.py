@@ -22,6 +22,7 @@ from constants.threshold_constants import LLMDefaults
 from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
+from .payloads import AgentStatus, RAGPayload
 from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_logger(__name__)
@@ -137,25 +138,25 @@ class RAGAgent(StandardizedAgent):
         document_analysis: Dict[str, Any],
         documents: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
-        """
-        Build successful RAG query response.
+        """Build successful RAG query response (#6703).
 
-        (Issue #398: extracted helper)
+        Constructs a typed RAGPayload then returns model_dump() so the
+        public API contract (Dict[str, Any]) is unchanged.
         """
-        return {
-            "status": "success",
-            "synthesized_response": synthesis_result.get("response", ""),
-            "confidence_score": synthesis_result.get("confidence", 0.8),
-            "document_analysis": document_analysis,
-            "sources_used": [doc.get("metadata", {}).get("filename", "Unknown") for doc in documents],
-            "agent_type": "rag",
-            "model_used": self.model_name,
-            "metadata": {
+        return RAGPayload(
+            status=AgentStatus.SUCCESS,
+            agent_type="rag",
+            model_used=self.model_name,
+            synthesized_response=synthesis_result.get("response", ""),
+            confidence_score=synthesis_result.get("confidence", 0.8),
+            document_analysis=document_analysis,
+            sources_used=[doc.get("metadata", {}).get("filename", "Unknown") for doc in documents],
+            metadata={
                 "agent": "RAGAgent",
                 "documents_processed": len(documents),
                 "synthesis_complexity": "high",
             },
-        }
+        ).model_dump()
 
     async def process_document_query(
         self,

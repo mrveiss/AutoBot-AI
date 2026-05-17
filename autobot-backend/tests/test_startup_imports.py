@@ -14,6 +14,7 @@ Catches the recurring #6042-migration regression family:
 - Required-field defaults dropped at module level (#6609)
 - Wrong-arity factory calls in module bodies (#6613)
 - Renamed/missing methods on globally constructed singletons
+- Abstract method not implemented on module-level singleton (#6732, #6709)
 
 Runs under pytest. Fast (<5s) — pure imports, no Redis or network calls.
 """
@@ -109,6 +110,62 @@ def test_api_module_imports(module_name: str) -> None:
     importlib.import_module(module_name)
 
 
+def _agents_modules() -> list[str]:
+    """Discover every importable agents/*.py module relative to autobot-backend.
+
+    Excludes test files and __init__.py so only production agent code is
+    exercised. Each module is imported with importlib so that module-level
+    singleton construction (e.g. ``json_formatter = JSONFormatterAgent()``)
+    runs under the test harness — TypeError from an unimplemented abstract
+    method surfaces here instead of at deploy time (#6732 / #6709).
+    """
+    backend_root = Path(__file__).resolve().parent.parent
+    agents_dir = backend_root / "agents"
+    modules = []
+    for path in sorted(agents_dir.glob("*.py")):
+        if path.name == "__init__.py":
+            continue
+        if path.name.endswith("_test.py"):
+            continue
+        modules.append(f"agents.{path.stem}")
+    return modules
+
+
+# Known-broken agent modules at the time this test was added. Remove an entry
+# when its tracking issue is closed.
+KNOWN_BROKEN_AGENTS: dict[str, str] = {}
+
+
+def _agents_module_params() -> list:
+    """Build pytest params with xfail marks for known-broken agent modules."""
+    params = []
+    for name in _agents_modules():
+        if name in KNOWN_BROKEN_AGENTS:
+            params.append(
+                pytest.param(
+                    name,
+                    marks=pytest.mark.xfail(
+                        reason=f"tracked in {KNOWN_BROKEN_AGENTS[name]}",
+                        strict=True,
+                    ),
+                )
+            )
+        else:
+            params.append(pytest.param(name))
+    return params
+
+
+@pytest.mark.parametrize("module_name", _agents_module_params())
+def test_agents_module_imports(module_name: str) -> None:
+    """Every autobot-backend/agents/*.py must import without error.
+
+    Specifically catches TypeError raised when a module-level singleton
+    instantiates an Agent subclass that does not implement all abstract methods
+    (the regression that surfaced in #6709 and was missed by #6540).
+    """
+    importlib.import_module(module_name)
+
+
 def _extract_class_names(source: str) -> list[str]:
     """Extract top-level (column-0) ``class Foo(...):`` names from source text.
 
@@ -188,4 +245,57 @@ def test_no_duplicate_class_names_across_schema_modules() -> None:
         "Cross-module class-name collisions detected — same name in two "
         "schemas_*.py files will shadow on whichever import path resolves "
         "last. Rename one or add to INTENTIONAL_SHARED with justification:\n  - " + "\n  - ".join(collisions)
+    )
+
+
+def test_no_new_hardcoded_status_strings_in_agents() -> None:
+    """Agent code must not add new 'status': 'success' / 'error' literals (#6703).
+
+    The AgentStatus enum in agents/payloads.py is the canonical source.
+    Hardcoded status strings bypass the type system — the structural cause of
+    #6648 / #6650.
+
+    This test is a regression guard: it asserts the total violation count across
+    all agent modules does not exceed the baseline recorded when agents/payloads.py
+    was introduced. The count decreases naturally as more helpers are migrated.
+
+    KNOWN_BASELINE was measured against the codebase at introduction time:
+      - 70 violations in non-yet-migrated files
+      - 15 violations remaining in partially-migrated files (other helpers)
+      = 85 total (payloads.py itself is excluded as the canonical types module)
+
+    If this number increases, a new hardcoded literal was added — fail.
+    If it decreases, do not raise the baseline (that would allow regressions).
+    """
+    import re as _re
+
+    _STATUS_LITERAL = _re.compile(r'"status"\s*:\s*"(success|error|warning|unavailable|rate_limited|disabled)"')
+
+    # Excluded from scan: the canonical types module (any match there is infrastructure).
+    EXCLUDED: set[str] = {"agents/payloads.py"}
+
+    # Baseline total violation count at the time payloads.py was introduced (#6703).
+    # Should only decrease as files are migrated to AgentStatus. Never increase.
+    KNOWN_BASELINE: int = 85
+
+    backend_root = Path(__file__).resolve().parent.parent
+    agents_dir = backend_root / "agents"
+    violations: list[str] = []
+
+    for path in sorted(agents_dir.glob("*.py")):
+        rel = f"agents/{path.name}"
+        if rel in EXCLUDED:
+            continue
+        if path.name.endswith("_test.py") or path.name == "__init__.py":
+            continue
+        source = path.read_text(encoding="utf-8")
+        for lineno, line in enumerate(source.splitlines(), 1):
+            if _STATUS_LITERAL.search(line):
+                violations.append(f"{rel}:{lineno}: {line.strip()}")
+
+    assert len(violations) <= KNOWN_BASELINE, (
+        f"New hardcoded status string(s) added to agent code (#6703). "
+        f"Count {len(violations)} > baseline {KNOWN_BASELINE}. "
+        f"Use AgentStatus enum from agents/payloads.py instead.\n"
+        f"All current violations:\n  " + "\n  ".join(violations)
     )

@@ -24,6 +24,7 @@ from constants.threshold_constants import LLMDefaults
 from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
+from .payloads import AgentStatus, CommandPayload
 from .standardized_agent import StandardizedAgent
 
 logger = get_logger(__name__)
@@ -188,25 +189,32 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
         return messages
 
     def _build_command_payload(self, command_info: Dict[str, Any]) -> Dict[str, Any]:
-        """Build the system-commands-specific payload dict.
+        """Build the system-commands-specific payload dict (#6650, #6703).
 
-        Returned as the ``result`` field of the AgentResponse the base class
-        ``StandardizedAgent._build_success_response`` constructs (#6650). The
-        prior name shadowed the base method with an incompatible signature,
-        so any AI Stack ``/agents/system_commands/process`` request would
-        crash with a TypeError. (Issue #398: extracted.)
+        Constructs a typed CommandPayload then returns model_dump() so the
+        public API contract (Dict[str, Any]) is unchanged.
         """
-        return {
-            "status": "success" if command_info.get("is_safe", False) else "warning",
-            **command_info,
-            "agent_type": "system_commands",
-            "model_used": self.model_name,
-            "metadata": {
+        status = AgentStatus.SUCCESS if command_info.get("is_safe", False) else AgentStatus.WARNING
+        return CommandPayload(
+            status=status,
+            agent_type="system_commands",
+            model_used=self.model_name,
+            command=command_info.get("command", ""),
+            explanation=command_info.get("explanation", ""),
+            is_safe=command_info.get("is_safe", False),
+            security_concerns=command_info.get("security_concerns", []),
+            suggested_alternatives=command_info.get("suggested_alternatives", []),
+            metadata={
                 "agent": "EnhancedSystemCommandsAgent",
                 "security_checked": True,
                 "validation_level": "strict",
             },
-        }
+            **{
+                k: v
+                for k, v in command_info.items()
+                if k not in {"command", "explanation", "is_safe", "security_concerns", "suggested_alternatives"}
+            },
+        ).model_dump()
 
     def _build_error_response(self, error: Exception) -> Dict[str, Any]:
         """Build error response (Issue #398: extracted)."""

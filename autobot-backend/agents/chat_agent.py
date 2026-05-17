@@ -22,6 +22,7 @@ from prompt_manager import get_language_instruction, resolve_language
 from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
+from .payloads import AgentStatus, ChatPayload
 from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_logger(__name__)
@@ -89,34 +90,28 @@ class ChatAgent(StandardizedAgent):
         return self.capabilities.copy()
 
     def _build_chat_payload(self, response_text: str, response: Any) -> Dict[str, Any]:
-        """
-        Build the chat-specific payload dict.
+        """Build the chat-specific payload dict (#6648, #620, #6703).
 
-        Returned as the ``result`` field of the AgentResponse the base class
-        ``StandardizedAgent._build_success_response`` constructs (#6648). The
-        prior name shadowed the base method with an incompatible signature,
-        crashing every AI Stack chat request with a TypeError.
-
-        Issue #620.
-        Issue #4501: response is an LLMResponse object — use attribute access.
+        Constructs a typed ChatPayload then returns model_dump() so the
+        public API contract (Dict[str, Any]) is unchanged.
         """
         if isinstance(response, dict):
             token_usage = response.get("usage", {})
         else:
             token_usage = getattr(response, "usage", {})
-        return {
-            "status": "success",
-            "response": response_text,
-            "response_text": response_text,
-            "agent_type": "chat",
-            "model_used": self.model_name,
-            "token_usage": token_usage,
-            "metadata": {
+        return ChatPayload(
+            status=AgentStatus.SUCCESS,
+            agent_type="chat",
+            model_used=self.model_name,
+            response=response_text,
+            response_text=response_text,
+            token_usage=token_usage,
+            metadata={
                 "agent": "ChatAgent",
                 "processing_time": "fast",
                 "complexity": "low",
             },
-        }
+        ).model_dump()
 
     def _build_error_response(self, error: Exception) -> Dict[str, Any]:
         """
