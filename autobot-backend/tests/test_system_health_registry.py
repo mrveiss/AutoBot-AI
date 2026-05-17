@@ -199,7 +199,8 @@ def test_probe_app_state_degraded_when_request_missing():
 
 
 def test_probe_app_state_degraded_when_attr_missing():
-    class _State: ...
+    class _State:
+        pass
 
     class _App:
         state = _State()

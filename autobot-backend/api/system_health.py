@@ -347,9 +347,7 @@ def register_singleton_probe(
     data_callback: Callable[[Any], dict] | None = None,
 ) -> None:
     """One-line wrapper: build + register a singleton-resolve probe."""
-    register_health_probe(name)(
-        probe_singleton(name, getter, async_getter=async_getter, data_callback=data_callback)
-    )
+    register_health_probe(name)(probe_singleton(name, getter, async_getter=async_getter, data_callback=data_callback))
 
 
 def register_redis_probe(
