@@ -1216,5 +1216,3 @@ async def list_sanitizers(admin_check: bool = Depends(check_admin_permission)):
     Issue #744: Requires admin authentication.
     """
     return {"sanitizers": sorted(SANITIZERS)}
-
-

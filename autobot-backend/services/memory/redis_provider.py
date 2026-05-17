@@ -72,9 +72,7 @@ class RedisMemoryProvider:
         except Exception as e:
             logger.error(f"Error syncing to Redis: {e}")
 
-    async def search(
-        self, query: str, limit: int = 10, filters: Dict[str, Any] | None = None
-    ) -> List[Dict[str, Any]]:
+    async def search(self, query: str, limit: int = 10, filters: Dict[str, Any] | None = None) -> List[Dict[str, Any]]:
         if not self.redis:
             return []
         try:

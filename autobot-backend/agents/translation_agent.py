@@ -28,6 +28,7 @@ from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_logger(__name__)
 
+
 class TranslationAgent(StandardizedAgent):
     """Agent specialized for multi-language translation."""
 
@@ -160,6 +161,7 @@ class TranslationAgent(StandardizedAgent):
             if "content" in response:
                 return str(response["content"]).strip()
         return str(response)
+
 
 get_translation_agent = lazy_singleton(TranslationAgent)
 """Get the singleton Translation Agent instance (thread-safe)."""

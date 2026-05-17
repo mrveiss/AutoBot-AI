@@ -29,9 +29,7 @@ class CompletionResult:
 class TerminalCompletionService:
     """Bash-like tab completion using compgen subprocess."""
 
-    async def get_completions(
-        self, text: str, cursor_pos: int, cwd: str, env: dict | None = None
-    ) -> CompletionResult:
+    async def get_completions(self, text: str, cursor_pos: int, cwd: str, env: dict | None = None) -> CompletionResult:
         """
         Get completions based on context.
 

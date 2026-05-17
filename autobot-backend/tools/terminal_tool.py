@@ -160,9 +160,7 @@ class TerminalTool:
 
         return session_id
 
-    def _format_execution_result(
-        self, result: Dict[str, Any], command: str, description: str | None
-    ) -> Dict[str, Any]:
+    def _format_execution_result(self, result: Dict[str, Any], command: str, description: str | None) -> Dict[str, Any]:
         """Format command execution result for agent response."""
         if result.get("status") == "pending_approval":
             return {

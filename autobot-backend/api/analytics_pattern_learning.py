@@ -1063,5 +1063,3 @@ async def probe_analytics_pattern_learning(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-

@@ -28,6 +28,7 @@ from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_logger(__name__)
 
+
 class AudioProcessingAgent(StandardizedAgent):
     """Agent specialized for audio transcription and analysis."""
 
@@ -162,6 +163,7 @@ class AudioProcessingAgent(StandardizedAgent):
             if "content" in response:
                 return str(response["content"]).strip()
         return str(response)
+
 
 get_audio_processing_agent = lazy_singleton(AudioProcessingAgent)
 """Get the singleton Audio Processing Agent instance (thread-safe)."""

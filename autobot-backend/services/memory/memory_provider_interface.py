@@ -64,9 +64,7 @@ class MemoryProvider(ABC):
         """
 
     @abstractmethod
-    async def search(
-        self, query: str, limit: int = 10, filters: Dict[str, Any] | None = None
-    ) -> List[Dict[str, Any]]:
+    async def search(self, query: str, limit: int = 10, filters: Dict[str, Any] | None = None) -> List[Dict[str, Any]]:
         """
         Find similar memories by semantic similarity.
 

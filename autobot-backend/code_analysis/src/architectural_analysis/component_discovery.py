@@ -217,9 +217,7 @@ class ComponentDiscovery:
             logger.error(f"Error analyzing function {node.name}: {e}")
             return None
 
-    def _analyze_module_component(
-        self, file_path: str, tree: ast.AST, content: str
-    ) -> ArchitecturalComponent | None:
+    def _analyze_module_component(self, file_path: str, tree: ast.AST, content: str) -> ArchitecturalComponent | None:
         """Analyze a module as an architectural component."""
         try:
             module_name = Path(file_path).stem

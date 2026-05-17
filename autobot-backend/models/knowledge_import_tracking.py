@@ -9,6 +9,8 @@ Tracks which files have been imported into the knowledge base
 import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
+
+
 class ImportTracker:
     """Track imported files and their status"""
 

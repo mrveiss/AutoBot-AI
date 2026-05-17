@@ -516,9 +516,7 @@ class UnifiedKnowledgeManager:
     # TEMPORAL TRACKING API (delegates to TemporalKnowledgeManager)
     # ========================================================================
 
-    def register_content(
-        self, content_id: str, metadata: Dict[str, Any], content_hash: str
-    ) -> TemporalMetadata | None:
+    def register_content(self, content_id: str, metadata: Dict[str, Any], content_hash: str) -> TemporalMetadata | None:
         """
         Register content with temporal tracking
 

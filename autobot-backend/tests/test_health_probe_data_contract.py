@@ -29,12 +29,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 from pydantic import BaseModel
 
-
 # ---------------------------------------------------------------------------
 # Enum stubs — must mirror the real enum values so FastAPI accepts them as
 # valid Query parameter types (FastAPI rejects plain Pydantic models as Query
 # params, but accepts str-enum subclasses just fine).
 # ---------------------------------------------------------------------------
+
 
 class BatchJobStatus(str, Enum):
     pending = "pending"
@@ -53,6 +53,7 @@ class BatchJobType(str, Enum):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _pkg_stub(name: str, **attrs) -> types.ModuleType:
     """Return (and register) a lightweight package stub."""
@@ -97,18 +98,14 @@ def _pydantic_model(name: str) -> type:
 # level under Python 3.10 (missing ``from __future__ import annotations``
 # guard), causing a TypeError at import time.  Stub the entire chain.
 _leaf_stub("utils.error_catalog", get_error=MagicMock())
-_leaf_stub("utils.catalog_http_exceptions",
-           raise_auth_error=MagicMock(),
-           raise_http_error=MagicMock())
+_leaf_stub("utils.catalog_http_exceptions", raise_auth_error=MagicMock(), raise_http_error=MagicMock())
 _pkg_stub("utils")
 
 # --- auth_middleware ----------------------------------------------------------
 _leaf_stub("auth_middleware", get_current_user=MagicMock())
 
 # --- autobot_shared.redis_management.config ----------------------------------
-_pkg_stub("autobot_shared.redis_management.config",
-          REDIS_DATABASES=MagicMock(),
-          DEFAULT_MAX_CONNECTIONS=20)
+_pkg_stub("autobot_shared.redis_management.config", REDIS_DATABASES=MagicMock(), DEFAULT_MAX_CONNECTIONS=20)
 
 # --- autobot_shared.redis_client ---------------------------------------------
 # Stub the whole module so the real file (which tries to open sockets) is
@@ -118,19 +115,20 @@ if "autobot_shared.redis_client" not in sys.modules:
     _rc = types.ModuleType("autobot_shared.redis_client")
     _rc.__package__ = "autobot_shared"
     _rc.get_async_redis_client = AsyncMock(return_value=None)  # type: ignore[attr-defined]
-    _rc.get_redis_client = MagicMock(return_value=None)        # type: ignore[attr-defined]
+    _rc.get_redis_client = MagicMock(return_value=None)  # type: ignore[attr-defined]
     sys.modules["autobot_shared.redis_client"] = _rc
 
 # --- autobot_shared.error_boundaries -----------------------------------------
 if "autobot_shared.error_boundaries" not in sys.modules:
+
     class _ErrorCategory(Enum):
         SERVER_ERROR = "server_error"
         CLIENT_ERROR = "client_error"
 
     _eb = types.ModuleType("autobot_shared.error_boundaries")
     _eb.__package__ = "autobot_shared"
-    _eb.ErrorCategory = _ErrorCategory                          # type: ignore[attr-defined]
-    _eb.with_error_handling = lambda *a, **k: (lambda f: f)    # type: ignore[attr-defined]
+    _eb.ErrorCategory = _ErrorCategory  # type: ignore[attr-defined]
+    _eb.with_error_handling = lambda *a, **k: (lambda f: f)  # type: ignore[attr-defined]
     sys.modules["autobot_shared.error_boundaries"] = _eb
 
 # --- autobot_shared.models.pagination ----------------------------------------
@@ -154,20 +152,34 @@ if "api.schemas_workflows" not in sys.modules:
 
     # Enum types used as Query parameters — must be real str-enum subclasses.
     _sw.BatchJobStatus = BatchJobStatus  # type: ignore[attr-defined]
-    _sw.BatchJobType = BatchJobType      # type: ignore[attr-defined]
+    _sw.BatchJobType = BatchJobType  # type: ignore[attr-defined]
 
     # Pydantic BaseModel stubs for response_model= / body schema usage.
     for _schema_name in [
-        "APIBatchRequest", "APIBatchResponse",
-        "BatchChatInitResponse", "BatchJob", "BatchJobCreate",
-        "BatchJobDeleteResponse", "BatchJobList", "BatchLoadResponse",
-        "BatchLogEntry", "BatchSchedule", "BatchScheduleDeleteResponse",
-        "BatchStatusResponse", "BatchTemplate", "BatchTemplateDeleteResponse",
+        "APIBatchRequest",
+        "APIBatchResponse",
+        "BatchChatInitResponse",
+        "BatchJob",
+        "BatchJobCreate",
+        "BatchJobDeleteResponse",
+        "BatchJobList",
+        "BatchLoadResponse",
+        "BatchLogEntry",
+        "BatchSchedule",
+        "BatchScheduleDeleteResponse",
+        "BatchStatusResponse",
+        "BatchTemplate",
+        "BatchTemplateDeleteResponse",
         # Names used by api/long_running_operations.py route decorators
-        "CodebaseIndexingRequest", "KnowledgeBaseRequest",
-        "LongRunningOperationCancelResponse", "LongRunningOperationListResponse",
-        "LongRunningOperationMigrateResponse", "LongRunningOperationResumeResponse",
-        "LongRunningOperationStatusResponse", "SecurityScanRequest", "TestSuiteRequest",
+        "CodebaseIndexingRequest",
+        "KnowledgeBaseRequest",
+        "LongRunningOperationCancelResponse",
+        "LongRunningOperationListResponse",
+        "LongRunningOperationMigrateResponse",
+        "LongRunningOperationResumeResponse",
+        "LongRunningOperationStatusResponse",
+        "SecurityScanRequest",
+        "TestSuiteRequest",
     ]:
         setattr(_sw, _schema_name, _pydantic_model(_schema_name))
 
@@ -178,18 +190,16 @@ if "api.schemas_workflows" not in sys.modules:
 # --- constants.path_constants / constants.threshold_constants ----------------
 # Imported by long_running_operations at module level.
 _pkg_stub("constants")
-_leaf_stub("constants.path_constants",
-           PATH=types.SimpleNamespace(PROJECT_ROOT="/tmp"))
-_leaf_stub("constants.threshold_constants",
-           TimingConstants=MagicMock())
+_leaf_stub("constants.path_constants", PATH=types.SimpleNamespace(PROJECT_ROOT="/tmp"))
+_leaf_stub("constants.threshold_constants", TimingConstants=MagicMock())
 
 
 import pytest  # noqa: E402  (intentionally after sys.modules setup)
 
-
 # ---------------------------------------------------------------------------
 # probe_batch_jobs — data contract
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_probe_batch_jobs_data_shape_redis_ok(monkeypatch):
@@ -199,9 +209,11 @@ async def test_probe_batch_jobs_data_shape_redis_ok(monkeypatch):
         class _Stub:
             async def ping(self):
                 return True
+
         return _Stub()
 
     import api.batch_jobs as _bj
+
     monkeypatch.setattr(_bj, "get_async_redis_client", _fake_redis)
 
     result = await _bj.probe_batch_jobs(None)
@@ -219,9 +231,11 @@ async def test_probe_batch_jobs_data_shape_redis_ping_fails(monkeypatch):
         class _Stub:
             async def ping(self):
                 raise ConnectionError("redis down")
+
         return _Stub()
 
     import api.batch_jobs as _bj
+
     monkeypatch.setattr(_bj, "get_async_redis_client", _fake_redis)
 
     result = await _bj.probe_batch_jobs(None)
@@ -240,6 +254,7 @@ async def test_probe_batch_jobs_data_shape_client_none(monkeypatch):
         return None
 
     import api.batch_jobs as _bj
+
     monkeypatch.setattr(_bj, "get_async_redis_client", _fake_redis)
 
     result = await _bj.probe_batch_jobs(None)
@@ -258,9 +273,11 @@ async def test_probe_batch_jobs_data_service_value(monkeypatch):
         class _Stub:
             async def ping(self):
                 return True
+
         return _Stub()
 
     import api.batch_jobs as _bj
+
     monkeypatch.setattr(_bj, "get_async_redis_client", _fake_redis)
 
     result = await _bj.probe_batch_jobs(None)

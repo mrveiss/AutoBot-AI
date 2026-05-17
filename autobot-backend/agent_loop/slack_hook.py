@@ -30,9 +30,7 @@ _SLACK_NOTIFICATIONS_CHANNEL_DEFAULT = "#agent-notifications"
 class _NullSlackHook:
     """No-op hook returned when Slack is not configured."""
 
-    async def post_agent_status(
-        self, agent_name: str, status: str, message: str, thread_ts: str | None = None
-    ) -> None:
+    async def post_agent_status(self, agent_name: str, status: str, message: str, thread_ts: str | None = None) -> None:
         pass
 
     async def post_task_completion(
@@ -73,9 +71,7 @@ class _SlackHook:
         self._notifications_channel = notifications_channel
         self._approvals_channel = approvals_channel
 
-    async def post_agent_status(
-        self, agent_name: str, status: str, message: str, thread_ts: str | None = None
-    ) -> None:
+    async def post_agent_status(self, agent_name: str, status: str, message: str, thread_ts: str | None = None) -> None:
         params: Dict[str, Any] = {
             "channel": self._notifications_channel,
             "agent_name": agent_name,

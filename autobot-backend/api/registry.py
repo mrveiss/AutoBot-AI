@@ -601,5 +601,3 @@ async def probe_registry(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-

@@ -20,10 +20,10 @@ from unittest.mock import patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Load helpers
 # ---------------------------------------------------------------------------
+
 
 def _load_detector():
     """Load AntiPatternDetector from the code_analysis sub-module."""
@@ -61,6 +61,7 @@ def _write(root: Path, name: str, body: str) -> Path:
 # ---------------------------------------------------------------------------
 # Detector unit tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_detect_unwired_tracker_flags_zero_caller_module(tmp_path):
@@ -119,9 +120,7 @@ async def test_detect_unwired_tracker_ignores_imported_module(tmp_path):
     findings = await detector._detect_unwired_trackers(str(tmp_path))
 
     stems = {f.entity_name for f in findings}
-    assert "wired_feature" not in stems, (
-        "wired_feature has a caller (main_runner) and must NOT be flagged"
-    )
+    assert "wired_feature" not in stems, "wired_feature has a caller (main_runner) and must NOT be flagged"
 
 
 @pytest.mark.asyncio
@@ -172,6 +171,7 @@ async def test_detect_unwired_tracker_no_ref_no_finding(tmp_path):
 # Finding dict shape test (via cross-file bridge)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_unwired_tracker_problem_dict_shape(tmp_path):
     """The problem dict produced by the cross-file bridge must include all
@@ -195,9 +195,7 @@ async def test_unwired_tracker_problem_dict_shape(tmp_path):
         return len(problems)
 
     with patch.object(xfa, "_persist_to_chromadb", new=fake_persist):
-        count = await xfa.run_cross_file_analysis(
-            str(tmp_path), source_id=None, exclude_patterns=["__pycache__"]
-        )
+        count = await xfa.run_cross_file_analysis(str(tmp_path), source_id=None, exclude_patterns=["__pycache__"])
 
     # There must be at least 1 finding for our fixture
     assert count >= 1, f"expected at least 1 finding persisted, got {count}"
@@ -210,17 +208,14 @@ async def test_unwired_tracker_problem_dict_shape(tmp_path):
     for key in ("type", "severity", "file_path", "line", "description", "suggestion"):
         assert key in p, f"problem dict missing required key {key!r}: {p}"
 
-    assert p["type"] == "code_smell_unwired_tracker", (
-        f"expected code_smell_unwired_tracker, got {p['type']!r}"
-    )
-    assert p["severity"] in ("low", "medium", "high", "critical"), (
-        f"unexpected severity: {p['severity']}"
-    )
+    assert p["type"] == "code_smell_unwired_tracker", f"expected code_smell_unwired_tracker, got {p['type']!r}"
+    assert p["severity"] in ("low", "medium", "high", "critical"), f"unexpected severity: {p['severity']}"
 
 
 # ---------------------------------------------------------------------------
 # Integration: cross-file bridge includes unwired-tracker findings
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_cross_file_bridge_includes_unwired_tracker(tmp_path):
@@ -246,11 +241,7 @@ async def test_cross_file_bridge_includes_unwired_tracker(tmp_path):
         return len(problems)
 
     with patch.object(xfa, "_persist_to_chromadb", new=fake_persist):
-        await xfa.run_cross_file_analysis(
-            str(tmp_path), source_id="test-source", exclude_patterns=["__pycache__"]
-        )
+        await xfa.run_cross_file_analysis(str(tmp_path), source_id="test-source", exclude_patterns=["__pycache__"])
 
     types = {p.get("type") for p in persisted}
-    assert "code_smell_unwired_tracker" in types, (
-        f"expected code_smell_unwired_tracker in persisted types; got {types}"
-    )
+    assert "code_smell_unwired_tracker" in types, f"expected code_smell_unwired_tracker in persisted types; got {types}"

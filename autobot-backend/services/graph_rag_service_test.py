@@ -201,7 +201,9 @@ async def test_graph_aware_search_with_entity_expansion(graph_rag_service, mock_
 
 
 @pytest.mark.asyncio
-async def test_graph_aware_search_no_expansion_without_entities(graph_rag_service, mock_rag_service, mock_memory_graph) -> None:
+async def test_graph_aware_search_no_expansion_without_entities(
+    graph_rag_service, mock_rag_service, mock_memory_graph
+) -> None:
     """Test search without entity expansion when no entities found."""
     # Mock empty entity extraction
     graph_rag_service.enable_entity_extraction = False

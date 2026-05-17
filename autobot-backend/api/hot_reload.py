@@ -205,5 +205,3 @@ async def probe_hot_reload(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-

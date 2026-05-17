@@ -539,9 +539,7 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
         )
 
 
-def analyze_performance(
-    directory: str | None = None, exclude_patterns: List[str] | None = None
-) -> Dict[str, Any]:
+def analyze_performance(directory: str | None = None, exclude_patterns: List[str] | None = None) -> Dict[str, Any]:
     """
     Convenience function to analyze performance of a directory.
 

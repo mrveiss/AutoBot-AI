@@ -392,9 +392,7 @@ class UnifiedMultiModalProcessor:
 
         return fused_embedding
 
-    def _extract_modality_contributions(
-        self, attention_weights: Any | None, modalities: List[str]
-    ) -> Dict[str, float]:
+    def _extract_modality_contributions(self, attention_weights: Any | None, modalities: List[str]) -> Dict[str, float]:
         """Extract modality contributions from attention weights. Issue #620."""
         if attention_weights is not None:
             attn_scores = attention_weights.mean(dim=1).squeeze().cpu().numpy()

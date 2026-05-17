@@ -124,9 +124,7 @@ def _check_vosk_timeout(elapsed: float, timeout: float | None, speech_detected: 
     return None
 
 
-def _check_vosk_phrase_limit(
-    elapsed: float, phrase_time_limit: float | None, recognizer
-) -> Dict[str, Any] | None:
+def _check_vosk_phrase_limit(elapsed: float, phrase_time_limit: float | None, recognizer) -> Dict[str, Any] | None:
     """Issue #665: Extracted from _vosk_recognize_blocking to reduce function length.
 
     Check phrase time limit and return final result if exceeded.

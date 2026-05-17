@@ -44,10 +44,7 @@ def env(name: str, default: Any = None) -> Any:
     """
     spec = REGISTRY.get(name)
     if spec is None:
-        raise KeyError(
-            f"Unregistered env var: {name}. "
-            f"Add it to autobot_shared/env_registry.py before use."
-        )
+        raise KeyError(f"Unregistered env var: {name}. " f"Add it to autobot_shared/env_registry.py before use.")
     raw = os.getenv(name)
     if raw is None:
         return spec.default if default is None else default
@@ -167,8 +164,7 @@ register_env_var(
         type=str,
         default="development",
         description=(
-            "Full environment name for OTel deployment.environment attribute. "
-            "Prefer AUTOBOT_ENV for new code."
+            "Full environment name for OTel deployment.environment attribute. " "Prefer AUTOBOT_ENV for new code."
         ),
         component="system",
     )

@@ -223,9 +223,7 @@ class LibrarianAssistant:
             logger.error("Error extracting content from %s: %s", url, e)
             return None
 
-    def _build_fallback_assessment(
-        self, content_data: Dict[str, Any], error_msg: str | None = None
-    ) -> Dict[str, Any]:
+    def _build_fallback_assessment(self, content_data: Dict[str, Any], error_msg: str | None = None) -> Dict[str, Any]:
         """Build fallback assessment when LLM fails (Issue #665: extracted helper)."""
         if error_msg:
             return {

@@ -361,9 +361,7 @@ async def _handle_canvas_cancel(data: dict, current_user_id: str) -> None:
         from user_management.database import db_session_context
 
         async with db_session_context() as session:
-            result = await session.execute(
-                select(CanvasCell).where(CanvasCell.id == cell_uuid)
-            )
+            result = await session.execute(select(CanvasCell).where(CanvasCell.id == cell_uuid))
             cell = result.scalar_one_or_none()
 
         if cell is None or cell.user_id != current_user_id:
@@ -378,8 +376,7 @@ async def _handle_canvas_cancel(data: dict, current_user_id: str) -> None:
         async with _canvas_tasks_lock:
             # Search through all tasks for this cell
             keys_to_remove = [
-                k for k in _canvas_streaming_tasks.keys()
-                if k[1] == cell_id and (not canvas_id or k[0] == canvas_id)
+                k for k in _canvas_streaming_tasks.keys() if k[1] == cell_id and (not canvas_id or k[0] == canvas_id)
             ]
 
             for key in keys_to_remove:
@@ -455,7 +452,9 @@ async def _add_to_chat_history(chat_history_manager, message_type: str, raw_data
     # Issue #350 Root Cause Fix: Skip message types that are explicitly persisted elsewhere
     if text and chat_history_manager and message_type not in SKIP_WEBSOCKET_PERSISTENCE_TYPES:
         try:
-            await chat_history_manager.add_message(sender=sender, text=text, message_type=message_type, raw_data=raw_data)
+            await chat_history_manager.add_message(
+                sender=sender, text=text, message_type=message_type, raw_data=raw_data
+            )
         except Exception as e:
             logger.error("Failed to add message to chat history: %s", e)
 

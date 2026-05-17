@@ -1106,5 +1106,3 @@ async def probe_ide_integration(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-

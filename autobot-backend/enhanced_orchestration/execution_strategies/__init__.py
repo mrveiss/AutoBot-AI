@@ -53,9 +53,7 @@ class ExecutionStrategyHandler:
         seq = SequentialStrategy(*shared_args, deps.topological_sort_tasks, deps.dependencies_met)
         par = ParallelStrategy(*shared_args, deps.dependencies_met)
         pip = PipelineStrategy(*shared_args, deps.group_pipeline_stages)
-        col = CollaborativeStrategy(
-            *shared_args, deps.enhance_task_for_collaboration, deps.coordinate_collaboration
-        )
+        col = CollaborativeStrategy(*shared_args, deps.enhance_task_for_collaboration, deps.coordinate_collaboration)
         adp = AdaptiveStrategy(seq, par)
 
         self._strategies = {

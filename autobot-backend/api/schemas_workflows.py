@@ -2364,9 +2364,7 @@ class SequentialThinkingRequest(BaseModel):
     revises_thought: int | None = Field(None, ge=1, description="Which thought is being reconsidered")
     branch_from_thought: int | None = Field(None, ge=1, description="Branching point thought number")
     branch_id: str | None = Field(None, description="Branch identifier")
-    needs_more_thoughts: bool | None = Field(
-        False, description="If more thoughts are needed beyond initial estimate"
-    )
+    needs_more_thoughts: bool | None = Field(False, description="If more thoughts are needed beyond initial estimate")
 
     session_id: str | None = Field("default", description="Thinking session identifier")
 
@@ -2564,9 +2562,7 @@ class HTTPPostRequest(HTTPRequestBase):
     """POST request model."""
 
     json_body: _HTTPClientJSONObject | None = Field(default=None, description="JSON request body")
-    form_data: Dict[str, str] | None = Field(
-        default=None, description="Form data (mutually exclusive with json_body)"
-    )
+    form_data: Dict[str, str] | None = Field(default=None, description="Form data (mutually exclusive with json_body)")
 
 
 class HTTPPutRequest(HTTPRequestBase):

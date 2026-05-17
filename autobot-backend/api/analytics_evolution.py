@@ -955,9 +955,7 @@ def _create_demo_data_point(current: datetime, start: datetime, base_score: floa
     }
 
 
-def _generate_demo_timeline(
-    start_date: str | None, end_date: str | None, granularity: str
-) -> List[Dict[str, Any]]:
+def _generate_demo_timeline(start_date: str | None, end_date: str | None, granularity: str) -> List[Dict[str, Any]]:
     """Generate demo timeline data for visualization testing (Issue #398: refactored).
 
     TEST ONLY - Not used in production responses (Issue #543).

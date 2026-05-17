@@ -74,8 +74,7 @@ def test_registry_runtimes_are_valid() -> None:
     valid = {"asyncio_per_worker", "celery_beat", "leader_elected", "apscheduler"}
     for job in REGISTRY:
         assert job.runtime in valid, (
-            f"REGISTRY entry '{job.name}' has unknown runtime '{job.runtime}'. "
-            f"Valid values: {valid}"
+            f"REGISTRY entry '{job.name}' has unknown runtime '{job.runtime}'. " f"Valid values: {valid}"
         )
 
 

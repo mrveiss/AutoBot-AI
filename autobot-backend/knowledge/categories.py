@@ -337,9 +337,7 @@ class CategoriesMixin:
         await self.redis().delete(f"category:facts:{cat_id}")
         await self.redis().delete(f"category:{cat_id}")
 
-    async def _build_deletion_list(
-        self, category_id: str, recursive: bool
-    ) -> tuple[List[str], Dict[str, Any] | None]:
+    async def _build_deletion_list(self, category_id: str, recursive: bool) -> tuple[List[str], Dict[str, Any] | None]:
         """Build list of categories to delete. Issue #620.
 
         Args:

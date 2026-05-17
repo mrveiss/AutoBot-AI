@@ -383,9 +383,7 @@ class ClaimClassifier:
             logger.error(f"KB search failed for claim '{claim}': {e}")
             return []
 
-    def _evaluate_kb_results(
-        self, results: List[Dict[str, Any]]
-    ) -> tuple[KBStatus, float, List[KBSource], str | None]:
+    def _evaluate_kb_results(self, results: List[Dict[str, Any]]) -> tuple[KBStatus, float, List[KBSource], str | None]:
         """
         Evaluate KB search results to determine status and confidence.
 

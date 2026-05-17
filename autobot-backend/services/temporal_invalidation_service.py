@@ -594,9 +594,7 @@ class TemporalInvalidationService:
             "facts_invalidated": 0,
         }
 
-    async def run_invalidation_sweep(
-        self, source_filter: str | None = None, dry_run: bool = False
-    ) -> Dict[str, Any]:
+    async def run_invalidation_sweep(self, source_filter: str | None = None, dry_run: bool = False) -> Dict[str, Any]:
         """
         Run a comprehensive invalidation sweep.
 

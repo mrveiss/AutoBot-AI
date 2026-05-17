@@ -28,6 +28,7 @@ from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_logger(__name__)
 
+
 class SentimentAnalysisAgent(StandardizedAgent):
     """Agent specialized for sentiment analysis and emotion classification."""
 
@@ -186,6 +187,7 @@ class SentimentAnalysisAgent(StandardizedAgent):
             if "content" in response:
                 return str(response["content"]).strip()
         return str(response)
+
 
 get_sentiment_analysis_agent = lazy_singleton(SentimentAnalysisAgent)
 """Get the singleton Sentiment Analysis Agent instance (thread-safe)."""

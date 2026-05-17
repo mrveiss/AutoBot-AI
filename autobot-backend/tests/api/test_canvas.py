@@ -483,7 +483,11 @@ def _make_cancel_db_mock(cell_user_id: str):
 class TestCanvasWebSocketStreaming:
     @pytest.mark.asyncio
     async def test_register_and_unregister_streaming_task(self):
-        from api.websockets import register_canvas_streaming_task, unregister_canvas_streaming_task, _canvas_streaming_tasks
+        from api.websockets import (
+            register_canvas_streaming_task,
+            unregister_canvas_streaming_task,
+            _canvas_streaming_tasks,
+        )
 
         task = asyncio.create_task(asyncio.sleep(10))
         canvas_id = str(uuid.uuid4())

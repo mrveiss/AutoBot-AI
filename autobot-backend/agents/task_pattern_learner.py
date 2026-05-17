@@ -149,9 +149,7 @@ class TaskPatternLearner(AsyncRedisClientMixin):
             "Return structured JSON only."
         )
 
-    def _parse_strategy_response(
-        self, response: Any, task_type: str, outcomes: List[Dict]
-    ) -> LearnedStrategy | None:
+    def _parse_strategy_response(self, response: Any, task_type: str, outcomes: List[Dict]) -> LearnedStrategy | None:
         """Parse LLM response into a LearnedStrategy."""
         try:
             content = response if isinstance(response, (str, dict)) else getattr(response, "content", "{}")

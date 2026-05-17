@@ -68,9 +68,7 @@ def _now() -> datetime:
     return datetime.now(tz=timezone.utc)
 
 
-def _entity(
-    valid_from: str | None = None, valid_to: str | None = None, entity_type: str = "TASK"
-) -> Dict[str, Any]:
+def _entity(valid_from: str | None = None, valid_to: str | None = None, entity_type: str = "TASK") -> Dict[str, Any]:
     """Build a minimal entity dict for testing."""
     return {
         "id": "aaaa-1111",

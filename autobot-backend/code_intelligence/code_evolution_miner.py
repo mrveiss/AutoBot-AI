@@ -90,9 +90,7 @@ class GitHistoryCrawler:
             logger.error("Failed to initialize git repository: %s", e)
             self.repo = None
 
-    def get_commits_in_range(
-        self, start_date: datetime | None = None, end_date: datetime | None = None
-    ) -> List[Dict]:
+    def get_commits_in_range(self, start_date: datetime | None = None, end_date: datetime | None = None) -> List[Dict]:
         """Get commits within a date range"""
         if self.repo is None:
             return []

@@ -4118,9 +4118,7 @@ class DocsBrowseRequest(BaseModel):
     file_path_pattern: str | None = Field(
         default=None, max_length=500, description="Filter by file path pattern (e.g., 'docs/api/')"
     )
-    search_query: str | None = Field(
-        default=None, max_length=500, description="Optional text search within documents"
-    )
+    search_query: str | None = Field(default=None, max_length=500, description="Optional text search within documents")
     page: int = Field(default=1, ge=1, le=1000, description="Page number")
     page_size: int = Field(default=20, ge=1, le=100, description="Results per page")
     sort_by: str = Field(

@@ -182,9 +182,7 @@ Respond with valid JSON:
                 continue
         return "".join(response_parts).strip()
 
-    async def _try_model_classify(
-        self, model: str, prompt: str, available_models: List[str]
-    ) -> Dict[str, Any] | None:
+    async def _try_model_classify(self, model: str, prompt: str, available_models: List[str]) -> Dict[str, Any] | None:
         """Try classification with single model (Issue #334 - extracted helper)."""
         if model not in available_models:
             return None

@@ -329,9 +329,7 @@ class SecureSandboxExecutor:
         await self._log_execution_metrics(container_id, result)
         return result
 
-    async def execute_command(
-        self, command: str | List[str], config: SandboxConfig | None = None
-    ) -> SandboxResult:
+    async def execute_command(self, command: str | List[str], config: SandboxConfig | None = None) -> SandboxResult:
         """
         Execute a command in the secure sandbox.
 

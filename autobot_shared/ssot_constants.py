@@ -836,5 +836,3 @@ def match_intent_from_patterns(transcription: str, patterns: list, default: str)
         if re.search(pattern, transcription):
             return intent
     return default
-
-

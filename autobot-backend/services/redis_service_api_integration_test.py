@@ -388,7 +388,9 @@ class TestRestartServiceEndpoint:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_restart_service_operator_allowed(self, api_client, operator_token, mock_redis_service_manager) -> None:
+    async def test_restart_service_operator_allowed(
+        self, api_client, operator_token, mock_redis_service_manager
+    ) -> None:
         """
         Test Case 3.2: Operator can restart service
 

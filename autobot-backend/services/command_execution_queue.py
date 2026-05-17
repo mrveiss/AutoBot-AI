@@ -30,9 +30,7 @@ def _decode_command_ids(command_ids: set) -> List[str]:
     return [cid.decode("utf-8") for cid in command_ids]
 
 
-def _parse_command_data_safe(
-    command_data: bytes, state_filter: CommandState | None = None
-) -> CommandExecution | None:
+def _parse_command_data_safe(command_data: bytes, state_filter: CommandState | None = None) -> CommandExecution | None:
     """Parse command JSON data safely. (Issue #315 - extracted)"""
     if not command_data:
         return None
@@ -245,9 +243,7 @@ class CommandExecutionQueue:
             logger.error(f"Failed to get terminal commands for {terminal_session_id}: {e}")
             return []
 
-    async def get_chat_commands(
-        self, chat_id: str, state_filter: CommandState | None = None
-    ) -> List[CommandExecution]:
+    async def get_chat_commands(self, chat_id: str, state_filter: CommandState | None = None) -> List[CommandExecution]:
         """
         Get all commands for a chat session.
 

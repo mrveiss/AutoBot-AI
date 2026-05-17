@@ -207,9 +207,7 @@ class CausalExecutor:
     # Cascade analysis
     # -----------------------------------------------------------------------
 
-    def analyze_cascades(
-        self, execution_ctx: DAGExecutionContext, failed_step_id: str | None = None
-    ) -> CascadeReport:
+    def analyze_cascades(self, execution_ctx: DAGExecutionContext, failed_step_id: str | None = None) -> CascadeReport:
         """
         Analyze cascading failures after execution.
 

@@ -28,6 +28,7 @@ from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_logger(__name__)
 
+
 class SummarizationAgent(StandardizedAgent):
     """Agent specialized for document and text summarization."""
 
@@ -158,6 +159,7 @@ class SummarizationAgent(StandardizedAgent):
             if "content" in response:
                 return str(response["content"]).strip()
         return str(response)
+
 
 get_summarization_agent = lazy_singleton(SummarizationAgent)
 """Get the singleton Summarization Agent instance (thread-safe)."""

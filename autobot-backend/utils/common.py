@@ -178,9 +178,7 @@ class CommonUtils:
         return logger
 
     @staticmethod
-    def get_database_connection(
-        db_path: str | Path, create_if_missing: bool = True
-    ) -> sqlite3.Connection | None:
+    def get_database_connection(db_path: str | Path, create_if_missing: bool = True) -> sqlite3.Connection | None:
         """
         Get database connection with consistent error handling
 
