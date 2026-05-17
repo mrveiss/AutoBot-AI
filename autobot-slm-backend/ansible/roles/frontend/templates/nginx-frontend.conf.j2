@@ -76,6 +76,7 @@ server {
         add_header Referrer-Policy strict-origin-when-cross-origin;
         add_header Cross-Origin-Opener-Policy "same-origin";
         add_header Cross-Origin-Embedder-Policy "credentialless";
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' wss://$host; frame-ancestors 'none'; base-uri 'self'; form-action 'self';" always;
 
         try_files $uri =404;
     }
@@ -116,6 +117,7 @@ server {
         add_header Referrer-Policy strict-origin-when-cross-origin;
         add_header Cross-Origin-Opener-Policy "same-origin";
         add_header Cross-Origin-Embedder-Policy "credentialless";
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' wss://$host; frame-ancestors 'none'; base-uri 'self'; form-action 'self';" always;
     }
 
     # Issue #1099: Extended timeouts for heavy analytics/code-intelligence
