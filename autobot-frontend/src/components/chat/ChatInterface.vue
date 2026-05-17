@@ -10,14 +10,9 @@
         aria-hidden="true"
       ></div>
 
-      <!-- Chat Sidebar with Unified Loading -->
+      <!-- Chat Sidebar -->
       <!-- Desktop: inline. Mobile: fixed overlay when showMobileSidebar is true -->
-      <UnifiedLoadingView
-        :has-content="store.sessions.length > 0"
-        :timeout-ms="10000"
-        @loading-complete="handleSidebarLoadingComplete"
-        @loading-error="handleSidebarLoadingError"
-        @loading-timeout="handleSidebarLoadingTimeout"
+      <div
         :class="[
           'sidebar-loading-view h-full shrink-0',
           'hidden lg:block',
@@ -25,7 +20,7 @@
         ]"
       >
         <ChatSidebar />
-      </UnifiedLoadingView>
+      </div>
 
       <!-- Mobile Sidebar Overlay -->
       <Transition
@@ -109,14 +104,7 @@
         />
 
         <!-- Scrollable Content Area (Header scrolls away, input stays) -->
-        <UnifiedLoadingView
-          :has-content="store.currentMessages.length > 0"
-          :timeout-ms="15000"
-          @loading-complete="handleContentLoadingComplete"
-          @loading-error="handleContentLoadingError"
-          @loading-timeout="handleContentLoadingTimeout"
-          class="flex-1 min-h-0 flex flex-col overflow-hidden"
-        >
+        <div class="flex-1 min-h-0 flex flex-col overflow-hidden">
           <!-- Issue #3232: Live reasoning trace panel above the chat input -->
           <ReasoningTrace
             v-if="activeTab === 'chat'"
@@ -136,7 +124,7 @@
             @tool-call-detected="handleToolCallDetected"
             @vision-send-to-chat="handleVisionSendToChat"
           />
-        </UnifiedLoadingView>
+        </div>
       </div>
 
       <!-- Right side panels (mutually exclusive) -->
@@ -296,7 +284,6 @@ const logger = createLogger('ChatInterface')
 
 // Components
 import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
-import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
 import ChatSidebar from './ChatSidebar.vue'
 import ChatHeader from './ChatHeader.vue'
 import ChatTabs from './ChatTabs.vue'
@@ -659,33 +646,6 @@ const clearSession = async () => {
       appStore.setGlobalError(t('chat.interface.failedToClear'))
     }
   }
-}
-
-// Unified loading event handlers
-const handleSidebarLoadingComplete = () => {
-  logger.debug('Sidebar loading completed')
-}
-
-const handleSidebarLoadingError = (error: any) => {
-  logger.error('Sidebar loading error:', error)
-  appStore.setGlobalError(t('chat.interface.failedToLoadSessions'))
-}
-
-const handleSidebarLoadingTimeout = () => {
-  logger.warn('Sidebar loading timed out')
-}
-
-const handleContentLoadingComplete = () => {
-  logger.debug('Content loading completed')
-}
-
-const handleContentLoadingError = (error: any) => {
-  logger.error('Content loading error:', error)
-  appStore.setGlobalError(t('chat.interface.failedToLoadContent'))
-}
-
-const handleContentLoadingTimeout = () => {
-  logger.warn('Content loading timed out')
 }
 
 // Tab change handler — updates local state and syncs URL to the named tab route (#6415)

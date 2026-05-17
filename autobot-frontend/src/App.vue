@@ -383,14 +383,10 @@
 
     <!-- Main Content Area with Router -->
     <main id="main-content" class="flex-1 min-h-0 overflow-hidden" role="main">
-      <!-- Unified Loading System -->
-      <UnifiedLoadingView
-        :is-loading="isLoading"
-        :has-content="!isLoading && !hasErrors"
+      <LoadingBoundary
+        :loading="isLoading"
         :on-retry="clearAllCaches"
         :timeout-ms="15000"
-        @loading-complete="handleLoadingComplete"
-        @loading-error="handleLoadingError"
         @loading-timeout="handleLoadingTimeout"
         class="h-full"
       >
@@ -398,7 +394,7 @@
         <ErrorBoundary>
           <router-view class="h-full" />
         </ErrorBoundary>
-      </UnifiedLoadingView>
+      </LoadingBoundary>
     </main>
 
     <!-- Footer: About link (hidden on public routes and routes with hideFooter meta) -->
@@ -441,7 +437,7 @@ import CaptchaNotification from '@/components/research/CaptchaNotification.vue';
 import ToastContainer from '@/components/ui/ToastContainer.vue';
 import HostSelectionDialog from '@/components/ui/HostSelectionDialog.vue';
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue';
-import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue';
+import LoadingBoundary from '@/components/ui/LoadingBoundary.vue';
 import ProfileModal from '@/components/profile/ProfileModal.vue';
 import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
 import OfflineBanner from '@/components/ui/OfflineBanner.vue';
@@ -458,7 +454,7 @@ export default {
     ToastContainer,
     HostSelectionDialog,
     ConfirmDialog,
-    UnifiedLoadingView,
+    LoadingBoundary,
     ProfileModal,
     ErrorBoundary,
     NavOverflowMenu,
