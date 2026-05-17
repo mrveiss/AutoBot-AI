@@ -55,6 +55,24 @@ export interface TemplateStep {
 }
 
 /**
+ * Runtime workflow step status — string union mirroring
+ * `services/workflow_automation/models.py:WorkflowStepStatus`.
+ *
+ * #7123: declared here as the canonical types module. The previous local
+ * declaration in `composables/useWorkflowBuilder.ts` is now a re-export
+ * pointing at this definition (single source of truth).
+ */
+export type WorkflowStepStatus =
+  | 'pending'
+  | 'waiting_approval'
+  | 'approved'
+  | 'executing'
+  | 'completed'
+  | 'skipped'
+  | 'failed'
+  | 'paused'
+
+/**
  * Runtime workflow step — matches backend
  * `services/workflow_automation/WorkflowStep.to_status_dict()`. Used by the
  * shell+vision execution path with risk levels and confirmation gating.
