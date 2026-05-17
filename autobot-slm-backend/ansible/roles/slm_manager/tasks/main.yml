@@ -641,6 +641,38 @@
   ansible.builtin.meta: flush_handlers
   tags: ['slm', 'service']
 
+# Fast-fail if the service crashed before burning all 120 health-check retries (#7920).
+# After flush_handlers the service should be 'active' or 'activating'; anything else
+# (failed, inactive) means it will never pass the health check — detect it immediately.
+- name: "SLM | Check service state before health poll (#7920)"
+  ansible.builtin.command:
+    cmd: systemctl is-active {{ slm_backend_service }}
+  register: _slm_pre_health_active
+  changed_when: false
+  failed_when: false
+  tags: ['slm', 'service']
+
+- name: "SLM | Collect startup logs when service is not starting (#7920)"
+  ansible.builtin.shell:
+    cmd: >-
+      journalctl -u {{ slm_backend_service }} -n 100 --no-pager 2>&1 ||
+      tail -100 {{ slm_log_dir }}/slm-backend.log 2>/dev/null ||
+      echo "No logs available yet"
+  register: _slm_startup_log
+  changed_when: false
+  failed_when: false
+  when: _slm_pre_health_active.stdout | default('') not in ['active', 'activating']
+  tags: ['slm', 'service']
+
+- name: "SLM | Fail early when service is in failed or inactive state (#7920)"
+  ansible.builtin.fail:
+    msg: >-
+      SLM backend is in '{{ _slm_pre_health_active.stdout | default("unknown") }}'
+      state after restart — it will not become healthy. Logs:
+      {{ _slm_startup_log.stdout_lines | default(['(none)']) }}
+  when: _slm_pre_health_active.stdout | default('') not in ['active', 'activating']
+  tags: ['slm', 'service']
+
 - name: "SLM | Wait for backend to be healthy (retry-based)"
   ansible.builtin.uri:
     url: "http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/health"
