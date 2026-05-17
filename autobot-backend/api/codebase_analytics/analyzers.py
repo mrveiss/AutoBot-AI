@@ -16,6 +16,7 @@ from typing import Dict, List, Set, Tuple
 import aiofiles
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.missing_dep import optional_import
 from constants.network_constants import NetworkConstants
 from services.llm_service import get_llm_service
 from type_defs.common import Metadata
@@ -26,23 +27,18 @@ logger = get_logger(__name__)
 # Issue #662: Thread-safe locks for analyzer singletons
 _analyzers_lock = threading.Lock()
 
-try:
-    from code_intelligence.anti_pattern_detector import AntiPatternDetector
-    from code_intelligence.bug_predictor import BugPredictor
-    from code_intelligence.performance_analyzer import PerformanceAnalyzer
-
-    _anti_pattern_detector: AntiPatternDetector | None = None
-    _performance_analyzer: PerformanceAnalyzer | None = None
-    _bug_predictor: BugPredictor | None = None
-    _analyzers_available = True
-except ImportError as e:
-    from autobot_shared.missing_dep import MissingDep as _MissingDep
-
-    logger.warning("Code intelligence analyzers not available: %s", e)
-    _analyzers_available = False
-    _anti_pattern_detector = _MissingDep("AntiPatternDetector", e)  # type: ignore[assignment]
-    _performance_analyzer = _MissingDep("PerformanceAnalyzer", e)  # type: ignore[assignment]
-    _bug_predictor = _MissingDep("BugPredictor", e)  # type: ignore[assignment]
+_apd = optional_import("code_intelligence.anti_pattern_detector", ["AntiPatternDetector"])
+_bp = optional_import("code_intelligence.bug_predictor", ["BugPredictor"])
+_pa = optional_import("code_intelligence.performance_analyzer", ["PerformanceAnalyzer"])
+AntiPatternDetector = _apd["AntiPatternDetector"]  # type: ignore[assignment]
+BugPredictor = _bp["BugPredictor"]  # type: ignore[assignment]
+PerformanceAnalyzer = _pa["PerformanceAnalyzer"]  # type: ignore[assignment]
+_analyzers_available = bool(AntiPatternDetector)
+if not _analyzers_available:
+    logger.warning("Code intelligence analyzers not available: %s", AntiPatternDetector)
+_anti_pattern_detector = None if _analyzers_available else AntiPatternDetector  # type: ignore[assignment]
+_performance_analyzer = None if _analyzers_available else PerformanceAnalyzer  # type: ignore[assignment]
+_bug_predictor = None if _analyzers_available else BugPredictor  # type: ignore[assignment]
 
 
 # =============================================================================
