@@ -30,7 +30,6 @@ from autobot_shared.logging_manager import get_logger
 
 import json
 import smtplib
-import ssl
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -424,7 +423,9 @@ class NotificationService:
 
         try:
             if use_tls:
-                context = ssl.create_default_context()
+                from autobot_shared.tls import get_internal_tls_context
+
+                context = get_internal_tls_context()  # #6702: canonical SSL context
                 with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
                     server.ehlo()
                     server.starttls(context=context)

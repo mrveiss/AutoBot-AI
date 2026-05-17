@@ -23,7 +23,6 @@ Related to Issue #760 Phase 2.
 
 import asyncio
 import os
-import ssl
 import time
 from dataclasses import dataclass
 from typing import Callable, Dict
@@ -137,83 +136,14 @@ class ServiceDiscoveryCache:
         logger.debug("Cleared service discovery cache")
 
 
-_LOOPBACK_HOSTS: frozenset = frozenset({"127.0.0.1", "localhost", "::1", "ip6-localhost"})
-
-# Emit the loopback-permissive warning once per process to avoid log spam.
-_loopback_permissive_warned: bool = False
-
-
-def _is_loopback_target(target_url: str | None) -> bool:
-    """Return True iff target_url's host resolves to a loopback address.
-
-    Loopback targets cannot be MITM'd (no off-host network path), so trusting
-    a self-signed cert here is safe even when no project CA is bundled.
-    """
-    if not target_url:
-        return False
-    try:
-        from urllib.parse import urlparse
-
-        host = (urlparse(target_url).hostname or "").lower()
-    except Exception:
-        return False
-    return host in _LOOPBACK_HOSTS
-
-
-def _create_permissive_ssl_context(target_url: str | None = None):
-    """Create SSL context for internal SLM communication (#1048, #2852, #4664, #6654).
-
-    Trust hierarchy (first match wins):
-    1. AUTOBOT_TLS_CA_PATH env var → load that CA cert (production mTLS)
-    2. AUTOBOT_SKIP_TLS_VERIFY=true → disable verification (dev/test only)
-    3. AutoBot project CA fallback (certs/ca/ca-cert.pem) → load if present
-    4. Loopback target with no CA configured → CERT_NONE (single-host self-signed
-       installs, #6654: no MITM possible when SLM is on the same host)
-    5. System trust store → default Python SSL behaviour (strict)
-
-    Set AUTOBOT_SKIP_TLS_VERIFY=true ONLY in dev/test environments — never in
-    production. For non-loopback production deploys, configure AUTOBOT_TLS_CA_PATH.
-    """
-    ctx = ssl.create_default_context()
-
-    # 1. Explicit CA path from env (production deployment)
-    ca_path = config.tls_ca_path
-    if ca_path and os.path.isfile(ca_path):
-        ctx.load_verify_locations(ca_path)
-        return ctx
-
-    # 2. Dev/test override — skip verification entirely
-    if config.skip_tls_verify.lower() == "true":
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        return ctx
-
-    # 3. AutoBot project CA fallback (covers single-host installs with self-signed certs)
-    _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    _cert_dir = config.tls_cert_dir
-    _fallback_ca = os.path.join(_project_root, _cert_dir, "ca", "ca-cert.pem")
-    if os.path.isfile(_fallback_ca):
-        ctx.load_verify_locations(_fallback_ca)
-        return ctx
-
-    # 4. Loopback target — accept self-signed certs. No MITM is possible because
-    #    the connection never leaves the host. Single-host installs typically have
-    #    no project CA bundled and would otherwise crash on every connect (#6654).
-    if _is_loopback_target(target_url):
-        global _loopback_permissive_warned
-        if not _loopback_permissive_warned:
-            logger.warning(
-                "TLS verification disabled for loopback target %s — no CA configured "
-                "(set AUTOBOT_TLS_CA_PATH for strict verification, #6654)",
-                target_url,
-            )
-            _loopback_permissive_warned = True
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        return ctx
-
-    # 5. Strict by default (system trust store).
-    return ctx
+# #6702: SSL context creation moved to autobot_shared/tls.py — single canonical
+# implementation shared across slm_client, dag_executor, celery_app, and
+# notification_service. Re-exported here for one-cycle backward compatibility.
+from autobot_shared.tls import (
+    _LOOPBACK_HOSTS,
+    _is_loopback_target,
+    get_internal_tls_context as _create_permissive_ssl_context,
+)
 
 
 class ServiceNotConfiguredError(Exception):
