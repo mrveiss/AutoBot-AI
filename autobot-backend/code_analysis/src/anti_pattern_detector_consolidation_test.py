@@ -321,8 +321,12 @@ async def test_duplicate_class_shape_skips_pydantic_models(fixture_root):
 
 
 @pytest.mark.asyncio
-async def test_duplicate_class_shape_below_method_threshold_skipped(fixture_root):
-    """Classes with fewer than the method threshold must NOT be flagged."""
+async def test_duplicate_class_shape_small_identical_flagged(fixture_root):
+    """#6780: small classes with IDENTICAL method sets (Jaccard=1.0) ARE flagged.
+
+    The threshold was lowered from 5 → 2.  The guard for false positives is
+    the strict-Jaccard rule: small classes need exact match, not just ≥0.7.
+    """
     apd = _load_detector_module()
     _write_module(
         fixture_root,
@@ -345,7 +349,40 @@ async def test_duplicate_class_shape_below_method_threshold_skipped(fixture_root
         exclude_patterns=["__pycache__"],
     )
     dup_shape = [ap for ap in report.anti_patterns if ap.pattern_type.value == "duplicate_class_shape"]
-    assert not dup_shape, "small classes (< _SHAPE_MIN_METHODS) should be skipped"
+    assert dup_shape, "small classes with identical method sets should be flagged (#6780)"
+
+
+@pytest.mark.asyncio
+async def test_duplicate_class_shape_small_partial_overlap_skipped(fixture_root):
+    """#6780: small classes with partial method overlap are NOT flagged.
+
+    Below _SHAPE_MIN_METHODS_STRICT (5) the threshold is 1.0 (exact match).
+    A class pair sharing 1 of 2 methods (Jaccard=0.33) must NOT produce a
+    finding — this guards against FastAPI endpoint false positives.
+    """
+    apd = _load_detector_module()
+    _write_module(
+        fixture_root,
+        "partial",
+        """
+        class EndpointA:
+            def list(self): pass
+            def create(self): pass
+
+        class EndpointB:
+            def list(self): pass
+            def delete(self): pass
+        """,
+    )
+
+    detector = apd.AntiPatternDetector()
+    report = await detector.analyze(
+        root_path=str(fixture_root),
+        patterns=["*.py"],
+        exclude_patterns=["__pycache__"],
+    )
+    dup_shape = [ap for ap in report.anti_patterns if ap.pattern_type.value == "duplicate_class_shape"]
+    assert not dup_shape, "small classes with partial overlap should NOT be flagged (strict threshold)"
 
 
 # ---------------------------------------------------------------------------

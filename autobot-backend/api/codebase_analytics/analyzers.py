@@ -947,14 +947,16 @@ def _run_anti_pattern_analysis(file_path: str) -> List[Dict]:
                 if _anti_pattern_detector is None:
                     _anti_pattern_detector = AntiPatternDetector()
         result = _anti_pattern_detector.analyze_file(file_path)
-        for pattern in result.get("patterns", []):
+        # #6757: key is "anti_patterns" (list of dicts from .to_dict()); not
+        # "patterns" (old wrong key) and not AntiPatternResult objects.
+        for pattern in result.get("anti_patterns", []):
             problems.append(
                 {
-                    "type": f"code_smell_{pattern.pattern_type.value}",
-                    "severity": pattern.severity.value,
-                    "line": pattern.line_number,
-                    "description": pattern.description,
-                    "suggestion": pattern.suggestion,
+                    "type": f"code_smell_{pattern['pattern_type']}",
+                    "severity": pattern["severity"],
+                    "line": pattern.get("line_number", 0),
+                    "description": pattern.get("description", ""),
+                    "suggestion": pattern.get("suggestion", ""),
                 }
             )
     except Exception as e:

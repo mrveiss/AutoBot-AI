@@ -415,21 +415,19 @@ class CodeEvolutionMiner:
 
                 # Analyze file for anti-patterns
                 try:
-                    with open(file_path, encoding="utf-8") as f:
-                        code = f.read()
-
-                    # Use anti-pattern detector
-                    results = self.anti_pattern_detector.analyze_code(code, str(file_path))
+                    # #6757: analyze_code() never existed; use analyze_file()
+                    # which returns {"anti_patterns": [dict, ...], ...}.
+                    result_dict = self.anti_pattern_detector.analyze_file(str(file_path))
 
                     # Track each detected pattern
-                    for result in results.patterns:
+                    for ap in result_dict.get("anti_patterns", []):
                         occurrence = PatternOccurrence(
-                            pattern_type=result.type.value,
+                            pattern_type=ap.get("pattern_type", "unknown"),
                             file_path=str(item),
-                            line_number=result.line_number,
+                            line_number=ap.get("line_number", 0),
                             commit_hash=commit["hash"],
                             timestamp=commit["timestamp"],
-                            severity=result.severity.value,
+                            severity=ap.get("severity", "low"),
                         )
                         self.tracker.track_pattern(occurrence)
 

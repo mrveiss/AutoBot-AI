@@ -26,6 +26,18 @@ New facade: ~100 lines (92% reduction)
 # Backward compatibility: Expose commonly used regex patterns
 import re
 
+# #6757: canonical AntiPatternDetector lives in code_analysis.src.
+# Expose it here so that all callers of this facade get the unified class
+# that has both per-file (analyze_file) and cross-file (analyze,
+# analyze_cross_file_only) support.  Fall back to the package-local class
+# if code_analysis is unavailable (e.g., isolated test environments).
+try:
+    from code_analysis.src.anti_pattern_detector import (
+        AntiPatternDetector,  # noqa: F401  (re-exported below)
+    )
+except ImportError:
+    from .anti_pattern_detection import AntiPatternDetector  # type: ignore[assignment]
+
 # Re-export all public API from the package for backward compatibility
 from .anti_pattern_detection import (  # Types and enums; Data models; Severity utilities; Detectors; Main analyzer
     ALLOWED_MAGIC_NUMBERS,
@@ -34,7 +46,6 @@ from .anti_pattern_detection import (  # Types and enums; Data models; Severity 
     DEFAULT_IGNORE_PATTERNS,
     SNAKE_CASE_RE,
     AnalysisReport,
-    AntiPatternDetector,
     AntiPatternResult,
     AntiPatternSeverity,
     AntiPatternType,
