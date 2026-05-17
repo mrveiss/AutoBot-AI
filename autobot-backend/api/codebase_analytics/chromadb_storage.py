@@ -239,6 +239,32 @@ async def _generate_batch_embeddings_fallback(
     return all_embeddings
 
 
+def make_problem_dict(
+    problem_type: str,
+    severity: str,
+    file_path: str,
+    line: int,
+    description: str,
+    suggestion: str,
+    file_category: str = FILE_CATEGORY_CODE,
+) -> Dict:
+    """Canonical factory for the problem-dict schema (#6759).
+
+    Single source of truth for the keys read by ``_prepare_problem_document``
+    and written by cross-file analysis converters.  If the schema gains a new
+    field, add it here and update the reader below.
+    """
+    return {
+        "type": problem_type,
+        "severity": severity,
+        "file_path": file_path,
+        "file_category": file_category,
+        "line": line,
+        "description": description,
+        "suggestion": suggestion,
+    }
+
+
 def _prepare_problem_document(problem: Dict, problem_idx: int, source_id: str | None = None) -> tuple:
     """
     Prepare a problem document for ChromaDB storage.

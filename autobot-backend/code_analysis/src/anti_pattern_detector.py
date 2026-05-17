@@ -1399,7 +1399,13 @@ class AntiPatternDetector:
             "NamedTuple",
         }
     )
-    _SHAPE_MIN_METHODS = 5
+    # #6780: lowered from 5 → 2 so small identical-shape boilerplate clusters
+    # are detected.  Classes with fewer than _SHAPE_MIN_METHODS_STRICT methods
+    # use a strict Jaccard threshold of 1.0 (exact match) to avoid false
+    # positives for FastAPI endpoint classes that share a few method names by
+    # design.  The relaxed threshold applies only above _SHAPE_MIN_METHODS_STRICT.
+    _SHAPE_MIN_METHODS = 2
+    _SHAPE_MIN_METHODS_STRICT = 5
     _SHAPE_JACCARD_THRESHOLD = 0.7
     # #6755 round 3: bumped from 0.7 to 0.85 to suppress priority-scale
     # FPs. Enums like ``SandboxSecurityLevel`` (high/low/medium),
@@ -1613,8 +1619,15 @@ class AntiPatternDetector:
                 # intended relationship, not a duplicate.
                 if self._is_protocol_impl_pair(cls_a, cls_b):
                     continue
+                # #6780: small classes (below strict threshold) require exact
+                # match (Jaccard=1.0) to suppress FastAPI-handler false positives.
+                threshold = (
+                    self._SHAPE_JACCARD_THRESHOLD
+                    if max(len(names_a), len(names_b)) >= self._SHAPE_MIN_METHODS_STRICT
+                    else 1.0
+                )
                 similarity = self._jaccard(names_a, names_b)
-                if similarity < self._SHAPE_JACCARD_THRESHOLD:
+                if similarity < threshold:
                     continue
                 shared = sorted(names_a & names_b)
                 pair_key = tuple(sorted([full_a, full_b]))
@@ -1940,6 +1953,61 @@ class AntiPatternDetector:
             except Exception as e:
                 logger.warning(f"Failed to retrieve cached results: {e}")
         return None
+
+    def analyze_file(self, file_path: str) -> Dict[str, Any]:
+        """Per-file analysis compatibility shim (#6757).
+
+        Runs the per-file detectors (god_class, feature_envy, long_method,
+        long_parameter_list, lazy_class) on a single file without the
+        cross-file rules that require a whole-codebase index.
+
+        Returns a dict compatible with the legacy ``code_intelligence``
+        per-file analyzer shape expected by callers in ``analyzers.py`` and
+        ``code_evolution_miner.py``.
+        """
+        import asyncio
+
+        async def _inner() -> List[AntiPatternInstance]:
+            clear_ast_cache()
+            detector = AntiPatternDetector()
+            module_info = await detector._parse_file(file_path)
+            if not module_info:
+                return []
+            detector.modules = {module_info.name: module_info}
+            detector.classes = {
+                f"{module_info.name}.{cls.name}": cls for cls in module_info.classes
+            }
+            detector.all_defined_names = {cls.name for cls in module_info.classes}
+            detector.all_defined_names.update(module_info.functions)
+
+            patterns: List[AntiPatternInstance] = []
+            patterns.extend(await detector._detect_god_classes())
+            patterns.extend(await detector._detect_feature_envy())
+            patterns.extend(await detector._detect_long_methods())
+            patterns.extend(await detector._detect_long_parameter_lists())
+            patterns.extend(await detector._detect_lazy_classes())
+            return patterns
+
+        try:
+            loop = asyncio.new_event_loop()
+            try:
+                patterns = loop.run_until_complete(_inner())
+            finally:
+                loop.close()
+        except Exception as exc:
+            logger.error("analyze_file error for %s: %s", file_path, exc)
+            patterns = []
+
+        summary: Dict[str, int] = {}
+        for p in patterns:
+            k = p.pattern_type.value
+            summary[k] = summary.get(k, 0) + 1
+
+        return {
+            "file_path": file_path,
+            "anti_patterns": [p.to_dict() for p in patterns],
+            "summary": summary,
+        }
 
 
 # Convenience function for CLI usage
