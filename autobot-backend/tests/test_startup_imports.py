@@ -14,6 +14,7 @@ Catches the recurring #6042-migration regression family:
 - Required-field defaults dropped at module level (#6609)
 - Wrong-arity factory calls in module bodies (#6613)
 - Renamed/missing methods on globally constructed singletons
+- Abstract method not implemented on module-level singleton (#6732, #6709)
 
 Runs under pytest. Fast (<5s) — pure imports, no Redis or network calls.
 """
@@ -105,6 +106,62 @@ def test_api_module_imports(module_name: str) -> None:
     - Pydantic ValidationError raised at class-body time when a required field
       lacks a default and module-level constructor literals are evaluated
       (e.g. SUPPORTED_PROVIDERS dict in #6604)
+    """
+    importlib.import_module(module_name)
+
+
+def _agents_modules() -> list[str]:
+    """Discover every importable agents/*.py module relative to autobot-backend.
+
+    Excludes test files and __init__.py so only production agent code is
+    exercised. Each module is imported with importlib so that module-level
+    singleton construction (e.g. ``json_formatter = JSONFormatterAgent()``)
+    runs under the test harness — TypeError from an unimplemented abstract
+    method surfaces here instead of at deploy time (#6732 / #6709).
+    """
+    backend_root = Path(__file__).resolve().parent.parent
+    agents_dir = backend_root / "agents"
+    modules = []
+    for path in sorted(agents_dir.glob("*.py")):
+        if path.name == "__init__.py":
+            continue
+        if path.name.endswith("_test.py"):
+            continue
+        modules.append(f"agents.{path.stem}")
+    return modules
+
+
+# Known-broken agent modules at the time this test was added. Remove an entry
+# when its tracking issue is closed.
+KNOWN_BROKEN_AGENTS: dict[str, str] = {}
+
+
+def _agents_module_params() -> list:
+    """Build pytest params with xfail marks for known-broken agent modules."""
+    params = []
+    for name in _agents_modules():
+        if name in KNOWN_BROKEN_AGENTS:
+            params.append(
+                pytest.param(
+                    name,
+                    marks=pytest.mark.xfail(
+                        reason=f"tracked in {KNOWN_BROKEN_AGENTS[name]}",
+                        strict=True,
+                    ),
+                )
+            )
+        else:
+            params.append(pytest.param(name))
+    return params
+
+
+@pytest.mark.parametrize("module_name", _agents_module_params())
+def test_agents_module_imports(module_name: str) -> None:
+    """Every autobot-backend/agents/*.py must import without error.
+
+    Specifically catches TypeError raised when a module-level singleton
+    instantiates an Agent subclass that does not implement all abstract methods
+    (the regression that surfaced in #6709 and was missed by #6540).
     """
     importlib.import_module(module_name)
 
