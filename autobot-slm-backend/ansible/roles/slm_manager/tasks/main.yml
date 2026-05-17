@@ -642,15 +642,43 @@
   tags: ['slm', 'service']
 
 - name: "SLM | Wait for backend to be healthy (retry-based)"
-  ansible.builtin.uri:
-    url: "http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/health"
-    method: GET
-    status_code: 200
-  register: _slm_health
-  retries: 60
-  delay: 5
-  until: _slm_health is succeeded
   tags: ['slm', 'service']
+  block:
+    - name: "SLM | Poll /api/health until backend responds"
+      ansible.builtin.uri:
+        url: "http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/health"
+        method: GET
+        status_code: 200
+        timeout: 5
+      register: _slm_health
+      retries: "{{ slm_backend_health_check_retries }}"
+      delay: "{{ slm_backend_health_check_delay }}"
+      until: _slm_health is succeeded
+  rescue:
+    - name: "SLM | Capture service status on health-check failure"
+      ansible.builtin.command:
+        cmd: systemctl status autobot-slm-backend
+      register: _slm_svc_status
+      failed_when: false
+      changed_when: false
+
+    - name: "SLM | Capture service journal on health-check failure"
+      ansible.builtin.command:
+        cmd: journalctl -u autobot-slm-backend -n 100 --no-pager
+      register: _slm_journal
+      failed_when: false
+      changed_when: false
+
+    - name: "SLM | Fail with diagnostic output"
+      ansible.builtin.fail:
+        msg: |
+          SLM backend did not become healthy after {{ slm_backend_health_check_retries }} attempts.
+
+          === systemctl status ===
+          {{ _slm_svc_status.stdout | default('(no output)') }}
+
+          === journalctl (last 100 lines) ===
+          {{ _slm_journal.stdout | default('(no output)') }}
 
 - name: "SLM | Export admin password for downstream plays"
   ansible.builtin.shell:
