@@ -34,6 +34,18 @@ if TYPE_CHECKING:
     from user_management.models.sso import UserSSOLink
     from user_management.models.team import TeamMembership
 
+# Runtime imports for SQLAlchemy relationships (avoid circular imports)
+try:
+    from models.activities import (  # noqa: F401
+        BrowserActivityModel,
+        DesktopActivityModel,
+        FileActivityModel,
+        SecretUsageModel,
+        TerminalActivityModel,
+    )
+except ImportError:
+    pass
+
 
 class User(Base):
     """

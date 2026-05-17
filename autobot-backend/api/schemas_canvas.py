@@ -6,6 +6,9 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from canvas.models import CellType
+
+
 # ---------------------------------------------------------------------------
 # Shared
 # ---------------------------------------------------------------------------
@@ -58,7 +61,7 @@ class CellAutosaveItem(BaseModel):
     id: uuid.UUID
     position: int
     content: str
-    type: str = "text"
+    type: CellType = CellType.text
 
 
 class CanvasPutRequest(BaseModel):
@@ -77,7 +80,7 @@ class CanvasPutResponse(BaseModel):
 
 
 class CellCreateRequest(BaseModel):
-    type: str = "text"
+    type: CellType = CellType.text
     content: str = ""
     position: int = 0
     # Phase 2: optional rich payload for chart/code cells
