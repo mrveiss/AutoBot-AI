@@ -329,9 +329,8 @@ for removed in $(git diff origin/Dev_new_gui...$PR_BRANCH --diff-filter=D --name
   grep -r "$(basename $removed .py)" autobot-backend/ --include="*.py" | grep -v "_test.py" | grep -v "$removed"
 done
 
-# 2d. Wiring check — for any NEW class or function added, verify it has a production caller
-# New symbols have zero existing callers → this is fine IF the PR also adds the caller
-# If new symbol with zero callers and PR adds no caller → flag as NOT WIRED
+# 2d. Wiring check — hard-block if any new module has 0 production callers
+cd $(git rev-parse --show-toplevel) && pipeline-scripts/check-new-module-callers.sh
 
 # 2e. Linting
 python -m black --check $(git diff origin/Dev_new_gui...$PR_BRANCH --name-only | grep "\.py$") 2>&1
@@ -339,7 +338,7 @@ python -m black --check $(git diff origin/Dev_new_gui...$PR_BRANCH --name-only |
 
 **If validation fails:** Fix inline in the worktree, push update to the branch, re-validate. Do not merge a failing PR.
 
-**If wiring check flags unwired code:** Comment on the issue: "⚠️ New code has no production callers — wiring needed before merge." Do not close the issue after merge.
+**If wiring check exits 1 (unwired modules):** **HARD BLOCK** — do not merge and do not close the issue. Either wire the module in, or file a follow-up wire-in issue and re-run with `pipeline-scripts/check-new-module-callers.sh --allow-deferral .wiring-deferral.txt`. Document the deferral in the closure comment under `### Wire-in deferred to #NNNN`.
 
 ---
 
