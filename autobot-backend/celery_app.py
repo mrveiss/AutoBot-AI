@@ -10,7 +10,6 @@ with real-time event streaming and task routing.
 Issue #725: Added mTLS support for Redis connections.
 """
 
-import ssl
 import urllib.parse
 from pathlib import Path
 
@@ -41,24 +40,24 @@ _broker_ssl_options = None
 _backend_ssl_options = None
 
 if _redis_tls_enabled:
-    # Check for explicit cert paths first (set by SLM enable-tls playbook)
-    _ca_cert = config.tls_ca_path
-    _client_cert = config.tls_cert_path
-    _client_key = config.tls_key_path
+    # #6702: resolve cert paths (explicit env vars first, legacy cert_dir fallback)
+    from autobot_shared.tls import get_internal_tls_context
+
+    _ca_cert = ssot_config.misc.tls_ca_path
+    _client_cert = ssot_config.misc.tls_cert_path
+    _client_key = ssot_config.misc.tls_key_path
 
     # Fallback to legacy cert_dir pattern for backwards compatibility
     if not _ca_cert or not _client_cert or not _client_key:
         _project_root = Path(__file__).parent.parent
-        _cert_dir = config.tls_cert_dir
+        _cert_dir = ssot_config.tls.cert_dir
         _ca_cert = str(_project_root / _cert_dir / "ca" / "ca-cert.pem")
         _client_cert = str(_project_root / _cert_dir / "main-host" / "server-cert.pem")
         _client_key = str(_project_root / _cert_dir / "main-host" / "server-key.pem")
 
-    # Create SSL context for mTLS
-    _ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
-    _ssl_context.load_verify_locations(_ca_cert)
-    _ssl_context.load_cert_chain(_client_cert, _client_key)
-
+    _ssl_context = get_internal_tls_context(
+        ca_path=_ca_cert, client_cert=_client_cert, client_key=_client_key
+    )
     _broker_ssl_options = {"ssl": _ssl_context}
     _backend_ssl_options = {"ssl": _ssl_context}
 

@@ -592,12 +592,10 @@ class DAGExecutor:
 
 
 def _build_slm_ssl_context() -> ssl.SSLContext:
-    """Create SSL context for SLM HTTP calls (mirrors slm_client pattern)."""
-    ctx = ssl.create_default_context()
-    if config.skip_tls_verify.lower() == "true":
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-    return ctx
+    """Create SSL context for SLM HTTP calls (#6702: delegates to shared tls.py)."""
+    from autobot_shared.tls import get_internal_tls_context
+
+    return get_internal_tls_context()
 
 
 async def _execute_on_node(
