@@ -1,5 +1,5 @@
 fastapi>=0.136.1                # SECURITY UPDATE - requires starlette >=0.52.1
-uvicorn[standard]>=0.46.0
+uvicorn[standard]>=0.47.0
 transformers>=5.8.0
 torch>=2.11.0
 soundfile>=0.13.1
