@@ -7,7 +7,7 @@
 #
 
 # Prometheus metrics (Issue #937: shared monitoring implementation)
-prometheus-client>=0.24.1
+prometheus-client>=0.25.0
 
 # Web framework
 fastapi>=0.136.1                # SECURITY UPDATE - requires starlette >=0.52.1
