@@ -93,19 +93,22 @@ if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+(
   deny "Blocked: never check out main/master locally (#4113, #6512). Main is read-only; commits flow Dev_new_gui → main via release cycle. If you need to inspect main, use git log origin/main or create a worktree: git worktree add .worktrees/inspect-main main"
 fi
 
-# Block checkout to issue-* branches from main session (#6512)
-# Agents and parallel work must run inside .worktrees/issue-*/, not on main checkout
-if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+(checkout|switch)[[:space:]]+(issue-[0-9a-zA-Z_-]+|origin/issue-[0-9a-zA-Z_-]+)([[:space:]]|$)'; then
+# Block ALL branch checkouts from the main working tree (#6512)
+# Subagents running in parallel would trample the shared HEAD for every other session.
+# Any branch work (rebases, fixes, reviews) must happen inside an isolated worktree.
+# Allowed from main tree: Dev_new_gui (the primary branch), -b/-B (new branch creation),
+#   --orphan, and detached-HEAD SHAs. Everything else is denied.
+if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+(checkout|switch)[[:space:]]+[^-]'; then
   CURRENT_DIR=$(pwd)
-  IN_WORKTREE=0
-
-  # Check if we're already inside a worktree (then it's fine)
-  if [[ "$CURRENT_DIR" =~ \.worktrees/ ]]; then
-    IN_WORKTREE=1
-  fi
-
-  if [ "$IN_WORKTREE" -eq 0 ]; then
-    deny "Blocked: never checkout issue-* branches on the main working tree (#6512). All parallel work must happen in isolated worktrees. Create one: git worktree add .worktrees/issue-XXXX -b issue-XXXX origin/Dev_new_gui && cd .worktrees/issue-XXXX"
+  if [[ ! "$CURRENT_DIR" =~ \.worktrees/ ]]; then
+    # Extract the branch argument (first non-flag token after checkout/switch)
+    BRANCH_ARG=$(echo "$COMMAND_TO_CHECK" | grep -oP '(?<=git (checkout|switch) )\S+' | head -1)
+    # Allow Dev_new_gui, bare SHAs (40 hex chars), and tag-like refs (v1.2.3)
+    if [[ "$BRANCH_ARG" != "Dev_new_gui" ]] && \
+       ! [[ "$BRANCH_ARG" =~ ^[0-9a-f]{7,40}$ ]] && \
+       ! [[ "$BRANCH_ARG" =~ ^v[0-9]+\.[0-9]+ ]]; then
+      deny "Blocked: switching branches on the main working tree tramples HEAD for parallel sessions (#6512). Use a worktree instead: git worktree add .worktrees/<name> <branch> && cd .worktrees/<name>. Then do your work and remove with: git worktree remove .worktrees/<name>"
+    fi
   fi
 fi
 
