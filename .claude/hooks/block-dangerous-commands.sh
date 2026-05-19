@@ -97,16 +97,31 @@ fi
 # Subagents running in parallel would trample the shared HEAD for every other session.
 # Any branch work (rebases, fixes, reviews) must happen inside an isolated worktree.
 # Allowed from main tree: Dev_new_gui (the primary branch), -b/-B (new branch creation),
-#   --orphan, and detached-HEAD SHAs. Everything else is denied.
+#   --orphan, detached-HEAD SHAs, and file-restore targets (. or paths). Everything else is denied.
 if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+(checkout|switch)[[:space:]]+[^-]'; then
   CURRENT_DIR=$(pwd)
   if [[ ! "$CURRENT_DIR" =~ \.worktrees/ ]]; then
-    # Extract the branch argument (first non-flag token after checkout/switch)
-    BRANCH_ARG=$(echo "$COMMAND_TO_CHECK" | grep -oP '(?<=git (checkout|switch) )\S+' | head -1)
-    # Allow Dev_new_gui, bare SHAs (40 hex chars), and tag-like refs (v1.2.3)
+    # Extract the first non-flag argument after checkout/switch.
+    # Cannot use grep -oP lookbehind with alternation — GNU grep 3.7 requires fixed-length
+    # lookbehinds. Use awk instead to skip flags and grab the first positional argument.
+    BRANCH_ARG=$(echo "$COMMAND_TO_CHECK" | awk '{
+      found=0
+      for(i=1;i<=NF;i++) {
+        if ($i=="checkout" || $i=="switch") { found=i; break }
+      }
+      if (found) {
+        for(j=found+1;j<=NF;j++) {
+          if (substr($j,1,1)!="-") { print $j; break }
+        }
+      }
+    }')
+    # Allow Dev_new_gui, bare SHAs (7-40 hex chars), tag-like refs (v1.2.3),
+    # and file/path restore targets (. or absolute paths).
     if [[ "$BRANCH_ARG" != "Dev_new_gui" ]] && \
+       [[ "$BRANCH_ARG" != "." ]] && \
        ! [[ "$BRANCH_ARG" =~ ^[0-9a-f]{7,40}$ ]] && \
-       ! [[ "$BRANCH_ARG" =~ ^v[0-9]+\.[0-9]+ ]]; then
+       ! [[ "$BRANCH_ARG" =~ ^v[0-9]+\.[0-9]+ ]] && \
+       ! [[ "$BRANCH_ARG" =~ ^/ ]]; then
       deny "Blocked: switching branches on the main working tree tramples HEAD for parallel sessions (#6512). Use a worktree instead: git worktree add .worktrees/<name> <branch> && cd .worktrees/<name>. Then do your work and remove with: git worktree remove .worktrees/<name>"
     fi
   fi
