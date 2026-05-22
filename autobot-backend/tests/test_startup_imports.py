@@ -299,3 +299,57 @@ def test_no_new_hardcoded_status_strings_in_agents() -> None:
         f"Use AgentStatus enum from agents/payloads.py instead.\n"
         f"All current violations:\n  " + "\n  ".join(violations)
     )
+
+
+def test_strict_mode_raises_on_router_import_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """AUTOBOT_FEATURE_ROUTERS_STRICT=1 raises RuntimeError when any router import fails (#6690).
+
+    Verifies the strict-boot path end-to-end:
+    - ImportError injected for the first configured feature-router module.
+    - Config patched to strict=1 (default in dev/CI after #6690 fix).
+    - load_feature_routers() must raise RuntimeError mentioning AUTOBOT_FEATURE_ROUTERS_STRICT=1.
+    """
+    import importlib as _importlib
+    import importlib.util
+    import sys
+    import types
+    from pathlib import Path
+
+    # initialization/__init__.py transitively imports chat_history which may fail
+    # in certain local envs. Pre-populate parent-package stubs with __path__ set
+    # so the import machinery can find submodules without running __init__.py.
+    _backend_root = Path(__file__).resolve().parent.parent
+    _pkg_dirs = {
+        "initialization": str(_backend_root / "initialization"),
+        "initialization.router_registry": str(_backend_root / "initialization/router_registry"),
+    }
+    for _pkg, _pkg_dir in _pkg_dirs.items():
+        if _pkg not in sys.modules:
+            _stub = types.ModuleType(_pkg)
+            _stub.__path__ = [_pkg_dir]  # type: ignore[attr-defined]
+            _stub.__package__ = _pkg
+            monkeypatch.setitem(sys.modules, _pkg, _stub)
+
+    feature_routers = _importlib.import_module("initialization.router_registry.feature_routers")
+
+    # Narrow FEATURE_ROUTER_CONFIGS to one synthetic entry so load_feature_routers()
+    # doesn't try to import the entire real router list (many of which have
+    # pre-existing Python-version or dependency issues in the local test env).
+    _fake_module = "initialization._test_fake_router"
+    monkeypatch.setattr(
+        feature_routers,
+        "FEATURE_ROUTER_CONFIGS",
+        [(_fake_module, "/fake", ["fake"], "fake_router")],
+    )
+
+    def _failing_import(name: str, *args, **kwargs):
+        if name == _fake_module:
+            raise ImportError(f"injected failure for {name}")
+        return _importlib.import_module(name, *args, **kwargs)
+
+    monkeypatch.setenv("AUTOBOT_FEATURE_ROUTERS_STRICT", "1")
+    monkeypatch.setattr(feature_routers.config.misc, "feature_routers_strict", "1")
+    monkeypatch.setattr(feature_routers, "importlib", type("_FakeImportlib", (), {"import_module": staticmethod(_failing_import)})())
+
+    with pytest.raises(RuntimeError, match="AUTOBOT_FEATURE_ROUTERS_STRICT=1"):
+        feature_routers.load_feature_routers()

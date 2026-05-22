@@ -1190,7 +1190,7 @@ class MiscConfig(BaseSettings):
     dev_mode: str = Field(default="", alias="AUTOBOT_DEV_MODE")
     encryption_key: str = Field(default="", alias="AUTOBOT_ENCRYPTION_KEY")
     env: str = Field(default="", alias="AUTOBOT_ENV")
-    feature_routers_strict: str = Field(default="", alias="AUTOBOT_FEATURE_ROUTERS_STRICT")
+    feature_routers_strict: str = Field(default="1", alias="AUTOBOT_FEATURE_ROUTERS_STRICT")
     gc_threshold_0: int = Field(default=0, alias="AUTOBOT_GC_THRESHOLD_0")
     gc_threshold_1: int = Field(default=0, alias="AUTOBOT_GC_THRESHOLD_1")
     gc_threshold_2: int = Field(default=0, alias="AUTOBOT_GC_THRESHOLD_2")
