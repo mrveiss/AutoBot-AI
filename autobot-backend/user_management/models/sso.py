@@ -12,7 +12,7 @@ Supports multiple SSO providers:
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
@@ -130,7 +130,7 @@ class SSOProvider(Base):
     )
 
     # Relationships
-    organization: Mapped["Organization" | None] = relationship(
+    organization: Mapped[Optional["Organization"]] = relationship(
         "Organization",
         back_populates="sso_providers",
     )
