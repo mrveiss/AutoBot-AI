@@ -360,9 +360,20 @@ _gateway_instance: Gateway | None = None
 
 
 async def get_gateway() -> Gateway:
-    """Get the singleton Gateway instance."""
+    """Get the singleton Gateway instance.
+
+    GH#8268: injects DistributedAgentCoordinator._router so user-chat messages
+    flow through RLRouter's Q-learning selection (GH#881 prerequisite is closed).
+    """
     global _gateway_instance
     if _gateway_instance is None:
-        _gateway_instance = Gateway()
+        try:
+            from agents.agent_orchestration import get_distributed_agent_coordinator
+
+            coordinator = get_distributed_agent_coordinator()
+            _gateway_instance = Gateway(agent_router=coordinator._router)
+        except Exception:
+            logger.warning("DistributedAgentCoordinator unavailable; Gateway starts without RLRouter")
+            _gateway_instance = Gateway()
         await _gateway_instance.start()
     return _gateway_instance
