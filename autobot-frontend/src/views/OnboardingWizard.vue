@@ -12,6 +12,7 @@ OnboardingWizard.vue — First-run UX wizard (Issue #5061)
 -->
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
@@ -190,7 +191,7 @@ onMounted(async () => {
     <!-- Header -->
     <div class="wizard-header">
       <div class="wizard-brand">
-        <i class="fas fa-robot text-autobot-accent"></i>
+        <Icon name="robot" class="text-autobot-accent" />
         <span class="ml-2 text-lg font-semibold text-autobot-text">AutoBot Setup</span>
       </div>
       <div class="wizard-steps" aria-label="Setup progress">
@@ -207,13 +208,13 @@ onMounted(async () => {
 
     <!-- Success state -->
     <div v-if="step === 4" class="wizard-card success-card">
-      <i class="fas fa-check-circle text-green-400 text-5xl mb-4"></i>
+      <Icon name="check-circle" class="text-green-400 text-5xl mb-4" />
       <h2 class="text-xl font-semibold text-autobot-text mb-2">You're all set!</h2>
       <p class="text-autobot-text-muted mb-6">
         Your preset has been applied. Head to Chat to start using AutoBot.
       </p>
       <button class="btn-primary" @click="goToChat">
-        <i class="fas fa-comments mr-2"></i>Open Chat
+        <Icon name="comments" class="mr-2" />Open Chat
       </button>
     </div>
 
@@ -224,7 +225,7 @@ onMounted(async () => {
 
         <!-- Error banner -->
         <div v-if="error" class="error-banner" role="alert">
-          <i class="fas fa-exclamation-triangle mr-2"></i>{{ error }}
+          <Icon name="exclamation-triangle" class="mr-2" />{{ error }}
         </div>
 
         <!-- ----------------------------------------------------------------
@@ -232,14 +233,14 @@ onMounted(async () => {
              ---------------------------------------------------------------- -->
         <div v-if="step === 1" class="step-content">
           <div v-if="loading" class="loading-state">
-            <i class="fas fa-spinner fa-spin text-2xl text-autobot-accent"></i>
+            <Icon name="spinner" class="animate-spin text-2xl text-autobot-accent" />
             <p class="mt-2 text-autobot-text-muted">Scanning system…</p>
           </div>
 
           <template v-else-if="doctorReport">
             <!-- Hardware -->
             <section class="doctor-section">
-              <h3 class="section-title"><i class="fas fa-microchip mr-2"></i>Hardware</h3>
+              <h3 class="section-title"><Icon name="cube" class="mr-2" />Hardware</h3>
               <div class="metrics-grid">
                 <div class="metric-card">
                   <span class="metric-label">RAM</span>
@@ -260,7 +261,7 @@ onMounted(async () => {
 
             <!-- Services -->
             <section class="doctor-section">
-              <h3 class="section-title"><i class="fas fa-server mr-2"></i>Services</h3>
+              <h3 class="section-title"><Icon name="server" class="mr-2" />Services</h3>
               <div class="services-list">
                 <div
                   v-for="(info, name) in doctorReport.services"
@@ -278,7 +279,7 @@ onMounted(async () => {
 
             <!-- Recommendation -->
             <section class="doctor-section recommendation-box">
-              <h3 class="section-title"><i class="fas fa-lightbulb mr-2"></i>Recommendation</h3>
+              <h3 class="section-title"><Icon name="lightbulb" class="mr-2" />Recommendation</h3>
               <div class="flex items-center gap-3 mb-2">
                 <span class="text-autobot-text-muted text-sm">Suggested tier:</span>
                 <span :class="['tier-badge', tierBadgeClass(doctorReport.recommendation.llm_tier)]">
@@ -330,7 +331,7 @@ onMounted(async () => {
                 </span>
               </div>
               <div v-if="selectedPreset === preset.name" class="preset-check-mark">
-                <i class="fas fa-check-circle text-autobot-accent"></i>
+                <Icon name="check-circle" class="text-autobot-accent" />
               </div>
             </div>
           </div>
@@ -375,7 +376,7 @@ onMounted(async () => {
             :disabled="loading"
             @click="prevStep"
           >
-            <i class="fas fa-chevron-left mr-1"></i>Back
+            <Icon name="chevron-left" class="mr-1" />Back
           </button>
           <div class="flex-1"></div>
           <button
@@ -384,7 +385,7 @@ onMounted(async () => {
             :disabled="!canGoNext"
             @click="nextStep"
           >
-            Next<i class="fas fa-chevron-right ml-1"></i>
+            Next<Icon name="chevron-right" class="ml-1" />
           </button>
           <button
             v-if="step === 3"
@@ -392,7 +393,7 @@ onMounted(async () => {
             :disabled="loading || !selectedPreset"
             @click="handleApply"
           >
-            <i v-if="loading" class="fas fa-spinner fa-spin mr-2"></i>
+            <Icon v-if="loading" name="spinner" class="animate-spin mr-2" />
             <span>{{ loading ? 'Applying…' : 'Apply Preset' }}</span>
           </button>
         </div>

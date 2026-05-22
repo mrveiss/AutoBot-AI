@@ -6,14 +6,14 @@
           <!-- Header -->
           <div class="captcha-header">
             <div class="captcha-icon">
-              <i class="fas fa-shield-alt"></i>
+              <Icon name="shield-alt" />
             </div>
             <div class="captcha-title">
               <h3>{{ $t('research.captcha.detected') }}</h3>
               <p class="captcha-type">{{ captchaTypeLabel }}</p>
             </div>
             <div class="captcha-timer" :class="{ 'timer-warning': timeRemaining < 30 }">
-              <i class="fas fa-clock"></i>
+              <Icon name="clock" />
               {{ formatTime(timeRemaining) }}
             </div>
           </div>
@@ -24,7 +24,7 @@
               {{ $t('research.captcha.message') }}
             </p>
             <p class="captcha-url">
-              <i class="fas fa-link"></i>
+              <Icon name="link" />
               <a :href="activeCaptcha.url" target="_blank" rel="noopener">{{ truncatedUrl }}</a>
             </p>
 
@@ -37,7 +37,7 @@
                 @click="openVnc"
               />
               <div class="preview-overlay" @click="openVnc">
-                <i class="fas fa-external-link-alt"></i>
+                <Icon name="external-link-alt" />
                 {{ $t('research.captcha.clickToSolve') }}
               </div>
             </div>
@@ -46,15 +46,15 @@
           <!-- Actions -->
           <div class="captcha-actions">
             <button class="btn-vnc" @click="openVnc">
-              <i class="fas fa-desktop"></i>
+              <Icon name="desktop" />
               {{ $t('research.captcha.openVnc') }}
             </button>
             <button class="btn-solved" @click="markSolved" :disabled="isSubmitting">
-              <i class="fas fa-check"></i>
+              <Icon name="check" />
               {{ $t('research.captcha.solved') }}
             </button>
             <button class="btn-skip" @click="skipCaptcha" :disabled="isSubmitting">
-              <i class="fas fa-times"></i>
+              <Icon name="times" />
               {{ $t('research.captcha.skipSource') }}
             </button>
           </div>
@@ -74,6 +74,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { useI18n } from 'vue-i18n'
 import { useCaptchaStatus } from '@/composables/research/useCaptchaStatus'
 

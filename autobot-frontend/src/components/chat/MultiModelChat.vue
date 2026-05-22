@@ -40,7 +40,7 @@
         :aria-label="$t('chat.compare.sendLabel')"
       >
         <span v-if="isComparing">
-          <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+          <Icon name="spinner" class="animate-spin" />
         </span>
         <span v-else>{{ $t('chat.compare.send') }}</span>
       </button>
@@ -91,6 +91,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, watch } from 'vue'
 import { useMultiModelCompare } from '@/composables/useMultiModelCompare'
 

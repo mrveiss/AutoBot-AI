@@ -3,7 +3,7 @@
     <div class="widget-header" @click="toggleExpanded" tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
       <div class="workflow-info">
         <div class="workflow-title">
-          <i class="fas fa-cogs"></i>
+          <Icon name="cogs" />
           {{ activeWorkflow.user_message }}
         </div>
         <div class="workflow-progress">
@@ -21,11 +21,11 @@
 
       <div class="widget-controls">
         <button v-if="hasApprovalPending" @click.stop="openApprovals" class="btn-approval" :aria-label="$t('workflow.progress.warningAriaLabel')">
-          <i class="fas fa-exclamation-circle"></i>
+          <Icon name="exclamation-circle" />
           {{ $t('workflow.progress.approvalRequired') }}
         </button>
         <button @click.stop="toggleExpanded" class="btn-toggle" :aria-label="$t('workflow.progress.expandAriaLabel')">
-          <i :class="expanded ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
+          <Icon :name="expanded ? 'chevron-up' : 'chevron-down'" />
         </button>
       </div>
     </div>
@@ -63,11 +63,11 @@
 
       <div class="widget-actions">
         <button @click="openFullWorkflowView" class="btn-view" :aria-label="$t('workflow.progress.viewAriaLabel')">
-          <i class="fas fa-external-link-alt"></i>
+          <Icon name="external-link-alt" />
           {{ $t('workflow.progress.viewFullWorkflow') }}
         </button>
         <button @click="cancelWorkflow" class="btn-cancel" :aria-label="$t('workflow.progress.cancelAriaLabel')">
-          <i class="fas fa-stop"></i>
+          <Icon name="stop" />
           {{ $t('workflow.progress.cancel') }}
         </button>
       </div>
@@ -76,6 +76,7 @@
 </template>
 
 <script setup>
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'

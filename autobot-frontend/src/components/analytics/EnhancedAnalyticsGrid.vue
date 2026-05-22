@@ -4,9 +4,9 @@
     <BasePanel variant="dark" size="medium">
       <template #header>
         <div class="card-header-content">
-          <h3><i class="fas fa-tachometer-alt"></i> {{ $t('analytics.grid.systemOverview') }}</h3>
+          <h3><Icon name="tachometer-alt" /> {{ $t('analytics.grid.systemOverview') }}</h3>
           <div class="refresh-indicator" :class="{ active: realTimeEnabled }">
-            <i class="fas fa-circle"></i>
+            <Icon name="circle" />
             {{ realTimeEnabled ? $t('analytics.grid.live') : $t('analytics.grid.static') }}
           </div>
         </div>
@@ -46,9 +46,9 @@
     <BasePanel variant="dark" size="medium">
       <template #header>
         <div class="card-header-content">
-          <h3><i class="fas fa-network-wired"></i> {{ $t('analytics.grid.communicationPatterns') }}</h3>
+          <h3><Icon name="network-wired" /> {{ $t('analytics.grid.communicationPatterns') }}</h3>
           <button @click="$emit('load-communication-patterns')" class="refresh-btn">
-            <i class="fas fa-sync"></i>
+            <Icon name="sync" />
           </button>
         </div>
       </template>
@@ -77,9 +77,9 @@
     <BasePanel variant="dark" size="medium">
       <template #header>
         <div class="card-header-content">
-          <h3><i class="fas fa-code-branch"></i> {{ $t('analytics.grid.codeQuality') }}</h3>
+          <h3><Icon name="code-branch" /> {{ $t('analytics.grid.codeQuality') }}</h3>
           <button @click="$emit('load-code-quality')" class="refresh-btn">
-            <i class="fas fa-sync"></i>
+            <Icon name="sync" />
           </button>
         </div>
       </template>
@@ -114,9 +114,9 @@
     <BasePanel variant="dark" size="medium">
       <template #header>
         <div class="card-header-content">
-          <h3><i class="fas fa-bolt"></i> {{ $t('analytics.grid.performanceMetrics') }}</h3>
+          <h3><Icon name="bolt" /> {{ $t('analytics.grid.performanceMetrics') }}</h3>
           <button @click="$emit('load-performance-metrics')" class="refresh-btn">
-            <i class="fas fa-sync"></i>
+            <Icon name="sync" />
           </button>
         </div>
       </template>
@@ -162,6 +162,7 @@
  * Issue #184: Split oversized Vue components
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 

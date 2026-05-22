@@ -16,6 +16,7 @@
  * - Slide animation
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -149,14 +150,14 @@ function stopResize(): void {
 
 function getTypeIcon(type?: string): string {
   const icons: Record<string, string> = {
-    'markdown': 'fas fa-file-alt',
-    'document': 'fas fa-file-alt',
-    'api': 'fas fa-code',
-    'code': 'fas fa-code',
-    'guide': 'fas fa-book',
-    'reference': 'fas fa-book-open'
+    'markdown': 'file-alt',
+    'document': 'file-alt',
+    'api': 'code',
+    'code': 'code',
+    'guide': 'book',
+    'reference': 'book-open'
   }
-  return icons[type || 'document'] || 'fas fa-file'
+  return icons[type || 'document'] || 'file'
 }
 
 // Cleanup on close
@@ -196,7 +197,7 @@ onUnmounted(() => {
           <header class="panel-header">
             <div class="header-content">
               <div class="doc-type-icon">
-                <i :class="getTypeIcon(document?.type)"></i>
+                <Icon :name="getTypeIcon(document?.type)" />
               </div>
               <div class="header-info">
                 <h3 class="panel-title">{{ document?.title || $t('knowledge.panels.sourcePreview.defaultTitle') }}</h3>
@@ -208,14 +209,14 @@ onUnmounted(() => {
               @click="closePanel"
               :title="$t('knowledge.panels.sourcePreview.closePanel')"
             >
-              <i class="fas fa-times"></i>
+              <Icon name="times" />
             </button>
           </header>
 
           <!-- Panel Content -->
           <div class="panel-body">
             <div v-if="!hasDocument" class="empty-state">
-              <i class="fas fa-file-alt"></i>
+              <Icon name="file-alt" />
               <p>{{ $t('knowledge.panels.sourcePreview.noDocument') }}</p>
             </div>
 
@@ -223,15 +224,15 @@ onUnmounted(() => {
               <!-- Metadata Bar -->
               <div class="metadata-bar">
                 <span v-if="document?.category" class="meta-item">
-                  <i class="fas fa-folder"></i>
+                  <Icon name="folder" />
                   {{ document.category }}
                 </span>
                 <span class="meta-item">
-                  <i class="fas fa-file-word"></i>
+                  <Icon name="file-word" />
                   {{ $t('knowledge.panels.sourcePreview.wordCount', { count: wordCount }) }}
                 </span>
                 <span v-if="relevancePercent !== null" class="meta-item relevance">
-                  <i class="fas fa-bullseye"></i>
+                  <Icon name="bullseye" />
                   {{ $t('knowledge.panels.sourcePreview.relevance', { percent: relevancePercent }) }}
                 </span>
               </div>
@@ -252,7 +253,7 @@ onUnmounted(() => {
               @click="copyContent"
               :disabled="!hasDocument"
             >
-              <i :class="copySuccess ? 'fas fa-check' : 'fas fa-copy'"></i>
+              <Icon :name="copySuccess ? 'check' : 'copy'" />
               {{ copySuccess ? $t('knowledge.panels.sourcePreview.copied') : $t('knowledge.panels.sourcePreview.copy') }}
             </BaseButton>
 
@@ -262,7 +263,7 @@ onUnmounted(() => {
               @click="openInKnowledgeManager"
               :disabled="!hasDocument"
             >
-              <i class="fas fa-external-link-alt"></i>
+              <Icon name="external-link-alt" />
               {{ $t('knowledge.panels.sourcePreview.openInKnowledgeManager') }}
             </BaseButton>
           </footer>

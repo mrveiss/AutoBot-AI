@@ -25,18 +25,18 @@
           <option value="7d">{{ t('visualizations.resourceHeatmap.last7Days') }}</option>
         </select>
         <button @click="fetchData" class="refresh-btn" :disabled="isLoading">
-          <i class="fas fa-sync" :class="{ 'fa-spin': isLoading }"></i>
+          <Icon name="sync" />
         </button>
       </div>
     </div>
 
     <div v-if="isLoading" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" class="animate-spin" />
       <span>{{ t('visualizations.resourceHeatmap.loadingData') }}</span>
     </div>
 
     <div v-else-if="error" class="error-state">
-      <i class="fas fa-exclamation-triangle"></i>
+      <Icon name="exclamation-triangle" />
       <span>{{ error }}</span>
       <button @click="fetchData" class="retry-btn">{{ t('visualizations.resourceHeatmap.retry') }}</button>
     </div>
@@ -55,7 +55,7 @@
         :series="chartSeries"
       />
       <div v-else class="no-data-state">
-        <i class="fas fa-chart-bar"></i>
+        <Icon name="chart-bar" />
         <span>{{ t('visualizations.resourceHeatmap.noData') }}</span>
       </div>
 
@@ -86,6 +86,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import VueApexCharts from 'vue3-apexcharts'

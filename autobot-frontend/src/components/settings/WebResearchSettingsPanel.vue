@@ -11,7 +11,7 @@ Issue #3850: web research settings UI missing
   <form class="web-research-panel" @submit.prevent>
     <div class="panel-header">
       <h3 class="panel-title">
-        <i class="fas fa-search" aria-hidden="true"></i>
+        <Icon name="search" />
         {{ t('settings.webResearch.title') }}
       </h3>
     </div>
@@ -21,7 +21,7 @@ Issue #3850: web research settings UI missing
       <!-- Enable / disable -->
       <fieldset class="preference-section">
         <legend class="preference-label">
-          <i class="fas fa-toggle-on" aria-hidden="true"></i>
+          <Icon name="check" />
           {{ t('settings.webResearch.enabledLabel') }}
         </legend>
         <label class="toggle-row">
@@ -42,7 +42,7 @@ Issue #3850: web research settings UI missing
       <!-- Require user confirmation -->
       <fieldset class="preference-section">
         <legend class="preference-label">
-          <i class="fas fa-user-check" aria-hidden="true"></i>
+          <Icon name="user" />
           {{ t('settings.webResearch.confirmationLabel') }}
         </legend>
         <label class="toggle-row">
@@ -63,7 +63,7 @@ Issue #3850: web research settings UI missing
       <!-- Preferred method -->
       <fieldset class="preference-section">
         <legend class="preference-label">
-          <i class="fas fa-sliders-h" aria-hidden="true"></i>
+          <Icon name="sliders-h" />
           {{ t('settings.webResearch.methodLabel') }}
         </legend>
         <p class="preference-hint">{{ t('settings.webResearch.methodHint') }}</p>
@@ -78,14 +78,14 @@ Issue #3850: web research settings UI missing
             <option value="advanced">{{ t('settings.webResearch.methodAdvanced') }}</option>
             <option value="api_based">{{ t('settings.webResearch.methodApiBased') }}</option>
           </select>
-          <i class="fas fa-chevron-down select-icon" aria-hidden="true"></i>
+          <Icon name="chevron-down" class="select-icon" />
         </div>
       </fieldset>
 
       <!-- Max results -->
       <fieldset class="preference-section">
         <legend class="preference-label">
-          <i class="fas fa-list-ol" aria-hidden="true"></i>
+          <Icon name="list-ol" />
           {{ t('settings.webResearch.maxResultsLabel') }}
         </legend>
         <p class="preference-hint">{{ t('settings.webResearch.maxResultsHint') }}</p>
@@ -102,7 +102,7 @@ Issue #3850: web research settings UI missing
       <!-- Timeout -->
       <fieldset class="preference-section">
         <legend class="preference-label">
-          <i class="fas fa-clock" aria-hidden="true"></i>
+          <Icon name="clock" />
           {{ t('settings.webResearch.timeoutLabel') }}
         </legend>
         <p class="preference-hint">{{ t('settings.webResearch.timeoutHint') }}</p>
@@ -119,7 +119,7 @@ Issue #3850: web research settings UI missing
       <!-- Auto-research threshold -->
       <fieldset class="preference-section">
         <legend class="preference-label">
-          <i class="fas fa-robot" aria-hidden="true"></i>
+          <Icon name="robot" />
           {{ t('settings.webResearch.thresholdLabel') }}
         </legend>
         <p class="preference-hint">{{ t('settings.webResearch.thresholdHint') }}</p>
@@ -139,7 +139,7 @@ Issue #3850: web research settings UI missing
       <!-- Rate limiting -->
       <fieldset class="preference-section">
         <legend class="preference-label">
-          <i class="fas fa-tachometer-alt" aria-hidden="true"></i>
+          <Icon name="tachometer-alt" />
           {{ t('settings.webResearch.rateLimitLabel') }}
         </legend>
         <p class="preference-hint">{{ t('settings.webResearch.rateLimitHint') }}</p>
@@ -170,7 +170,7 @@ Issue #3850: web research settings UI missing
       <!-- Privacy & storage toggles -->
       <fieldset class="preference-section">
         <legend class="preference-label">
-          <i class="fas fa-shield-alt" aria-hidden="true"></i>
+          <Icon name="shield-alt" />
           {{ t('settings.webResearch.privacyLabel') }}
         </legend>
 
@@ -220,7 +220,7 @@ Issue #3850: web research settings UI missing
       <!-- Reset -->
       <div class="panel-actions">
         <button type="button" class="reset-btn" @click="store.resetSettings()">
-          <i class="fas fa-undo" aria-hidden="true"></i>
+          <Icon name="undo" />
           {{ t('settings.reset') }}
         </button>
       </div>
@@ -230,6 +230,7 @@ Issue #3850: web research settings UI missing
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useWebResearchStore } from '@/stores/useWebResearchStore'

@@ -54,7 +54,7 @@
             @click="toggleCodeSmellType(String(smellType))"
           >
             <div class="header-info">
-              <i :class="isSmellTypeExpanded(smellType) ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+              <Icon :name="isSmellTypeExpanded(smellType) ? 'chevron-down' : 'chevron-right'" />
               <span class="header-name">{{ formatCodeSmellType(String(smellType)) }}</span>
               <span class="header-count">({{ group.smells.length.toLocaleString() }})</span>
             </div>
@@ -124,6 +124,7 @@
  * Issue #184: Split oversized Vue components
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import { useGroupingMemo } from '@/composables/useComputedMemo'
 import { useExpansion } from '@/composables/useExpansion'

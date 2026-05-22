@@ -27,13 +27,14 @@
 
     <!-- Current step -->
     <div class="progress-step" v-if="currentStep && showStep">
-      <i class="fas fa-cog fa-spin step-icon" v-if="isRunning"></i>
+      <Icon name="cog" class="animate-spin step-icon" />
       <span class="step-text">{{ currentStep }}</span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import type { OperationStatus } from '@/types/operations'
 

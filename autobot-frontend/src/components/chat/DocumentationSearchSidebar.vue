@@ -7,14 +7,14 @@
       :aria-expanded="!isCollapsed"
       :aria-label="$t('chat.docSearch.toggleSidebar')"
     >
-      <i :class="isCollapsed ? 'fas fa-chevron-left' : 'fas fa-chevron-right'" aria-hidden="true"></i>
+      <Icon :name="isCollapsed ? 'chevron-left' : 'chevron-right'" />
     </button>
 
     <div v-if="!isCollapsed" class="sidebar-content">
       <!-- Header -->
       <div class="sidebar-header">
         <h3 class="sidebar-title">
-          <i class="fas fa-book-open" aria-hidden="true"></i>
+          <Icon name="book-open" />
           {{ $t('chat.docSearch.title') }}
         </h3>
         <button
@@ -22,14 +22,14 @@
           @click="$emit('close')"
           :aria-label="$t('chat.docSearch.closeSidebar')"
         >
-          <i class="fas fa-times" aria-hidden="true"></i>
+          <Icon name="times" />
         </button>
       </div>
 
       <!-- Search Input -->
       <div class="search-section">
         <div class="search-input-wrapper">
-          <i class="fas fa-search search-icon" aria-hidden="true"></i>
+          <Icon name="search" class="search-icon" />
           <input
             v-model="searchQuery"
             type="text"
@@ -45,7 +45,7 @@
             @click="clearSearch"
             :aria-label="$t('chat.docSearch.clearSearch')"
           >
-            <i class="fas fa-times" aria-hidden="true"></i>
+            <Icon name="times" />
           </button>
         </div>
       </div>
@@ -83,7 +83,7 @@
 
         <!-- Loading State -->
         <div v-if="isSearching" class="loading-state">
-          <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+          <Icon name="spinner" class="animate-spin" />
           <span>{{ $t('chat.docSearch.searching') }}</span>
         </div>
 
@@ -112,14 +112,14 @@
             @click="loadMore"
             :disabled="isLoadingMore"
           >
-            <i v-if="isLoadingMore" class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+            <Icon name="spinner" class="animate-spin" v-if="isLoadingMore"  aria-hidden="true" />
             <span>{{ isLoadingMore ? $t('common.loading') : $t('common.loadMore') }}</span>
           </button>
         </div>
 
         <!-- Empty State -->
         <div v-else class="empty-state">
-          <i class="fas fa-file-alt" aria-hidden="true"></i>
+          <Icon name="file-alt" />
           <p v-if="searchQuery">{{ $t('chat.docSearch.noResults', { query: searchQuery }) }}</p>
           <p v-else>{{ $t('chat.docSearch.searchPrompt') }}</p>
           <div v-if="!searchQuery" class="quick-searches">
@@ -146,7 +146,7 @@
             class="recent-item"
             @click="openRecentDoc(doc)"
           >
-            <i :class="getCategoryIcon(doc.category)" aria-hidden="true"></i>
+            <Icon :name="getCategoryIcon(doc.category)" />
             <span class="recent-title">{{ doc.title }}</span>
           </button>
         </div>
@@ -168,6 +168,7 @@
  * Issue #165: Chat Documentation UI Integration
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DocumentationResultCard from './DocumentationResultCard.vue'
@@ -234,19 +235,19 @@ const quickSearches = [
 
 // Category icons
 const categoryIcons: Record<string, string> = {
-  architecture: 'fas fa-project-diagram',
-  developer: 'fas fa-code',
-  api: 'fas fa-plug',
-  troubleshooting: 'fas fa-wrench',
-  deployment: 'fas fa-rocket',
-  security: 'fas fa-shield-alt',
-  features: 'fas fa-star',
-  testing: 'fas fa-vial',
-  workflow: 'fas fa-sitemap',
-  guides: 'fas fa-book',
-  implementation: 'fas fa-cogs',
-  agents: 'fas fa-robot',
-  general: 'fas fa-file-alt'
+  architecture: 'project-diagram',
+  developer: 'code',
+  api: 'plug',
+  troubleshooting: 'wrench',
+  deployment: 'rocket',
+  security: 'shield-alt',
+  features: 'star',
+  testing: 'vial',
+  workflow: 'sitemap',
+  guides: 'book',
+  implementation: 'cogs',
+  agents: 'robot',
+  general: 'file-alt'
 }
 
 const getCategoryIcon = (category: string): string => {

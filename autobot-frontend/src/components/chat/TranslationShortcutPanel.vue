@@ -2,7 +2,7 @@
   <div class="translation-panel">
     <div class="translation-panel-header">
       <h4 class="panel-title">
-        <i class="fas fa-language" aria-hidden="true"></i>
+        <Icon name="language" />
         {{ $t('chat.translate.title') }}
       </h4>
       <BaseButton
@@ -11,7 +11,7 @@
         @click="$emit('close')"
         :aria-label="$t('chat.translate.close')"
       >
-        <i class="fas fa-times" aria-hidden="true"></i>
+        <Icon name="times" />
       </BaseButton>
     </div>
 
@@ -59,7 +59,7 @@
           :disabled="!textToTranslate.trim() || isLoading"
           class="detect-btn"
         >
-          <i class="fas fa-search" aria-hidden="true"></i>
+          <Icon name="search" />
           {{ $t('chat.translate.detectLanguage') }}
         </BaseButton>
         <BaseButton
@@ -69,19 +69,19 @@
           :disabled="!canTranslate"
           :loading="isLoading"
         >
-          <i class="fas fa-language" aria-hidden="true"></i>
+          <Icon name="language" />
           {{ $t('chat.translate.translate') }}
         </BaseButton>
       </div>
 
       <!-- Result Display -->
       <div v-if="detectedLanguage" class="result-info">
-        <i class="fas fa-info-circle" aria-hidden="true"></i>
+        <Icon name="info-circle" />
         {{ $t('chat.translate.detectedAs', { language: detectedLanguage }) }}
       </div>
 
       <div v-if="translationError" class="result-error">
-        <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+        <Icon name="exclamation-triangle" />
         {{ translationError }}
       </div>
     </div>
@@ -90,6 +90,7 @@
 
 <script setup lang="ts">
 // Issue #1328: Translation shortcut panel with language picker
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseButton from '@/components/base/BaseButton.vue'

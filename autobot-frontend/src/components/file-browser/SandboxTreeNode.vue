@@ -20,7 +20,7 @@
     </button>
 
     <div v-else class="node-row node-file">
-      <i class="fas fa-file-alt node-icon file-icon"></i>
+      <Icon name="file-alt" class="node-icon file-icon" />
       <span class="node-name">{{ node.name }}</span>
     </div>
 
@@ -36,6 +36,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import type { SandboxTreeNode as SandboxTreeNodeType } from '@/composables/useFileSandbox'
 

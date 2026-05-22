@@ -88,6 +88,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
 

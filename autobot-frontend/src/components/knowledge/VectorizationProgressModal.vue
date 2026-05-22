@@ -5,11 +5,11 @@
         <!-- Header -->
         <div class="modal-header">
           <div class="header-content">
-            <i class="fas fa-cubes"></i>
+            <Icon name="cubes" />
             <h3>{{ $t('knowledge.vectorization.progressTitle') }}</h3>
           </div>
           <button class="close-btn" @click="$emit('close')">
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
           </button>
         </div>
 
@@ -65,10 +65,10 @@
               <div class="status-icon">
                 <i
                   :class="{
-                    'fas fa-check-circle': doc.status === 'vectorized',
+                    'check-circle': doc.status === 'vectorized',
                     'fas fa-spinner fa-spin': doc.status === 'pending',
-                    'fas fa-times-circle': doc.status === 'failed',
-                    'fas fa-question-circle': doc.status === 'unknown'
+                    'times-circle': doc.status === 'failed',
+                    'question-circle': doc.status === 'unknown'
                   }"
                 ></i>
               </div>
@@ -101,7 +101,7 @@
             class="action-btn retry-btn"
             @click="$emit('retry-failed')"
           >
-            <i class="fas fa-redo"></i>
+            <Icon name="redo" />
             {{ $t('knowledge.vectorization.retryFailed') }}
           </button>
           <button
@@ -109,7 +109,7 @@
             class="action-btn close-btn-action"
             @click="$emit('close')"
           >
-            <i class="fas fa-check"></i>
+            <Icon name="check" />
             {{ $t('knowledge.vectorization.done') }}
           </button>
           <button
@@ -117,7 +117,7 @@
             class="action-btn cancel-btn"
             @click="$emit('cancel')"
           >
-            <i class="fas fa-stop"></i>
+            <Icon name="stop" />
             {{ $t('knowledge.vectorization.cancelButton') }}
           </button>
         </div>
@@ -127,6 +127,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import VectorizationStatusBadge from './VectorizationStatusBadge.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'

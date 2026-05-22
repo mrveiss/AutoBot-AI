@@ -27,7 +27,7 @@
                 class="toggle-input"
               />
               <label :for="`stage-${stage.id}`" class="toggle-label">
-                <i :class="stage.icon"></i>
+                <Icon :name="stage.icon" />
                 {{ stage.name }}
               </label>
             </div>
@@ -130,6 +130,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, reactive, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/ui/Icon.vue'
@@ -162,7 +163,7 @@ const stages = reactive<Stage[]>([
   {
     id: 'extract',
     name: t('knowledge.pipeline.config.stageExtract'),
-    icon: 'fas fa-file-alt',
+    icon: 'file-alt',
     description: t('knowledge.pipeline.config.stageExtractDesc'),
     enabled: true,
     tasks: [
@@ -174,7 +175,7 @@ const stages = reactive<Stage[]>([
   {
     id: 'cognify',
     name: t('knowledge.pipeline.config.stageCognify'),
-    icon: 'fas fa-brain',
+    icon: 'brain',
     description: t('knowledge.pipeline.config.stageCognifyDesc'),
     enabled: true,
     tasks: [
@@ -187,7 +188,7 @@ const stages = reactive<Stage[]>([
   {
     id: 'load',
     name: t('knowledge.pipeline.config.stageLoad'),
-    icon: 'fas fa-database',
+    icon: 'database',
     description: t('knowledge.pipeline.config.stageLoadDesc'),
     enabled: true,
     tasks: [

@@ -3,7 +3,7 @@
     <div v-if="hasSelection" class="batch-toolbar">
       <div class="toolbar-content">
         <div class="toolbar-info">
-          <i class="fas fa-check-square"></i>
+          <Icon name="check-square" />
           <span>{{ $t('knowledge.batchToolbar.documentsSelected', { count: selectionCount }) }}</span>
         </div>
         <div class="toolbar-actions">
@@ -14,7 +14,7 @@
             :loading="isVectorizing"
             class="toolbar-btn vectorize"
           >
-            <i v-if="!isVectorizing" class="fas fa-cubes"></i>
+            <Icon name="cubes" v-if="!isVectorizing" />
             {{ $t('knowledge.batchToolbar.vectorizeSelected') }}
           </BaseButton>
           <BaseButton
@@ -22,7 +22,7 @@
             @click="$emit('deselect-all')"
             class="toolbar-btn cancel"
           >
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
             {{ $t('knowledge.batchToolbar.clearSelection') }}
           </BaseButton>
         </div>
@@ -44,6 +44,7 @@
  * Issue #184: Split oversized Vue components
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 
 interface Props {

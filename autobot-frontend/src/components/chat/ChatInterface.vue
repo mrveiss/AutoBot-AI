@@ -63,7 +63,7 @@
               :class="{ 'bg-electric-100 text-electric-600': voiceOutputEnabled }"
               :title="voiceOutputEnabled ? $t('chat.interface.voiceOutputOn') : $t('chat.interface.voiceOutputOff')"
             >
-              <i :class="isSpeaking ? 'fas fa-volume-up animate-pulse' : voiceOutputEnabled ? 'fas fa-volume-up' : 'fas fa-volume-mute'"></i>
+              <Icon :name="isSpeaking || voiceOutputEnabled ? 'volume-up' : 'volume-mute'" :class="isSpeaking ? 'animate-pulse' : ''" />
             </button>
             <!-- Voice Conversation (#1029) -->
             <button
@@ -72,7 +72,7 @@
               :class="{ 'bg-electric-100 text-electric-600': showVoiceOverlay || showVoicePanel }"
               :title="$t('chat.interface.voiceChat')"
             >
-              <i class="fas fa-headset"></i>
+              <Icon name="headset" />
             </button>
             <button
               v-if="store.currentSessionId"
@@ -81,7 +81,7 @@
               :class="{ 'bg-electric-100 text-electric-600': showFilePanel }"
               :title="$t('chat.interface.toggleFilePanel')"
             >
-              <i class="fas fa-paperclip"></i>
+              <Icon name="paperclip" />
             </button>
             <!-- Issue #4414: multi-model comparison toggle -->
             <button
@@ -91,7 +91,7 @@
               :title="$t('chat.compare.toggleTitle')"
               :aria-pressed="showComparePanel"
             >
-              <i class="fas fa-columns" aria-hidden="true"></i>
+              <Icon name="columns" />
             </button>
           </template>
         </ChatHeader>
@@ -184,7 +184,7 @@
       >
         <div class="tool-approval-dialog">
           <div class="tool-approval-header">
-            <i class="fas fa-shield-exclamation" aria-hidden="true"></i>
+            <Icon name="shield-alt" />
             <h3>{{ $t('chat.interface.toolApprovalTitle') }}</h3>
           </div>
           <div class="tool-approval-body">
@@ -222,7 +222,7 @@
               :disabled="submittingApproval"
               @click="onToolDenied()"
             >
-              <i class="fas fa-times" aria-hidden="true"></i>
+              <Icon name="times" />
               {{ $t('chat.interface.toolApprovalDeny') }}
             </button>
             <button
@@ -230,7 +230,7 @@
               :disabled="submittingApproval"
               @click="onToolApproved()"
             >
-              <i class="fas fa-check" aria-hidden="true"></i>
+              <Icon name="check" />
               {{ submittingApproval ? $t('chat.interface.toolApprovalSubmitting') : $t('chat.interface.toolApprovalApprove') }}
             </button>
           </div>
@@ -255,6 +255,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'

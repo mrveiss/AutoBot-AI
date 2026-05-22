@@ -5,9 +5,9 @@
       <BasePanel variant="dark" size="medium">
         <template #header>
           <div class="card-header-content">
-            <h3><i class="fas fa-tachometer-alt"></i> {{ $t('analytics.codebase.overview.title') }}</h3>
+            <h3><Icon name="tachometer-alt" /> {{ $t('analytics.codebase.overview.title') }}</h3>
             <div class="refresh-indicator" :class="{ active: realTimeEnabled }">
-              <i class="fas fa-circle"></i>
+              <Icon name="circle" />
               {{ realTimeEnabled ? $t('analytics.codebase.overview.live') : $t('analytics.codebase.overview.static') }}
             </div>
           </div>
@@ -49,9 +49,9 @@
       <BasePanel variant="dark" size="medium">
         <template #header>
           <div class="card-header-content">
-            <h3><i class="fas fa-network-wired"></i> {{ $t('analytics.codebase.communication.title') }}</h3>
+            <h3><Icon name="network-wired" /> {{ $t('analytics.codebase.communication.title') }}</h3>
             <button @click="emit('load-communication-patterns')" class="refresh-btn">
-              <i class="fas fa-sync"></i>
+              <Icon name="sync" />
             </button>
           </div>
         </template>
@@ -84,9 +84,9 @@
       <BasePanel variant="dark" size="medium">
         <template #header>
           <div class="card-header-content">
-            <h3><i class="fas fa-code-branch"></i> {{ $t('analytics.codebase.quality.title') }}</h3>
+            <h3><Icon name="code-branch" /> {{ $t('analytics.codebase.quality.title') }}</h3>
             <button @click="emit('load-code-quality')" class="refresh-btn">
-              <i class="fas fa-sync"></i>
+              <Icon name="sync" />
             </button>
           </div>
         </template>
@@ -121,9 +121,9 @@
       <BasePanel variant="dark" size="medium">
         <template #header>
           <div class="card-header-content">
-            <h3><i class="fas fa-bolt"></i> {{ $t('analytics.codebase.performance.title') }}</h3>
+            <h3><Icon name="bolt" /> {{ $t('analytics.codebase.performance.title') }}</h3>
             <button @click="emit('load-performance-metrics')" class="refresh-btn">
-              <i class="fas fa-sync"></i>
+              <Icon name="sync" />
             </button>
           </div>
         </template>
@@ -157,6 +157,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BasePanel from '@/components/base/BasePanel.vue'

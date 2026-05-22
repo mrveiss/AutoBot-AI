@@ -2,7 +2,7 @@
 <template>
   <div class="relationship-viewer">
     <div class="viewer-header">
-      <h4><i class="fas fa-sitemap"></i> {{ $t('knowledge.graph.relationships.title') }}</h4>
+      <h4><Icon name="sitemap" /> {{ $t('knowledge.graph.relationships.title') }}</h4>
       <p class="header-description">
         {{ $t('knowledge.graph.relationships.description') }}
       </p>
@@ -32,13 +32,13 @@
 
     <!-- Loading -->
     <div v-if="loading" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" class="animate-spin" />
       <span>{{ $t('knowledge.graph.relationships.loading') }}</span>
     </div>
 
     <!-- Error -->
     <div v-else-if="error" class="error-banner">
-      <i class="fas fa-exclamation-triangle"></i>
+      <Icon name="exclamation-triangle" />
       <span>{{ error }}</span>
     </div>
 
@@ -47,7 +47,7 @@
       v-else-if="filteredRelationships.length === 0"
       class="empty-state"
     >
-      <i class="fas fa-link"></i>
+      <Icon name="link" />
       <p>{{ $t('knowledge.graph.relationships.noResults') }}</p>
     </div>
 
@@ -84,7 +84,7 @@
 
         <div class="rel-meta">
           <span class="rel-confidence">
-            <i class="fas fa-bullseye"></i>
+            <Icon name="bullseye" />
             {{ (rel.confidence * 100).toFixed(0) }}%
           </span>
         </div>
@@ -106,6 +106,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useKnowledgeGraph } from '@/composables/useKnowledgeGraph'
 

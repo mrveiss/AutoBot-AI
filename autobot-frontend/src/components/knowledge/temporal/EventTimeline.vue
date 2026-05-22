@@ -2,7 +2,7 @@
 <template>
   <div class="event-timeline">
     <div class="timeline-header">
-      <h4><i class="fas fa-stream"></i> {{ $t('knowledge.temporal.events.title') }}</h4>
+      <h4><Icon name="stream" /> {{ $t('knowledge.temporal.events.title') }}</h4>
       <span v-if="events.length > 0" class="event-count">
         {{ $t('knowledge.temporal.events.eventCount', { count: events.length }) }}
       </span>
@@ -10,13 +10,13 @@
 
     <!-- Loading -->
     <div v-if="loading" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" class="animate-spin" />
       <span>{{ $t('knowledge.temporal.events.loading') }}</span>
     </div>
 
     <!-- Empty -->
     <div v-else-if="events.length === 0" class="empty-state">
-      <i class="fas fa-calendar-times"></i>
+      <Icon name="calendar" />
       <p>{{ $t('knowledge.temporal.events.noEvents') }}</p>
       <p class="empty-hint">
         {{ $t('knowledge.temporal.events.emptyHint') }}
@@ -46,7 +46,7 @@
             class="timeline-dot"
             :style="{ backgroundColor: getEventColor(event.event_type) }"
           >
-            <i :class="getEventIcon(event.event_type)"></i>
+            <Icon :name="getEventIcon(event.event_type)" />
           </div>
         </div>
 
@@ -125,6 +125,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { TemporalEvent } from '@/composables/useKnowledgeGraph'

@@ -33,7 +33,7 @@
           type="button"
           @click="activeTab = tab.key"
         >
-          <i :class="tab.icon"></i>
+          <Icon :name="tab.icon" />
           {{ tab.label }}
         </button>
       </div>
@@ -219,6 +219,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@/stores/useUserStore'
@@ -250,10 +251,10 @@ const emit = defineEmits<{
 type TabKey = 'general' | 'appearance' | 'language' | 'security'
 
 const tabs = computed<{ key: TabKey; label: string; icon: string }[]>(() => [
-  { key: 'general', label: t('profile.tabGeneral'), icon: 'fas fa-user' },
-  { key: 'appearance', label: t('profile.tabAppearance'), icon: 'fas fa-palette' },
-  { key: 'language', label: t('profile.tabLanguage'), icon: 'fas fa-globe' },
-  { key: 'security', label: t('profile.tabSecurity'), icon: 'fas fa-shield-alt' }
+  { key: 'general', label: t('profile.tabGeneral'), icon: 'user' },
+  { key: 'appearance', label: t('profile.tabAppearance'), icon: 'palette' },
+  { key: 'language', label: t('profile.tabLanguage'), icon: 'globe' },
+  { key: 'security', label: t('profile.tabSecurity'), icon: 'shield-alt' }
 ])
 
 const { t } = useI18n()

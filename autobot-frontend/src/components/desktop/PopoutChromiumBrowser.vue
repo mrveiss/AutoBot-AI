@@ -9,7 +9,7 @@
           <div class="w-3 h-3 bg-green-500 rounded-full"></div>
         </div>
         <div class="flex items-center gap-2 text-sm">
-          <i class="fab fa-chrome" style="color: var(--color-primary)"></i>
+          <Icon name="globe" />
           <span class="font-medium">{{ $t('desktop.popoutBrowser.title') }}</span>
           <span v-if="sessionId" class="text-xs text-autobot-text-muted">{{ $t('desktop.popoutBrowser.sessionLabel', { id: sessionId.slice(0, 8) }) }}</span>
         </div>
@@ -19,44 +19,44 @@
         <!-- Browser Controls -->
         <div class="flex items-center gap-1">
           <button @click="refreshBrowser" class="browser-btn" :disabled="isRefreshing" :title="$t('desktop.popoutBrowser.refresh')" :aria-label="$t('desktop.popoutBrowser.refresh')">
-            <i class="fas fa-sync-alt" :class="{ 'fa-spin': isRefreshing }"></i>
+            <Icon name="sync-alt" />
           </button>
 
           <button @click="navigateHome" class="browser-btn" :title="$t('desktop.popoutBrowser.home')" :aria-label="$t('desktop.popoutBrowser.home')">
-            <i class="fas fa-home"></i>
+            <Icon name="home" />
           </button>
 
           <button @click="showDevTools = !showDevTools" class="browser-btn" :title="$t('desktop.popoutBrowser.devTools')" :aria-label="$t('desktop.popoutBrowser.devTools')">
-            <i class="fas fa-code"></i>
+            <Icon name="code" />
           </button>
 
           <button @click="openVncPopout" class="browser-btn" style="color: var(--color-primary)" :title="$t('desktop.popoutBrowser.openVnc')" :aria-label="$t('desktop.popoutBrowser.openVnc')">
-            <i class="fas fa-desktop"></i>
+            <Icon name="desktop" />
           </button>
         </div>
 
         <!-- Playwright Automation Controls -->
         <div class="border-l border-autobot-border pl-2 flex items-center gap-1">
           <button @click="showPlaywrightPanel = !showPlaywrightPanel" class="browser-btn" :title="$t('desktop.popoutBrowser.playwrightAutomation')" :aria-label="$t('desktop.popoutBrowser.playwrightAutomation')">
-            <i class="fas fa-robot" :style="showPlaywrightPanel ? 'color: var(--color-primary)' : ''"></i>
+            <Icon name="robot" />
           </button>
 
           <button @click="runFrontendTest" class="browser-btn" :disabled="isTestingFrontend" :title="$t('desktop.popoutBrowser.testFrontend')" :aria-label="$t('desktop.popoutBrowser.testFrontend')">
-            <i class="fas fa-vials" :class="{ 'fa-spin': isTestingFrontend }"></i>
+            <Icon name="vial" />
           </button>
 
           <button @click="performWebSearch" class="browser-btn" :disabled="isSearching" :title="$t('desktop.popoutBrowser.webSearch')" :aria-label="$t('desktop.popoutBrowser.webSearch')">
-            <i class="fas fa-search" :class="{ 'fa-spin': isSearching }"></i>
+            <Icon name="search" />
           </button>
 
           <button @click="sendTestMessage" class="browser-btn" :disabled="isSendingMessage" :title="$t('desktop.popoutBrowser.testMessage')" :aria-label="$t('desktop.popoutBrowser.testMessage')">
-            <i class="fas fa-paper-plane" :class="{ 'fa-spin': isSendingMessage }"></i>
+            <Icon name="paper-plane" />
           </button>
         </div>
 
         <div class="border-l border-autobot-border pl-2">
           <button @click="$emit('close')" class="browser-btn text-red-600" :title="$t('desktop.popoutBrowser.close')" :aria-label="$t('desktop.popoutBrowser.close')">
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
           </button>
         </div>
       </div>
@@ -65,13 +65,13 @@
     <!-- Address Bar -->
     <div class="address-bar bg-autobot-bg-secondary border-b border-autobot-border p-3 flex items-center gap-3">
       <button @click="goBack" :disabled="!canGoBack || isGoingBack" class="nav-btn" :title="$t('desktop.popoutBrowser.back')" :aria-label="$t('desktop.popoutBrowser.back')">
-        <i class="fas fa-arrow-left" :class="{ 'fa-pulse': isGoingBack }"></i>
+        <Icon name="arrow-left" />
       </button>
       <button @click="goForward" :disabled="!canGoForward || isGoingForward" class="nav-btn" :title="$t('desktop.popoutBrowser.forward')" :aria-label="$t('desktop.popoutBrowser.forward')">
-        <i class="fas fa-arrow-right" :class="{ 'fa-pulse': isGoingForward }"></i>
+        <Icon name="arrow-right" />
       </button>
       <div class="flex-1 flex items-center bg-autobot-bg-tertiary rounded-lg px-3 py-2" :class="{ 'opacity-50': isNavigating }">
-        <i class="fas fa-lock text-green-500 text-sm mr-2" v-if="isSecure"></i>
+        <Icon name="lock" class="text-green-500 text-sm mr-2" />
         <input
           v-model="addressBarUrl"
           @keyup.enter="navigateToUrl(addressBarUrl)"
@@ -79,7 +79,7 @@
           :placeholder="$t('desktop.popoutBrowser.addressPlaceholder')"
         />
         <button @click="navigateToUrl(addressBarUrl)" :disabled="isNavigating" class="ml-2 text-autobot-text-secondary hover:text-autobot-text-primary">
-          <i class="fas fa-search"></i>
+          <Icon name="search" />
         </button>
       </div>
       <div class="text-xs text-autobot-text-muted">
@@ -94,7 +94,7 @@
         :title="markRegionsMode ? $t('desktop.popoutBrowser.exitRegionMode') : $t('desktop.popoutBrowser.markRegions')"
         :aria-label="markRegionsMode ? $t('desktop.popoutBrowser.exitRegionMode') : $t('desktop.popoutBrowser.markRegions')"
       >
-        <i class="fas" :class="isSnapshotLoading ? 'fa-spinner fa-spin' : 'fa-vector-square'"></i>
+        <Icon :name="isSnapshotLoading ? 'spinner' : 'th'" :class="isSnapshotLoading ? 'animate-spin' : ''" />
       </button>
     </div>
 
@@ -102,7 +102,7 @@
     <div v-if="showPlaywrightPanel" class="automation-panel border-b p-4" style="background: var(--color-info-bg); border-color: rgba(59,130,246,0.2)">
       <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-2">
-          <i class="fas fa-robot" style="color: var(--color-info)"></i>
+          <Icon name="robot" />
           <span class="font-medium text-autobot-text-primary">{{ $t('desktop.popoutBrowser.browserAutomation') }}</span>
           <span class="text-sm px-2 py-1 rounded" style="background: var(--color-info-bg); color: var(--color-info)">{{ playwrightStatus }}</span>
         </div>
@@ -111,7 +111,7 @@
           class="text-autobot-text-muted hover:text-autobot-text-secondary"
           :aria-label="$t('common.close')"
         >
-          <i class="fas fa-times"></i>
+          <Icon name="times" />
         </button>
       </div>
 
@@ -119,7 +119,7 @@
         <!-- Web Search -->
         <div class="automation-card">
           <div class="flex items-center gap-2 mb-2">
-            <i class="fas fa-search text-green-500"></i>
+            <Icon name="search" class="text-green-500" />
             <span class="text-sm font-medium">{{ $t('desktop.popoutBrowser.webSearch') }}</span>
           </div>
           <div class="space-y-2">
@@ -130,7 +130,7 @@
               :placeholder="$t('desktop.popoutBrowser.searchPlaceholder')"
             />
             <button @click="performWebSearch" :disabled="isSearching" class="w-full btn-sm btn-primary">
-              <i class="fas mr-1" :class="isSearching ? 'fa-spinner fa-spin' : 'fa-search'"></i>
+              <Icon :name="isSearching ? 'spinner' : 'search'" :class="isSearching ? 'animate-spin mr-1' : 'mr-1'" />
               {{ isSearching ? $t('desktop.popoutBrowser.searching') : $t('desktop.popoutBrowser.searchButton') }}
             </button>
           </div>
@@ -139,11 +139,11 @@
         <!-- Frontend Testing -->
         <div class="automation-card">
           <div class="flex items-center gap-2 mb-2">
-            <i class="fas fa-vials" style="color: var(--color-info)"></i>
+            <Icon name="vial" />
             <span class="text-sm font-medium">{{ $t('desktop.popoutBrowser.frontendTest') }}</span>
           </div>
           <button @click="runFrontendTest" :disabled="isTestingFrontend" class="w-full btn-sm btn-primary">
-              <i class="fas mr-1" :class="isTestingFrontend ? 'fa-spinner fa-spin' : 'fa-play'"></i>
+              <Icon :name="isTestingFrontend ? 'spinner' : 'play'" :class="isTestingFrontend ? 'animate-spin mr-1' : 'mr-1'" />
               {{ isTestingFrontend ? $t('desktop.popoutBrowser.running') : $t('desktop.popoutBrowser.runTests') }}
           </button>
         </div>
@@ -151,7 +151,7 @@
         <!-- Automation Results -->
         <div class="automation-card">
           <div class="flex items-center gap-2 mb-2">
-            <i class="fas fa-chart-bar text-purple-500"></i>
+            <Icon name="chart-bar" class="text-purple-500" />
             <span class="text-sm font-medium">{{ $t('desktop.popoutBrowser.results') }}</span>
           </div>
           <div class="text-xs text-autobot-text-secondary space-y-1">
@@ -162,7 +162,7 @@
               {{ $t('desktop.popoutBrowser.testResultCount', { passed: (automationResults.lastTest as TestData).passed || 0, total: (automationResults.lastTest as TestData).total || 0 }) }}
             </div>
             <div v-if="isSearching || isTestingFrontend || isSendingMessage" style="color: var(--color-info)">
-              <i class="fas fa-spinner fa-spin mr-1"></i>{{ $t('desktop.popoutBrowser.running') }}
+              <Icon name="spinner" class="animate-spin mr-1" />{{ $t('desktop.popoutBrowser.running') }}
             </div>
           </div>
         </div>
@@ -189,10 +189,10 @@
         <!-- API Error Overlay -->
         <div v-if="browserStatus === 'error'" class="absolute inset-0 flex items-center justify-center z-10" style="background: var(--color-error-bg)">
           <div class="text-center p-4">
-            <i class="fas fa-exclamation-triangle text-2xl mb-2" style="color: var(--color-error)"></i>
+            <Icon name="exclamation-triangle" class="text-2xl mb-2" />
             <p class="text-sm mb-2" style="color: var(--color-error)">{{ $t('desktop.popoutBrowser.playwrightConnectionFailed') }}</p>
             <BaseButton variant="primary" size="sm" @click="initializeBrowser" :loading="isInitializingBrowser">
-              <i class="fas fa-retry mr-1"></i>
+              <Icon name="redo" class="mr-1" />
               {{ $t('desktop.popoutBrowser.retryConnection') }}
             </BaseButton>
           </div>
@@ -201,7 +201,7 @@
         <!-- Loading state while VNC URL is being fetched -->
         <div v-if="!vncUrl" class="w-full h-full flex items-center justify-center bg-gray-900 text-white">
           <div class="text-center p-8">
-            <i class="fas fa-robot text-6xl mb-4 text-blue-400"></i>
+            <Icon name="robot" class="text-6xl mb-4 text-blue-400" />
             <h3 class="text-xl font-semibold mb-2">{{ $t('desktop.popoutBrowser.headlessBrowserMode') }}</h3>
             <p class="text-gray-300 mb-4">
               {{ $t('desktop.popoutBrowser.headlessDesc') }}
@@ -252,7 +252,7 @@
             </div>
             <div class="text-xs text-autobot-text-secondary">
               <div class="flex items-center gap-2">
-                <i class="fas fa-link" style="color: var(--color-info)"></i>
+                <Icon name="link" />
                 <span class="text-sm" style="color: var(--text-link)">{{ currentUrl }}</span>
               </div>
             </div>
@@ -264,7 +264,7 @@
 
             <div v-if="automationResults.lastSearch" class="mb-3 p-3 rounded" style="background: var(--color-info-bg)">
               <div class="flex items-center gap-2 mb-1">
-                <i class="fas fa-search" style="color: var(--color-info)"></i>
+                <Icon name="search" />
                 <span class="text-sm font-medium">{{ $t('desktop.popoutBrowser.webSearch') }}</span>
               </div>
               <p class="text-xs text-autobot-text-secondary">{{ $t('desktop.popoutBrowser.foundResults', { count: (automationResults.lastSearch as SearchData).results?.length || 0 }) }}</p>
@@ -272,7 +272,7 @@
 
             <div v-if="automationResults.lastTest" class="p-3 rounded" style="background: var(--color-success-bg)">
               <div class="flex items-center gap-2 mb-1">
-                <i class="fas fa-vials text-green-500"></i>
+                <Icon name="vial" class="text-green-500" />
                 <span class="text-sm font-medium">{{ $t('desktop.popoutBrowser.frontendTest') }}</span>
               </div>
               <p class="text-xs text-autobot-text-secondary">{{ $t('desktop.popoutBrowser.testResultCount', { passed: (automationResults.lastTest as TestData).passed, total: (automationResults.lastTest as TestData).total }) }}</p>
@@ -298,7 +298,7 @@
         >
           <template #actions>
             <BaseButton variant="primary" @click="initializeBrowser" :loading="isInitializingBrowser">
-              <i class="fas fa-rocket mr-2"></i>
+              <Icon name="rocket" class="mr-2" />
               {{ isInitializingBrowser ? $t('desktop.popoutBrowser.launching') : $t('desktop.popoutBrowser.launchSession') }}
             </BaseButton>
             <p class="text-sm text-autobot-text-muted mt-3">
@@ -329,7 +329,7 @@
         <div class="flex items-center justify-between bg-gray-800 p-2 text-white text-sm">
           <span>{{ $t('desktop.popoutBrowser.developerConsole') }}</span>
           <button @click="showDevTools = false" class="text-gray-400 hover:text-white" :aria-label="$t('common.close')">
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
           </button>
         </div>
         <div class="h-full overflow-auto p-2 text-green-400 font-mono text-xs bg-black">
@@ -344,17 +344,17 @@
       <div v-if="showInteractionOverlay" class="absolute inset-0 bg-black/50 flex items-center justify-center">
         <div class="bg-autobot-bg-elevated rounded-lg p-6 max-w-md mx-4">
           <div class="flex items-center mb-4">
-            <i class="fas fa-exclamation-triangle text-2xl mr-3" style="color: var(--color-warning)"></i>
+            <Icon name="exclamation-triangle" class="text-2xl mr-3" />
             <h3 class="text-lg font-semibold">{{ $t('desktop.popoutBrowser.interactionRequired') }}</h3>
           </div>
           <p class="text-autobot-text-primary mb-4">{{ interactionMessage }}</p>
           <div class="flex gap-3">
             <BaseButton variant="primary" @click="handleInteraction('wait')">
-              <i class="fas fa-clock mr-1"></i>
+              <Icon name="clock" class="mr-1" />
               {{ $t('desktop.popoutBrowser.waitAndMonitor') }}
             </BaseButton>
             <BaseButton variant="secondary" @click="handleInteraction('takeover')">
-              <i class="fas fa-hand-paper mr-1"></i>
+              <Icon name="hand-paper" class="mr-1" />
               {{ $t('desktop.popoutBrowser.takeControl') }}
             </BaseButton>
             <BaseButton variant="outline-solid" @click="hideInteractionOverlay">

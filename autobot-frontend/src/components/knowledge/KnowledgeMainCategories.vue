@@ -6,7 +6,7 @@
       class="kb-status-panel kb-status-panel--error"
       role="alert"
     >
-      <i class="fas fa-exclamation-triangle kb-status-panel__icon"></i>
+      <Icon name="exclamation-triangle" class="kb-status-panel__icon" />
       <div class="kb-status-panel__body">
         <h3 class="kb-status-panel__title">
           {{ $t('knowledge.categoriesFetchError.title') }}
@@ -23,7 +23,7 @@
       class="kb-status-panel kb-status-panel--error"
       role="alert"
     >
-      <i class="fas fa-exclamation-triangle kb-status-panel__icon"></i>
+      <Icon name="exclamation-triangle" class="kb-status-panel__icon" />
       <div class="kb-status-panel__body">
         <h3 class="kb-status-panel__title">
           {{ $t('knowledge.categoriesError.title') }}
@@ -40,7 +40,7 @@
       class="kb-status-panel kb-status-panel--info"
       role="status"
     >
-      <i class="fas fa-info-circle kb-status-panel__icon"></i>
+      <Icon name="info-circle" class="kb-status-panel__icon" />
       <div class="kb-status-panel__body">
         <h3 class="kb-status-panel__title">
           {{ $t('knowledge.emptyState.title') }}
@@ -63,7 +63,7 @@
         @click="$emit('select', mainCat.id)"
       >
         <div class="category-icon" :style="{ backgroundColor: mainCat.color }">
-          <i :class="mainCat.icon"></i>
+          <Icon :name="mainCat.icon" />
         </div>
         <div class="category-info">
           <h3>{{ mainCat.name }}</h3>
@@ -80,7 +80,7 @@
               @click.stop="$emit('populate', mainCat.id)"
               class="populate-btn"
             >
-              <i v-if="!populationStates[mainCat.id]?.isPopulating" class="fas fa-sync"></i>
+              <Icon name="sync" v-if="!populationStates[mainCat.id]?.isPopulating" />
               <span v-if="!populationStates[mainCat.id]?.isPopulating">{{ $t('knowledge.browser.populate') }}</span>
               <span v-else>{{ populationStates[mainCat.id]?.progress || 0 }}%</span>
             </BaseButton>
@@ -92,7 +92,7 @@
               @click.stop="$emit('import')"
               class="populate-btn"
             >
-              <i class="fas fa-file-import"></i>
+              <Icon name="file-import" />
               <span>{{ $t('knowledge.browser.import') }}</span>
             </BaseButton>
           </div>
@@ -116,6 +116,7 @@
  * Issue #5201: Distinguish empty-KB from broken-KB with clear CTA panels
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 

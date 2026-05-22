@@ -10,7 +10,7 @@
     @keydown.space.prevent="handleClick"
   >
     <span class="chip-icon" :class="iconClass">
-      <i :class="categoryIcon" aria-hidden="true"></i>
+      <Icon :name="categoryIcon" />
     </span>
     <span class="chip-label">{{ displayLabel }}</span>
     <span v-if="showScore && score !== undefined" class="chip-score" :class="scoreClass">
@@ -22,7 +22,7 @@
       @click.stop="$emit('dismiss')"
       :aria-label="$t('chat.docSuggestion.dismiss')"
     >
-      <i class="fas fa-times" aria-hidden="true"></i>
+      <Icon name="times" />
     </button>
   </div>
 </template>
@@ -41,6 +41,7 @@
  * Issue #704: Migrated to design tokens for SSOT theming
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -76,19 +77,19 @@ const emit = defineEmits<Emits>()
 
 // Category icon mapping
 const categoryIcons: Record<string, string> = {
-  architecture: 'fas fa-project-diagram',
-  developer: 'fas fa-code',
-  api: 'fas fa-plug',
-  troubleshooting: 'fas fa-wrench',
-  deployment: 'fas fa-rocket',
-  security: 'fas fa-shield-alt',
-  features: 'fas fa-star',
-  testing: 'fas fa-vial',
-  workflow: 'fas fa-sitemap',
-  guides: 'fas fa-book',
-  implementation: 'fas fa-cogs',
-  agents: 'fas fa-robot',
-  general: 'fas fa-file-alt'
+  architecture: 'project-diagram',
+  developer: 'code',
+  api: 'plug',
+  troubleshooting: 'wrench',
+  deployment: 'rocket',
+  security: 'shield-alt',
+  features: 'star',
+  testing: 'vial',
+  workflow: 'sitemap',
+  guides: 'book',
+  implementation: 'cogs',
+  agents: 'robot',
+  general: 'file-alt'
 }
 
 const categoryIcon = computed(() => {

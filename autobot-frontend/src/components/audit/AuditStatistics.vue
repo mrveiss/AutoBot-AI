@@ -4,7 +4,7 @@
       <!-- Total Events Card -->
       <div class="stat-card">
         <div class="stat-icon total">
-          <i class="fas fa-list-alt"></i>
+          <Icon name="list-alt" />
         </div>
         <div class="stat-content">
           <span class="stat-value">{{ formatNumber(statistics?.total_entries || 0) }}</span>
@@ -15,7 +15,7 @@
       <!-- Success Card -->
       <div class="stat-card">
         <div class="stat-icon success">
-          <i class="fas fa-check-circle"></i>
+          <Icon name="check-circle" />
         </div>
         <div class="stat-content">
           <span class="stat-value">{{ formatNumber(statistics?.success_count || 0) }}</span>
@@ -26,7 +26,7 @@
       <!-- Denied Card -->
       <div class="stat-card">
         <div class="stat-icon denied">
-          <i class="fas fa-ban"></i>
+          <Icon name="ban" />
         </div>
         <div class="stat-content">
           <span class="stat-value">{{ formatNumber(statistics?.denied_count || 0) }}</span>
@@ -37,7 +37,7 @@
       <!-- Failed Card -->
       <div class="stat-card">
         <div class="stat-icon failed">
-          <i class="fas fa-times-circle"></i>
+          <Icon name="times-circle" />
         </div>
         <div class="stat-content">
           <span class="stat-value">{{ formatNumber(statistics?.failed_count || 0) }}</span>
@@ -48,7 +48,7 @@
       <!-- Success Rate Card -->
       <div class="stat-card stat-card-wide">
         <div class="stat-icon rate">
-          <i class="fas fa-chart-pie"></i>
+          <Icon name="chart-pie" />
         </div>
         <div class="stat-content">
           <div class="success-rate-display">
@@ -70,7 +70,7 @@
       <!-- VM Info Card -->
       <div v-if="vmInfo" class="stat-card stat-card-wide">
         <div class="stat-icon vm">
-          <i class="fas fa-server"></i>
+          <Icon name="server" />
         </div>
         <div class="stat-content">
           <span class="stat-value stat-value-small">{{ vmInfo.vm_name }}</span>
@@ -82,7 +82,7 @@
     <!-- Top Operations Section -->
     <div v-if="statistics?.top_operations?.length" class="stat-section">
       <h4 class="section-title">
-        <i class="fas fa-fire"></i>
+        <Icon name="bolt" />
         {{ $t('audit.statistics.topOperations') }}
       </h4>
       <div class="top-list">
@@ -101,7 +101,7 @@
     <!-- Top Users Section -->
     <div v-if="statistics?.top_users?.length" class="stat-section">
       <h4 class="section-title">
-        <i class="fas fa-users"></i>
+        <Icon name="users" />
         {{ $t('audit.statistics.mostActiveUsers') }}
       </h4>
       <div class="top-list">
@@ -120,13 +120,14 @@
 
     <!-- Loading Overlay -->
     <div v-if="loading" class="loading-overlay">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" class="animate-spin" />
       <span>{{ $t('audit.statistics.loading') }}</span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import type { AuditStatistics } from '@/types/audit'
 

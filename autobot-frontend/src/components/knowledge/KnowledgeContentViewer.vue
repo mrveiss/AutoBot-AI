@@ -1,7 +1,7 @@
 <template>
   <div class="content-pane">
     <div v-if="!selectedFile" class="placeholder-state">
-      <i class="fas fa-file-alt"></i>
+      <Icon name="file-alt" />
       <h4>{{ $t('knowledge.contentViewer.noFileSelected') }}</h4>
       <p>{{ $t('knowledge.contentViewer.selectFileHint') }}</p>
     </div>
@@ -9,7 +9,7 @@
     <div v-else class="file-viewer">
       <div class="file-header">
         <div class="file-info">
-          <i :class="fileIcon"></i>
+          <Icon :name="fileIcon" />
           <div>
             <h4>{{ selectedFile.name }}</h4>
             <p class="file-meta">
@@ -25,18 +25,18 @@
           class="close-btn"
           :aria-label="$t('knowledge.contentViewer.closeFileViewer')"
         >
-          <i class="fas fa-times"></i>
+          <Icon name="times" />
         </BaseButton>
       </div>
 
       <div class="file-content">
         <div v-if="isLoading" class="loading-content">
-          <i class="fas fa-spinner fa-spin"></i>
+          <Icon name="spinner" class="animate-spin" />
           <p>{{ $t('knowledge.contentViewer.loadingContent') }}</p>
         </div>
 
         <div v-else-if="error" class="error-content">
-          <i class="fas fa-exclamation-circle"></i>
+          <Icon name="exclamation-circle" />
           <p>{{ error }}</p>
         </div>
 
@@ -59,6 +59,7 @@
  * Issue #184: Split oversized Vue components
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
@@ -98,7 +99,7 @@ defineEmits<Emits>()
 const { getFileIcon: getFileIconUtil } = useKnowledgeIcons()
 
 const fileIcon = computed(() => {
-  if (!props.selectedFile) return 'fas fa-file'
+  if (!props.selectedFile) return 'file'
   return getFileIconUtil(props.selectedFile as any)
 })
 </script>

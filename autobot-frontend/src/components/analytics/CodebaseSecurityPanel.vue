@@ -24,7 +24,7 @@
           class="action-btn primary"
           :title="$t('analytics.codebase.intelligence.runAnalysisTitle')"
         >
-          <i :class="props.analysisLoading ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>
+          <i :class="props.analysisLoading ? 'fas fa-spinner fa-spin' : 'search'"></i>
           {{
             props.analysisLoading
               ? $t('analytics.codebase.buttons.analyzing')
@@ -43,7 +43,7 @@
           @click="activeTab = tab.id"
           :class="['tab-btn', { active: activeTab === tab.id }]"
         >
-          <i :class="tab.icon"></i>
+          <Icon :name="tab.icon" />
           {{ $t(tab.labelKey) }}
           <span v-if="getTabCount(tab.id) > 0" class="tab-count">
             {{ getTabCount(tab.id) }}
@@ -93,6 +93,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type {
@@ -134,17 +135,17 @@ const tabs = [
   {
     id: 'security' as const,
     labelKey: 'analytics.codebase.intelligence.security',
-    icon: 'fas fa-shield-alt',
+    icon: 'shield-alt',
   },
   {
     id: 'performance' as const,
     labelKey: 'analytics.codebase.intelligence.performanceLabel',
-    icon: 'fas fa-tachometer-alt',
+    icon: 'tachometer-alt',
   },
   {
     id: 'redis' as const,
     labelKey: 'analytics.codebase.intelligence.redisLabel',
-    icon: 'fas fa-database',
+    icon: 'database',
   },
 ]
 

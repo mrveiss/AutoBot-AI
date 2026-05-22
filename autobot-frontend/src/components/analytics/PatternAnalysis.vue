@@ -1,17 +1,17 @@
 <template>
   <div class="pattern-analysis-section analytics-section">
     <h3>
-      <i class="fas fa-puzzle-piece"></i> {{ $t('analytics.patterns.title') }}
+      <Icon name="puzzle-piece" /> {{ $t('analytics.patterns.title') }}
       <span v-if="totalPatterns > 0" class="total-count">({{ $t('analytics.patterns.patternsCount', { count: totalPatterns }) }})</span>
       <button @click="runAnalysis" :disabled="analyzing || !rootPath" class="section-action-btn">
-        <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>
+        <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'search'"></i>
         {{ analyzing ? $t('analytics.patterns.analyzing') : $t('analytics.patterns.analyzePatterns') }}
       </button>
     </h3>
 
     <!-- Progress Bar (shown above results while analyzing) -->
     <div v-if="analyzing" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" class="animate-spin" />
       <span v-if="taskStatus">{{ taskStatus.current_step || $t('analytics.patterns.analyzingCode') }}</span>
       <span v-else>{{ $t('analytics.patterns.startingAnalysis') }}</span>
       <div v-if="taskStatus?.progress" class="mini-progress">
@@ -24,21 +24,21 @@
 
     <!-- Interrupted State (#1250) -->
     <div v-if="!analyzing && wasInterrupted" class="interrupted-state">
-      <i class="fas fa-info-circle"></i>
+      <Icon name="info-circle" />
       {{ $t('analytics.patterns.interrupted') }}
       <button @click="runAnalysis" :disabled="!rootPath" class="rerun-btn">
-        <i class="fas fa-redo"></i> {{ $t('analytics.patterns.rerunAnalysis') }}
+        <Icon name="redo" /> {{ $t('analytics.patterns.rerunAnalysis') }}
       </button>
       <button @click="reset" class="dismiss-btn">
-        <i class="fas fa-times"></i> {{ $t('analytics.patterns.dismiss') }}
+        <Icon name="times" /> {{ $t('analytics.patterns.dismiss') }}
       </button>
     </div>
 
     <!-- Error State -->
     <div v-if="!analyzing && !wasInterrupted && error" class="error-state">
-      <i class="fas fa-exclamation-triangle"></i> {{ error }}
+      <Icon name="exclamation-triangle" /> {{ error }}
       <button @click="reset" class="retry-btn">
-        <i class="fas fa-redo"></i> {{ $t('analytics.patterns.reset') }}
+        <Icon name="redo" /> {{ $t('analytics.patterns.reset') }}
       </button>
     </div>
 
@@ -74,8 +74,8 @@
       <!-- Duplicate Patterns Section -->
       <div v-if="duplicatePatterns.length > 0" class="accordion-group">
         <div class="accordion-header" @click="toggleSection('duplicates')">
-          <i :class="isSectionExpanded('duplicates') ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
-          <span class="header-title"><i class="fas fa-clone"></i> {{ $t('analytics.patterns.duplicateCode') }}</span>
+          <Icon :name="isSectionExpanded('duplicates') ? 'chevron-down' : 'chevron-right'" />
+          <span class="header-title"><Icon name="clone" /> {{ $t('analytics.patterns.duplicateCode') }}</span>
           <span class="header-count">({{ duplicatePatterns.length }})</span>
         </div>
         <div v-show="isSectionExpanded('duplicates')" class="accordion-content">
@@ -87,11 +87,11 @@
             </div>
             <div class="pattern-details">
               <div class="detail-row">
-                <i class="fas fa-map-marker-alt"></i>
+                <Icon name="globe" />
                 <span>{{ $t('analytics.patterns.locations', { count: dup.locations?.length || 0 }) }}</span>
               </div>
               <div class="detail-row">
-                <i class="fas fa-compress-alt"></i>
+                <Icon name="compress-alt" />
                 <span>{{ $t('analytics.patterns.linesSaveable', { count: dup.code_reduction_potential }) }}</span>
               </div>
             </div>
@@ -105,7 +105,7 @@
               </div>
             </div>
             <div class="pattern-suggestion">
-              <i class="fas fa-lightbulb"></i> {{ dup.suggestion }}
+              <Icon name="lightbulb" /> {{ dup.suggestion }}
             </div>
           </div>
           <div v-if="duplicatePatterns.length > 20" class="show-more">
@@ -117,8 +117,8 @@
       <!-- Regex Opportunities Section -->
       <div v-if="regexOpportunities.length > 0" class="accordion-group">
         <div class="accordion-header" @click="toggleSection('regex')">
-          <i :class="isSectionExpanded('regex') ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
-          <span class="header-title"><i class="fas fa-asterisk"></i> {{ $t('analytics.patterns.regexOpportunities') }}</span>
+          <Icon :name="isSectionExpanded('regex') ? 'chevron-down' : 'chevron-right'" />
+          <span class="header-title"><Icon name="times" /> {{ $t('analytics.patterns.regexOpportunities') }}</span>
           <span class="header-count">({{ regexOpportunities.length }})</span>
         </div>
         <div v-show="isSectionExpanded('regex')" class="accordion-content">
@@ -151,8 +151,8 @@
       <!-- Complexity Hotspots Section -->
       <div v-if="complexityHotspots.length > 0" class="accordion-group">
         <div class="accordion-header" @click="toggleSection('complexity')">
-          <i :class="isSectionExpanded('complexity') ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
-          <span class="header-title"><i class="fas fa-brain"></i> {{ $t('analytics.patterns.complexityHotspots') }}</span>
+          <Icon :name="isSectionExpanded('complexity') ? 'chevron-down' : 'chevron-right'" />
+          <span class="header-title"><Icon name="brain" /> {{ $t('analytics.patterns.complexityHotspots') }}</span>
           <span class="header-count">({{ complexityHotspots.length }})</span>
         </div>
         <div v-show="isSectionExpanded('complexity')" class="accordion-content">
@@ -194,8 +194,8 @@
       <!-- Refactoring Suggestions Section -->
       <div v-if="refactoringSuggestions.length > 0" class="accordion-group">
         <div class="accordion-header" @click="toggleSection('refactoring')">
-          <i :class="isSectionExpanded('refactoring') ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
-          <span class="header-title"><i class="fas fa-magic"></i> {{ $t('analytics.patterns.refactoringSuggestions') }}</span>
+          <Icon :name="isSectionExpanded('refactoring') ? 'chevron-down' : 'chevron-right'" />
+          <span class="header-title"><Icon name="magic" /> {{ $t('analytics.patterns.refactoringSuggestions') }}</span>
           <span class="header-count">({{ refactoringSuggestions.length }})</span>
         </div>
         <div v-show="isSectionExpanded('refactoring')" class="accordion-content">
@@ -215,10 +215,10 @@
             </div>
             <div class="refactoring-impact">
               <span v-if="suggestion.estimated_loc_reduction > 0">
-                <i class="fas fa-minus-circle"></i> {{ suggestion.estimated_loc_reduction }} LOC
+                <Icon name="minus-circle" /> {{ suggestion.estimated_loc_reduction }} LOC
               </span>
               <span v-if="suggestion.estimated_complexity_reduction > 0">
-                <i class="fas fa-chart-line"></i> -{{ suggestion.estimated_complexity_reduction }} complexity
+                <Icon name="chart-line" /> -{{ suggestion.estimated_complexity_reduction }} complexity
               </span>
             </div>
           </div>
@@ -230,16 +230,16 @@
 
       <!-- Storage Stats -->
       <div v-if="storageStats" class="storage-stats">
-        <i class="fas fa-database"></i>
+        <Icon name="database" />
         {{ $t('analytics.patterns.patternsInChromaDB', { count: storageStats.total_patterns }) }}
         <button @click="clearStorage" class="clear-btn" :title="$t('analytics.patterns.clearStoredPatterns')">
-          <i class="fas fa-trash-alt"></i>
+          <Icon name="trash-alt" />
         </button>
       </div>
 
       <!-- Timestamp -->
       <div v-if="analysisReport?.analysis_summary?.timestamp" class="scan-timestamp">
-        <i class="fas fa-clock"></i>
+        <Icon name="clock" />
         {{ $t('analytics.patterns.lastScan') }}: {{ formatTimestamp(analysisReport.analysis_summary.timestamp) }}
         <span v-if="analysisReport?.analysis_summary?.duration_seconds" class="analysis-time">
           ({{ analysisReport.analysis_summary.duration_seconds.toFixed(1) }}s)
@@ -249,7 +249,7 @@
 
     <!-- Empty State -->
     <div v-if="!analyzing && !wasInterrupted && !error && !hasResults" class="empty-state">
-      <i class="fas fa-puzzle-piece"></i>
+      <Icon name="puzzle-piece" />
       <p>{{ $t('analytics.patterns.noAnalysis') }}</p>
       <p class="empty-hint">{{ $t('analytics.patterns.emptyHint') }}</p>
     </div>
@@ -257,6 +257,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { watch, onMounted, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePatternAnalysis } from '@/composables/usePatternAnalysis'

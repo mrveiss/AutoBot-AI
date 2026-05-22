@@ -3,7 +3,7 @@
     <!-- Service Header -->
     <div class="flex items-center justify-between px-6 py-4 border-b bg-linear-to-r from-red-50 to-red-100" data-testid="redis-service-header">
       <div class="flex items-center gap-3">
-        <i class="fas fa-database text-2xl text-red-600"></i>
+        <Icon name="database" class="text-2xl text-red-600" />
         <div>
           <h3 class="text-lg font-semibold text-autobot-text-primary" data-testid="redis-service-title">{{ $t('redis.title') }}</h3>
           <p class="text-sm text-autobot-text-secondary" data-testid="redis-service-vm-info">VM3: {{ serviceStatus.vm_info?.host || NetworkConstants.REDIS_VM_IP }}</p>
@@ -61,7 +61,7 @@
             class="flex items-center gap-2 px-4 py-2"
             data-testid="redis-service-start-btn"
           >
-            <i class="fas fa-play"></i>
+            <Icon name="play" />
             <span>{{ $t('redis.start') }}</span>
           </BaseButton>
 
@@ -72,7 +72,7 @@
             class="flex items-center gap-2 px-4 py-2"
             data-testid="redis-service-restart-btn"
           >
-            <i class="fas fa-sync"></i>
+            <Icon name="sync" />
             <span>{{ $t('redis.restart') }}</span>
           </BaseButton>
 
@@ -83,7 +83,7 @@
             class="flex items-center gap-2 px-4 py-2"
             data-testid="redis-service-stop-btn"
           >
-            <i class="fas fa-stop"></i>
+            <Icon name="stop" />
             <span>{{ $t('redis.stop') }}</span>
           </BaseButton>
         </div>
@@ -95,7 +95,7 @@
           class="flex items-center gap-2 px-4 py-2"
           data-testid="redis-service-refresh-btn"
         >
-          <i class="fas fa-sync-alt"></i>
+          <Icon name="sync-alt" />
           <span>{{ $t('common.refresh') }}</span>
         </BaseButton>
       </div>
@@ -137,7 +137,7 @@
         data-testid="redis-service-recommendations"
       >
         <h5 class="text-sm font-semibold text-yellow-800 mb-2">
-          <i class="fas fa-lightbulb mr-1"></i>
+          <Icon name="lightbulb" class="mr-1" />
           {{ $t('redis.recommendations') }}
         </h5>
         <ul class="list-disc list-inside space-y-1">
@@ -173,7 +173,7 @@
           class="mt-3 p-3 bg-red-100 border border-red-300 rounded text-sm text-red-800"
           data-testid="redis-service-manual-intervention"
         >
-          <i class="fas fa-exclamation-triangle mr-1"></i>
+          <Icon name="exclamation-triangle" class="mr-1" />
           <strong>{{ $t('redis.manualInterventionTitle') }}</strong> {{ $t('redis.manualInterventionMsg') }}
         </div>
       </div>
@@ -182,7 +182,7 @@
     <!-- Loading Overlay -->
     <div v-if="loading" class="absolute inset-0 bg-autobot-bg-card/75 flex items-center justify-center" data-testid="redis-service-loading-overlay">
       <div class="text-center">
-        <i class="fas fa-spinner fa-spin text-4xl text-blue-600 mb-2"></i>
+        <Icon name="spinner" class="animate-spin text-4xl text-blue-600 mb-2" />
         <p class="text-sm text-autobot-text-secondary">{{ $t('redis.processing') }}</p>
       </div>
     </div>
@@ -200,7 +200,7 @@
         class="p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded"
       >
         <p class="text-sm text-yellow-800">
-          <i class="fas fa-exclamation-triangle mr-1"></i>
+          <Icon name="exclamation-triangle" class="mr-1" />
           {{ confirmDialog.warning }}
         </p>
       </div>
@@ -226,6 +226,7 @@
 </template>
 
 <script setup>
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useServiceManagement } from '@/composables/useServiceManagement'

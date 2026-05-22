@@ -15,7 +15,7 @@
           :title="$t('audit.logTable.refresh')"
           :aria-label="$t('audit.logTable.refreshAriaLabel')"
         >
-          <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }" aria-hidden="true"></i>
+          <Icon name="sync-alt" />
         </button>
         <div class="export-dropdown">
           <button
@@ -24,16 +24,16 @@
             :aria-label="$t('audit.logTable.exportAriaLabel')"
             :aria-expanded="showExportMenu"
           >
-            <i class="fas fa-download" aria-hidden="true"></i>
+            <Icon name="download" />
             {{ $t('audit.logTable.export') }}
           </button>
           <div v-if="showExportMenu" class="dropdown-menu" role="menu">
             <button @click="exportLogs('json')" role="menuitem" :aria-label="$t('audit.logTable.exportJsonAriaLabel')">
-              <i class="fas fa-file-code" aria-hidden="true"></i>
+              <Icon name="file-code" />
               {{ $t('audit.logTable.exportJson') }}
             </button>
             <button @click="exportLogs('csv')" role="menuitem" :aria-label="$t('audit.logTable.exportCsvAriaLabel')">
-              <i class="fas fa-file-csv" aria-hidden="true"></i>
+              <Icon name="file-csv" />
               {{ $t('audit.logTable.exportCsv') }}
             </button>
           </div>
@@ -95,7 +95,7 @@
             </td>
             <td class="col-result">
               <span :class="['result-badge', `badge-${entry.result}`]">
-                <i :class="resultIcon(entry.result)"></i>
+                <Icon :name="resultIcon(entry.result)" />
                 {{ entry.result }}
               </span>
             </td>
@@ -129,13 +129,13 @@
                 @click.stop="showDetails(entry)"
                 :title="$t('audit.logTable.viewDetails')"
               >
-                <i class="fas fa-eye"></i>
+                <Icon name="eye" />
               </button>
             </td>
           </tr>
           <tr v-if="entries.length === 0 && !loading">
             <td colspan="7" class="empty-state">
-              <i class="fas fa-inbox"></i>
+              <Icon name="inbox" />
               <span>{{ $t('audit.logTable.noLogs') }}</span>
             </td>
           </tr>
@@ -150,7 +150,7 @@
         :disabled="currentPage <= 1"
         @click="$emit('prev-page')"
       >
-        <i class="fas fa-chevron-left"></i>
+        <Icon name="chevron-left" />
         {{ $t('audit.logTable.previous') }}
       </button>
       <span class="page-info">{{ $t('audit.logTable.pageOf', { page: currentPage }) }}</span>
@@ -160,7 +160,7 @@
         @click="$emit('next-page')"
       >
         {{ $t('audit.logTable.next') }}
-        <i class="fas fa-chevron-right"></i>
+        <Icon name="chevron-right" />
       </button>
     </div>
 
@@ -174,7 +174,7 @@
             :aria-label="$t('common.close')"
             @click="closeDetails"
           >
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
           </button>
         </div>
         <div class="modal-body">
@@ -194,7 +194,7 @@
             <div class="detail-item">
               <label>{{ $t('audit.logTable.result') }}</label>
               <span :class="['result-badge', `badge-${selectedEntry.result}`]">
-                <i :class="resultIcon(selectedEntry.result)"></i>
+                <Icon :name="resultIcon(selectedEntry.result)" />
                 {{ selectedEntry.result }}
               </span>
             </div>
@@ -233,13 +233,14 @@
 
     <!-- Loading Overlay -->
     <div v-if="loading" class="loading-overlay">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" class="animate-spin" />
       <span>{{ $t('audit.logTable.loading') }}</span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AuditEntry } from '@/types/audit'
@@ -278,7 +279,7 @@ const sortField = ref<'timestamp' | 'operation'>('timestamp')
 const sortDirection = ref<'asc' | 'desc'>('desc')
 
 const sortIcon = computed(() =>
-  sortDirection.value === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down'
+  sortDirection.value === 'asc' ? 'sort-up' : 'sort-down'
 )
 
 const sortedEntries = computed(() => {
@@ -316,7 +317,7 @@ function formatOperationName(operation: string): string {
 
 function resultIcon(result: string): string {
   const config = AUDIT_RESULT_CONFIG[result as keyof typeof AUDIT_RESULT_CONFIG]
-  return config?.icon || 'fas fa-question-circle'
+  return config?.icon || 'question-circle'
 }
 
 function truncateId(id: string): string {
