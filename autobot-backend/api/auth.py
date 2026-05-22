@@ -33,8 +33,8 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
 from constants.error_constants import ERR_INVALID_CREDENTIALS, ERR_INVALID_TOKEN
-from services.event_log import EventType
-from services.event_log import emit as _emit_event  # Issue #4461
+from services.audit.unified_audit import EventType  # GH#8290 Phase 2
+from services.audit.unified_audit import emit as _emit_event  # GH#8290 Phase 2
 from user_management.database import db_session_context
 from user_management.services.user_service import UserService
 

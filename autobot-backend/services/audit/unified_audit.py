@@ -9,9 +9,10 @@ This module provides one canonical surface; the three originals forward to it
 via shim helpers defined at the bottom of each legacy file.
 
 Migration plan:
-  Phase 1 (this PR):   unified_audit.py lands; legacy files add shim wrappers.
-  Phase 2 (follow-up): Migrate callers area-by-area (security → compliance →
-                        knowledge) to import directly from unified_audit.
+  Phase 1 (done):   unified_audit.py landed; legacy files have shim wrappers.
+  Phase 2 (GH#8290): Callers migrated area-by-area to import from here.
+                     Backwards-compatible bridge symbols are exported so callers
+                     only need to update their import line, not their call sites.
   Phase 3 (follow-up): Remove the three legacy files once all callers migrated.
 """
 
@@ -224,3 +225,130 @@ async def emit_knowledge(
             ip_address=ip_address,
         )
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 (GH#8290): Backwards-compatible bridge symbols for migrated callers
+#
+# Callers of the three legacy modules update only their import line.
+# These bridges accept the EXACT same signatures as the legacy functions so no
+# call-site edits are needed.
+# ---------------------------------------------------------------------------
+
+# --- Re-export legacy enum types so import-only callers need no changes ----
+
+import warnings as _warnings  # noqa: E402
+
+with _warnings.catch_warnings():
+    # Suppress the DeprecationWarnings these modules emit at import time — they
+    # are designed to warn external callers, not the canonical migration target.
+    _warnings.simplefilter("ignore", DeprecationWarning)
+    from services.event_log import EventType  # noqa: E402
+    from services.audit.audit_log import AuditAction  # noqa: E402
+    from knowledge.audit_log import AuditEventType, KnowledgeAuditLog as _KnowledgeAuditLog  # noqa: E402
+
+
+# --- Drop-in replacements for services/event_log.emit() and query_events() -
+
+def emit(  # type: ignore[misc]  — intentional override of local name
+    event_type: "EventType",
+    user_id: str | None = None,
+    resource_type: str | None = None,
+    resource_id: str | None = None,
+    metadata: Dict[str, Any] | None = None,
+    ip_address: str | None = None,
+) -> None:
+    """Bridge: drop-in for ``services.event_log.emit()`` (GH#8290 Phase 2)."""
+    emit_compliance(
+        action=event_type.value if hasattr(event_type, "value") else str(event_type),
+        actor_id=user_id,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        metadata=metadata,
+        ip_address=ip_address,
+    )
+
+
+async def query_events(
+    user_id: str | None = None,
+    event_type: str | None = None,
+    from_ts: float | None = None,
+    to_ts: float | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> List[Dict[str, Any]]:
+    """Bridge: drop-in for ``services.event_log.query_events()`` (GH#8290 Phase 2)."""
+    return await query(
+        category=AuditCategory.COMPLIANCE,
+        actor_id=user_id,
+        action=event_type,
+        from_ts=from_ts,
+        to_ts=to_ts,
+        limit=limit,
+        offset=offset,
+    )
+
+
+# --- Drop-in replacement for services/audit/audit_log.audit_record() -------
+
+def audit_record(
+    user_id: str,
+    action: "AuditAction",
+    resource_type: str | None = None,
+    resource_id: str | None = None,
+    metadata: Dict[str, Any] | None = None,
+    ip_address: str | None = None,
+    session_id: str | None = None,
+    outcome: str = "success",
+) -> None:
+    """Bridge: drop-in for ``services.audit.audit_log.audit_record()`` (GH#8290 Phase 2)."""
+    emit_security(
+        action=action.value if hasattr(action, "value") else str(action),
+        actor_id=user_id,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        metadata=metadata,
+        ip_address=ip_address,
+        session_id=session_id,
+        outcome=outcome,
+    )
+
+
+# --- Drop-in compatibility class for knowledge/audit_log.KnowledgeAuditLog --
+
+class KnowledgeAuditLog(_KnowledgeAuditLog):
+    """Bridge: subclass of ``KnowledgeAuditLog`` that delegates to unified_audit.
+
+    Callers that instantiate ``KnowledgeAuditLog(redis_client)`` and call
+    ``.log_event()`` continue to work unchanged (GH#8290 Phase 2).
+    The ``log_event`` override also writes to the unified Redis key so all
+    knowledge events appear in the unified audit stream.
+    """
+
+    async def log_event(
+        self,
+        event_type: "AuditEventType",
+        user_id: str,
+        fact_id: str | None = None,
+        organization_id: str | None = None,
+        details: Dict | None = None,
+        ip_address: str | None = None,
+    ) -> str:
+        event_id = await super().log_event(
+            event_type=event_type,
+            user_id=user_id,
+            fact_id=fact_id,
+            organization_id=organization_id,
+            details=details,
+            ip_address=ip_address,
+        )
+        # Also write to unified stream
+        await emit_knowledge(
+            action=event_type.value if hasattr(event_type, "value") else str(event_type),
+            actor_id=user_id,
+            resource_type="fact" if fact_id else "knowledge",
+            resource_id=fact_id or organization_id,
+            metadata=details or {},
+            ip_address=ip_address,
+        )
+        return event_id

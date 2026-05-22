@@ -154,29 +154,58 @@ def clear_ast_cache() -> None:
 
 
 class AntiPatternType(Enum):
-    """Types of anti-patterns detected"""
+    """Types of anti-patterns detected.
 
+    Canonical SSOT (GH#6757): merged from code_analysis/src (per-file rules)
+    and code_intelligence/anti_pattern_detection (cross-file/naming rules).
+    Both modules previously kept diverged copies of this enum.
+    """
+
+    # --- Structural bloaters ---
     GOD_CLASS = "god_class"
+    LONG_METHOD = "long_method"
+    LONG_PARAMETER_LIST = "long_parameter_list"
+    LARGE_FILE = "large_file"
+    DEEP_NESTING = "deep_nesting"
+    # DATA_CLUMP / DATA_CLUMPS: canonical name is DATA_CLUMP ("data_clump");
+    # legacy code_intelligence used DATA_CLUMPS — kept as alias for migration.
+    DATA_CLUMP = "data_clump"
+    DATA_CLUMPS = "data_clumps"  # legacy alias from code_intelligence (GH#6757)
+    PRIMITIVE_OBSESSION = "primitive_obsession"
+
+    # --- Couplers ---
     FEATURE_ENVY = "feature_envy"
     CIRCULAR_DEPENDENCY = "circular_dependency"
     SHOTGUN_SURGERY = "shotgun_surgery"
+    MESSAGE_CHAINS = "message_chains"
+    INAPPROPRIATE_INTIMACY = "inappropriate_intimacy"
+
+    # --- Dispensables ---
     SPECULATIVE_GENERALITY = "speculative_generality"
     DEAD_CODE = "dead_code"
-    DATA_CLUMP = "data_clump"
-    LONG_METHOD = "long_method"
-    LONG_PARAMETER_LIST = "long_parameter_list"
-    PRIMITIVE_OBSESSION = "primitive_obsession"
     LAZY_CLASS = "lazy_class"
     REFUSED_BEQUEST = "refused_bequest"
-    # Issue #6661: Liskov Substitution Principle violations
+    # DUPLICATE_ABSTRACTION: legacy name from code_intelligence; canonical is
+    # DUPLICATE_CLASS_SHAPE (added in #6684).
+    DUPLICATE_CLASS_SHAPE = "duplicate_class_shape"
+    DUPLICATE_ABSTRACTION = "duplicate_abstraction"  # legacy alias (GH#6757)
+    DUPLICATE_ENUM = "duplicate_enum"
+
+    # --- Naming issues (from code_intelligence NamingDetector) ---
+    INCONSISTENT_NAMING = "inconsistent_naming"
+    SINGLE_LETTER_VARIABLE = "single_letter_variable"
+    MAGIC_NUMBER = "magic_number"
+
+    # --- Code clarity ---
+    COMPLEX_CONDITIONAL = "complex_conditional"
+    MISSING_DOCSTRING = "missing_docstring"
+
+    # --- LSP violations (Issue #6661) ---
     LSP_SIGNATURE_INCOMPATIBLE = "lsp_signature_incompatible"
     LSP_EXCEPTION_CONTRACT_CHANGED = "lsp_exception_contract_changed"
-    # Issue #6684: consolidation opportunities (missing-inheritance siblings to LSP)
-    DUPLICATE_ENUM = "duplicate_enum"
-    DUPLICATE_CLASS_SHAPE = "duplicate_class_shape"
-    # Issue #6871: modules with zero production callers (closed tracker, unwired code)
+
+    # --- Architecture-level (Issue #6871, #6748) ---
     UNWIRED_TRACKER = "unwired_tracker"
-    # Issue #6748: repeated reactive boilerplate that should be extracted to a composable
     COMPOSABLE_OPPORTUNITY = "composable_opportunity"
 
 

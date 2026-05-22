@@ -23,7 +23,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.time_utils import now_utc
-from knowledge.audit_log import KnowledgeAuditLog
+from services.audit.unified_audit import KnowledgeAuditLog  # GH#8290 Phase 2
 from knowledge_factory import get_or_create_knowledge_base
 
 logger = get_logger(__name__)

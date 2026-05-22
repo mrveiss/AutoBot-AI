@@ -99,7 +99,7 @@ from knowledge.schemas.stats import (
 # NOTE: Tag-related models moved to knowledge_tags.py
 # NOTE: Search models (EnhancedSearchRequest) moved to knowledge_search.py
 from knowledge_factory import get_or_create_knowledge_base
-from services.audit.audit_log import AuditAction, audit_record
+from services.audit.unified_audit import AuditAction, audit_record  # GH#8290 Phase 2
 from utils.path_validation import contains_path_traversal
 
 # =============================================================================

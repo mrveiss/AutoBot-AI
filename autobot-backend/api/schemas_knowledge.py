@@ -4963,7 +4963,7 @@ class KBQueryResponse(BaseModel):
 
 from datetime import datetime as _datetime
 
-from knowledge.audit_log import AuditEventType as _AuditEventType
+from services.audit.unified_audit import AuditEventType as _AuditEventType  # GH#8290 Phase 2
 
 
 class AuditEvent(BaseModel):
