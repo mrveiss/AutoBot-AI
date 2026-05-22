@@ -33,7 +33,7 @@ logger = get_logger(__name__)
 # by default). Override via env var when tuning memory pressure.
 def _resolve_chat_session_cache_ttl() -> int:
     """Return TTL seconds for chat:session:* Redis keys."""
-    raw = config.chat_session_cache_ttl
+    raw = config.misc.chat_session_cache_ttl
     if raw is None:
         return TTL_24_HOURS
     try:
@@ -71,7 +71,7 @@ _CHAT_RECENT_MAX_ENTRIES_DEFAULT = 1000
 
 def _resolve_chat_recent_max_entries() -> int:
     """Return max members for the chat:recent sorted set."""
-    raw = config.chat_recent_max_entries
+    raw = config.misc.chat_recent_max_entries
     if raw is None:
         return _CHAT_RECENT_MAX_ENTRIES_DEFAULT
     try:

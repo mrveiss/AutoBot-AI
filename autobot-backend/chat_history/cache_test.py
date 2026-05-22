@@ -22,7 +22,7 @@ def _reload_cache_with_env(env_value):
     if env_value is None:
         os.environ.pop("AUTOBOT_CHAT_SESSION_CACHE_TTL", None)
     else:
-        config.chat_session_cache_ttl = env_value
+        config.misc.chat_session_cache_ttl = env_value
     import chat_history.cache as cache_mod
 
     importlib.reload(cache_mod)
@@ -31,12 +31,12 @@ def _reload_cache_with_env(env_value):
 
 @pytest.fixture(autouse=True)
 def _restore_env():
-    saved = config.chat_session_cache_ttl
+    saved = config.misc.chat_session_cache_ttl
     yield
     if saved is None:
         os.environ.pop("AUTOBOT_CHAT_SESSION_CACHE_TTL", None)
     else:
-        config.chat_session_cache_ttl = saved
+        config.misc.chat_session_cache_ttl = saved
     import chat_history.cache as cache_mod
 
     importlib.reload(cache_mod)
@@ -86,7 +86,7 @@ def _reload_cache_with_recent_env(env_value):
     if env_value is None:
         os.environ.pop("AUTOBOT_CHAT_RECENT_MAX_ENTRIES", None)
     else:
-        config.chat_recent_max_entries = env_value
+        config.misc.chat_recent_max_entries = env_value
     import chat_history.cache as cache_mod
 
     importlib.reload(cache_mod)
@@ -95,12 +95,12 @@ def _reload_cache_with_recent_env(env_value):
 
 @pytest.fixture(autouse=False)
 def _restore_recent_env():
-    saved = config.chat_recent_max_entries
+    saved = config.misc.chat_recent_max_entries
     yield
     if saved is None:
         os.environ.pop("AUTOBOT_CHAT_RECENT_MAX_ENTRIES", None)
     else:
-        config.chat_recent_max_entries = saved
+        config.misc.chat_recent_max_entries = saved
     import chat_history.cache as cache_mod
 
     importlib.reload(cache_mod)
