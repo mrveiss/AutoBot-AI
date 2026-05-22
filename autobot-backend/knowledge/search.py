@@ -275,8 +275,8 @@ class SearchMixin:
             from knowledge.tiering import get_tier_manager
             collection_id = getattr(chroma_collection, "name", None) or getattr(self, "chromadb_collection", "default")
             await get_tier_manager().record_access(collection_id)
-        except Exception:
-            pass
+        except Exception as _tier_err:
+            logger.debug("CollectionTierManager record_access failed: %s", _tier_err)
 
         kwargs: Dict[str, Any] = {
             "query_embeddings": [query_embedding],
