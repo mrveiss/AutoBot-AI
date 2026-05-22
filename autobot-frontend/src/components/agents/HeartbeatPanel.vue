@@ -155,12 +155,12 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { getBackendUrl } from '@/config/ssot-config'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
-import { useLiveEvents } from '@/composables/useLiveEvents'
+import { useEventBus } from '@/composables/useEventBus'
 import { useExpansion } from '@/composables/useExpansion'
 import type { LiveEvent } from '@/services/LiveEventService'
 
 const logger = createLogger('HeartbeatPanel')
-const { subscribe, unsubscribe } = useLiveEvents()
+const { subscribe, unsubscribe } = useEventBus()
 
 interface HeartbeatConfig {
   agent_id: string

@@ -4,6 +4,11 @@
 /**
  * Global WebSocket Composable
  *
+ * @deprecated For channel-based event subscriptions, prefer `useEventBus`
+ * from `@/composables/useEventBus` instead (#6488 Phase 2).
+ * This composable is preserved for callers that need `send()` or `state`
+ * access until backend endpoint unification (#8291) is complete.
+ *
  * Provides easy access to the global WebSocket service for any component.
  * Use this in any Vue component to get real-time updates regardless of page/tab.
  *

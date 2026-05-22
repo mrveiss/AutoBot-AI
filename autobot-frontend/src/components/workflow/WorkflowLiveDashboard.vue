@@ -157,7 +157,8 @@
 import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
-import { useLiveEvents, type LiveEvent } from '@/composables/useLiveEvents';
+import { useEventBus } from '@/composables/useEventBus'
+import type { LiveEvent } from '@/services/LiveEventService'
 import AgentObservabilityPanel from './AgentObservabilityPanel.vue';
 import type {
   ActiveWorkflow,
@@ -186,7 +187,7 @@ const emit = defineEmits<{
 const maxVisibleSteps = 10;
 
 // Live event connection
-const { subscribe, isConnected: liveConnected, connectionState, connect } = useLiveEvents();
+const { subscribe, isConnected: liveConnected, connectionState, connect } = useEventBus()
 const isReconnecting = ref(false);
 
 const connectionStatusClass = computed(() => {
