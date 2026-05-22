@@ -212,6 +212,7 @@ class TaskManager:
         Issue #4554: Resetting the TTL on every GET means any client that
         is actively polling will never see a 404 — tasks only expire when
         genuinely abandoned (no polls for a full TTL window).
+        Issue #8162: Pipeline the three EXPIRE calls into one round-trip.
         """
         key = _KEY_TASK.format(task_id)
         raw = self._redis.get(key)
@@ -220,23 +221,42 @@ class TaskManager:
         # Slide TTL — reset expiry from now so active pollers stay alive.
         # Slide the audit key too so it doesn't expire before the task does.
         ttl = self._ttl()
-        self._redis.expire(key, ttl)
-        self._redis.expire(_KEY_AUDIT.format(task_id), ttl)
-        self._redis.expire(_KEY_TASKS, ttl)
+        with self._redis.pipeline() as pipe:
+            pipe.expire(key, ttl)
+            pipe.expire(_KEY_AUDIT.format(task_id), ttl)
+            pipe.expire(_KEY_TASKS, ttl)
+            pipe.execute()
         return _task_from_json(raw if isinstance(raw, str) else raw.decode("utf-8"))
 
     def list_tasks(self) -> List[Task]:
-        """Return all tasks whose keys are still alive in Redis."""
+        """Return all tasks whose keys are still alive in Redis.
+
+        Issue #8162: Use MGET to batch all task fetches into one round-trip
+        instead of issuing one GET per task ID (N+1 pattern).
+        """
         ids = self._redis.smembers(_KEY_TASKS)
+        if not ids:
+            return []
+
+        id_strs = [tid if isinstance(tid, str) else tid.decode("utf-8") for tid in ids]
+        keys = [_KEY_TASK.format(tid) for tid in id_strs]
+        raws = self._redis.mget(keys)
+
         tasks: List[Task] = []
-        for tid in ids:
-            tid_str = tid if isinstance(tid, str) else tid.decode("utf-8")
-            task = self._load(tid_str)
-            if task is not None:
-                tasks.append(task)
+        expired_ids = []
+        for tid, raw in zip(ids, raws):
+            if raw is not None:
+                tasks.append(_task_from_json(raw if isinstance(raw, str) else raw.decode("utf-8")))
             else:
-                # TTL expired — remove from tracking set
-                self._redis.srem(_KEY_TASKS, tid)
+                # TTL expired — collect for bulk removal from tracking set
+                expired_ids.append(tid)
+
+        if expired_ids:
+            with self._redis.pipeline() as pipe:
+                for expired in expired_ids:
+                    pipe.srem(_KEY_TASKS, expired)
+                pipe.execute()
+
         return tasks
 
     def update_state(

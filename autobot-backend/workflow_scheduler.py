@@ -446,8 +446,8 @@ class WorkflowScheduler:
             except asyncio.CancelledError:
                 logger.debug("Scheduler task cancelled during shutdown")
 
-        # Save state before stopping
-        self._save_workflows()
+        # Issue #8165: run blocking file I/O off the event loop.
+        await asyncio.to_thread(self._save_workflows)
 
     def _parse_schedule_params(
         self,
@@ -810,7 +810,7 @@ class WorkflowScheduler:
 
                 if result and result.get("success"):
                     self.queue.complete_workflow(workflow.id, WorkflowStatus.COMPLETED)
-                    self._move_to_completed(workflow)
+                    await self._move_to_completed(workflow)
                     logger.info("Workflow %s completed successfully", workflow.id)
                 else:
                     # Handle failure with retry logic
@@ -833,15 +833,18 @@ class WorkflowScheduler:
         else:
             # Mark as failed
             self.queue.complete_workflow(workflow.id, WorkflowStatus.FAILED)
-            self._move_to_completed(workflow)
+            await self._move_to_completed(workflow)
             logger.warning("Workflow %s failed after %s retries", workflow.id, workflow.retry_count)
 
-    def _move_to_completed(self, workflow: ScheduledWorkflow) -> None:
-        """Move workflow to completed storage"""
+    async def _move_to_completed(self, workflow: ScheduledWorkflow) -> None:
+        """Move workflow to completed storage.
+
+        Issue #8165: async so the blocking file write runs via asyncio.to_thread.
+        """
         self.completed_workflows[workflow.id] = workflow
         if workflow.id in self.scheduled_workflows:
             del self.scheduled_workflows[workflow.id]
-        self._save_workflows()
+        await asyncio.to_thread(self._save_workflows)
 
     def _parse_time_string(self, time_str: str) -> datetime:
         """Parse various time string formats"""
