@@ -517,7 +517,8 @@ async def create_chat_context(request_data: CreateContextRequest, request: Reque
 
         return {
             "success": True,
-            "context": {
+            "data": {
+                "success": True,
                 "chat_id": context.chat_id,
                 "topic": context.topic,
                 "keywords": context.keywords,
@@ -551,7 +552,8 @@ async def associate_file_with_chat(request_data: AssociateFileRequest, request: 
 
         return {
             "success": True,
-            "association": {
+            "data": {
+                "success": True,
                 "file_id": association.file_id,
                 "file_name": association.file_name,
                 "association_type": association.association_type.value,
@@ -604,7 +606,7 @@ async def upload_file_to_chat(
             metadata={"original_filename": file.filename},
         )
 
-        return {"success": True, "file_id": association.file_id, "file_path": file_path}
+        return {"success": True, "data": {"success": True, "file_id": association.file_id, "file_path": file_path}}
 
     except Exception as e:
         logger.error("Failed to upload file: %s", e)
@@ -624,7 +626,7 @@ async def add_temporary_knowledge(request: AddKnowledgeRequest):
             chat_id=request.chat_id, content=request.content, metadata=request.metadata
         )
 
-        return {"success": True, "knowledge_id": knowledge_id}
+        return {"success": True, "data": {"success": True, "knowledge_id": knowledge_id}}
 
     except Exception as e:
         logger.error("Failed to add temporary knowledge: %s", e)
@@ -644,8 +646,11 @@ async def get_pending_knowledge_decisions(chat_id: str):
 
         return {
             "success": True,
-            "pending_items": pending_items,
-            "count": len(pending_items),
+            "data": {
+                "success": True,
+                "pending_items": pending_items,
+                "count": len(pending_items),
+            },
         }
 
     except Exception as e:
@@ -669,8 +674,11 @@ async def apply_knowledge_decision(request: KnowledgeDecisionRequest):
         )
 
         return {
-            "success": success,
-            "message": f"Knowledge {request.decision.value} applied",
+            "success": True,
+            "data": {
+                "success": success,
+                "message": f"Knowledge {request.decision.value} applied",
+            },
         }
 
     except Exception as e:
@@ -694,7 +702,7 @@ async def compile_chat_to_knowledge(request_data: CompileChatRequest, request: R
             include_system_messages=request_data.include_system_messages,
         )
 
-        return {"success": True, "compiled": compiled}
+        return {"success": True, "data": {"success": True, "compiled": compiled}}
 
     except Exception as e:
         logger.error("Failed to compile chat: %s", e)
@@ -716,7 +724,7 @@ async def search_chat_knowledge(request: ChatKnowledgeSearchRequest):
             include_temporary=request.include_temporary,
         )
 
-        return {"success": True, "results": results, "count": len(results)}
+        return {"success": True, "data": {"success": True, "results": results, "count": len(results)}}
 
     except Exception as e:
         logger.error("Failed to search knowledge: %s", e)
@@ -735,13 +743,14 @@ async def get_chat_context(chat_id: str):
         context = chat_knowledge_manager.chat_contexts.get(chat_id)
 
         if not context:
-            return {"success": False, "message": "No context found for chat"}
+            return {"success": False, "message": "No context found for chat", "data": None}
 
         file_associations = chat_knowledge_manager.file_associations.get(chat_id, [])
 
         return {
             "success": True,
-            "context": {
+            "data": {
+                "success": True,
                 "chat_id": context.chat_id,
                 "topic": context.topic,
                 "keywords": context.keywords,

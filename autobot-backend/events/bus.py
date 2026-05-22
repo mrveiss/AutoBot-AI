@@ -71,6 +71,17 @@ class EventBus:
             payload: Event payload dict.
             persist: Which backend(s) receive the event.
         """
+        if persist is PersistStrategy.REDIS:
+            # #8304: REDIS strategy has no implementation in this facade.
+            # Callers needing durable Redis events must use RedisEventStreamManager
+            # directly.  Log a critical error instead of silently dropping.
+            logger.critical(
+                "PersistStrategy.REDIS is not implemented in EventBus — event dropped "
+                "(channel=%s, event_type=%s). Use RedisEventStreamManager directly.",
+                channel,
+                event_type,
+            )
+            return
         if persist in (PersistStrategy.NONE, PersistStrategy.BOTH):
             await get_event_manager().publish(event_type, {"channel": channel, **payload})
         if persist in (PersistStrategy.MEMORY, PersistStrategy.BOTH):

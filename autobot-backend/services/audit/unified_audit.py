@@ -93,8 +93,8 @@ async def record(event: AuditEvent) -> None:
     ttl = _CATEGORY_TTL.get(event.category.value, _COMPLIANCE_TTL)
     async with redis.pipeline() as pipe:
         await pipe.zadd(UNIFIED_KEY, {raw: event.occurred_at})
-        await pipe.expire(UNIFIED_KEY, ttl)
-        # Per-category secondary index for scoped queries
+        # UNIFIED_KEY spans all categories with different TTLs — never set expire
+        # on it (#8303). Per-category keys each carry their own TTL.
         cat_key = f"audit:category:{event.category.value}"
         await pipe.zadd(cat_key, {raw: event.occurred_at})
         await pipe.expire(cat_key, ttl)
@@ -122,6 +122,7 @@ async def query(
     to_ts: float | None = None,
     limit: int = 100,
     offset: int = 0,
+    max_scan: int = 10_000,
 ) -> List[Dict[str, Any]]:
     """Query audit events.  Filters are applied in-memory after a Redis scan."""
     redis = await get_async_redis_client(database="main")
@@ -130,7 +131,8 @@ async def query(
     key = f"audit:category:{category.value}" if category else UNIFIED_KEY
     min_score: Any = from_ts if from_ts is not None else 0
     max_score: Any = to_ts if to_ts is not None else "+inf"
-    raws = await redis.zrangebyscore(key, min_score, max_score)
+    # #8302: cap Redis scan before Python-side filtering to prevent OOM
+    raws = await redis.zrangebyscore(key, min_score, max_score, start=0, num=max_scan)
     results: List[Dict[str, Any]] = []
     for raw in raws:
         try:
