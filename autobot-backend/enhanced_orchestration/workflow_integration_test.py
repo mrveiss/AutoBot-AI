@@ -238,17 +238,17 @@ async def test_execute_workflow_end_to_end_with_skill_bound_plan() -> None:
 
 @pytest.mark.asyncio
 async def test_unknown_capability_produces_blocked_plan() -> None:
-    """Phase 3: planner with no winning skill builds a BLOCKED plan.
+    """Phase 3 (strict mode): planner with no winning skill builds a BLOCKED plan.
 
     Verifies that ``plan.status == "blocked"`` and each task carries a
     non-None ``pending_skill_id`` when the skill_router returns
     ``{success: True, enabled_skill: None}`` (the 'no match' outcome that
-    triggers Phase 3 gap-fill).
+    triggers Phase 3 gap-fill in strict mode).
     """
     fake_router = MagicMock()
     fake_router.execute = AsyncMock(return_value={"success": True, "enabled_skill": None})
 
-    planner = StrategyPlanner(agent_capabilities={})
+    planner = StrategyPlanner(agent_capabilities={}, strict_gap_fill=True)
     planner._skill_router_skill = fake_router
 
     plan_data = {
@@ -286,7 +286,10 @@ async def test_try_resume_unblocks_plan_and_executes_when_skill_synthesized() ->
             "method": "llm",
         }
     )
-    planner = StrategyPlanner(agent_capabilities={})
+    # strict_gap_fill=True so rebind triggers gap-fill path when needed; the
+    # router here always returns a skill so gap-fill won't fire, but the strict
+    # flag ensures the planner would fire it if rebind still finds no winner.
+    planner = StrategyPlanner(agent_capabilities={}, strict_gap_fill=True)
     planner._skill_router_skill = router_after
 
     task = _task("task-resume")
@@ -319,7 +322,7 @@ async def test_try_resume_stays_blocked_when_skill_still_unavailable() -> None:
     """
     router_miss = MagicMock()
     router_miss.execute = AsyncMock(return_value={"success": True, "enabled_skill": None})
-    planner = StrategyPlanner(agent_capabilities={})
+    planner = StrategyPlanner(agent_capabilities={}, strict_gap_fill=True)
     planner._skill_router_skill = router_miss
 
     task = _task("task-stuck")

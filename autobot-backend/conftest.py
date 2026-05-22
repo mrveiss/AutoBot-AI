@@ -151,6 +151,7 @@ for _svc_mod in [
     "services",
     "services.llm_api_key_service",
     "services.llm_cost_tracker",
+    "services.tool_output_filter",
 ]:
     if _svc_mod not in sys.modules:
         _svc_stub = _make_pkg_stub(_svc_mod)
@@ -308,6 +309,45 @@ try:
         _lm_mod._get_logger_patched_for_tests = True  # type: ignore[attr-defined]
 except Exception:
     pass
+
+# orchestration.causal_error_recovery / causal_error_analyzer stubs (#7431).
+# orchestration/__init__.py imports CausalErrorRecovery from causal_error_recovery,
+# which cascades through agent_loop → tools → code_intelligence — a chain of
+# modules with Python-3.10-incompatible annotations or missing config keys.
+# Stub these modules so the lightweight types-only tests (workflow_planning_test,
+# workflow_integration_test) can collect without needing the full backend stack.
+for _causal_mod in [
+    "orchestration.causal_error_recovery",
+    "orchestration.causal_error_analyzer",
+    "orchestration.causal_validator",
+    "agent_loop",
+    "agent_loop.loop",
+    "agent_loop.think_tool",
+    "tools.parallel",
+    "tools.parallel.executor",
+    "code_intelligence",
+]:
+    if _causal_mod not in sys.modules:
+        sys.modules[_causal_mod] = _make_pkg_stub(_causal_mod)
+
+# Ensure CausalErrorRecovery / RecoveryPlan / get_recovery_recommender are
+# resolvable from the stub so orchestration/__init__.py's wildcard import
+# (`from .causal_error_recovery import CausalErrorRecovery, ...`) succeeds.
+_cer_stub = sys.modules.get("orchestration.causal_error_recovery") or _make_pkg_stub("orchestration.causal_error_recovery")
+_cer_stub.CausalErrorRecovery = MagicMock()  # type: ignore[attr-defined]
+_cer_stub.RecoveryPlan = MagicMock()  # type: ignore[attr-defined]
+_cer_stub.get_recovery_recommender = MagicMock()  # type: ignore[attr-defined]
+sys.modules["orchestration.causal_error_recovery"] = _cer_stub
+
+_cea_stub = sys.modules.get("orchestration.causal_error_analyzer") or _make_pkg_stub("orchestration.causal_error_analyzer")
+_cea_stub.CausalErrorAnalysis = MagicMock()  # type: ignore[attr-defined]
+sys.modules["orchestration.causal_error_analyzer"] = _cea_stub
+
+_al_stub = sys.modules.get("agent_loop") or _make_pkg_stub("agent_loop")
+_al_stub.AgentLoop = MagicMock()  # type: ignore[attr-defined]
+sys.modules["agent_loop"] = _al_stub
+sys.modules.setdefault("agent_loop.loop", _make_pkg_stub("agent_loop.loop"))
+sys.modules.setdefault("agent_loop.think_tool", _make_pkg_stub("agent_loop.think_tool"))
 
 # Package stubs for SQLAlchemy and alembic sub-packages (need __path__ so
 # dotted sub-module imports like ``sqlalchemy.dialects.postgresql`` resolve).

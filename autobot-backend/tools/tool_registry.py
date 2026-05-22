@@ -1,6 +1,8 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+from __future__ import annotations
+
 """
 Unified Tool Registry
 

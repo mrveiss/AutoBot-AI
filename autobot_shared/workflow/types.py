@@ -54,6 +54,30 @@ class ExecutionStrategy(Enum):
     ADAPTIVE = "adaptive"
 
 
+class WorkflowPlanState(Enum):
+    """Lifecycle state for a WorkflowPlan (#7431, ADR-006 §Phase 3).
+
+    Provides a first-class enum surface over the plain ``status: str`` field so
+    callers can branch on lifecycle state without string literals.  The ``state``
+    property on ``WorkflowPlan`` returns the appropriate member.
+
+    ``READY`` — plan is runnable (all tasks have skill bindings or fall back to
+        capability-based routing; status == "pending").
+    ``BLOCKED_ON_SKILL_GENERATION`` — one or more tasks are awaiting an async
+        Phase 3 gap-fill; executor must not run the plan until it resumes
+        (status == "blocked").
+    ``IN_PROGRESS`` — plan is actively executing (status == "in_progress").
+    ``COMPLETED`` — plan reached a terminal success state (status == "completed").
+    ``FAILED`` — plan reached a terminal failure state (status == "failed").
+    """
+
+    READY = "ready"
+    BLOCKED_ON_SKILL_GENERATION = "blocked_on_skill_generation"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 @dataclass
 class PromptSpec:
     """Structured prompt for a workflow task.
@@ -272,6 +296,25 @@ class WorkflowPlan:
 
     created_at_epoch: float | None = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def state(self) -> WorkflowPlanState:
+        """Typed lifecycle state derived from the plain ``status`` string.
+
+        Maps the string-valued ``status`` field to the canonical
+        ``WorkflowPlanState`` enum so callers can branch on first-class values
+        instead of comparing raw strings (#7431, ADR-006 §Phase 3).  Unknown
+        status values fall back to ``READY`` so legacy callers that set custom
+        statuses don't raise.
+        """
+        _map = {
+            "pending": WorkflowPlanState.READY,
+            "blocked": WorkflowPlanState.BLOCKED_ON_SKILL_GENERATION,
+            "in_progress": WorkflowPlanState.IN_PROGRESS,
+            "completed": WorkflowPlanState.COMPLETED,
+            "failed": WorkflowPlanState.FAILED,
+        }
+        return _map.get(self.status, WorkflowPlanState.READY)
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to a JSON-compatible dict (#7124).

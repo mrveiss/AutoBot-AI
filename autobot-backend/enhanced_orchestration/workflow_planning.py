@@ -29,14 +29,27 @@ logger = get_logger(__name__)
 class StrategyPlanner:
     """Handles workflow plan creation and task management."""
 
-    def __init__(self, agent_capabilities: Dict[str, Set[AgentCapability]]):
-        """
-        Initialize workflow planner.
+    def __init__(
+        self,
+        agent_capabilities: Dict[str, Set[AgentCapability]],
+        *,
+        strict_gap_fill: bool = False,
+    ):
+        """Initialize workflow planner.
 
         Args:
-            agent_capabilities: Mapping of agent types to their capabilities
+            agent_capabilities: Mapping of agent types to their capabilities.
+            strict_gap_fill: ADR-006 strict mode (#7431). When ``True``, a
+                no-skill-match at plan time fires the async Phase 3 gap-fill
+                loop (skill-researcher → autonomous-skill-development →
+                governance → register) and flips the plan to
+                ``BLOCKED_ON_SKILL_GENERATION`` until a skill is promoted.
+                When ``False`` (default, lenient), a no-match leaves
+                ``task.skill_name=None`` and legacy capability-based routing
+                handles the task unchanged.
         """
         self.agent_capabilities = agent_capabilities
+        self.strict_gap_fill = strict_gap_fill
         # #7268 Phase 1: lazily-instantiated skill_router for plan-time binding.
         # Created on first ``build_workflow_plan`` call and cached for the
         # planner's lifetime. Each lookup is ``dry_run=True`` so no skill is
@@ -173,12 +186,15 @@ class StrategyPlanner:
 
         skill_name = result.get("enabled_skill")
         if not skill_name:
-            # #7431 Phase 3: no skill matched — fire async gap-fill in the
-            # background and attach a pending_skill_id so the plan can flip
-            # to BLOCKED. The forthcoming resume path re-binds the task
-            # when the generated skill is promoted (skill_promoted Redis
-            # pub-sub event from registry.register).
-            await self._trigger_async_gap_fill(task, task_desc)
+            # #7431 Phase 3: no skill matched.
+            # strict_gap_fill=True (ADR-006 strict mode): fire async gap-fill
+            # in the background, attach a pending_skill_id, and let the plan
+            # flip to BLOCKED_ON_SKILL_GENERATION. The resume path re-binds
+            # the task once a skill is promoted via skill_promoted Redis pub-sub.
+            # strict_gap_fill=False (default, lenient): leave skill_name=None
+            # and fall back to legacy capability-based routing — no gap-fill.
+            if self.strict_gap_fill:
+                await self._trigger_async_gap_fill(task, task_desc)
             return
 
         # Action defaults to ``"execute"`` — Phase 2 (WorkflowExecutor
