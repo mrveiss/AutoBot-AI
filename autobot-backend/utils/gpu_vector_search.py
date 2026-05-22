@@ -29,6 +29,7 @@ import numpy as np
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.missing_dep import MissingDep as _MissingDep
 from knowledge.backends import BaseClient, BaseCollection
+from knowledge.hnsw_prefetch import attach_prefetcher
 from utils.async_initializable import AsyncInitializable
 
 # FAISS and ChromaDB are imported as whole-module objects (faiss.IndexFlatL2(),
@@ -152,6 +153,7 @@ class GPUVectorIndex:
         self.next_id: int = 0
         self.is_trained: bool = False
         self._lock = asyncio.Lock()
+        self._hnsw_prefetcher: Any | None = None  # Issue #8161: HNSW prefetch
 
         # Backend tracking
         self.backend = SearchBackend.CHROMADB  # Default fallback
@@ -264,6 +266,8 @@ class GPUVectorIndex:
             index = faiss.IndexHNSWFlat(dim, 32)  # 32 neighbors
             index.hnsw.efConstruction = 200
             index.hnsw.efSearch = 64
+            # Issue #8161: attach prefetcher after index creation
+            self._hnsw_prefetcher = attach_prefetcher(index)
             return index
 
         else:
@@ -460,8 +464,17 @@ class GPUVectorIndex:
         if hasattr(self.index, "nprobe"):
             self.index.nprobe = self.config.nprobe
 
+        # Issue #8161: warm HNSW entry-point neighbor lists before traversal
+        if self._hnsw_prefetcher is not None:
+            self._hnsw_prefetcher.warmup_entry_point()
+
         # Execute search
         distances, indices = await asyncio.to_thread(self.index.search, query, top_k)
+
+        # Issue #8161: speculatively prefetch level-0 neighbors of top results
+        if self._hnsw_prefetcher is not None:
+            valid_ids = [int(i) for i in indices[0] if i >= 0]
+            self._hnsw_prefetcher.speculative_prefetch(valid_ids)
 
         # Issue #620: Use helper for result conversion
         results = self._convert_search_results(distances, indices)
