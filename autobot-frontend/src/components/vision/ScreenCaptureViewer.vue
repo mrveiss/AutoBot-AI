@@ -49,6 +49,15 @@
       </div>
     </div>
 
+    <!-- Capture Error -->
+    <BaseAlert
+      v-if="analyzeError"
+      variant="error"
+      :message="analyzeError"
+      dismissible
+      @dismiss="analyzeError = null"
+    />
+
     <!-- Main Content -->
     <div class="viewer-content">
       <!-- Analysis View -->
@@ -199,11 +208,11 @@
 </template>
 
 <script setup lang="ts">
-import Icon from '@/components/ui/Icon.vue'
+import Icon from '@/components/ui/Icon.vue';
+import BaseAlert from '@/components/ui/BaseAlert.vue';
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
-import { useNotificationBus } from '@/composables/useNotificationBus';
 import { usePollingJob } from '@/composables/usePollingJob';
 import {
   visionMultimodalApiClient,
@@ -214,7 +223,6 @@ import {
 
 const { t } = useI18n();
 const logger = createLogger('ScreenCaptureViewer');
-const { showToast } = useNotificationBus();
 
 // Emits
 const emit = defineEmits<{
@@ -231,6 +239,7 @@ const emit = defineEmits<{
 
 // State
 const analyzing = ref(false);
+const analyzeError = ref<string | null>(null);
 const analysisResult = ref<ScreenAnalysisResponse | null>(null);
 const selectedElement = ref<UIElement | null>(null);
 const elementTypes = ref<ElementTypeInfo[]>([]);
@@ -269,15 +278,16 @@ const captureAndAnalyze = async () => {
     });
 
     if (response.success && response.data) {
+      analyzeError.value = null;
       analysisResult.value = response.data;
       emit('analysis-complete', response.data);
       logger.debug('Screen analysis complete:', response.data);
     } else {
-      showToast(response.error || t('vision.screenCapture.toastAnalysisFailed'), 'error');
+      analyzeError.value = response.error || t('vision.screenCapture.toastAnalysisFailed');
       logger.error('Analysis failed:', response.error);
     }
   } catch (err) {
-    showToast(t('vision.screenCapture.toastFailedToAnalyze'), 'error');
+    analyzeError.value = t('vision.screenCapture.toastFailedToAnalyze');
     logger.error('Analysis error:', err);
   } finally {
     analyzing.value = false;

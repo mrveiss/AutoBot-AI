@@ -14,6 +14,15 @@
       </div>
     </div>
 
+    <!-- Action Error -->
+    <BaseAlert
+      v-if="actionError"
+      variant="error"
+      :message="actionError"
+      dismissible
+      @dismiss="actionError = null"
+    />
+
     <!-- Loading State -->
     <div v-if="loading" class="loading-state">
       <Icon name="spinner" class="animate-spin" />
@@ -158,7 +167,8 @@
 </template>
 
 <script setup lang="ts">
-import Icon from '@/components/ui/Icon.vue'
+import Icon from '@/components/ui/Icon.vue';
+import BaseAlert from '@/components/ui/BaseAlert.vue';
 import { ref, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
@@ -187,6 +197,7 @@ const emit = defineEmits<{
 
 // State
 const selectedOpportunity = ref<AutomationOpportunity | null>(null);
+const actionError = ref<string | null>(null);
 const showElementTypes = ref(false);
 const showInteractionTypes = ref(false);
 const elementTypesList = ref<ElementTypeInfo[]>([]);
@@ -224,13 +235,14 @@ const executing = ref(false);
 const executeAction = async (opportunity: AutomationOpportunity) => {
   if (executing.value) return;
   executing.value = true;
+  actionError.value = null;
   try {
     const res = await visionMultimodalApiClient.detectElements({
       element_type: opportunity.element_type,
       min_confidence: opportunity.confidence * 0.8,
     });
     if (!res.success || !res.data) {
-      showToast(t('vision.guiAutomation.toastVerifyFailed', { error: res.error || 'Unknown error' }), 'error');
+      actionError.value = t('vision.guiAutomation.toastVerifyFailed', { error: res.error || 'Unknown error' });
       return;
     }
     const found = res.data.elements?.some(
@@ -250,7 +262,7 @@ const executeAction = async (opportunity: AutomationOpportunity) => {
     emit('refresh');
   } catch (err) {
     logger.error('Execute action failed:', err);
-    showToast(t('vision.guiAutomation.toastExecutionFailed'), 'error');
+    actionError.value = t('vision.guiAutomation.toastExecutionFailed');
   } finally {
     executing.value = false;
   }

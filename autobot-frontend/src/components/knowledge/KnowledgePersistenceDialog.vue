@@ -215,6 +215,15 @@
         </BaseButton>
       </div>
 
+      <!-- Submit Error -->
+      <BaseAlert
+        v-if="submitError"
+        variant="error"
+        :message="submitError"
+        dismissible
+        @dismiss="submitError = null"
+      />
+
       <!-- Dialog Actions -->
       <div class="dialog-actions">
         <div class="action-summary">
@@ -262,6 +271,7 @@ import { apiService } from '@/services/api';
 import { getApiBase } from '@/config/ssot-config';
 import { formatDateTime as formatDate } from '@/utils/formatHelpers';
 import BaseButton from '@/components/base/BaseButton.vue';
+import BaseAlert from '@/components/ui/BaseAlert.vue';
 import { createLogger } from '@/utils/debugUtils';
 
 type KnowledgeDecision = 'add_to_kb' | 'keep_temporary' | 'delete';
@@ -324,6 +334,7 @@ const compileOptions = ref({
   title: '',
 });
 const loading = ref(false);
+const submitError = ref<string | null>(null);
 
 const hasDecisions = computed(() => Object.keys(itemDecisions.value).length > 0);
 
@@ -359,7 +370,7 @@ const loadPendingItems = async (): Promise<void> => {
     }
   } catch (error) {
     logger.error('Failed to load pending knowledge:', error);
-    showToast(t('knowledge.persistence.failedToLoad'), 'error');
+    submitError.value = t('knowledge.persistence.failedToLoad');
   } finally {
     loading.value = false;
   }
@@ -418,11 +429,12 @@ const applyAllDecisions = async (): Promise<void> => {
     );
 
     showToast(t('knowledge.persistence.decisionsApplied', { count: decisions.length }), 'success');
+    submitError.value = null;
     emit('decisions-applied', decisions);
     closeDialog();
   } catch (error) {
     logger.error('Failed to apply decisions:', error);
-    showToast(t('knowledge.persistence.decisionsApplyFailed'), 'error');
+    submitError.value = t('knowledge.persistence.decisionsApplyFailed');
   } finally {
     loading.value = false;
   }
@@ -441,12 +453,13 @@ const compileChat = async (): Promise<void> => {
 
     if (response.success) {
       showToast(t('knowledge.persistence.compiledSuccess'), 'success');
+      submitError.value = null;
       emit('chat-compiled', response.data?.compiled);
       closeDialog();
     }
   } catch (error) {
     logger.error('Failed to compile chat:', error);
-    showToast(t('knowledge.persistence.compileFailed'), 'error');
+    submitError.value = t('knowledge.persistence.compileFailed');
   } finally {
     loading.value = false;
   }
