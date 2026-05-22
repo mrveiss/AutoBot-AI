@@ -139,6 +139,16 @@ class TestBuildDocument:
         doc = store._build_document(exp)
         assert "val_bpb" not in doc
 
+    def test_val_bpb_none_with_baseline_set_omits_improvement(self) -> None:
+        """val_bpb=None but baseline_val_bpb set must not include Improvement — Issue #3211."""
+        store = _make_store()
+        exp = _make_experiment(val_bpb=None, baseline=6.0)
+        # result exists but val_bpb is None
+        exp.result = ExperimentResult(val_bpb=None)
+        doc = store._build_document(exp)
+        assert "Improvement" not in doc
+        assert "Baseline" not in doc
+
 
 # ---------------------------------------------------------------------------
 # _build_metadata tests

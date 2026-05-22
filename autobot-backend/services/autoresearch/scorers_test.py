@@ -135,6 +135,39 @@ class TestLLMJudgeScorer:
         assert "error" in result.metadata
 
 
+class TestLLMJudgeScorerParseRating:
+    """Unit tests for LLMJudgeScorer._parse_rating edge cases — Issue #3211."""
+
+    def test_parse_rating_completely_unparseable_returns_zero(self) -> None:
+        result = LLMJudgeScorer._parse_rating("no numbers here at all")
+        assert result == 0
+
+    def test_parse_rating_json_path(self) -> None:
+        assert LLMJudgeScorer._parse_rating('{"rating": 7, "reasoning": "ok"}') == 7
+
+    def test_parse_rating_regex_path(self) -> None:
+        assert LLMJudgeScorer._parse_rating("I give this 8 out of 10") == 8
+
+    def test_parse_rating_clamps_to_10(self) -> None:
+        assert LLMJudgeScorer._parse_rating('{"rating": 15}') == 10
+
+    def test_parse_rating_clamps_to_0(self) -> None:
+        assert LLMJudgeScorer._parse_rating('{"rating": -3}') == 0
+
+
+class TestValBpbScorerRunExperimentException:
+    """ValBpbScorer should surface exceptions from run_experiment — Issue #3211."""
+
+    @pytest.mark.asyncio
+    async def test_score_propagates_run_experiment_exception(self) -> None:
+        runner = AsyncMock()
+        runner.run_experiment.side_effect = RuntimeError("training crashed")
+
+        scorer = ValBpbScorer(runner=runner, baseline_val_bpb=5.0)
+        with pytest.raises(RuntimeError, match="training crashed"):
+            await scorer.score("hypothesis", {"hyperparams": {}})
+
+
 class TestSubsetFractionPassthrough:
     """Verify subset_fraction=None is a no-op for all concrete scorers."""
 
