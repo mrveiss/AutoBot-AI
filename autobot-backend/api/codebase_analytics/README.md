@@ -77,11 +77,42 @@ The module is integrated into the main application via:
 - `backend/initialization/routers.py` - Router registration
 - `backend/api/analytics_debt.py` - Uses storage utilities
 
+## Anti-Pattern Detectors
+
+Cross-file analysis is provided by `code_analysis/src/anti_pattern_detector.py`
+via `AntiPatternDetector.analyze_cross_file_only()`. Detectors surface findings
+under `GET /codebase/problems`.
+
+| `AntiPatternType` value       | Introduced | Description |
+|-------------------------------|------------|-------------|
+| `god_class`                   | #221       | Class with >20 methods / high complexity |
+| `feature_envy`                | #221       | Methods that use other classes more than their own |
+| `circular_dependency`         | #221       | Module-level import cycles |
+| `long_method`                 | #221       | Functions exceeding complexity threshold |
+| `data_clump`                  | #221       | Parameter groups that recur across many call sites |
+| `dead_code`                   | #221       | Unreferenced classes / methods |
+| `lsp_signature_incompatible`  | #6661      | Child overrides that break Liskov Substitution |
+| `lsp_exception_contract_changed` | #6661  | Child method throws exceptions not declared in parent |
+| `duplicate_enum`              | #6684      | Enum pairs with overlapping value sets (Jaccard ≥ 0.85) |
+| `duplicate_class_shape`       | #6684      | Class pairs sharing method-name sets without a shared base |
+| `unwired_tracker`             | #6871      | Modules with tracker refs but zero production callers |
+| `composable_opportunity`      | #6748      | Vue components repeating the same `<script setup>` reactive boilerplate (≥ 5 files with identical API-call signature → suggest a composable) |
+
+### Tuning notes
+
+- `duplicate_enum` threshold bumped 0.7 → 0.85 (#6755) to suppress severity-scale FP pairs.
+- `composable_opportunity` threshold: 5 components. Excludes `src/composables/` and `node_modules/`.
+
 ## Testing
 
 Run module tests:
 ```bash
 python3 -m pytest tests/unit/test_api_endpoint_migrations.py -k codebase
+```
+
+Run consolidation and composable detector tests:
+```bash
+python3 -m pytest autobot-backend/code_analysis/src/anti_pattern_detector_consolidation_test.py -v
 ```
 
 ## Original File

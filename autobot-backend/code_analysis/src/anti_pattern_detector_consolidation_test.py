@@ -514,3 +514,102 @@ async def test_duplicate_class_shape_still_flags_unrelated_classes_after_protoco
     )
     dup_shape = [ap for ap in report.anti_patterns if ap.pattern_type.value == "duplicate_class_shape"]
     assert dup_shape, "unrelated classes with identical shape should still be flagged"
+
+
+# ---------------------------------------------------------------------------
+# COMPOSABLE_OPPORTUNITY (#6748)
+# ---------------------------------------------------------------------------
+
+_LOADING_ERROR_VUE = """\
+<script setup lang="ts">
+import { ref } from 'vue'
+const loading = ref(false)
+const error = ref<string | null>(null)
+</script>
+<template><div>test</div></template>
+"""
+
+_DIFFERENT_PATTERN_VUE = """\
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+const count = ref(0)
+const doubled = computed(() => count.value * 2)
+</script>
+<template><div>{{ doubled }}</div></template>
+"""
+
+
+def _make_vue_root(root: Path) -> Path:
+    comp_dir = root / "autobot-frontend" / "src" / "components"
+    comp_dir.mkdir(parents=True)
+    return comp_dir
+
+
+@pytest.mark.asyncio
+async def test_composable_opportunity_loading_pattern(tmp_path):
+    """6 components with the same loading+error ref boilerplate trigger COMPOSABLE_OPPORTUNITY."""
+    apd = _load_detector_module()
+    comp_dir = _make_vue_root(tmp_path)
+    for i in range(6):
+        (comp_dir / f"Widget{i}.vue").write_text(_LOADING_ERROR_VUE, encoding="utf-8")
+
+    detector = apd.AntiPatternDetector()
+    findings = await detector._detect_composable_opportunities(str(tmp_path))
+
+    composable = [f for f in findings if f.pattern_type.value == "composable_opportunity"]
+    assert composable, "expected COMPOSABLE_OPPORTUNITY for 6 components sharing the same pattern"
+    assert composable[0].metrics["component_count"] >= 5
+    assert composable[0].entity_name == "useLoadingState"
+
+
+@pytest.mark.asyncio
+async def test_composable_opportunity_below_threshold(tmp_path):
+    """4 components (below threshold of 5) must NOT produce a COMPOSABLE_OPPORTUNITY finding."""
+    apd = _load_detector_module()
+    comp_dir = _make_vue_root(tmp_path)
+    for i in range(4):
+        (comp_dir / f"Widget{i}.vue").write_text(_LOADING_ERROR_VUE, encoding="utf-8")
+
+    detector = apd.AntiPatternDetector()
+    findings = await detector._detect_composable_opportunities(str(tmp_path))
+
+    composable = [f for f in findings if f.pattern_type.value == "composable_opportunity"]
+    assert not composable, "4 components should NOT trigger COMPOSABLE_OPPORTUNITY (below threshold of 5)"
+
+
+@pytest.mark.asyncio
+async def test_composable_opportunity_different_patterns_not_clustered(tmp_path):
+    """Components with different reactive patterns are not clustered together."""
+    apd = _load_detector_module()
+    comp_dir = _make_vue_root(tmp_path)
+    # 4 loading+error, 4 count+computed — neither group reaches threshold alone
+    for i in range(4):
+        (comp_dir / f"LoadWidget{i}.vue").write_text(_LOADING_ERROR_VUE, encoding="utf-8")
+    for i in range(4):
+        (comp_dir / f"CountWidget{i}.vue").write_text(_DIFFERENT_PATTERN_VUE, encoding="utf-8")
+
+    detector = apd.AntiPatternDetector()
+    findings = await detector._detect_composable_opportunities(str(tmp_path))
+
+    composable = [f for f in findings if f.pattern_type.value == "composable_opportunity"]
+    assert not composable, "two distinct 4-component groups should not each trigger COMPOSABLE_OPPORTUNITY"
+
+
+@pytest.mark.asyncio
+async def test_composable_opportunity_excludes_composables_dir(tmp_path):
+    """Files inside a 'composables' directory are excluded from detection."""
+    apd = _load_detector_module()
+    comp_dir = _make_vue_root(tmp_path)
+    composable_dir = comp_dir / "composables"
+    composable_dir.mkdir()
+    # 6 files in composables/ plus 3 outside — only outside 3 count; below threshold
+    for i in range(6):
+        (composable_dir / f"use{i}.vue").write_text(_LOADING_ERROR_VUE, encoding="utf-8")
+    for i in range(3):
+        (comp_dir / f"Widget{i}.vue").write_text(_LOADING_ERROR_VUE, encoding="utf-8")
+
+    detector = apd.AntiPatternDetector()
+    findings = await detector._detect_composable_opportunities(str(tmp_path))
+
+    composable = [f for f in findings if f.pattern_type.value == "composable_opportunity"]
+    assert not composable, "composables/ dir is excluded; only 3 real components remain — below threshold"
