@@ -19,7 +19,13 @@ from api.schemas_system import (
     AddPortRequest,
     AddVulnerabilityRequest,
     AdvancePhaseRequest,
+    AssessmentData,
+    AssessmentFindingsData,
+    AssessmentListData,
+    AssessmentPhaseData,
+    AssessmentPhaseDefinitionsData,
     CreateAssessmentRequest,
+    ParseToolOutputData,
     ParseToolOutputRequest,
     RecoverErrorRequest,
 )
@@ -53,7 +59,7 @@ async def get_workflow_manager() -> SecurityWorkflowManager:
 # API Endpoints
 
 
-@router.post("/assessments", response_model=DataResponse)
+@router.post("/assessments", response_model=DataResponse[AssessmentData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_assessment",
@@ -102,7 +108,7 @@ async def create_assessment(
     )
 
 
-@router.get("/assessments", response_model=DataResponse)
+@router.get("/assessments", response_model=DataResponse[AssessmentListData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_assessments",
@@ -147,7 +153,7 @@ async def list_assessments(
     )
 
 
-@router.get("/assessments/{assessment_id}", response_model=DataResponse)
+@router.get("/assessments/{assessment_id}", response_model=DataResponse[AssessmentData])
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="get_assessment",
@@ -187,7 +193,7 @@ async def get_assessment(
     )
 
 
-@router.get("/assessments/{assessment_id}/summary", response_model=DataResponse)
+@router.get("/assessments/{assessment_id}/summary", response_model=DataResponse[AssessmentData])
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="get_assessment_summary",
@@ -267,7 +273,7 @@ async def delete_assessment(
     )
 
 
-@router.get("/assessments/{assessment_id}/phase", response_model=DataResponse)
+@router.get("/assessments/{assessment_id}/phase", response_model=DataResponse[AssessmentPhaseData])
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="get_phase",
@@ -317,7 +323,7 @@ async def get_current_phase(
     )
 
 
-@router.post("/assessments/{assessment_id}/phase", response_model=DataResponse)
+@router.post("/assessments/{assessment_id}/phase", response_model=DataResponse[AssessmentData])
 @with_error_handling(
     category=ErrorCategory.VALIDATION,
     operation="advance_phase",
@@ -570,7 +576,7 @@ async def add_finding(
     )
 
 
-@router.get("/assessments/{assessment_id}/findings", response_model=DataResponse)
+@router.get("/assessments/{assessment_id}/findings", response_model=DataResponse[AssessmentFindingsData])
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="get_findings",
@@ -715,7 +721,7 @@ async def _store_parsed_vulnerabilities(manager, assessment_id: str, parsed) -> 
     return vulns_added
 
 
-@router.post("/assessments/{assessment_id}/parse", response_model=DataResponse)
+@router.post("/assessments/{assessment_id}/parse", response_model=DataResponse[ParseToolOutputData])
 @with_error_handling(
     category=ErrorCategory.VALIDATION,
     operation="parse_tool_output",
@@ -783,7 +789,7 @@ async def parse_and_store_tool_output(
     )
 
 
-@router.post("/assessments/{assessment_id}/error", response_model=DataResponse)
+@router.post("/assessments/{assessment_id}/error", response_model=DataResponse[AssessmentData])
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="set_error",
@@ -825,7 +831,7 @@ async def set_error_state(
     )
 
 
-@router.post("/assessments/{assessment_id}/recover", response_model=DataResponse)
+@router.post("/assessments/{assessment_id}/recover", response_model=DataResponse[AssessmentData])
 @with_error_handling(
     category=ErrorCategory.VALIDATION,
     operation="recover_from_error",
@@ -873,7 +879,7 @@ async def recover_from_error(
     )
 
 
-@router.get("/phases", response_model=DataResponse)
+@router.get("/phases", response_model=DataResponse[AssessmentPhaseDefinitionsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_phase_definitions",

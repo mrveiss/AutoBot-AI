@@ -16,9 +16,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from api.schemas_common import DataResponse
 from api.schemas_system import (
+    AuditLogData,
     CommandApprovalRequest,
     CommandApprovalResponse,
+    CommandHistoryData,
     DomainSecurityStatsResponse,
+    PendingApprovalsData,
     SecurityStatusResponse,
     ThreatIntelStatusResponse,
     URLCheckRequest,
@@ -110,7 +113,7 @@ async def approve_command(request: Request, approval: CommandApprovalRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/pending-approvals", response_model=DataResponse)
+@router.get("/pending-approvals", response_model=DataResponse[PendingApprovalsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pending_approvals",
@@ -132,7 +135,7 @@ async def get_pending_approvals(request: Request):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/command-history", response_model=DataResponse)
+@router.get("/command-history", response_model=DataResponse[CommandHistoryData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_command_history",
@@ -181,7 +184,7 @@ async def _read_audit_log_file(log_file: str, limit: int) -> list:
         return []
 
 
-@router.get("/audit-log", response_model=DataResponse)
+@router.get("/audit-log", response_model=DataResponse[AuditLogData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_audit_log",
