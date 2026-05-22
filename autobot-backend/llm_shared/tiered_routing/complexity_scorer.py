@@ -25,21 +25,23 @@ class TaskComplexityScorer:
     Rule-based complexity scorer for LLM requests.
 
     Analyzes messages using weighted heuristic factors:
-    - Message length (0.15 weight)
-    - Code detection (0.25 weight)
-    - Technical terms (0.20 weight)
-    - Multi-step indicators (0.20 weight)
-    - Question complexity (0.20 weight)
+    - Message length (0.13 weight)
+    - Code detection (0.23 weight)
+    - Technical terms (0.18 weight)
+    - Multi-step indicators (0.18 weight)
+    - Question complexity (0.18 weight)
+    - Output length (0.10 weight)
 
     Score is normalized to 0-10 scale.
     """
 
     # Factor weights (must sum to 1.0)
-    WEIGHT_LENGTH = 0.15
-    WEIGHT_CODE = 0.25
-    WEIGHT_TECHNICAL = 0.20
-    WEIGHT_MULTISTEP = 0.20
-    WEIGHT_QUESTION = 0.20
+    WEIGHT_LENGTH = 0.13
+    WEIGHT_CODE = 0.23
+    WEIGHT_TECHNICAL = 0.18
+    WEIGHT_MULTISTEP = 0.18
+    WEIGHT_QUESTION = 0.18
+    WEIGHT_OUTPUT_TOKENS = 0.10
 
     # Code detection patterns
     CODE_PATTERNS = [
@@ -195,6 +197,16 @@ class TaskComplexityScorer:
         r"^tell\s+me\s+",
     ]
 
+    # Output-length heuristic patterns
+    OUTPUT_LENGTH_PATTERNS = [
+        r"summarize|summarise",
+        r"list\s+(all|every|each)",
+        r"step[\s\-]by[\s\-]step",
+        r"enumerate\s+all",
+        r"write\s+a\s+(full|complete|detailed|comprehensive)",
+        r"generate\s+a\s+(complete|full|detailed)",
+    ]
+
     def __init__(self, config: TierConfig, tokenizer: Optional[Callable[[str], int]] = None):
         """
         Initialize complexity scorer.
@@ -216,13 +228,19 @@ class TaskComplexityScorer:
             re.compile(p, re.IGNORECASE) for p in self.COMPLEX_QUESTION_PATTERNS
         ]
         self._compiled_simple_question_patterns = [re.compile(p, re.IGNORECASE) for p in self.SIMPLE_QUESTION_PATTERNS]
+        self._compiled_output_length_patterns = [
+            re.compile(p, re.IGNORECASE) for p in self.OUTPUT_LENGTH_PATTERNS
+        ]
 
-    def score(self, messages: List[Dict]) -> ComplexityResult:
+    def score(self, messages: List[Dict], expected_output_tokens: Optional[int] = None) -> ComplexityResult:
         """
         Score the complexity of a request.
 
         Args:
             messages: List of message dicts with 'role' and 'content' keys
+            expected_output_tokens: Optional hint for the expected number of output
+                tokens. When provided, the output_length factor is derived directly
+                from this value instead of content heuristics.
 
         Returns:
             ComplexityResult with score, factors, tier, and reasoning
@@ -238,6 +256,14 @@ class TaskComplexityScorer:
                 reasoning="No user content to analyze",
             )
 
+        # Extract max_tokens hint from any message that carries it
+        max_tokens: Optional[int] = None
+        for msg in messages:
+            mt = msg.get("max_tokens")
+            if mt is not None and int(mt) > 0:
+                max_tokens = int(mt)
+                break
+
         # Calculate individual factor scores (0-3 scale)
         factors = {
             "length": self._score_length(user_content),
@@ -245,6 +271,7 @@ class TaskComplexityScorer:
             "technical": self._score_technical(user_content),
             "multistep": self._score_multistep(user_content),
             "question": self._score_question(user_content),
+            "output_length": self._score_output_length(user_content, expected_output_tokens, max_tokens),
         }
 
         # Calculate weighted score and build result
@@ -335,6 +362,47 @@ class TaskComplexityScorer:
         # Clamp to 0-3
         return max(0.0, min(3.0, net_score))
 
+    def _score_output_length(
+        self,
+        content: str,
+        expected_output_tokens: Optional[int],
+        max_tokens: Optional[int] = None,
+    ) -> float:
+        """Score based on expected output length (0-3).
+
+        Priority:
+        1. explicit expected_output_tokens hint
+        2. max_tokens from the message payload
+        3. heuristic pattern count from content
+
+        Thresholds (tokens): <100 -> 0.0, <500 -> 1.0, <2000 -> 2.0, >=2000 -> 3.0
+        """
+        if expected_output_tokens is not None:
+            tokens = expected_output_tokens
+            if tokens < 100:
+                return 0.0
+            elif tokens < 500:
+                return 1.0
+            elif tokens < 2000:
+                return 2.0
+            else:
+                return 3.0
+
+        if max_tokens is not None and max_tokens > 0:
+            tokens = max_tokens
+            if tokens < 100:
+                return 0.0
+            elif tokens < 500:
+                return 1.0
+            elif tokens < 2000:
+                return 2.0
+            else:
+                return 3.0
+
+        # Heuristic fallback: count matching patterns, cap at 3.0
+        matches = sum(1 for p in self._compiled_output_length_patterns if p.search(content))
+        return min(3.0, float(matches))
+
     def _calculate_weighted_score(self, factors: Dict[str, float]) -> float:
         """
         Calculate and normalize the weighted complexity score.
@@ -353,6 +421,7 @@ class TaskComplexityScorer:
             + factors["technical"] * self.WEIGHT_TECHNICAL
             + factors["multistep"] * self.WEIGHT_MULTISTEP
             + factors["question"] * self.WEIGHT_QUESTION
+            + factors["output_length"] * self.WEIGHT_OUTPUT_TOKENS
         )
         # Normalize to 0-10 scale (factors are 0-3, max weighted is 3)
         normalized_score = (weighted_score / 3.0) * 10.0
@@ -409,6 +478,7 @@ class TaskComplexityScorer:
             "technical": "technical terminology",
             "multistep": "multi-step requirements",
             "question": "question complexity",
+            "output_length": "output length",
         }
 
         dominant_names = [factor_names.get(f, f) for f in dominant]
