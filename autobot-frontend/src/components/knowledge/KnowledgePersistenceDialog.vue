@@ -349,8 +349,8 @@ const decisionsCount = computed(() => {
     delete: 0,
   };
 
-  const selectedIds = new Set(selectedPendingItems.value.map(item => item.id));
-  Object.entries(itemDecisions.value).forEach(([itemId, decision]) => {
+  const selectedIds = new Set(selectedPendingItems.value.map((item: PendingKnowledgeItem) => item.id));
+  (Object.entries(itemDecisions.value) as [string, KnowledgeDecision][]).forEach(([itemId, decision]) => {
     if (selectedIds.has(itemId) && decision) {
       counts[decision]++;
     }
@@ -366,10 +366,10 @@ const loadPendingItems = async (): Promise<void> => {
     const response = await apiService.get(`${getApiBase()}/chat-knowledge/knowledge/pending/${props.chatId}`) as { success: boolean; pending_items: PendingKnowledgeItem[] };
 
     if (response.success) {
-      pendingItems.value = response.data?.pending_items ?? [];
+      pendingItems.value = response.pending_items ?? [];
 
       // Initialize decisions (useBatchSelection handles selection state)
-      pendingItems.value.forEach(item => {
+      pendingItems.value.forEach((item: PendingKnowledgeItem) => {
         itemDecisions.value[item.id] = item.suggested_action || 'keep_temporary';
       });
     }
@@ -409,7 +409,7 @@ const deselectAll = (): void => {
 };
 
 const applyBulkDecision = (decision: KnowledgeDecision): void => {
-  selectedPendingItems.value.forEach(item => {
+  selectedPendingItems.value.forEach((item: PendingKnowledgeItem) => {
     itemDecisions.value[item.id] = decision;
   });
 };
@@ -417,13 +417,14 @@ const applyBulkDecision = (decision: KnowledgeDecision): void => {
 const applyAllDecisions = async (): Promise<void> => {
   try {
     loading.value = true;
-    const decisions = selectedPendingItems.value
-      .filter(item => itemDecisions.value[item.id])
-      .map(item => ({
-        chat_id: props.chatId as string,
-        knowledge_id: item.id,
-        decision: itemDecisions.value[item.id],
-      }));
+    const decisions: Array<{ chat_id: string; knowledge_id: string; decision: KnowledgeDecision }> =
+      selectedPendingItems.value
+        .filter((item: PendingKnowledgeItem) => itemDecisions.value[item.id])
+        .map((item: PendingKnowledgeItem) => ({
+          chat_id: props.chatId as string,
+          knowledge_id: item.id,
+          decision: itemDecisions.value[item.id],
+        }));
 
     // Apply decisions in parallel - eliminates N+1 sequential API calls
     // Issue #552: Fixed path to match backend (hyphen instead of underscore)
@@ -459,7 +460,7 @@ const compileChat = async (): Promise<void> => {
     if (response.success) {
       showToast(t('knowledge.persistence.compiledSuccess'), 'success');
       submitError.value = null;
-      emit('chat-compiled', response.data?.compiled);
+      emit('chat-compiled', response.compiled);
       closeDialog();
     }
   } catch (error) {
@@ -480,7 +481,7 @@ onMounted(() => {
   }
 });
 
-watch(() => props.visible, (newVal) => {
+watch(() => props.visible, (newVal: boolean) => {
   if (newVal && props.chatId) {
     loadPendingItems();
   }
