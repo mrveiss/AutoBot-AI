@@ -2902,3 +2902,60 @@ class WebResearchUsageStatsData(BaseModel):
     status: str
     stats: Dict[str, Any]
     timestamp: str
+
+
+# ---------------------------------------------------------------------------
+# manual_mcp.py / structured_thinking_mcp.py / sequential_thinking_mcp.py
+# schemas (GH #6509 Batch E)
+# ---------------------------------------------------------------------------
+
+
+class ManPageLookupData(BaseModel):
+    """Response data for POST /mcp/lookup_man_page."""
+
+    success: bool = True
+    command: str = ""
+    section: str = ""
+    result: Dict[str, Any] | None = None
+    error: str | None = None
+
+
+class ManPageSearchData(BaseModel):
+    """Response data for POST /mcp/search_man_pages and /mcp/get_doc_index."""
+
+    success: bool = True
+    query: str = ""
+    count: int = 0
+    results: List[Any] = Field(default_factory=list)
+    error: str | None = None
+
+
+class StructuredThinkingOverview(BaseModel):
+    """Overview section of structured thinking summary."""
+
+    total_thoughts: int = 0
+    started_at: str = ""
+    last_thought_at: str = ""
+    complete: bool = False
+
+
+class StructuredThinkingSummaryData(BaseModel):
+    """Response data for POST /mcp/generate_summary."""
+
+    success: bool = True
+    session_id: str = ""
+    message: str = ""
+    thought_count: int = 0
+    overview: StructuredThinkingOverview = Field(default_factory=StructuredThinkingOverview)
+    stage_distribution: Dict[str, int] = Field(default_factory=dict)
+    stage_progression: List[Any] = Field(default_factory=list)
+    metadata_analysis: Dict[str, Any] = Field(default_factory=dict)
+
+
+class SequentialThinkingClearData(BaseModel):
+    """Response data for DELETE /sessions/{session_id}."""
+
+    success: bool = True
+    session_id: str = ""
+    thoughts_cleared: int = 0
+    message: str = ""

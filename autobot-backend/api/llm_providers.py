@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 
 from api.schemas_common import DataResponse
+from api.schemas_system import LLMProviderListData, LLMProviderSwitchData, LLMProviderTestData
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -22,7 +23,7 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
-@router.post("/switch", response_model=DataResponse)
+@router.post("/switch", response_model=DataResponse[LLMProviderSwitchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="switch_llm_provider",
@@ -51,7 +52,7 @@ async def switch_llm_provider(
     return JSONResponse(status_code=200, content=result)
 
 
-@router.get("/providers", response_model=DataResponse)
+@router.get("/providers", response_model=DataResponse[LLMProviderListData])
 @cache_response(cache_key="llm_providers_list", ttl=30)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -70,7 +71,7 @@ async def list_llm_providers(
     )
 
 
-@router.post("/providers/{provider_name}/test", response_model=DataResponse)
+@router.post("/providers/{provider_name}/test", response_model=DataResponse[LLMProviderTestData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_llm_provider",

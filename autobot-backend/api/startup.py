@@ -23,7 +23,7 @@ router = APIRouter(tags=["startup", "status"])
 import threading
 
 from api.schemas_common import DataResponse
-from api.schemas_system import StartupMessage, StartupPhase, StartupStatusResponse
+from api.schemas_system import StartupMessage, StartupPhase, StartupPhaseUpdateData, StartupStatusResponse
 
 _startup_lock = threading.Lock()
 
@@ -162,7 +162,7 @@ async def startup_websocket(websocket: WebSocket):
             startup_state["websocket_clients"].discard(websocket)
 
 
-@router.post("/phase", response_model=DataResponse)
+@router.post("/phase", response_model=DataResponse[StartupPhaseUpdateData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_startup_phase",

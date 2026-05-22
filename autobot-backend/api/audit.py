@@ -21,7 +21,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from api.schemas_common import DataResponse
 from api.schemas_system import (
+    AuditCleanupData,
     AuditCleanupRequest,
+    AuditOperationsData,
     AuditQueryResponse,
     AuditStatisticsResponse,
 )
@@ -324,7 +326,7 @@ async def get_failed_operations(
         raise_server_error("API_0003", "Failed operations query error")
 
 
-@router.post("/cleanup", response_model=DataResponse)
+@router.post("/cleanup", response_model=DataResponse[AuditCleanupData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cleanup_old_logs",
@@ -365,7 +367,7 @@ async def cleanup_old_logs(
         raise_server_error("API_0003", "Cleanup error")
 
 
-@router.get("/operations", response_model=DataResponse)
+@router.get("/operations", response_model=DataResponse[AuditOperationsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_operation_types",

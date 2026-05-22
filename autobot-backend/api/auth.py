@@ -26,6 +26,7 @@ from api.schemas_agent import (
     SignupResponse,
 )
 from api.schemas_common import DataResponse
+from api.schemas_system import AuthLogoutData, AuthRefreshData
 from auth_middleware import get_auth_middleware
 from autobot_shared.auth.jwt_core import JWTDecodeError, decode_jwt_no_verify_exp
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -233,7 +234,7 @@ async def login(request: Request, login_data: LoginRequest):
         raise HTTPException(status_code=500, detail="Authentication service temporarily unavailable")
 
 
-@router.post("/logout", response_model=DataResponse)
+@router.post("/logout", response_model=DataResponse[AuthLogoutData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="logout",
@@ -569,7 +570,7 @@ def _decode_refresh_token(token: str) -> Dict:
     return payload
 
 
-@router.post("/refresh", response_model=DataResponse)
+@router.post("/refresh", response_model=DataResponse[AuthRefreshData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="refresh_token",

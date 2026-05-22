@@ -3555,3 +3555,43 @@ class AnalyticsEmbeddingOptimizationResponse(BaseModel):
 
     status: str = ""
     data: Dict[str, Any] = Field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# analytics_code_generation.py / analytics_performance.py / analytics_quality.py
+# schemas (GH #6509 Batch E)
+# ---------------------------------------------------------------------------
+
+
+class AnalyticsCodeGenRollbackData(BaseModel):
+    """Response data for POST /codegen/rollback."""
+
+    success: bool = True
+    file_path: str = ""
+    version_id: str = ""
+    code: str = ""
+
+
+class AnalyticsPerformanceAnalyzeData(BaseModel):
+    """Response data for GET /performance/analyze."""
+
+    total_issues: int = 0
+    critical_count: int = 0
+    high_count: int = 0
+    medium_count: int = 0
+    low_count: int = 0
+    files_analyzed: int = 0
+    duration_ms: float = 0.0
+    timestamp: str = ""
+    score: float = 0.0
+    issues: List[Any] = Field(default_factory=list)
+    status: str = ""
+
+
+class AnalyticsQualityExportData(BaseModel):
+    """Response data for GET /quality/export."""
+
+    format: str = "json"
+    content: Any = None
+    status: str = ""
+    error: str | None = None

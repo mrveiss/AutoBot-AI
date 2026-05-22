@@ -4985,3 +4985,36 @@ class ComplianceReportRequest(BaseModel):
     start_date: _datetime = Field(description="Report start date")
     end_date: _datetime = Field(description="Report end date")
     organization_id: str | None = Field(default=None, description="Organization ID (defaults to user's org)")
+
+
+# ---------------------------------------------------------------------------
+# knowledge_test.py / graph_rag.py schemas (GH #6509 Batch E)
+# ---------------------------------------------------------------------------
+
+
+class KnowledgeFreshStatsData(BaseModel):
+    """Response data for GET /knowledge/test/fresh_stats."""
+
+    source: str = ""
+    stats: Dict[str, Any] = Field(default_factory=dict)
+    success: bool = True
+    error: str | None = None
+
+
+class KnowledgeRebuildIndexData(BaseModel):
+    """Response data for POST /knowledge/test/rebuild_index."""
+
+    operation: str = ""
+    result: Dict[str, Any] = Field(default_factory=dict)
+    success: bool = True
+    error: str | None = None
+
+
+class GraphRagMetricsData(BaseModel):
+    """Response data for GET /graphrag/metrics."""
+
+    service: str = ""
+    graph_weight: float = 0.0
+    entity_extraction_enabled: bool = False
+    rag_service: Dict[str, Any] = Field(default_factory=dict)
+    graph_initialized: bool = False

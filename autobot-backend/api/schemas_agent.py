@@ -2104,3 +2104,44 @@ class AdapterOverrideClearResponse(BaseModel):
 
     agent_id: str
     cleared: bool
+
+
+# ---------------------------------------------------------------------------
+# skills.py / overseer_handlers.py schemas (GH #6509 Batch E)
+# ---------------------------------------------------------------------------
+
+
+class SkillCatalogInstallData(BaseModel):
+    """Response data for POST /skills/catalog/{name}/install."""
+
+    success: bool = True
+    id: str = ""
+    name: str = ""
+    version: str = ""
+    trust_level: str = ""
+
+
+class SkillFeedbackData(BaseModel):
+    """Response data for POST /skills/{name}/feedback."""
+
+    success: bool = True
+    message: str = ""
+
+
+class OverseerQueryStep(BaseModel):
+    """A single step in an overseer execution plan."""
+
+    step_number: int = 0
+    description: str = ""
+    command: str = ""
+
+
+class OverseerQueryData(BaseModel):
+    """Response data for POST /overseer/query/{session_id}."""
+
+    success: bool = True
+    plan_id: str = ""
+    analysis: str = ""
+    steps: List[OverseerQueryStep] = Field(default_factory=list)
+    message: str = ""
+    error: str | None = None

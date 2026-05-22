@@ -3745,3 +3745,131 @@ class GPUConfigUpdateResponse(BaseModel):
 
     success: bool
     updated_keys: List[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# auth.py / audit.py / hot_reload.py / startup.py / process_management.py /
+# captcha.py / models.py / llm_providers.py / security_assessment.py schemas
+# (GH #6509 Batch E)
+# ---------------------------------------------------------------------------
+
+
+class AuthLogoutData(BaseModel):
+    """Response data for POST /auth/logout."""
+
+    success: bool = True
+    message: str = ""
+
+
+class AuthRefreshData(BaseModel):
+    """Response data for POST /auth/refresh."""
+
+    success: bool = True
+    token: str = ""
+    expiresIn: int = 0
+
+
+class AuditCleanupData(BaseModel):
+    """Response data for POST /audit/cleanup."""
+
+    success: bool = True
+    message: str = ""
+    days_retained: int = 0
+
+
+class AuditOperationsData(BaseModel):
+    """Response data for GET /audit/operations."""
+
+    success: bool = True
+    categories: Dict[str, List[str]] = Field(default_factory=dict)
+    total_operations: int = 0
+
+
+class HotReloadStatusData(BaseModel):
+    """Response data for POST /hot-reload/start and /stop."""
+
+    success: bool = True
+    message: str = ""
+
+
+class StartupPhaseUpdateData(BaseModel):
+    """Response data for POST /startup/phase."""
+
+    success: bool = True
+    phase: str = ""
+    progress: int = 0
+    error: str | None = None
+
+
+class ProcessStatusData(BaseModel):
+    """Response data for GET /processes/{process_id}."""
+
+    process_id: str = ""
+    status: str = ""
+    command: str | None = None
+    log_excerpt: str | None = None
+    log_path: str | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
+
+
+class ProcessSignalData(BaseModel):
+    """Response data for POST /processes/{process_id}/signal."""
+
+    process_id: str = ""
+    signal: str = ""
+    delivered: bool = False
+
+
+class AgentProcessesData(BaseModel):
+    """Response data for GET /agents/{agent_id}/processes."""
+
+    agent_id: str = ""
+    processes: List[Dict[str, Any]] = Field(default_factory=list)
+    total: int = 0
+
+
+class CaptchaPendingData(BaseModel):
+    """Response data for GET /captcha/pending."""
+
+    success: bool = True
+    pending_captchas: List[Any] = Field(default_factory=list)
+    count: int = 0
+    timestamp: str = ""
+
+
+class ModelsAvailableData(BaseModel):
+    """Response data for GET /models/available."""
+
+    models: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class LLMProviderSwitchData(BaseModel):
+    """Response data for POST /llm/switch."""
+
+    success: bool = True
+    provider: str = ""
+    model: str = ""
+
+
+class LLMProviderListData(BaseModel):
+    """Response data for GET /llm/providers."""
+
+    active_provider: str = ""
+    providers: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class LLMProviderTestData(BaseModel):
+    """Response data for POST /llm/providers/{provider_name}/test."""
+
+    provider: str = ""
+    available: bool = False
+    error: str | None = None
+
+
+class AssessmentMutationData(BaseModel):
+    """Response data for assessment mutation endpoints (delete/add host/port/vulnerability/finding)."""
+
+    success: bool = True
+    message: str = ""
+    request_id: str = ""

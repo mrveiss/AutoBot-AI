@@ -20,6 +20,7 @@ from fastapi import APIRouter, HTTPException, Path
 from fastapi.responses import JSONResponse
 
 from api.schemas_common import DataResponse
+from api.schemas_system import CaptchaPendingData
 from api.schemas_workflows import CaptchaResolutionRequest, CaptchaResolutionResponse
 from api.system_health import register_singleton_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -150,7 +151,7 @@ async def skip_captcha(
         )
 
 
-@router.get("/pending", response_model=DataResponse)
+@router.get("/pending", response_model=DataResponse[CaptchaPendingData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pending_captchas",

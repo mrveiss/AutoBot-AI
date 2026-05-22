@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas_common import DataResponse
 from api.schemas_system import ApplyPresetRequest, OnboardingStatus
+from typing import Any, Dict, List
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.logging_manager import get_logger
 from onboarding.doctor import run_doctor
@@ -35,7 +36,7 @@ router = APIRouter(tags=["onboarding"])
 # ---------------------------------------------------------------------------
 
 
-@router.get("/presets", response_model=DataResponse, dependencies=[Depends(get_current_user)])
+@router.get("/presets", response_model=DataResponse[List[Dict[str, Any]]], dependencies=[Depends(get_current_user)])
 async def list_presets() -> DataResponse:
     """Return all curated starter presets.
 
@@ -47,7 +48,7 @@ async def list_presets() -> DataResponse:
     return DataResponse(data=presets)
 
 
-@router.get("/doctor", response_model=DataResponse, dependencies=[Depends(get_current_user)])
+@router.get("/doctor", response_model=DataResponse[Dict[str, Any]], dependencies=[Depends(get_current_user)])
 async def doctor_report() -> DataResponse:
     """
     Run onboarding doctor scan.
@@ -61,7 +62,7 @@ async def doctor_report() -> DataResponse:
 
 @router.post(
     "/apply",
-    response_model=DataResponse,
+    response_model=DataResponse[Dict[str, Any]],
     dependencies=[Depends(check_admin_permission)],
 )
 async def apply_preset(body: ApplyPresetRequest) -> DataResponse:

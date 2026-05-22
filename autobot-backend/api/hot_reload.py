@@ -9,7 +9,7 @@ Provides REST endpoints for hot reloading chat workflow modules during developme
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from api.schemas_common import DataResponse
-from api.schemas_system import ReloadRequest, ReloadResponse
+from api.schemas_system import HotReloadStatusData, ReloadRequest, ReloadResponse
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -133,7 +133,7 @@ async def get_reload_status():
         raise HTTPException(status_code=500, detail="Failed to get status")
 
 
-@router.post("/start", response_model=DataResponse)
+@router.post("/start", response_model=DataResponse[HotReloadStatusData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_hot_reload",
@@ -161,7 +161,7 @@ async def start_hot_reload():
         raise HTTPException(status_code=500, detail="Failed to start hot reload")
 
 
-@router.post("/stop", response_model=DataResponse)
+@router.post("/stop", response_model=DataResponse[HotReloadStatusData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="stop_hot_reload",

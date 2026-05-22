@@ -14,6 +14,9 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 
 from api.schemas_common import DataResponse
 from api.schemas_system import (
+    AgentProcessesData,
+    ProcessSignalData,
+    ProcessStatusData,
     SignalRequest,
     SpawnRequest,
     SpawnResponse,
@@ -75,7 +78,7 @@ async def spawn_process(
     )
 
 
-@router.get("/processes/{process_id}", response_model=DataResponse)
+@router.get("/processes/{process_id}", response_model=DataResponse[ProcessStatusData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_process_status",
@@ -114,7 +117,7 @@ async def get_process_logs(
     return PlainTextResponse(content=_read_log_file(log_path), status_code=200)
 
 
-@router.post("/processes/{process_id}/signal", response_model=DataResponse)
+@router.post("/processes/{process_id}/signal", response_model=DataResponse[ProcessSignalData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="signal_process",
@@ -142,7 +145,7 @@ async def signal_process(
     )
 
 
-@router.get("/agents/{agent_id}/processes", response_model=DataResponse)
+@router.get("/agents/{agent_id}/processes", response_model=DataResponse[AgentProcessesData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_agent_processes",

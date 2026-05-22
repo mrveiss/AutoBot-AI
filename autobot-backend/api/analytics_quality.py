@@ -19,6 +19,7 @@ from fastapi.responses import JSONResponse
 
 from api.analytics_shared import resolve_source_root_or_404 as _resolve_source_root_or_404
 from api.schemas_analytics import (
+    AnalyticsQualityExportData,
     HealthScore,
     MetricCategory,
     QualityComplexityResponse,
@@ -1337,7 +1338,7 @@ async def drill_down_category(
     }
 
 
-@router.get("/export", response_model=DataResponse)
+@router.get("/export", response_model=DataResponse[AnalyticsQualityExportData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_quality_report",

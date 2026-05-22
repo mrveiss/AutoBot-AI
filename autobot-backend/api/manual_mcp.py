@@ -23,6 +23,7 @@ from api.schemas_code import (
     ManualMCPToolItem,
 )
 from api.schemas_common import DataResponse
+from api.schemas_workflows import ManPageLookupData, ManPageSearchData
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -308,7 +309,7 @@ async def get_manual_mcp_tools(
     ]
 
 
-@router.post("/mcp/lookup_man_page", response_model=DataResponse)
+@router.post("/mcp/lookup_man_page", response_model=DataResponse[ManPageLookupData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="mcp_lookup_man_page",
@@ -348,7 +349,7 @@ async def mcp_lookup_man_page(
         }
 
 
-@router.post("/mcp/search_man_pages", response_model=DataResponse)
+@router.post("/mcp/search_man_pages", response_model=DataResponse[ManPageSearchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="mcp_search_man_pages",
@@ -384,7 +385,7 @@ async def mcp_search_man_pages(
         }
 
 
-@router.post("/mcp/get_doc_index", response_model=DataResponse)
+@router.post("/mcp/get_doc_index", response_model=DataResponse[ManPageSearchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="mcp_get_doc_index",
