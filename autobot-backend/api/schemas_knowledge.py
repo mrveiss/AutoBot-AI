@@ -8,7 +8,7 @@ Knowledge base collection, category, fact, grounding, and audit schemas.
 import re
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field, field_validator
 
