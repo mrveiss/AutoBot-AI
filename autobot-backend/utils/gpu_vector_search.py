@@ -781,6 +781,9 @@ class HybridVectorSearch(AsyncInitializable):
         self.chromadb = chromadb_client
         self.config = config or VectorSearchConfig()
         self.gpu_index = GPUVectorIndex(self.config)
+        # Issue #8357: per-collection IVFPQ indexes built/loaded at startup for
+        # large collections (≥ ivfpq_min_vectors).
+        self._ivfpq_indexes: Dict[str, Any] = {}
 
     async def _initialize_impl(self) -> bool:
         """Initialize FAISS GPU/CPU index backend."""
@@ -791,7 +794,70 @@ class HybridVectorSearch(AsyncInitializable):
         else:
             logger.info("Hybrid Vector Search initialized (ChromaDB fallback)")
 
+        # Issue #8357: build or load IVFPQ indexes for each large collection.
+        if self.chromadb is not None and FAISS_AVAILABLE:
+            await self._init_ivfpq_indexes()
+
         return True
+
+    async def _init_ivfpq_indexes(self) -> None:
+        """Build or load a FAISSIVFPQBuilder index for each large ChromaDB collection.
+
+        Issue #8357: called once at startup.  For collections with a persisted
+        index the builder loads from disk (fast).  For new large collections it
+        trains and persists (slow, once).  Collections below ivfpq_min_vectors
+        are skipped — the flat/IVF FAISS index is sufficient.
+        """
+        from utils.faiss_ivfpq_builder import FAISSIVFPQBuilder
+
+        try:
+            collections = await asyncio.to_thread(self.chromadb.list_collections)
+        except Exception as exc:
+            logger.warning("IVFPQ startup: could not list collections (%s)", exc)
+            return
+
+        for coll in collections:
+            name = coll.name if hasattr(coll, "name") else str(coll)
+            try:
+                collection: BaseCollection = await asyncio.to_thread(
+                    self.chromadb.get_collection, name
+                )
+                count = await asyncio.to_thread(collection.count)
+
+                if count < self.config.ivfpq_min_vectors:
+                    logger.debug(
+                        "IVFPQ startup: skipping %s (%d < %d vectors)",
+                        name, count, self.config.ivfpq_min_vectors,
+                    )
+                    continue
+
+                builder = FAISSIVFPQBuilder(
+                    dim=self.config.embedding_dim,
+                    index_dir=self.config.ivfpq_index_dir,
+                    collection_name=name,
+                )
+
+                # Try to load persisted index first; only fetch vectors when training.
+                index = await builder.load()
+                if index is None:
+                    all_data = await asyncio.to_thread(
+                        collection.get, include=["embeddings"]
+                    )
+                    if all_data.get("embeddings"):
+                        vectors = np.array(all_data["embeddings"], dtype=np.float32)
+                        index = await builder.build_or_load(vectors)
+
+                if index is not None:
+                    self._ivfpq_indexes[name] = index
+                    logger.info(
+                        "IVFPQ startup: index ready for collection '%s' (%d vectors)",
+                        name, count,
+                    )
+
+            except Exception as exc:
+                logger.warning(
+                    "IVFPQ startup: failed for collection '%s' (%s)", name, exc
+                )
 
     async def add_documents(
         self,
