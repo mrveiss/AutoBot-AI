@@ -8,7 +8,9 @@ Integrates Intel NPU acceleration with ChromaDB and Redis vector store
 """
 
 import asyncio
+import hashlib
 import json
+import os
 import time
 import uuid
 from dataclasses import dataclass
@@ -25,6 +27,7 @@ from ai_hardware_accelerator import (
 )
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_llm_logger
+from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
 from config import cfg
 
@@ -53,6 +56,35 @@ except ImportError:
     CHROMADB_AVAILABLE = False
 
 logger = get_llm_logger("npu_semantic_search")
+
+# #8159: L2 embedding cache TTL. Override via AUTOBOT_NPU_EMBEDDING_CACHE_TTL (seconds).
+# Default 3600s (1h) — embeddings are stable within a model version.
+def _resolve_npu_embedding_cache_ttl() -> int:
+    """Return TTL seconds for emb:* Redis L2 cache keys."""
+    _default = 3600
+    raw = os.environ.get("AUTOBOT_NPU_EMBEDDING_CACHE_TTL")
+    if raw is None:
+        return _default
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning(
+            "AUTOBOT_NPU_EMBEDDING_CACHE_TTL=%r is not an integer; falling back to %ds (1h)",
+            raw,
+            _default,
+        )
+        return _default
+    if value <= 0:
+        logger.warning(
+            "AUTOBOT_NPU_EMBEDDING_CACHE_TTL=%d is not positive; falling back to %ds (1h)",
+            value,
+            _default,
+        )
+        return _default
+    return value
+
+
+_NPU_EMBEDDING_CACHE_TTL: int = _resolve_npu_embedding_cache_ttl()
 
 # Issue #380: Module-level tuple for default target modalities in cross-modal search
 _DEFAULT_TARGET_MODALITIES = ("text", "image", "audio", "multimodal")
@@ -191,6 +223,11 @@ class NPUSemanticSearch:
         # Issue #387: GPU-accelerated hybrid vector search
         self.hybrid_search: HybridVectorSearch | None = None
         self.use_gpu_search = cfg.get("vector_search.use_gpu", True)
+
+        # Issue #8159: L1/L2 embedding cache hit counters (per-worker, reset on restart)
+        self._l1_hits: int = 0
+        self._l2_hits: int = 0
+        self._cache_misses: int = 0
 
     async def initialize(self):
         """Initialize NPU semantic search engine."""
@@ -489,25 +526,61 @@ class NPUSemanticSearch:
         embeddings = chunker._compute_sentence_embeddings([text])
         return embeddings[0], "cpu_final_fallback"
 
+    async def _l2_cache_get(self, text: str) -> "np.ndarray | None":
+        """Check Redis L2 embedding cache. Issue #8159."""
+        redis = get_async_redis_client()
+        if redis is None:
+            return None
+        try:
+            key = f"emb:{hashlib.sha256(text.encode('utf-8')).hexdigest()[:16]}"
+            cached = await redis.get(key)
+            if cached:
+                return np.frombuffer(cached, dtype=np.float32).copy()
+        except Exception as exc:
+            logger.debug("L2 cache get failed (non-fatal): %s", exc)
+        return None
+
+    async def _l2_cache_set(self, text: str, embedding: np.ndarray) -> None:
+        """Store embedding in Redis L2 cache. Issue #8159."""
+        redis = get_async_redis_client()
+        if redis is None:
+            return
+        try:
+            key = f"emb:{hashlib.sha256(text.encode('utf-8')).hexdigest()[:16]}"
+            await redis.set(key, embedding.astype(np.float32).tobytes(), ex=_NPU_EMBEDDING_CACHE_TTL)
+        except Exception as exc:
+            logger.debug("L2 cache set failed (non-fatal): %s", exc)
+
     async def _generate_optimized_embedding(
         self, text: str, enable_npu: bool, force_device: HardwareDevice | None
     ) -> Tuple[np.ndarray, str]:
-        """Generate embedding using optimal hardware with caching. Issue #65 P0."""
+        """Generate embedding using optimal hardware with L1+L2 caching. Issue #65 P0, #8159."""
+        # L1: in-process cache (fastest)
         cached_embedding = await self.embedding_cache.get(text)
         if cached_embedding is not None:
-            logger.debug("✅ Using cached embedding for query: %s...", text[:50])
-            return np.array(cached_embedding), "cached"
+            self._l1_hits += 1
+            logger.debug("L1 cache hit for query: %s...", text[:50])
+            return np.array(cached_embedding), "l1_cached"
 
+        # L2: Redis shared cache (shared across uvicorn workers, survives restarts)
+        l2_result = await self._l2_cache_get(text)
+        if l2_result is not None:
+            self._l2_hits += 1
+            logger.debug("L2 cache hit for query: %s...", text[:50])
+            await self.embedding_cache.put(text, l2_result.tolist())  # warm L1
+            return l2_result, "l2_cached"
+
+        # Miss: generate via NPU/GPU/CPU
+        self._cache_misses += 1
         try:
             embedding, device_name = await self._generate_embedding_with_device(text, enable_npu, force_device)
-            await self.embedding_cache.put(text, embedding.tolist())
-            return embedding, device_name
-
         except Exception as e:
-            logger.warning(f"⚠️ Optimized embedding generation failed: {e}, using fallback")
+            logger.warning("Optimized embedding generation failed: %s, using fallback", e)
             embedding, device_name = await self._generate_fallback_embedding(text)
-            await self.embedding_cache.put(text, embedding.tolist())
-            return embedding, device_name
+
+        await self.embedding_cache.put(text, embedding.tolist())
+        await self._l2_cache_set(text, embedding)
+        return embedding, device_name
 
     def _convert_hybrid_results(
         self, hybrid_results: List[Any], hybrid_metrics: Any, device_used: str
@@ -617,8 +690,6 @@ class NPUSemanticSearch:
 
     def _generate_cache_key(self, query: str, top_k: int, filters: Dict[str, Any] | None) -> str:
         """Generate cache key for search results."""
-        import hashlib
-
         cache_data = {
             "query": query.strip().lower(),
             "top_k": top_k,
@@ -840,7 +911,13 @@ class NPUSemanticSearch:
         gpu_search_stats = self.hybrid_search.get_stats() if self.hybrid_search else None
 
         return {
-            "embedding_cache_stats": embedding_stats,  # Issue #65 P0 metrics
+            "embedding_cache_stats": {
+                **embedding_stats,  # Issue #65 P0 L1 stats
+                # Issue #8159: L1/L2 tier breakdown
+                "l1_hits": self._l1_hits,
+                "l2_hits": self._l2_hits,
+                "misses": self._cache_misses,
+            },
             "search_results_cache_stats": {
                 "cache_size": len(self.search_results_cache),
                 "cache_max_size": self.cache_max_size,
