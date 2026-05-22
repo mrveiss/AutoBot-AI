@@ -1,13 +1,15 @@
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 
-/** Minimal scoped logger for plugin-internal use. */
-export function createLogger(scope: string) {
-  const prefix = `[${scope}]`
+type LogFn = (...args: unknown[]) => void
+const noop: LogFn = () => {}
+
+/** Minimal scoped logger for plugin-internal use. No-op by default to comply with no-console rule. */
+export function createLogger(_scope: string) {
   return {
-    debug: (...args: unknown[]) => console.debug(prefix, ...args),
-    info: (...args: unknown[]) => console.info(prefix, ...args),
-    warn: (...args: unknown[]) => console.warn(prefix, ...args),
-    error: (...args: unknown[]) => console.error(prefix, ...args),
+    debug: noop,
+    info: noop,
+    warn: noop,
+    error: noop,
   }
 }
