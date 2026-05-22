@@ -8,7 +8,7 @@ Implements database-driven RBAC (Role-Based Access Control).
 """
 
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Boolean, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
@@ -133,7 +133,7 @@ class Role(Base, TimestampMixin):
     )
 
     # Relationships
-    organization: Mapped["Organization" | None] = relationship(
+    organization: Mapped[Optional["Organization"]] = relationship(
         "Organization",
         back_populates="roles",
     )

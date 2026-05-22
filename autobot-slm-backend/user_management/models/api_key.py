@@ -9,7 +9,7 @@ Long-lived API keys for programmatic access.
 
 import uuid
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -139,7 +139,7 @@ class APIKey(Base, TimestampMixin):
         foreign_keys=[user_id],
     )
 
-    team: Mapped["Team" | None] = relationship(
+    team: Mapped[Optional["Team"]] = relationship(
         "Team",
         back_populates="api_keys",
     )
