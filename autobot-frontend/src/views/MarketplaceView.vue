@@ -752,7 +752,7 @@ onMounted(async () => {
 }
 
 .star-icon {
-  color: #f59e0b;
+  color: var(--color-warning);
 }
 
 .category-tag {

@@ -1364,12 +1364,12 @@ onMounted(() => {
 
 .stat.critical {
   background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .stat.high {
   background: rgba(245, 158, 11, 0.15);
-  color: #f59e0b;
+  color: var(--color-warning);
 }
 
 .stat.total {

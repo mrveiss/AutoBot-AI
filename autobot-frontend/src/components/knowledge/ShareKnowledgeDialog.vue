@@ -484,7 +484,7 @@ const closeDialog = () => {
 }
 
 .search-status--error {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .search-result-item {
@@ -590,7 +590,7 @@ const closeDialog = () => {
   border: none;
   padding: var(--spacing-2);
   cursor: pointer;
-  color: #ef4444;
+  color: var(--color-error);
   border-radius: var(--radius-default);
   transition: background-color var(--duration-200);
 }

@@ -173,7 +173,7 @@ const progressBarClasses = computed(() => {
 }
 
 .bg-red-500 {
-  background-color: #ef4444;
+  background-color: var(--color-error);
 }
 
 .bg-yellow-500 {

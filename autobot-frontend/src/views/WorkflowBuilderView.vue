@@ -1253,12 +1253,12 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .health-indicator.healthy {
-  color: #10b981;
+  color: var(--color-success);
   background: rgba(16, 185, 129, 0.1);
 }
 
 .health-indicator.degraded {
-  color: #f59e0b;
+  color: var(--color-warning);
   background: rgba(245, 158, 11, 0.1);
 }
 
