@@ -1,0 +1,224 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""Unified audit service — single taxonomy for all audit categories (#6475).
+
+Three prior log modules (services/event_log.py, services/audit/audit_log.py,
+knowledge/audit_log.py) each stored overlapping data in separate Redis keys.
+This module provides one canonical surface; the three originals forward to it
+via shim helpers defined at the bottom of each legacy file.
+
+Migration plan:
+  Phase 1 (this PR):   unified_audit.py lands; legacy files add shim wrappers.
+  Phase 2 (follow-up): Migrate callers area-by-area (security → compliance →
+                        knowledge) to import directly from unified_audit.
+  Phase 3 (follow-up): Remove the three legacy files once all callers migrated.
+"""
+
+import json
+import time
+import uuid
+from dataclasses import asdict, dataclass, field
+from enum import Enum
+from typing import Any, Dict, List
+
+from autobot_shared.fire_and_forget import run_redis_write
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.redis_client import get_async_redis_client
+
+logger = get_logger(__name__)
+
+# ---------------------------------------------------------------------------
+# Retention constants (per category)
+# ---------------------------------------------------------------------------
+
+_SECURITY_TTL = 90 * 24 * 3600
+_COMPLIANCE_TTL = 90 * 24 * 3600
+_KNOWLEDGE_TTL = 365 * 24 * 3600
+_GOVERNANCE_TTL = 365 * 24 * 3600
+
+_CATEGORY_TTL: Dict[str, int] = {
+    "security": _SECURITY_TTL,
+    "compliance": _COMPLIANCE_TTL,
+    "knowledge": _KNOWLEDGE_TTL,
+    "governance": _GOVERNANCE_TTL,
+}
+
+# ---------------------------------------------------------------------------
+# Public taxonomy
+# ---------------------------------------------------------------------------
+
+UNIFIED_KEY = "audit:unified"
+
+
+class AuditCategory(str, Enum):
+    SECURITY = "security"      # session, api_key, user, config (was audit_log)
+    COMPLIANCE = "compliance"  # login/logout, agent invoke (was event_log)
+    KNOWLEDGE = "knowledge"    # view, search, share (was knowledge/audit_log)
+    GOVERNANCE = "governance"  # skill approval, budget breach, agent pause
+
+
+@dataclass
+class AuditEvent:
+    category: AuditCategory
+    action: str
+    actor_id: str
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    resource_type: str | None = None
+    resource_id: str | None = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    occurred_at: float = field(default_factory=time.time)
+    ip_address: str | None = None
+    session_id: str | None = None
+    outcome: str = "success"
+
+    def to_dict(self) -> Dict[str, Any]:
+        d = asdict(self)
+        d["category"] = self.category.value
+        return d
+
+
+# ---------------------------------------------------------------------------
+# Write path
+# ---------------------------------------------------------------------------
+
+
+async def record(event: AuditEvent) -> None:
+    """Persist a single audit event to the unified Redis sorted set."""
+    redis = await get_async_redis_client(database="main")
+    if redis is None:
+        logger.debug("unified_audit: Redis unavailable, event dropped: %s/%s", event.category, event.action)
+        return
+    raw = json.dumps(event.to_dict(), ensure_ascii=False)
+    ttl = _CATEGORY_TTL.get(event.category.value, _COMPLIANCE_TTL)
+    async with redis.pipeline() as pipe:
+        await pipe.zadd(UNIFIED_KEY, {raw: event.occurred_at})
+        await pipe.expire(UNIFIED_KEY, ttl)
+        # Per-category secondary index for scoped queries
+        cat_key = f"audit:category:{event.category.value}"
+        await pipe.zadd(cat_key, {raw: event.occurred_at})
+        await pipe.expire(cat_key, ttl)
+        await pipe.execute()
+
+
+def emit(event: AuditEvent) -> None:
+    """Fire-and-forget wrapper around :func:`record`.
+
+    Safe to call from any sync or async context.
+    """
+    run_redis_write(record(event), label="unified_audit")
+
+
+# ---------------------------------------------------------------------------
+# Read path
+# ---------------------------------------------------------------------------
+
+
+async def query(
+    category: AuditCategory | None = None,
+    actor_id: str | None = None,
+    action: str | None = None,
+    from_ts: float | None = None,
+    to_ts: float | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> List[Dict[str, Any]]:
+    """Query audit events.  Filters are applied in-memory after a Redis scan."""
+    redis = await get_async_redis_client(database="main")
+    if redis is None:
+        return []
+    key = f"audit:category:{category.value}" if category else UNIFIED_KEY
+    min_score: Any = from_ts if from_ts is not None else 0
+    max_score: Any = to_ts if to_ts is not None else "+inf"
+    raws = await redis.zrangebyscore(key, min_score, max_score)
+    results: List[Dict[str, Any]] = []
+    for raw in raws:
+        try:
+            ev = json.loads(raw)
+        except Exception:
+            continue
+        if actor_id and ev.get("actor_id") != actor_id:
+            continue
+        if action and ev.get("action") != action:
+            continue
+        results.append(ev)
+    results.sort(key=lambda e: e.get("occurred_at", 0), reverse=True)
+    return results[offset: offset + limit]
+
+
+# ---------------------------------------------------------------------------
+# Convenience helpers (match legacy call-sites during migration)
+# ---------------------------------------------------------------------------
+
+
+def emit_compliance(
+    action: str,
+    actor_id: str | None,
+    *,
+    resource_type: str | None = None,
+    resource_id: str | None = None,
+    metadata: Dict[str, Any] | None = None,
+    ip_address: str | None = None,
+) -> None:
+    """Drop-in shim for services/event_log.emit()."""
+    emit(
+        AuditEvent(
+            category=AuditCategory.COMPLIANCE,
+            action=action,
+            actor_id=actor_id or "system",
+            resource_type=resource_type,
+            resource_id=resource_id,
+            metadata=metadata or {},
+            ip_address=ip_address,
+        )
+    )
+
+
+def emit_security(
+    action: str,
+    actor_id: str,
+    *,
+    resource_type: str | None = None,
+    resource_id: str | None = None,
+    metadata: Dict[str, Any] | None = None,
+    ip_address: str | None = None,
+    session_id: str | None = None,
+    outcome: str = "success",
+) -> None:
+    """Drop-in shim for services/audit/audit_log.audit_record()."""
+    emit(
+        AuditEvent(
+            category=AuditCategory.SECURITY,
+            action=action,
+            actor_id=actor_id,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            metadata=metadata or {},
+            ip_address=ip_address,
+            session_id=session_id,
+            outcome=outcome,
+        )
+    )
+
+
+async def emit_knowledge(
+    action: str,
+    actor_id: str,
+    *,
+    resource_type: str | None = None,
+    resource_id: str | None = None,
+    metadata: Dict[str, Any] | None = None,
+    ip_address: str | None = None,
+) -> None:
+    """Async shim for knowledge/audit_log.KnowledgeAuditLog.log_event()."""
+    await record(
+        AuditEvent(
+            category=AuditCategory.KNOWLEDGE,
+            action=action,
+            actor_id=actor_id,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            metadata=metadata or {},
+            ip_address=ip_address,
+        )
+    )
