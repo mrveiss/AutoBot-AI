@@ -34,7 +34,10 @@ import asyncio
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+
+if TYPE_CHECKING:
+    import redis
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.missing_dep import MissingDep
@@ -132,6 +135,10 @@ class _DiskANNIndex:
 # Tier manager
 # ---------------------------------------------------------------------------
 
+_REDIS_PREFIX = "tiering"
+_REDIS_TTL = 3600  # seconds; refreshed on each write
+
+
 class CollectionTierManager:
     """
     Manages hot/warm/cold placement of vector collections.
@@ -140,6 +147,10 @@ class CollectionTierManager:
     The manager decides whether the collection should be promoted and, if so,
     loads the appropriate index tier.  ``search`` delegates to whichever
     tier currently holds the collection's index.
+
+    Issue #8408: When ``redis_client`` is supplied the manager backs access counts
+    and tier assignments in Redis so all uvicorn workers share state.  Falls back
+    to the in-process dict when Redis is unavailable.
     """
 
     def __init__(
@@ -147,6 +158,7 @@ class CollectionTierManager:
         hot_max: int = HOT_MAX_COLLECTIONS,
         warm_max: int = WARM_MAX_COLLECTIONS,
         reap_interval: float = REAP_INTERVAL_SECONDS,
+        redis_client: Optional["redis.Redis"] = None,
     ) -> None:
         self._hot_max = hot_max
         self._warm_max = warm_max
@@ -161,6 +173,8 @@ class CollectionTierManager:
         self._hot_loader: Optional[Any] = None   # callable(collection_id) → index
         self._warm_loader: Optional[Any] = None
         self._cold_loader: Optional[Any] = None  # returns _DiskANNIndex
+        # Issue #8408: shared state backend
+        self._redis: Optional[Any] = redis_client
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -194,6 +208,54 @@ class CollectionTierManager:
         self._warm_loader = warm_loader
         self._cold_loader = cold_loader
 
+    # ------------------------------------------------------------------
+    # Redis helpers (Issue #8408)
+    # ------------------------------------------------------------------
+
+    async def _redis_hincrby(self, key: str, field: str, amount: int = 1) -> Optional[int]:
+        """HINCRBY on a Redis hash; refreshes TTL. Returns new value or None on error."""
+        if self._redis is None:
+            return None
+        try:
+            val = await asyncio.to_thread(self._redis.hincrby, key, field, amount)
+            await asyncio.to_thread(self._redis.expire, key, _REDIS_TTL)
+            return int(val)
+        except Exception as e:
+            logger.warning("Redis HINCRBY %s %s failed: %s", key, field, e)
+            return None
+
+    async def _redis_hset(self, key: str, field: str, value: str) -> None:
+        """HSET on a Redis hash; refreshes TTL. No-op on error."""
+        if self._redis is None:
+            return
+        try:
+            await asyncio.to_thread(self._redis.hset, key, field, value)
+            await asyncio.to_thread(self._redis.expire, key, _REDIS_TTL)
+        except Exception as e:
+            logger.warning("Redis HSET %s %s failed: %s", key, field, e)
+
+    async def _redis_tier_count(self, tier: Tier) -> int:
+        """Return count of collections in ``tier`` from Redis; falls back to in-process dict."""
+        if self._redis is None:
+            return sum(1 for e in self._entries.values() if e.tier == tier)
+        try:
+            raw = await asyncio.to_thread(self._redis.hget, f"{_REDIS_PREFIX}:counts", tier.value)
+            return int(raw) if raw else 0
+        except Exception as e:
+            logger.warning("Redis HGET counts %s failed: %s", tier.value, e)
+            return sum(1 for e in self._entries.values() if e.tier == tier)
+
+    async def _redis_update_tier(self, collection_id: str, old_tier: Tier, new_tier: Tier) -> None:
+        """Update the shared tier assignment and adjust hot/warm counters in Redis."""
+        await self._redis_hset(f"{_REDIS_PREFIX}:tiers", collection_id, new_tier.value)
+        if old_tier == new_tier:
+            return
+        # Increment new tier count; decrement old tier count (if not COLD, which is the default/uncounted)
+        if new_tier in (Tier.HOT, Tier.WARM):
+            await self._redis_hincrby(f"{_REDIS_PREFIX}:counts", new_tier.value, 1)
+        if old_tier in (Tier.HOT, Tier.WARM):
+            await self._redis_hincrby(f"{_REDIS_PREFIX}:counts", old_tier.value, -1)
+
     async def record_access(self, collection_id: str) -> Tier:
         """
         Record an access to collection_id. May trigger a tier promotion.
@@ -203,8 +265,15 @@ class CollectionTierManager:
             entry = self._entries.setdefault(
                 collection_id, TierEntry(collection_id=collection_id)
             )
-            entry.access_count += 1
             entry.last_accessed = time.monotonic()
+
+            # Issue #8408: use Redis shared counter when available so all workers
+            # see the same access frequency, preventing per-worker tier divergence.
+            shared_count = await self._redis_hincrby(
+                f"{_REDIS_PREFIX}:access_counts", collection_id, 1
+            )
+            entry.access_count = shared_count if shared_count is not None else entry.access_count + 1
+
             new_tier = self._desired_tier(entry)
             if new_tier != entry.tier:
                 await self._promote(entry, new_tier)
@@ -273,6 +342,8 @@ class CollectionTierManager:
         elif new_tier == Tier.WARM:
             self._warm_count += 1
         entry.tier = new_tier
+        # Issue #8408: persist tier assignment so other workers see the promotion.
+        await self._redis_update_tier(entry.collection_id, old_tier, new_tier)
         logger.info("Collection %s promoted %s→%s", entry.collection_id, old_tier, new_tier)
 
     async def _demote(self, entry: TierEntry) -> None:
@@ -288,6 +359,8 @@ class CollectionTierManager:
         old_tier = entry.tier
         entry.index = None
         entry.tier = new_tier
+        # Issue #8408: persist demotion so other workers see it.
+        await self._redis_update_tier(entry.collection_id, old_tier, new_tier)
         logger.info("Collection %s demoted %s→%s (stale)", entry.collection_id, old_tier, new_tier)
 
     async def _reap_loop(self) -> None:
@@ -310,8 +383,16 @@ class CollectionTierManager:
 _tier_manager: Optional[CollectionTierManager] = None
 
 
-def get_tier_manager() -> CollectionTierManager:
+def get_tier_manager(redis_client: Optional[Any] = None) -> CollectionTierManager:
+    """Return the process-singleton CollectionTierManager.
+
+    Issue #8408: pass ``redis_client`` on the first call (typically from lifespan)
+    to enable cross-worker Redis-backed tier state.  Subsequent calls without
+    ``redis_client`` return the already-configured singleton unchanged.
+    """
     global _tier_manager
     if _tier_manager is None:
-        _tier_manager = CollectionTierManager()
+        _tier_manager = CollectionTierManager(redis_client=redis_client)
+    elif redis_client is not None and _tier_manager._redis is None:
+        _tier_manager._redis = redis_client
     return _tier_manager

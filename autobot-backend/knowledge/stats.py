@@ -398,8 +398,8 @@ class StatsMixin:
             try:
                 from knowledge.tiering import get_tier_manager
                 stats["collection_tiers"] = get_tier_manager().stats()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to get tier stats: %s", e)
 
             return stats
 
