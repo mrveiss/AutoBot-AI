@@ -1954,11 +1954,12 @@ class EnterpriseFeatureEnableAllResponse(BaseModel):
     """Response for POST /features/enable-all."""
 
     status: str
-    enabled_features: List[str] = Field(default_factory=list)
-    failed_features: List[Any] = Field(default_factory=list)
-    total_features: int = 0
-    success_rate: float = 0.0
+    phase: str = ""
+    result: Dict[str, Any] = Field(default_factory=dict)
+    success_rate: str = ""
+    enterprise_capabilities: Dict[str, bool] = Field(default_factory=dict)
     message: str = ""
+    warnings: List[str] = Field(default_factory=list)
 
 
 class EnterpriseFeatureListResponse(BaseModel):
