@@ -185,7 +185,8 @@
               :disabled="submitting"
               type="button"
             >
-              <i :class="submitting ? 'fas fa-spinner fa-spin' : (isEditMode ? 'save' : 'plus')"></i>
+              <i v-if="submitting" class="fas fa-spinner fa-spin"></i>
+              <Icon v-else :name="isEditMode ? 'save' : 'plus'" />
               {{ submitting ? $t('analytics.sources.form.saving') : (isEditMode ? $t('analytics.sources.form.saveChanges') : $t('analytics.sources.addSource')) }}
             </button>
           </div>
