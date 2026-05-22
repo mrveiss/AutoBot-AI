@@ -31,12 +31,18 @@ from fastapi.responses import JSONResponse
 
 from api.schemas_common import DataResponse
 from api.schemas_system import (
+    ChatSecretsDeleteData,
     SecretCreateRequest,
+    SecretCreatedData,
     SecretModel,
     SecretScope,
+    SecretsListData,
     SecretsStatusResponse,
+    SecretsStatsData,
+    SecretTransferData,
     SecretTransferRequest,
     SecretType,
+    SecretTypesData,
     SecretUpdateRequest,
 )
 from auth_middleware import check_admin_permission, get_auth_middleware
@@ -521,7 +527,7 @@ def audit_log(
 # API Endpoints
 
 
-@router.post("/", response_model=DataResponse)
+@router.post("/", response_model=DataResponse[SecretCreatedData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_secret",
@@ -574,7 +580,7 @@ async def create_secret(
         raise HTTPException(status_code=500, detail="Failed to create secret")
 
 
-@router.get("/", response_model=DataResponse)
+@router.get("/", response_model=DataResponse[SecretsListData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_secrets",
@@ -605,7 +611,7 @@ async def list_secrets(
         raise HTTPException(status_code=500, detail="Failed to list secrets")
 
 
-@router.get("/types", response_model=DataResponse)
+@router.get("/types", response_model=DataResponse[SecretTypesData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_secret_types",
@@ -656,7 +662,7 @@ async def get_secrets_status(
         }
 
 
-@router.get("/stats", response_model=DataResponse)
+@router.get("/stats", response_model=DataResponse[SecretsStatsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_secrets_stats",
@@ -705,7 +711,7 @@ async def get_secrets_stats(
         raise HTTPException(status_code=500, detail="Failed to get stats")
 
 
-@router.get("/{secret_id}", response_model=DataResponse)
+@router.get("/{secret_id}", response_model=DataResponse[SecretCreatedData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_secret",
@@ -770,7 +776,7 @@ async def get_secret(
         raise HTTPException(status_code=500, detail="Failed to get secret")
 
 
-@router.put("/{secret_id}", response_model=DataResponse)
+@router.put("/{secret_id}", response_model=DataResponse[SecretCreatedData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_secret",
@@ -827,7 +833,7 @@ async def update_secret(
         raise HTTPException(status_code=500, detail="Failed to update secret")
 
 
-@router.delete("/{secret_id}", response_model=DataResponse)
+@router.delete("/{secret_id}", response_model=DataResponse[SecretCreatedData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_secret",
@@ -880,7 +886,7 @@ async def delete_secret(
         raise HTTPException(status_code=500, detail="Failed to delete secret")
 
 
-@router.post("/transfer", response_model=DataResponse)
+@router.post("/transfer", response_model=DataResponse[SecretTransferData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="transfer_secrets",
@@ -920,7 +926,7 @@ async def transfer_secrets(
         raise HTTPException(status_code=500, detail="Failed to transfer secrets")
 
 
-@router.get("/chat/{chat_id}/cleanup", response_model=DataResponse)
+@router.get("/chat/{chat_id}/cleanup", response_model=DataResponse[ChatSecretsDeleteData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_chat_cleanup_info",
@@ -940,7 +946,7 @@ async def get_chat_cleanup_info(
         raise HTTPException(status_code=500, detail="Failed to get cleanup info")
 
 
-@router.delete("/chat/{chat_id}", response_model=DataResponse)
+@router.delete("/chat/{chat_id}", response_model=DataResponse[ChatSecretsDeleteData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_chat_secrets",

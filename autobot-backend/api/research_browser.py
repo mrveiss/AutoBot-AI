@@ -15,7 +15,13 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from api.schemas_common import DataResponse
 from api.schemas_workflows import (
+    BrowserInfoData,
     BrowserResearchRequest,
+    BrowserSessionActionData,
+    BrowserSessionCleanupData,
+    BrowserSessionListData,
+    BrowserSessionStatusData,
+    ChatBrowserSessionData,
     CreateChatBrowserRequest,
     NavigationRequest,
     SessionAction,
@@ -82,7 +88,7 @@ async def probe_research_browser(
         )
 
 
-@router.post("/url", response_model=DataResponse)
+@router.post("/url", response_model=DataResponse[BrowserSessionStatusData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="research_url",
@@ -98,7 +104,7 @@ async def research_url(request: BrowserResearchRequest):
     return JSONResponse(status_code=200, content=result)
 
 
-@router.post("/session/action", response_model=DataResponse)
+@router.post("/session/action", response_model=DataResponse[BrowserSessionActionData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="handle_session_action",
@@ -146,7 +152,7 @@ async def handle_session_action(request: SessionAction):
     return JSONResponse(status_code=200, content=result)
 
 
-@router.get("/session/{session_id}/status", response_model=DataResponse)
+@router.get("/session/{session_id}/status", response_model=DataResponse[BrowserSessionStatusData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_session_status",
@@ -219,7 +225,7 @@ async def download_mhtml(session_id: str, filename: str):
     )
 
 
-@router.delete("/session/{session_id}", response_model=DataResponse)
+@router.delete("/session/{session_id}", response_model=DataResponse[BrowserSessionCleanupData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cleanup_session",
@@ -236,7 +242,7 @@ async def cleanup_session(session_id: str):
     )
 
 
-@router.get("/sessions", response_model=DataResponse)
+@router.get("/sessions", response_model=DataResponse[BrowserSessionListData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_sessions",
@@ -266,7 +272,7 @@ async def list_sessions():
     )
 
 
-@router.post("/session/{session_id}/navigate", response_model=DataResponse)
+@router.post("/session/{session_id}/navigate", response_model=DataResponse[BrowserSessionStatusData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="navigate_session",
@@ -285,7 +291,7 @@ async def navigate_session(session_id: str, request: NavigationRequest):
 
 
 # Browser integration endpoints for frontend
-@router.get("/browser/{session_id}", response_model=DataResponse)
+@router.get("/browser/{session_id}", response_model=DataResponse[BrowserInfoData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_browser_info",
@@ -382,7 +388,7 @@ def _get_browser_actions() -> list:
 # These endpoints tie browser sessions to chat conversations like terminal
 
 
-@router.post("/chat-session", response_model=DataResponse)
+@router.post("/chat-session", response_model=DataResponse[ChatBrowserSessionData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_or_create_chat_browser_session",
@@ -444,7 +450,7 @@ async def get_or_create_chat_browser_session(request: CreateChatBrowserRequest):
     )
 
 
-@router.get("/chat-session/{conversation_id}", response_model=DataResponse)
+@router.get("/chat-session/{conversation_id}", response_model=DataResponse[ChatBrowserSessionData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_chat_browser_session",
@@ -495,7 +501,7 @@ async def get_chat_browser_session(conversation_id: str):
     )
 
 
-@router.delete("/chat-session/{conversation_id}", response_model=DataResponse)
+@router.delete("/chat-session/{conversation_id}", response_model=DataResponse[BrowserSessionCleanupData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_chat_browser_session",

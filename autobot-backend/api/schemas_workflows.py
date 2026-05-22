@@ -2654,3 +2654,251 @@ class OrchestrationExamplesResponse(BaseModel):
 
     examples: Dict[str, Any] = Field(default_factory=dict)
     usage_tips: List[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# llm.py response data schemas (GH #6509)
+# ---------------------------------------------------------------------------
+
+
+class LLMDeprecatedData(BaseModel):
+    """Response data for deprecated LLM config write endpoints (HTTP 410)."""
+
+    detail: str
+    redirect: str
+
+
+class LLMComprehensiveStatusData(BaseModel):
+    """Response data for get_comprehensive_llm_status."""
+
+    provider_type: str
+    providers: Dict[str, Any]
+    active_provider: Dict[str, Any]
+    settings: Dict[str, Any]
+
+
+class LLMQuickStatusData(BaseModel):
+    """Response data for get_quick_llm_status and get_llm_status."""
+
+    status: str
+    provider_type: str
+    model: str
+    timestamp: str
+    error: str | None = None
+
+
+class LLMProvidersHealthData(BaseModel):
+    """Response data for get_all_providers_health."""
+
+    overall_status: str
+    available_providers: int
+    total_providers: int
+    providers: Dict[str, Any]
+    cache_stats: Dict[str, Any] = Field(default_factory=dict)
+    timestamp: str
+    error: str | None = None
+
+
+class LLMProviderHealthData(BaseModel):
+    """Response data for get_provider_health."""
+
+    provider: str
+    status: str
+    available: bool
+    message: str
+    response_time_ms: float
+    details: Dict[str, Any] = Field(default_factory=dict)
+    timestamp: str
+    error: str | None = None
+
+
+class LLMCacheClearData(BaseModel):
+    """Response data for clear_provider_health_cache."""
+
+    success: bool
+    message: str
+    cache_stats: Dict[str, Any] = Field(default_factory=dict)
+
+
+class LLMTieredRoutingMetricsData(BaseModel):
+    """Response data for get_tiered_routing_metrics."""
+
+    enabled: bool
+    metrics: Dict[str, Any] | None = None
+    message: str | None = None
+
+
+class LLMTieredRoutingConfigData(BaseModel):
+    """Response data for get_tiered_routing_config."""
+
+    enabled: bool
+    complexity_threshold: float | None = None
+    models: Dict[str, str] | None = None
+    fallback_to_complex: bool | None = None
+    logging: Dict[str, Any] | None = None
+    message: str | None = None
+
+
+class LLMTieredRoutingUpdateData(BaseModel):
+    """Response data for update_tiered_routing_config."""
+
+    success: bool
+    message: str
+    config: Dict[str, Any]
+
+
+class LLMTieredMetricsResetData(BaseModel):
+    """Response data for reset_tiered_routing_metrics."""
+
+    success: bool
+    message: str
+    metrics: Dict[str, Any]
+
+
+# ---------------------------------------------------------------------------
+# research_browser.py response data schemas (GH #6509)
+# ---------------------------------------------------------------------------
+
+
+class BrowserSessionStatusData(BaseModel):
+    """Response data for get_session_status."""
+
+    session_id: str
+    conversation_id: str
+    status: str
+    current_url: str | None = None
+    interaction_required: bool = False
+    interaction_message: str | None = None
+    created_at: str
+    last_activity: str
+    mhtml_files_count: int = 0
+
+
+class BrowserSessionListData(BaseModel):
+    """Response data for list_sessions."""
+
+    sessions: List[Dict[str, Any]]
+    total_sessions: int
+
+
+class BrowserSessionActionData(BaseModel):
+    """Response data for handle_session_action."""
+
+    success: bool
+    session_id: str
+    interaction_complete: bool | None = None
+    status: str | None = None
+    message: str | None = None
+    mhtml_path: str | None = None
+    browser_accessible: bool | None = None
+    current_url: str | None = None
+    content: Any | None = None
+    error: str | None = None
+
+
+class BrowserInfoData(BaseModel):
+    """Response data for get_browser_info."""
+
+    session_id: str
+    conversation_id: str
+    status: str
+    current_url: str | None = None
+    interaction_required: bool
+    interaction_message: str | None = None
+    docker_browser: Dict[str, Any]
+    actions: List[Dict[str, Any]]
+
+
+class ChatBrowserSessionData(BaseModel):
+    """Response data for chat browser session endpoints."""
+
+    session_id: str
+    conversation_id: str
+    browser_status: str
+    current_url: str | None = None
+    interaction_required: bool = False
+    interaction_message: str | None = None
+    created_at: str | None = None
+    last_activity: str | None = None
+    docker_browser: Dict[str, Any] | None = None
+    status: str | None = None
+
+
+class BrowserSessionCleanupData(BaseModel):
+    """Response data for cleanup_session and delete_chat_browser_session."""
+
+    success: bool | None = None
+    message: str | None = None
+    session_id: str | None = None
+    conversation_id: str | None = None
+    status: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# web_research_settings.py response data schemas (GH #6509)
+# ---------------------------------------------------------------------------
+
+
+class WebResearchStatusData(BaseModel):
+    """Response data for get_research_status."""
+
+    status: str
+    enabled: bool
+    preferred_method: str | None = None
+    health: Dict[str, Any] | None = None
+    circuit_breakers: Dict[str, Any] | None = None
+    cache_stats: Dict[str, Any] | None = None
+    timestamp: str
+    message: str | None = None
+
+
+class WebResearchToggleData(BaseModel):
+    """Response data for enable_web_research and disable_web_research."""
+
+    status: str
+    message: str
+    enabled: bool
+    timestamp: str
+
+
+class WebResearchSettingsData(BaseModel):
+    """Response data for get_research_settings."""
+
+    status: str
+    settings: Dict[str, Any]
+    timestamp: str
+
+
+class WebResearchSettingsUpdateData(BaseModel):
+    """Response data for update_research_settings."""
+
+    status: str
+    message: str
+    settings: Dict[str, Any]
+    timestamp: str
+
+
+class WebResearchTestData(BaseModel):
+    """Response data for test_web_research."""
+
+    status: str
+    test_query: str
+    result: Any | None = None
+    error: str | None = None
+    timestamp: str
+
+
+class WebResearchCacheClearData(BaseModel):
+    """Response data for clear_research_cache and reset_circuit_breakers."""
+
+    status: str
+    message: str
+    timestamp: str
+
+
+class WebResearchUsageStatsData(BaseModel):
+    """Response data for get_usage_stats."""
+
+    status: str
+    stats: Dict[str, Any]
+    timestamp: str

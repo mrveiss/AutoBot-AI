@@ -21,6 +21,18 @@ from api.schemas_agent import (
     LLMModelsResponse,
 )
 from api.schemas_common import DataResponse
+from api.schemas_workflows import (
+    LLMCacheClearData,
+    LLMComprehensiveStatusData,
+    LLMDeprecatedData,
+    LLMProvidersHealthData,
+    LLMProviderHealthData,
+    LLMQuickStatusData,
+    LLMTieredMetricsResetData,
+    LLMTieredRoutingConfigData,
+    LLMTieredRoutingMetricsData,
+    LLMTieredRoutingUpdateData,
+)
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -68,7 +80,7 @@ async def get_llm_config(
         raise HTTPException(status_code=500, detail="Error getting LLM config")
 
 
-@router.post("/config", response_model=DataResponse)
+@router.post("/config", response_model=DataResponse[LLMDeprecatedData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_llm_config",
@@ -226,7 +238,7 @@ def _build_llm_update_response() -> dict:
     }
 
 
-@router.post("/provider", response_model=DataResponse)
+@router.post("/provider", response_model=DataResponse[LLMDeprecatedData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_llm_provider",
@@ -326,7 +338,7 @@ async def _apply_embedding_config(provider: str, model: str, embedding_data: dic
     await asyncio.to_thread(config.save_config_to_yaml)
 
 
-@router.post("/embedding", response_model=DataResponse)
+@router.post("/embedding", response_model=DataResponse[LLMDeprecatedData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_embedding_model",
@@ -452,7 +464,7 @@ def _build_active_provider_info(provider_type: str, local_config: dict, cloud_co
     }
 
 
-@router.get("/status/comprehensive", response_model=DataResponse)
+@router.get("/status/comprehensive", response_model=DataResponse[LLMComprehensiveStatusData])
 @cache_response(cache_key="llm_status_comprehensive", ttl=30)  # Cache for 30 seconds
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -500,7 +512,7 @@ async def get_comprehensive_llm_status(
         return JSONResponse(status_code=500, content={"error": "Failed to get LLM status"})
 
 
-@router.get("/status", response_model=DataResponse)
+@router.get("/status", response_model=DataResponse[LLMQuickStatusData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_llm_status",
@@ -562,7 +574,7 @@ def _get_model_from_cloud_config(unified_config: dict) -> str:
     return model if (api_key and model) else ""
 
 
-@router.get("/status/quick", response_model=DataResponse)
+@router.get("/status/quick", response_model=DataResponse[LLMQuickStatusData])
 @cache_response(cache_key="llm_status_quick", ttl=15)  # Cache for 15 seconds
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -631,7 +643,7 @@ def _build_providers_health_dict(results: dict) -> tuple:
     return providers_health, available_count
 
 
-@router.get("/health/providers", response_model=DataResponse)
+@router.get("/health/providers", response_model=DataResponse[LLMProvidersHealthData])
 @cache_response(cache_key="llm_providers_health", ttl=30)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -685,7 +697,7 @@ async def get_all_providers_health():
         )
 
 
-@router.get("/health/providers/{provider_name}", response_model=DataResponse)
+@router.get("/health/providers/{provider_name}", response_model=DataResponse[LLMProviderHealthData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_provider_health",
@@ -741,7 +753,7 @@ async def get_provider_health(provider_name: str, use_cache: bool = True):
         )
 
 
-@router.post("/health/providers/clear-cache", response_model=DataResponse)
+@router.post("/health/providers/clear-cache", response_model=DataResponse[LLMCacheClearData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_provider_health_cache",
@@ -793,7 +805,7 @@ async def clear_provider_health_cache(
 # ============================================================================
 
 
-@router.get("/tiered-routing/metrics", response_model=DataResponse)
+@router.get("/tiered-routing/metrics", response_model=DataResponse[LLMTieredRoutingMetricsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_tiered_routing_metrics",
@@ -848,7 +860,7 @@ async def get_tiered_routing_metrics(
         )
 
 
-@router.get("/tiered-routing/config", response_model=DataResponse)
+@router.get("/tiered-routing/config", response_model=DataResponse[LLMTieredRoutingConfigData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_tiered_routing_config",
@@ -972,7 +984,7 @@ def _build_tiered_routing_response(tier_router) -> dict:
     }
 
 
-@router.post("/tiered-routing/config", response_model=DataResponse)
+@router.post("/tiered-routing/config", response_model=DataResponse[LLMTieredRoutingUpdateData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_tiered_routing_config",
@@ -1019,7 +1031,7 @@ async def update_tiered_routing_config(
         )
 
 
-@router.post("/tiered-routing/metrics/reset", response_model=DataResponse)
+@router.post("/tiered-routing/metrics/reset", response_model=DataResponse[LLMTieredMetricsResetData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reset_tiered_routing_metrics",

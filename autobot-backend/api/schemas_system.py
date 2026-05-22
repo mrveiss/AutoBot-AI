@@ -3511,6 +3511,154 @@ class OnboardingStatus(BaseModel):
     """Response model for GET /api/onboarding/status."""
 
     preset_applied: bool
+
+
+# ---------------------------------------------------------------------------
+# security_assessment.py response data schemas (GH #6509)
+# ---------------------------------------------------------------------------
+
+
+class AssessmentData(BaseModel):
+    """Assessment entity from SecurityWorkflowManager.to_dict()."""
+
+    model_config = {"extra": "allow"}
+    id: str
+    name: str
+    target: str
+    phase: str
+    training_mode: bool = False
+    hosts: List[Dict[str, Any]] = Field(default_factory=list)
+    findings: List[Dict[str, Any]] = Field(default_factory=list)
+    actions: List[Dict[str, Any]] = Field(default_factory=list)
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class AssessmentListData(BaseModel):
+    """Response data for list_assessments."""
+
+    assessments: List[Dict[str, Any]]
+    count: int
+
+
+class AssessmentPhaseData(BaseModel):
+    """Response data for get_current_phase."""
+
+    current_phase: str
+    description: str = ""
+    available_actions: List[str] = Field(default_factory=list)
+    valid_transitions: List[str] = Field(default_factory=list)
+    training_mode: bool = False
+
+
+class AssessmentFindingsData(BaseModel):
+    """Response data for get_findings."""
+
+    findings: List[Dict[str, Any]]
+    vulnerabilities: List[Dict[str, Any]]
+    total_findings: int
+    total_vulnerabilities: int
+
+
+class ParseToolOutputData(BaseModel):
+    """Response data for parse_and_store_tool_output."""
+
+    tool: str
+    scan_type: str | None = None
+    hosts_added: int
+    ports_added: int
+    vulnerabilities_added: int
+    parsed_data: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AssessmentPhaseDefinitionsData(BaseModel):
+    """Response data for get_phase_definitions."""
+
+    phases: Dict[str, Any]
+    transitions: Dict[str, Any]
+
+
+# ---------------------------------------------------------------------------
+# secrets.py response data schemas (GH #6509)
+# ---------------------------------------------------------------------------
+
+
+class SecretCreatedData(BaseModel):
+    """Response data for create_secret and update_secret."""
+
+    status: str
+    message: str
+    secret: Dict[str, Any]
+
+
+class SecretsListData(BaseModel):
+    """Response data for list_secrets."""
+
+    secrets: List[Dict[str, Any]]
+    total_count: int
+    filters: Dict[str, Any] = Field(default_factory=dict)
+
+
+class SecretTypesData(BaseModel):
+    """Response data for get_secret_types."""
+
+    types: List[Dict[str, str]]
+    scopes: List[Dict[str, str]]
+
+
+class SecretsStatsData(BaseModel):
+    """Response data for get_secrets_stats."""
+
+    total_secrets: int
+    by_scope: Dict[str, int]
+    by_type: Dict[str, int]
+    by_chat: Dict[str, int] = Field(default_factory=dict)
+    expired_count: int
+
+
+class SecretTransferData(BaseModel):
+    """Response data for transfer_secrets."""
+
+    status: str
+    message: str
+    result: Dict[str, Any]
+
+
+class ChatSecretsDeleteData(BaseModel):
+    """Response data for delete_chat_secrets."""
+
+    status: str
+    message: str
+    result: Dict[str, Any]
+
+
+# ---------------------------------------------------------------------------
+# security.py response data schemas (GH #6509)
+# ---------------------------------------------------------------------------
+
+
+class PendingApprovalsData(BaseModel):
+    """Response data for get_pending_approvals."""
+
+    success: bool = True
+    pending_approvals: List[Dict[str, Any]]
+    count: int
+
+
+class CommandHistoryData(BaseModel):
+    """Response data for get_command_history."""
+
+    success: bool = True
+    command_history: List[Dict[str, Any]]
+    count: int
+
+
+class AuditLogData(BaseModel):
+    """Response data for get_audit_log."""
+
+    success: bool = True
+    audit_entries: List[Dict[str, Any]]
+    count: int
     preset_name: str | None = None
 
 
