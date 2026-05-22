@@ -6,6 +6,7 @@ Tests the ARC cache with TTL for ChromaDB query embeddings.
 import asyncio
 
 import pytest
+import pytest_asyncio
 
 from knowledge_base import EmbeddingCache, get_embedding_cache
 
@@ -16,11 +17,11 @@ def cache():
     return EmbeddingCache(maxsize=3, ttl_seconds=2)
 
 
-@pytest.fixture
-def global_cache():
+@pytest_asyncio.fixture
+async def global_cache():
     """Get the global cache instance"""
     cache = get_embedding_cache()
-    cache.clear()  # Reset for testing
+    await cache.clear()  # Reset for testing
     return cache
 
 
@@ -204,7 +205,7 @@ class TestEmbeddingCache:
         assert stats["cache_size"] == 2
         assert stats["misses"] == 0
 
-        cache.clear()
+        await cache.clear()
 
         stats = cache.get_stats()
         assert stats["cache_size"] == 0
