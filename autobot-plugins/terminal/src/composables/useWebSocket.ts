@@ -129,7 +129,6 @@ export function useWebSocket(url: Ref<string> | string, options: UseWebSocketOpt
   const disconnect = () => {
     clearTimers()
     if (ws.value) {
-      ws.value.onclose = null
       ws.value.close(1000, 'Manual disconnect')
       ws.value = null
     }

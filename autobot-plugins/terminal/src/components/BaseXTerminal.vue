@@ -134,8 +134,9 @@ const handleTerminalData = (data: string) => {
   if (data === '\x1b[A') { emit('historyNavigate', { direction: 'up', lineBuffer: currentLineBuffer.value }); return }
   if (data === '\x1b[B') { emit('historyNavigate', { direction: 'down', lineBuffer: currentLineBuffer.value }); return }
   if (data === '\t') { emit('tabCompletion', { text: currentLineBuffer.value, cursor: cursorPosition.value }); return }
+  const command = (data === '\r' || data === '\n') ? currentLineBuffer.value.trim() : ''
   updateLineBuffer(data)
-  if (data === '\r' || data === '\n') { if (currentLineBuffer.value.trim()) emit('commandExecuted', currentLineBuffer.value.trim()) }
+  if (command) emit('commandExecuted', command)
   emit('data', data)
 }
 
