@@ -44,13 +44,16 @@ export const PLUGIN_MOUNT_REGISTRY: readonly PluginMountEntry[] = [
   // Built-in plugins bundled with AutoBot.
   // Third-party / marketplace plugins are discovered at runtime via the
   // backend API and resolved through getPluginComponent() below.
-  //
-  // Example entry (uncomment and adapt when a real plugin ships its UI):
-  // {
-  //   id: 'hello-plugin',
-  //   label: 'Hello Plugin',
-  //   loader: () => import('@/components/plugins/hello-plugin/HelloPlugin.vue'),
-  // },
+  {
+    id: 'terminal',
+    label: 'SSH Terminal',
+    loader: () => import('@/components/plugins/TerminalPlugin.vue'),
+  },
+  {
+    id: 'vnc',
+    label: 'VNC Viewer',
+    loader: () => import('@/components/plugins/VncPlugin.vue'),
+  },
 ] as const
 
 const _indexById = new Map<string, PluginMountEntry>(

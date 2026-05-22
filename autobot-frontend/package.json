@@ -44,6 +44,8 @@
     "build-storybook": "storybook build"
   },
   "dependencies": {
+    "@autobot/terminal": "file:../autobot-plugins/terminal",
+    "@autobot/vnc": "file:../autobot-plugins/vnc",
     "@fontsource/inter": "^5.2.8",
     "@fortawesome/fontawesome-free": "^7.2.0",
     "@heroicons/vue": "^2.2.0",

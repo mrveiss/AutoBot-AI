@@ -1,0 +1,20 @@
+{
+  "name": "@autobot/vnc",
+  "version": "0.1.0",
+  "description": "AutoBot VNC viewer plugin — iframe viewer + control toolbar for both frontends",
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "scripts": {
+    "build": "vite build"
+  },
+  "peerDependencies": {
+    "vue": ">=3.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.0",
+    "typescript": "~5.8.0",
+    "vite": "^6.0.0",
+    "vue": "^3.5.0"
+  }
+}
