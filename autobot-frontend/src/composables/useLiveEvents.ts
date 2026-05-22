@@ -4,14 +4,14 @@
 /**
  * Live Events Composable (#2064)
  *
+ * @deprecated Use `useEventBus` from `@/composables/useEventBus` instead.
+ * `useEventBus` is the canonical unified entry-point (#6488 Phase 2).
+ * This composable is preserved for backward compatibility; migrate callers to
+ * `useEventBus()` — the API is identical.
+ *
  * Provides Vue-friendly access to the scoped LiveEventService for
  * channel-based real-time event streaming (agent:{id}, task:{id},
  * workflow:{id}, global).
- *
- * Usage:
- *   const { subscribe, isConnected, connectionState } = useLiveEvents()
- *   const unsub = subscribe('global', (event) => { ... })
- *   // unsub() to stop listening, or it auto-cleans on component unmount
  */
 
 import { computed, onUnmounted, getCurrentInstance, type ComputedRef } from 'vue'
