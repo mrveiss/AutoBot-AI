@@ -224,9 +224,14 @@ class ContextWindowManager:
             Architecture family string (e.g. ``'transformer'``, ``'state_space'``).
         """
         model = model_name or self.current_model
+        # Issue #8360: unknown models fall through to default, inheriting its
+        # architecture_family.  Return the safe default directly instead.
         if model not in self.config["models"]:
-            model = self.config["models"]["default"]["name"]
-        return self.config["models"][model].get("architecture_family", "transformer")
+            return "transformer"
+        # Issue #8361: normalize whitespace and case before returning so callers
+        # don't see e.g. "State_Space" fail the frozenset membership check.
+        raw = self.config["models"][model].get("architecture_family", "transformer")
+        return raw.strip().lower()
 
     def get_compression_threshold(self, model_name: str | None = None) -> int:
         """Get the compression threshold for a model.
@@ -251,7 +256,14 @@ class ContextWindowManager:
             model = self.config["models"]["default"]["name"]
 
         entry = self.config["models"][model]
-        family = entry.get("architecture_family", "transformer")
+        # Issue #8361: normalize before frozenset check.
+        family = entry.get("architecture_family", "transformer").strip().lower()
+
+        # Issue #8359: explicit compression_threshold always wins, regardless of
+        # architecture family.  Only fall back to family-specific defaults when
+        # the field is absent.
+        if "compression_threshold" in entry:
+            return entry["compression_threshold"]
 
         if family in _NON_TRANSFORMER_FAMILIES:
             # Use the model's declared context window as the threshold —
@@ -265,7 +277,7 @@ class ContextWindowManager:
             )
             return threshold
 
-        return entry.get("compression_threshold", 8192)
+        return 8192
 
     async def async_should_compress(self, content_tokens: int, model_name: str | None = None) -> bool:
         """Return True when content_tokens exceed the model compression threshold.

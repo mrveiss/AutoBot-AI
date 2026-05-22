@@ -219,3 +219,129 @@ class TestAsyncShouldCompress:
         mgr = _manager_with_config(_TRANSFORMER_CONFIG)
         result = await mgr.async_should_compress(500000, "linear-attn-2b")
         assert result is False
+
+
+# ---------------------------------------------------------------------------
+# Regression: #8359 explicit compression_threshold overrides family heuristic
+# ---------------------------------------------------------------------------
+
+
+class TestCompressionThresholdExplicitOverride:
+    def test_non_transformer_explicit_override_respected(self):
+        """Issue #8359: explicit compression_threshold must win over context_window_tokens."""
+        config = {
+            "models": {
+                "default": {"name": "ssm-big", "message_budget": {"system_prompt": 0, "recent_messages": 10, "max_history_tokens": 1000}},
+                "ssm-big": {
+                    "architecture_family": "state_space",
+                    "context_window_tokens": 131072,
+                    "compression_threshold": 32768,  # explicit override
+                    "message_budget": {"system_prompt": 0, "recent_messages": 10, "max_history_tokens": 1000},
+                },
+            },
+            "token_estimation": {"chars_per_token": 4, "safety_margin": 0.9},
+        }
+        mgr = _manager_with_config(config)
+        # Must return the explicit 32768, not context_window_tokens (131072).
+        assert mgr.get_compression_threshold("ssm-big") == 32768
+
+    def test_transformer_explicit_override_still_respected(self):
+        """Explicit override must also work for transformer models (existing behaviour)."""
+        config = {
+            "models": {
+                "default": {"name": "t5", "message_budget": {"system_prompt": 0, "recent_messages": 10, "max_history_tokens": 1000}},
+                "t5": {
+                    "compression_threshold": 4096,
+                    "context_window_tokens": 8192,
+                    "message_budget": {"system_prompt": 0, "recent_messages": 10, "max_history_tokens": 1000},
+                },
+            },
+            "token_estimation": {"chars_per_token": 4, "safety_margin": 0.9},
+        }
+        mgr = _manager_with_config(config)
+        assert mgr.get_compression_threshold("t5") == 4096
+
+
+# ---------------------------------------------------------------------------
+# Regression: #8360 unknown model must not inherit default model's family
+# ---------------------------------------------------------------------------
+
+
+class TestGetArchitectureFamilyFallthrough:
+    def test_unknown_model_does_not_inherit_default_family(self):
+        """Issue #8360: unknown model must return 'transformer', not default's family."""
+        config = {
+            "models": {
+                "default": {
+                    "name": "mamba-default",
+                    "architecture_family": "state_space",  # non-transformer default!
+                    "context_window_tokens": 131072,
+                    "message_budget": {"system_prompt": 0, "recent_messages": 10, "max_history_tokens": 1000},
+                },
+                "mamba-default": {
+                    "architecture_family": "state_space",
+                    "context_window_tokens": 131072,
+                    "message_budget": {"system_prompt": 0, "recent_messages": 10, "max_history_tokens": 1000},
+                },
+            },
+            "token_estimation": {"chars_per_token": 4, "safety_margin": 0.9},
+        }
+        mgr = _manager_with_config(config)
+        # Unknown model must NOT inherit state_space from default entry.
+        assert mgr.get_architecture_family("totally-unknown-model") == "transformer"
+
+
+# ---------------------------------------------------------------------------
+# Regression: #8361 architecture_family values normalized before frozenset check
+# ---------------------------------------------------------------------------
+
+
+class TestArchitectureFamilyNormalization:
+    def test_uppercase_family_recognized(self):
+        """Issue #8361: 'State_Space' must be normalized to 'state_space'."""
+        config = {
+            "models": {
+                "default": {"name": "m", "message_budget": {"system_prompt": 0, "recent_messages": 10, "max_history_tokens": 1000}},
+                "m": {
+                    "architecture_family": "State_Space",
+                    "context_window_tokens": 131072,
+                    "message_budget": {"system_prompt": 0, "recent_messages": 10, "max_history_tokens": 1000},
+                },
+            },
+            "token_estimation": {"chars_per_token": 4, "safety_margin": 0.9},
+        }
+        mgr = _manager_with_config(config)
+        assert mgr.get_architecture_family("m") == "state_space"
+
+    def test_family_with_whitespace_normalized(self):
+        """Issue #8361: ' hybrid ' must be stripped and lowercased."""
+        config = {
+            "models": {
+                "default": {"name": "j", "message_budget": {"system_prompt": 0, "recent_messages": 10, "max_history_tokens": 1000}},
+                "j": {
+                    "architecture_family": " Hybrid ",
+                    "context_window_tokens": 256000,
+                    "message_budget": {"system_prompt": 0, "recent_messages": 10, "max_history_tokens": 1000},
+                },
+            },
+            "token_estimation": {"chars_per_token": 4, "safety_margin": 0.9},
+        }
+        mgr = _manager_with_config(config)
+        assert mgr.get_architecture_family("j") == "hybrid"
+
+    def test_uppercased_family_bypasses_compression(self):
+        """Issue #8361: uppercase family must still trigger non-transformer bypass."""
+        config = {
+            "models": {
+                "default": {"name": "ssm", "message_budget": {"system_prompt": 0, "recent_messages": 10, "max_history_tokens": 1000}},
+                "ssm": {
+                    "architecture_family": "STATE_SPACE",
+                    "context_window_tokens": 100000,
+                    "message_budget": {"system_prompt": 0, "recent_messages": 10, "max_history_tokens": 1000},
+                },
+            },
+            "token_estimation": {"chars_per_token": 4, "safety_margin": 0.9},
+        }
+        mgr = _manager_with_config(config)
+        # Should use context_window_tokens (100000), not the transformer 8192 cap.
+        assert mgr.get_compression_threshold("ssm") == 100000
