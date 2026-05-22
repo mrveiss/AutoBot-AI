@@ -731,6 +731,30 @@ export const routes: RouteRecordRaw[] = [
       admin: true,
     },
   },
+  // Issue #7773: Sandbox file inspector — wires useFileSandbox() into admin UI
+  {
+    path: '/admin/sandbox',
+    name: 'admin-sandbox',
+    component: () => import('@/views/AdminSandboxView.vue'),
+    meta: {
+      title: 'Sandbox Inspector',
+      description: 'Browse code-execution sandbox files',
+      requiresAuth: true,
+      admin: true,
+    },
+  },
+  // Issue #7513: Host inventory admin view
+  {
+    path: '/admin/hosts',
+    name: 'admin-hosts',
+    component: () => import('@/views/Admin/HostsView.vue'),
+    meta: {
+      title: 'Host Inventory',
+      description: 'Manage multi-host role deployment',
+      requiresAuth: true,
+      admin: true,
+    },
+  },
   // /desktop removed from nav — noVNC is accessible via the Chat tab's noVNC tab.
   // Redirect any bookmarked /desktop URLs to /chat.
   { path: '/desktop', redirect: '/chat' },
