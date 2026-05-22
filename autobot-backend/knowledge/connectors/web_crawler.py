@@ -15,6 +15,7 @@ Issue #8286: Connection-level failures (status_code=None) now also raise Retryab
 import hashlib
 import os
 from datetime import datetime
+from collections.abc import Awaitable, Callable
 from typing import List
 from urllib.parse import urlparse
 
@@ -246,16 +247,19 @@ class WebCrawlerConnector(AbstractConnector):
             )
 
         try:
+            async def _on_seed_done(url: str) -> None:
+                await self._write_checkpoint(_url_to_source_id(url))
+
             fetched = await self.crawl(
                 seed_urls=pending_seeds,
                 max_depth=self._max_depth,
                 max_pages=self._max_pages,
                 respect_robots=self._respect_robots,
-                ingest=True,
+                ingest=False,
                 same_origin=self._same_origin,
+                on_seed_complete=_on_seed_done,
             )
-            for url in pending_seeds:
-                await self._write_checkpoint(_url_to_source_id(url))
+            await _ingest_results_to_kb(fetched, self, result)
             result.status = "success" if not result.errors else "partial"
             if result.status == "success":
                 await self._clear_checkpoint()
@@ -285,6 +289,7 @@ class WebCrawlerConnector(AbstractConnector):
         respect_robots: bool = True,
         ingest: bool = True,
         same_origin: bool = True,
+        on_seed_complete: Callable[[str], Awaitable[None]] | None = None,
     ) -> List[FetchResult]:
         """BFS crawl starting from *seed_urls*.
 
@@ -316,6 +321,8 @@ class WebCrawlerConnector(AbstractConnector):
             seed_results = await self._crawl_seed(seed, max_depth, pages_remaining, same_origin, fetcher)
             all_results.extend(seed_results)
             pages_remaining -= len(seed_results)
+            if on_seed_complete is not None:
+                await on_seed_complete(seed)
 
         if ingest:
             sync_result = SyncResult(
