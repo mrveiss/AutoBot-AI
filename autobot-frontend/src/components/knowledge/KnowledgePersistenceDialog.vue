@@ -253,7 +253,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useNotificationBus } from '@/composables/useNotificationBus';
@@ -264,36 +264,50 @@ import { formatDateTime as formatDate } from '@/utils/formatHelpers';
 import BaseButton from '@/components/base/BaseButton.vue';
 import { createLogger } from '@/utils/debugUtils';
 
+type KnowledgeDecision = 'add_to_kb' | 'keep_temporary' | 'delete';
+
+interface PendingKnowledgeItem {
+  id: string;
+  content: string;
+  suggested_action: KnowledgeDecision;
+  created_at: string;
+  metadata?: {
+    source?: string;
+    [key: string]: unknown;
+  };
+}
+
+interface ChatContext {
+  topic?: string;
+  keywords?: string[];
+  file_count?: number;
+}
+
+interface Props {
+  visible?: boolean;
+  chatId?: string | null;
+  chatContext?: ChatContext | null;
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  visible: false,
+  chatId: null,
+  chatContext: null,
+});
+
+const emit = defineEmits<{
+  close: [];
+  'decisions-applied': [decisions: Array<{ chat_id: string; knowledge_id: string; decision: KnowledgeDecision }>];
+  'chat-compiled': [compiled: unknown];
+}>();
+
 const logger = createLogger('KnowledgePersistenceDialog');
 
 const { t } = useI18n();
-
-// Props
-const props = defineProps({
-  visible: {
-    type: Boolean,
-    default: false
-  },
-  chatId: {
-    type: String,
-    required: false,
-    default: null
-  },
-  chatContext: {
-    type: Object,
-    default: null
-  }
-});
-
-// Emits
-const emit = defineEmits(['close', 'decisions-applied', 'chat-compiled']);
-
-// Composables
 const { showToast } = useNotificationBus();
 
-// Reactive data
-const pendingItems = ref([]);
-const itemDecisions = ref({});
+const pendingItems = ref<PendingKnowledgeItem[]>([]);
+const itemDecisions = ref<Record<string, KnowledgeDecision>>({});
 
 const {
   isSelected,
@@ -302,24 +316,22 @@ const {
   clear: deselectAllItems,
   selectedItems: selectedPendingItems,
   someSelected: hasSelectedItems,
-} = useBatchSelection(pendingItems, item => item.id);
+  selected: selectedKeys,
+} = useBatchSelection<PendingKnowledgeItem, string>(pendingItems, item => item.id);
+
 const compileOptions = ref({
   includeSystemMessages: false,
-  title: ''
+  title: '',
 });
 const loading = ref(false);
 
-// Computed properties
-
-const hasDecisions = computed(() => {
-  return Object.keys(itemDecisions.value).length > 0;
-});
+const hasDecisions = computed(() => Object.keys(itemDecisions.value).length > 0);
 
 const decisionsCount = computed(() => {
-  const counts = {
+  const counts: Record<KnowledgeDecision, number> = {
     add_to_kb: 0,
     keep_temporary: 0,
-    delete: 0
+    delete: 0,
   };
 
   const selectedIds = new Set(selectedPendingItems.value.map(item => item.id));
@@ -328,16 +340,14 @@ const decisionsCount = computed(() => {
       counts[decision]++;
     }
   });
-
   return counts;
 });
 
-// Methods
-const loadPendingItems = async () => {
+const loadPendingItems = async (): Promise<void> => {
   try {
     loading.value = true;
     // Issue #552: Fixed path to match backend (hyphen instead of underscore)
-    const response = await apiService.get(`${getApiBase()}/chat-knowledge/knowledge/pending/${props.chatId}`);
+    const response = await apiService.get(`${getApiBase()}/chat-knowledge/knowledge/pending/${props.chatId}`) as { success: boolean; pending_items: PendingKnowledgeItem[] };
 
     if (response.success) {
       pendingItems.value = response.data?.pending_items ?? [];
@@ -355,23 +365,21 @@ const loadPendingItems = async () => {
   }
 };
 
-const truncateContent = (content, maxLength) => {
+const truncateContent = (content: string, maxLength: number): string => {
   if (content.length <= maxLength) return content;
   return content.substring(0, maxLength) + '...';
 };
 
-const getSuggestionText = (action) => {
-  const suggestions = {
+const getSuggestionText = (action: KnowledgeDecision): string => {
+  const suggestions: Record<KnowledgeDecision, string> = {
     'add_to_kb': t('knowledge.persistence.suggestionAddToKb'),
     'keep_temporary': t('knowledge.persistence.suggestionKeepTemporary'),
-    'delete': t('knowledge.persistence.suggestionDelete')
+    'delete': t('knowledge.persistence.suggestionDelete'),
   };
   return suggestions[action] || '';
 };
 
-// NOTE: formatDate removed - now using formatDateTime from @/utils/formatHelpers
-
-const handleItemToggle = (item) => {
+const handleItemToggle = (item: PendingKnowledgeItem): void => {
   const wasSelected = isSelected(item);
   toggleItemSelection(item);
   if (wasSelected) {
@@ -379,33 +387,27 @@ const handleItemToggle = (item) => {
   }
 };
 
-const deselectAll = () => {
+const deselectAll = (): void => {
   deselectAllItems();
   itemDecisions.value = {};
 };
 
-const applyBulkDecision = (decision) => {
+const applyBulkDecision = (decision: KnowledgeDecision): void => {
   selectedPendingItems.value.forEach(item => {
     itemDecisions.value[item.id] = decision;
   });
 };
 
-const applyAllDecisions = async () => {
+const applyAllDecisions = async (): Promise<void> => {
   try {
     loading.value = true;
-    const decisions = [];
-
-    // Collect all decisions for selected items
-    selectedPendingItems.value.forEach(item => {
-      const decision = itemDecisions.value[item.id];
-      if (decision) {
-        decisions.push({
-          chat_id: props.chatId,
-          knowledge_id: item.id,
-          decision: decision
-        });
-      }
-    });
+    const decisions = selectedPendingItems.value
+      .filter(item => itemDecisions.value[item.id])
+      .map(item => ({
+        chat_id: props.chatId as string,
+        knowledge_id: item.id,
+        decision: itemDecisions.value[item.id],
+      }));
 
     // Apply decisions in parallel - eliminates N+1 sequential API calls
     // Issue #552: Fixed path to match backend (hyphen instead of underscore)
@@ -418,7 +420,6 @@ const applyAllDecisions = async () => {
     showToast(t('knowledge.persistence.decisionsApplied', { count: decisions.length }), 'success');
     emit('decisions-applied', decisions);
     closeDialog();
-
   } catch (error) {
     logger.error('Failed to apply decisions:', error);
     showToast(t('knowledge.persistence.decisionsApplyFailed'), 'error');
@@ -427,7 +428,7 @@ const applyAllDecisions = async () => {
   }
 };
 
-const compileChat = async () => {
+const compileChat = async (): Promise<void> => {
   try {
     loading.value = true;
 
@@ -435,15 +436,14 @@ const compileChat = async () => {
     const response = await apiService.post(`${getApiBase()}/chat-knowledge/compile`, {
       chat_id: props.chatId,
       title: compileOptions.value.title || null,
-      include_system_messages: compileOptions.value.includeSystemMessages
-    });
+      include_system_messages: compileOptions.value.includeSystemMessages,
+    }) as { success: boolean; compiled: unknown };
 
     if (response.success) {
       showToast(t('knowledge.persistence.compiledSuccess'), 'success');
       emit('chat-compiled', response.data?.compiled);
       closeDialog();
     }
-
   } catch (error) {
     logger.error('Failed to compile chat:', error);
     showToast(t('knowledge.persistence.compileFailed'), 'error');
@@ -452,18 +452,16 @@ const compileChat = async () => {
   }
 };
 
-const closeDialog = () => {
+const closeDialog = (): void => {
   emit('close');
 };
 
-// Lifecycle
 onMounted(() => {
   if (props.visible && props.chatId) {
     loadPendingItems();
   }
 });
 
-// Watchers
 watch(() => props.visible, (newVal) => {
   if (newVal && props.chatId) {
     loadPendingItems();
