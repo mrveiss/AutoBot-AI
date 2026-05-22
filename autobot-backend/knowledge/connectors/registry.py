@@ -19,6 +19,8 @@ Usage:
     running = ConnectorRegistry.get("my-connector-id")
 """
 
+from __future__ import annotations
+
 import asyncio
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Type
