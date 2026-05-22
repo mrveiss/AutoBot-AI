@@ -240,15 +240,15 @@ const handleTerminalData = (data: string) => {
     return
   }
 
-  // Issue #749: Track line buffer for tab completion
-  updateLineBuffer(data)
-
-  // Issue #749: Emit commandExecuted when Enter is pressed
+  // Issue #749: Emit commandExecuted when Enter is pressed (BEFORE buffer clear)
   if (data === '\r' || data === '\n') {
     if (currentLineBuffer.value.trim()) {
       emit('commandExecuted', currentLineBuffer.value.trim())
     }
   }
+
+  // Issue #749: Track line buffer for tab completion
+  updateLineBuffer(data)
 
   // Emit data for normal processing
   emit('data', data)
