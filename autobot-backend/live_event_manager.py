@@ -5,7 +5,7 @@
 Live Event Manager - Scoped Real-Time Events (#1408)
 
 In-memory channel router for WebSocket-based entity-scoped event streaming.
-Supports channels: agent:{id}, task:{id}, workflow:{id}, global
+Supports channels: agent:{id}, task:{id}, workflow:{id}, heartbeat:{id}, global
 """
 
 import asyncio
@@ -19,11 +19,11 @@ from autobot_shared.singleton_factory import lazy_singleton
 
 logger = get_logger(__name__)
 
-_VALID_PREFIXES = {"agent", "task", "workflow", "global"}
+_VALID_PREFIXES = {"agent", "task", "workflow", "global", "heartbeat"}
 
 
 def _is_valid_channel(channel: str) -> bool:
-    """Return True if channel matches agent:{id}, task:{id}, workflow:{id}, or global."""
+    """Return True if channel matches agent:{id}, task:{id}, workflow:{id}, heartbeat:{id}, or global."""
     if channel == "global":
         return True
     parts = channel.split(":", 1)
