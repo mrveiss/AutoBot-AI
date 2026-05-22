@@ -62,6 +62,7 @@ class SemanticLLMCache:
         # Parallel arrays: embeddings matrix + (cache_key, response) pairs.
         self._embeddings: list[np.ndarray] = []
         self._entries: list[tuple[str, Any]] = []  # (cache_key, CachedResponse)
+        self._entry_keys: set[str] = set()
         self._lock = asyncio.Lock()
 
         self._stats = {"semantic_hits": 0, "semantic_misses": 0, "entries": 0}
@@ -162,17 +163,20 @@ class SemanticLLMCache:
     def evict(self, count: int) -> int:
         return self._exact.evict(count)
 
-    def clear(self) -> None:
+    async def clear(self) -> None:
         self._exact.clear()
-        self._embeddings.clear()
-        self._entries.clear()
-        self._stats["entries"] = 0
+        async with self._lock:
+            self._embeddings.clear()
+            self._entries.clear()
+            self._entry_keys.clear()
+            self._stats["entries"] = 0
 
     async def clear_all(self) -> dict:
         result = await self._exact.clear_all()
         async with self._lock:
             self._embeddings.clear()
             self._entries.clear()
+            self._entry_keys.clear()
             self._stats["entries"] = 0
         return result
 
@@ -214,15 +218,16 @@ class SemanticLLMCache:
         return None, None
 
     def _add_entry(self, embedding: np.ndarray, cache_key: str, response: Any) -> None:
-        """
-        Insert a new embedding+entry pair.  Evicts the oldest when full.
-        Must be called inside self._lock.
-        """
+        """Insert a new embedding+entry pair. Deduplicates by cache_key. Evicts oldest when full.
+        Must be called inside self._lock."""
+        if cache_key in self._entry_keys:
+            return
         if len(self._entries) >= self._max_entries:
             self._embeddings.pop(0)
-            self._entries.pop(0)
+            evicted_key, _ = self._entries.pop(0)
+            self._entry_keys.discard(evicted_key)
             self._stats["entries"] = max(0, self._stats["entries"] - 1)
-
         self._embeddings.append(embedding)
         self._entries.append((cache_key, response))
+        self._entry_keys.add(cache_key)
         self._stats["entries"] += 1
