@@ -339,6 +339,35 @@ Perf impact on [memory wake-up / KB search / entity lookup / tool dispatch / hoo
 
 ---
 
+## Decorator Order Fix Tool
+
+`tools/lint/check_decorator_order.py` enforces the `@router.*` / `@with_error_handling` decorator order (see #6558, #6633, #6638).
+
+**Check-only (default, used by pre-commit):**
+
+```bash
+python3 tools/lint/check_decorator_order.py <file-or-dir> ...
+```
+
+**Auto-fix mode (opt-in):**
+
+```bash
+pip install libcst   # one-time
+python3 tools/lint/check_decorator_order.py --fix <file-or-dir> ...
+```
+
+`--fix` uses libcst to correct violations in place while preserving formatting, comments, and docstrings.
+It fixes both patterns in a single pass:
+
+- **Pattern A** — `@with_error_handling` above `@router.*`: swapped so `@router.*` is outermost.
+- **Pattern B** — two adjacent `@with_error_handling` decorators: outer duplicate removed.
+
+The pre-commit hook entry in `.pre-commit-config.yaml` does **not** include `--fix` — CI always runs check-only so it never silently mutates files.  `--fix` is a developer convenience for bulk remediation.
+
+`libcst` is a soft dependency: if not installed, `--fix` prints an error and exits 1.
+
+---
+
 ## AUTOBOT_* Environment Variables
 
 All `AUTOBOT_*` environment variables must be registered in
