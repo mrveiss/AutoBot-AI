@@ -6,6 +6,8 @@ Source Connector Data Models
 
 Issue #1254: Defines the dataclass models used across the connector framework —
 SourceInfo, ContentResult, ChangeInfo, ConnectorConfig, ConnectorStatus, SyncResult.
+Issue #8145: Added auth_type field to ConnectorConfig for API introspection.
+Issue #8146: Added resumed_from_checkpoint to SyncResult.
 """
 
 from dataclasses import dataclass, field
@@ -73,6 +75,9 @@ class ConnectorConfig:
     # Issue #4421: readiness tier copied from the connector class at instance-
     # creation time (0 = zero-config, 1 = free key/env var, 2 = credentials).
     tier: int = 0
+    # Issue #8145: auth type string derived from connector_class.auth_schema().__name__,
+    # or None for connectors that declare no typed auth.
+    auth_type: str | None = None
 
 
 @dataclass
@@ -99,3 +104,6 @@ class SyncResult:
     updated: int = 0
     deleted: int = 0
     errors: List[str] = field(default_factory=list)
+    # Issue #8146: True when sync resumed from a Redis checkpoint instead of
+    # starting from scratch (crash-recovery path).
+    resumed_from_checkpoint: bool = False
