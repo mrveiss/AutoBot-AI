@@ -2,11 +2,13 @@
 
 > Tracks the consolidation effort under umbrella issue [#6495](https://github.com/mrveiss/AutoBot-AI/issues/6495). This document is updated as each phase lands.
 >
-> - **Phase 1 — Task queues** ([#6505](https://github.com/mrveiss/AutoBot-AI/issues/6505)): _pending_
+> - **Phase 1 — Task queues** ([#6505](https://github.com/mrveiss/AutoBot-AI/issues/6505)): _pending_ — background_task_manager migration to Celery; task_queue.py retained as [#6468](https://github.com/mrveiss/AutoBot-AI/issues/6468) carve-out
 > - **Phase 2 — Progress trackers** ([#6506](https://github.com/mrveiss/AutoBot-AI/issues/6506)): **landed**
-> - **Phase 3 — Periodic schedulers** ([#6507](https://github.com/mrveiss/AutoBot-AI/issues/6507)): partially landed
->   - Beat deployment ([#6555](https://github.com/mrveiss/AutoBot-AI/issues/6555)): **landed (this PR)**
->   - ConnectorScheduler multi-worker fix ([#6556](https://github.com/mrveiss/AutoBot-AI/issues/6556)): **landed**
+> - **Phase 3 — Periodic schedulers** ([#6507](https://github.com/mrveiss/AutoBot-AI/issues/6507)): **landed**
+>   - Beat deployment ([#6555](https://github.com/mrveiss/AutoBot-AI/issues/6555)): landed
+>   - ConnectorScheduler multi-worker fix ([#6556](https://github.com/mrveiss/AutoBot-AI/issues/6556)): landed
+>   - cron_scheduler.py dead stub: deleted
+> - **Wakeup coalescing** ([#6472](https://github.com/mrveiss/AutoBot-AI/issues/6472)): **landed** — dedup by (agent_id, task_id), merged_count observability column
 
 The async-work stack covers three sub-domains: **queue work → execute → report progress → schedule next**. Historically each had two or three parallel implementations; #6495 consolidates them onto one canonical primitive per sub-domain.
 
@@ -151,6 +153,37 @@ All four workers call `begin_leader_election()` at startup
 
 - `services/scheduling/cron_scheduler.py` — 44 LOC stub with no execution loop,
   zero callers. Deleted in [#6507](https://github.com/mrveiss/AutoBot-AI/issues/6507).
+
+## Wakeup coalescing ([#6472](https://github.com/mrveiss/AutoBot-AI/issues/6472))
+
+### Problem
+
+Without deduplication, N simultaneous wakeup signals for the same
+`(agent_id, task_id)` — e.g., `@-mention + assignment + cron` firing within
+the same second — insert N rows and trigger N redundant agent runs, burning N×
+tokens for the same effective work.
+
+### Solution
+
+`HeartbeatScheduler.wakeup()` checks for an existing un-consumed row with the
+same `(agent_id, task_id)` before inserting. When found:
+
+1. Context is merged (incoming keys win on conflict).
+2. Priority is updated to `max(existing, incoming)`.
+3. `merged_count` is incremented (observability column; default 0 on clean rows).
+4. The existing row id is returned — no new row is inserted.
+
+Coalescing is skipped when `context` is absent or does not contain `task_id`,
+so non-task wakeups (interval ticks, manual triggers) are unaffected.
+
+The `FOR UPDATE` lock on the existing row prevents a TOCTOU race where two
+concurrent calls both see "no existing row" and both insert.
+
+### Schema
+
+`agent_wakeup_requests.merged_count INTEGER NOT NULL DEFAULT 0` — migration
+`20260522_021`. Read this column in Grafana or the `/heartbeat/{agent_id}/wakeup`
+API response to tune coalescing thresholds.
 
 ## Cross-cutting
 

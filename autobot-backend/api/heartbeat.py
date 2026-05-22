@@ -306,4 +306,5 @@ def _wakeup_to_response(req: AgentWakeupRequest) -> WakeupRequestResponse:
         consumed=req.consumed_at is not None,
         consumed_at=(req.consumed_at.isoformat() if req.consumed_at else None),
         created_at=(req.created_at.isoformat() if req.created_at else None),
+        merged_count=req.merged_count if req.merged_count is not None else 0,
     )

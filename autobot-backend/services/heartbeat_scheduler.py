@@ -16,7 +16,7 @@ import asyncio
 import uuid
 from typing import Any, Dict, Tuple
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from autobot_shared.logging_manager import get_logger
@@ -106,8 +106,43 @@ class HeartbeatScheduler:
         priority: int = 0,
         reason: str | None = None,
     ) -> str:
-        """Queue an event-driven wakeup request. Returns the request UUID (#1407)."""
+        """Queue an event-driven wakeup request. Returns the request UUID (#1407).
+
+        Deduplicates by (agent_id, task_id) for un-consumed requests (#6472).
+        When a matching un-consumed row exists: merges contexts (incoming wins
+        on conflict), takes max priority, increments merged_count, and returns
+        the existing request id.  If task_id is absent from context no
+        coalescing is attempted.
+        """
+        task_id: str | None = (context or {}).get("task_id")
+
         async with self._session_factory() as session:
+            if task_id is not None:
+                existing_result = await session.execute(
+                    select(AgentWakeupRequest)
+                    .where(
+                        AgentWakeupRequest.agent_id == agent_id,
+                        AgentWakeupRequest.consumed_at.is_(None),
+                        AgentWakeupRequest.context["task_id"].astext == task_id,
+                    )
+                    .with_for_update()
+                    .limit(1)
+                )
+                existing = existing_result.scalar_one_or_none()
+                if existing is not None:
+                    existing.context = {**(existing.context or {}), **(context or {})}
+                    existing.priority = max(existing.priority, priority)
+                    existing.merged_count = existing.merged_count + 1
+                    await session.commit()
+                    req_id = str(existing.id)
+                    logger.debug(
+                        "Wakeup coalesced for agent=%s task_id=%s (merged_count=%d)",
+                        agent_id,
+                        task_id,
+                        existing.merged_count,
+                    )
+                    return req_id
+
             state = await _get_or_create_state(session, agent_id)
             req = AgentWakeupRequest(
                 id=uuid.uuid4(),
@@ -120,6 +155,7 @@ class HeartbeatScheduler:
             session.add(req)
             await session.commit()
             req_id = str(req.id)
+
         logger.info("Wakeup request %s queued for agent %s", req_id, agent_id)
         if agent_id not in self._tasks and self._running:
             asyncio.create_task(

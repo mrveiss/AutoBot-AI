@@ -162,6 +162,7 @@ class AgentWakeupRequest(Base):
     reason = Column(String(255), nullable=True)
     consumed_at = Column(DateTime, nullable=True)
     consumed_by_run_id = Column(Uuid(as_uuid=True), nullable=True)
+    merged_count = Column(Integer, nullable=False, default=0)
 
     runtime_state = relationship("AgentRuntimeState", back_populates="wakeup_requests")
 
