@@ -1,7 +1,15 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Centralized context window management for LLM interactions."""
+"""Centralized context window management for LLM interactions.
+
+Issue #7351: architecture_family-aware compression bypass.  Non-transformer
+models (state_space, linear_attention, hybrid) carry constant inference memory
+and do not face the quadratic attention cost that justifies the 4K/8K
+compression trigger.  For those families the model's declared
+``context_window_tokens`` is used directly as the compression threshold
+instead of hard-capping at 8192.
+"""
 
 from pathlib import Path
 from typing import Dict, List
@@ -12,6 +20,13 @@ from autobot_shared.logging_manager import get_logger
 from constants.model_constants import ModelConfig, ModelConstants
 
 logger = get_logger(__name__)
+
+# Architecture families whose cost curve does not require transformer caps.
+# Matches the string values of llm_shared.types.ArchitectureFamily; kept as a
+# frozenset of strings here to avoid a circular import with llm_shared.
+_NON_TRANSFORMER_FAMILIES: frozenset[str] = frozenset(
+    {"state_space", "linear_attention", "hybrid"}
+)
 
 # Lazy singleton — imported on first call to avoid circular imports.
 _compression_service = None
@@ -195,11 +210,35 @@ class ContextWindowManager:
         max_tokens = self.get_max_history_tokens(model_name)
         return estimated_tokens > max_tokens
 
-    def get_compression_threshold(self, model_name: str | None = None) -> int:
-        """Get the compression_threshold for a model (defaults to 8192).
+    def get_architecture_family(self, model_name: str | None = None) -> str:
+        """Return the architecture_family for a model (defaults to 'transformer').
 
-        Issue #3770: Models whose context_window_tokens <= 8192 trigger
-        compression when retrieved content exceeds this value.
+        Issue #7351: reads the ``architecture_family`` key from the YAML config
+        entry for the model.  When absent or unknown the safe default is
+        ``'transformer'``, preserving existing compression behaviour.
+
+        Args:
+            model_name: Optional model name, uses current if not specified.
+
+        Returns:
+            Architecture family string (e.g. ``'transformer'``, ``'state_space'``).
+        """
+        model = model_name or self.current_model
+        if model not in self.config["models"]:
+            model = self.config["models"]["default"]["name"]
+        return self.config["models"][model].get("architecture_family", "transformer")
+
+    def get_compression_threshold(self, model_name: str | None = None) -> int:
+        """Get the compression threshold for a model.
+
+        Issue #3770: transformer models whose context_window_tokens <= 8192
+        trigger compression when retrieved content exceeds this value.
+
+        Issue #7351: non-transformer families (state_space, linear_attention,
+        hybrid) return the model's declared ``context_window_tokens`` instead of
+        the 8192 default so that large-context models are not falsely capped.
+        When ``context_window_tokens`` is also absent the fallback is 8192
+        (same safe default as before, still transformer-conservative).
 
         Args:
             model_name: Optional model name, uses current if not specified.
@@ -210,13 +249,32 @@ class ContextWindowManager:
         model = model_name or self.current_model
         if model not in self.config["models"]:
             model = self.config["models"]["default"]["name"]
-        return self.config["models"][model].get("compression_threshold", 8192)
+
+        entry = self.config["models"][model]
+        family = entry.get("architecture_family", "transformer")
+
+        if family in _NON_TRANSFORMER_FAMILIES:
+            # Use the model's declared context window as the threshold —
+            # no artificial cap for non-attention architectures.
+            threshold = entry.get("context_window_tokens", 8192)
+            logger.debug(
+                "get_compression_threshold: %s (family=%s) → %d (no cap)",
+                model,
+                family,
+                threshold,
+            )
+            return threshold
+
+        return entry.get("compression_threshold", 8192)
 
     async def async_should_compress(self, content_tokens: int, model_name: str | None = None) -> bool:
         """Return True when content_tokens exceed the model compression threshold.
 
         Issue #3770: Delegates to ContextCompressionService which applies the
         large-model guard (threshold > 8192 -> always False).
+
+        Issue #7351: non-transformer families bypass compression entirely —
+        their cost curve does not justify the 4K/8K trigger.
 
         Args:
             content_tokens: Estimated token count of content to evaluate.
@@ -226,6 +284,14 @@ class ContextWindowManager:
             True when compression should be applied.
         """
         model = model_name or self.current_model
+        family = self.get_architecture_family(model)
+        if family in _NON_TRANSFORMER_FAMILIES:
+            logger.debug(
+                "async_should_compress: %s (family=%s) → False (bypass)",
+                model,
+                family,
+            )
+            return False
         svc = _get_compression_service()
         return await svc.should_compress(model, content_tokens)
 
