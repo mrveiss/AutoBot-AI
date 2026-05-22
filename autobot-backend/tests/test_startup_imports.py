@@ -349,7 +349,8 @@ def test_strict_mode_raises_on_router_import_failure(monkeypatch: pytest.MonkeyP
 
     monkeypatch.setenv("AUTOBOT_FEATURE_ROUTERS_STRICT", "1")
     monkeypatch.setattr(feature_routers.config.misc, "feature_routers_strict", "1")
-    monkeypatch.setattr(feature_routers, "importlib", type("_FakeImportlib", (), {"import_module": staticmethod(_failing_import)})())
+    _fake_importlib = type("_FakeImportlib", (), {"import_module": staticmethod(_failing_import)})()
+    monkeypatch.setattr(feature_routers, "importlib", _fake_importlib)
 
     with pytest.raises(RuntimeError, match="AUTOBOT_FEATURE_ROUTERS_STRICT=1"):
         feature_routers.load_feature_routers()
