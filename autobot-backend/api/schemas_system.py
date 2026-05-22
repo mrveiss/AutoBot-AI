@@ -2347,6 +2347,7 @@ class WakeupRequestResponse(BaseModel):
     consumed: bool
     consumed_at: str | None
     created_at: str | None
+    merged_count: int = 0
 
 
 class RunEventResponse(BaseModel):

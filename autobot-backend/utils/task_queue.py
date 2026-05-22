@@ -6,6 +6,15 @@ Robust task queue system for AutoBot with Redis backend.
 
 This module provides a comprehensive task queue implementation with
 priority handling, retry logic, and distributed task execution.
+
+Architecture note — #6505 carve-out (#6468):
+  The Phase 1 async-consolidation plan (GH#6505) migrates most task-queue
+  work onto Celery.  This module is explicitly retained as a carve-out
+  because the NPU worker manager (initialization/lifespan.py) needs atomic
+  Redis Streams claim semantics (SETNX-based exclusive ownership per
+  GH#6468) that Celery does not expose.  Do NOT migrate or delete this
+  file until GH#6468 is resolved.  See docs/architecture/async-work.md
+  for the decision tree.
 """
 
 import asyncio
