@@ -328,9 +328,13 @@ const {
   selectAll,
   clear: deselectAllItems,
   selectedItems: selectedPendingItems,
-  someSelected: hasSelectedItems,
+  selectedCount,
   selected: selectedKeys,
 } = useBatchSelection<PendingKnowledgeItem, string>(pendingItems, item => item.id);
+
+// someSelected is false when ALL items are selected — use selectedCount > 0 so
+// bulk-action buttons remain enabled when the user selects all (GH#8395).
+const hasSelectedItems = computed(() => selectedCount.value > 0);
 
 const compileOptions = ref({
   includeSystemMessages: false,
