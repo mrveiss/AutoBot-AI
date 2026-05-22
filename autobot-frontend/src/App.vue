@@ -15,7 +15,7 @@
           <div class="shrink-0 flex items-center">
             <button
               @click="toggleSystemStatus"
-              class="flex items-center space-x-3 hover:bg-autobot-bg-tertiary rounded-md px-2 py-1 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-autobot-primary"
+              class="flex items-center gap-3 hover:bg-autobot-bg-tertiary rounded-md px-2 py-1 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-autobot-primary"
               :title="getSystemStatusTooltip()"
               :aria-label="getSystemStatusAriaLabel()"
             >
@@ -39,8 +39,8 @@
 
           <!-- Desktop Navigation -->
           <nav id="navigation" class="hidden lg:block" role="navigation" :aria-label="$t('nav.mainNavigation')">
-            <div class="hidden lg:flex items-center space-x-8">
-              <div ref="navContainerRef" class="flex items-center space-x-4">
+            <div class="hidden lg:flex items-center gap-8">
+              <div ref="navContainerRef" class="flex items-center gap-4">
                 <template v-for="item in visibleNavItems" :key="item.to">
                 <router-link
                   :to="item.to"
@@ -51,7 +51,7 @@
                   }"
                   class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 shrink-0"
                 >
-                  <div class="flex items-center space-x-1">
+                  <div class="flex items-center gap-1">
                     <svg class="w-4 h-4" :fill="item.iconStroke ? 'none' : 'currentColor'" :stroke="item.iconStroke ? 'currentColor' : undefined" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                       <template v-if="item.iconPaths">
                         <path v-for="(p, pi) in item.iconPaths" :key="pi" :d="p" :fill-rule="item.iconRule" :clip-rule="item.iconRule"></path>
@@ -77,7 +77,7 @@
                   :title="$t('nav.slmAdminTitle')"
                   :aria-label="$t('nav.slmAdminTitle')"
                 >
-                  <div class="flex items-center space-x-1">
+                  <div class="flex items-center gap-1">
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                       <path fill-rule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"></path>
                     </svg>
@@ -93,12 +93,12 @@
           </nav>
 
           <!-- Right side - Status and controls -->
-          <div class="flex items-center space-x-4">
+          <div class="flex items-center gap-4">
             <!-- User Profile Button -->
             <button
               v-if="userStore.isAuthenticated"
               @click="showProfileModal = true"
-              class="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium text-autobot-text-primary hover:bg-autobot-bg-tertiary transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-autobot-primary"
+              class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-autobot-text-primary hover:bg-autobot-bg-tertiary transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-autobot-primary"
               :title="$t('nav.profileSettings')"
               :aria-label="$t('nav.profileSettings')"
             >
@@ -160,7 +160,7 @@
               }"
               class="w-full text-start px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
             >
-              <div class="flex items-center space-x-2">
+              <div class="flex items-center gap-2">
                 <svg class="w-4 h-4" :fill="item.iconStroke ? 'none' : 'currentColor'" :stroke="item.iconStroke ? 'currentColor' : undefined" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                   <template v-if="item.iconPaths">
                     <path v-for="(p, pi) in item.iconPaths" :key="pi" :d="p" :fill-rule="item.iconRule" :clip-rule="item.iconRule"></path>
@@ -181,7 +181,7 @@
               class="w-full text-start px-3 py-2 rounded text-sm font-medium transition-colors duration-150 block text-autobot-text-primary hover:bg-autobot-bg-tertiary"
               :aria-label="$t('nav.slmAdminTitle')"
             >
-              <div class="flex items-center space-x-2">
+              <div class="flex items-center gap-2">
                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                   <path fill-rule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"></path>
                 </svg>
@@ -202,7 +202,7 @@
               @click="showProfileModal = true; closeMobileNav()"
               class="w-full text-start px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 text-autobot-text-primary hover:bg-autobot-bg-tertiary"
             >
-              <div class="flex items-center space-x-2">
+              <div class="flex items-center gap-2">
                 <div class="w-4 h-4 rounded-full bg-autobot-primary flex items-center justify-center text-white text-xs font-bold">
                   {{ displayUsername?.charAt(0)?.toUpperCase() || 'U' }}
                 </div>
