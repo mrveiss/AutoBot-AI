@@ -32,6 +32,9 @@ class CircuitState(Enum):
     HALF_OPEN = "half_open"  # Testing if service has recovered
 
 
+CircuitBreakerState = CircuitState
+
+
 @dataclass
 class CircuitBreakerConfig:
     """Configuration for circuit breaker"""
@@ -79,6 +82,26 @@ class CircuitBreakerOpenError(Exception):
         )
 
 
+class CircuitBreakerTimeout(Exception):
+    """Raised when an async call exceeds the circuit breaker timeout."""
+
+
+@dataclass
+class CircuitBreakerStats:
+    """Call statistics — attribute-access compatible with services.resilience API."""
+
+    total_calls: int = 0
+    successful_calls: int = 0
+    failed_calls: int = 0
+    blocked_calls: int = 0
+    state_changes: int = 0
+    average_response_time: float = 0.0
+    slow_calls: int = 0
+    last_failure_time: float | None = None
+    last_failure_error: str | None = None
+    last_state_change: float = 0.0
+
+
 @dataclass
 class CallRecord:
     """Record of a service call"""
@@ -110,15 +133,7 @@ class CircuitBreaker:
         self._lock = Lock()
 
         # Statistics
-        self.stats = {
-            "total_calls": 0,
-            "successful_calls": 0,
-            "failed_calls": 0,
-            "blocked_calls": 0,
-            "state_changes": 0,
-            "average_response_time": 0.0,
-            "slow_calls": 0,
-        }
+        self.stats = CircuitBreakerStats(last_state_change=time.time())
 
     def _should_monitor_exception(self, exception: Exception) -> bool:
         """Check if an exception should trigger circuit breaker logic"""
@@ -146,14 +161,14 @@ class CircuitBreaker:
             self.call_history = self.call_history[-self.max_history_size :]
 
         # Update statistics
-        self.stats["total_calls"] += 1
+        self.stats.total_calls += 1
         if success:
-            self.stats["successful_calls"] += 1
+            self.stats.successful_calls += 1
         else:
-            self.stats["failed_calls"] += 1
+            self.stats.failed_calls += 1
 
         if duration > self.config.slow_call_threshold:
-            self.stats["slow_calls"] += 1
+            self.stats.slow_calls += 1
 
     def _evaluate_performance(self) -> bool:
         """Evaluate if performance metrics indicate the service should be opened"""
@@ -196,7 +211,7 @@ class CircuitBreaker:
             logger.info("Circuit breaker %s: Transitioning to HALF_OPEN", self.name)
             self.state = CircuitState.HALF_OPEN
             self.state_change_time = current_time
-            self.stats["state_changes"] += 1
+            self.stats.state_changes += 1
             return True
 
     def _can_execute(self) -> bool:
@@ -232,7 +247,7 @@ class CircuitBreaker:
                     self.failure_count = 0
                     self.success_count = 0
                     self.state_change_time = time.time()
-                    self.stats["state_changes"] += 1
+                    self.stats.state_changes += 1
 
             # Reset failure count on successful call in CLOSED state
             elif self.state == CircuitState.CLOSED:
@@ -261,7 +276,7 @@ class CircuitBreaker:
                 self.state = CircuitState.OPEN
                 self.success_count = 0
                 self.state_change_time = time.time()
-                self.stats["state_changes"] += 1
+                self.stats.state_changes += 1
 
             elif self.state == CircuitState.HALF_OPEN:
                 # Any failure in half-open state opens the circuit
@@ -269,12 +284,12 @@ class CircuitBreaker:
                 self.state = CircuitState.OPEN
                 self.success_count = 0
                 self.state_change_time = time.time()
-                self.stats["state_changes"] += 1
+                self.stats.state_changes += 1
 
     async def call_async(self, func: Callable, *args, **kwargs) -> Any:
         """Execute an async function through the circuit breaker"""
         if not self._can_execute():
-            self.stats["blocked_calls"] += 1
+            self.stats.blocked_calls += 1
             raise CircuitBreakerOpenError(self.name, self.failure_count, self.last_failure_time)
 
         start_time = time.time()
@@ -307,7 +322,7 @@ class CircuitBreaker:
     def call_sync(self, func: Callable, *args, **kwargs) -> Any:
         """Execute a synchronous function through the circuit breaker"""
         if not self._can_execute():
-            self.stats["blocked_calls"] += 1
+            self.stats.blocked_calls += 1
             raise CircuitBreakerOpenError(self.name, self.failure_count, self.last_failure_time)
 
         start_time = time.time()
@@ -323,6 +338,10 @@ class CircuitBreaker:
             self._record_failure(duration, e)
             raise e
 
+    def call(self, func: Callable, *args, **kwargs) -> Any:
+        """Synchronous call with circuit breaker protection (services.resilience API compat)."""
+        return self.call_sync(func, *args, **kwargs)
+
     def get_state(self) -> Dict[str, Any]:
         """Get current circuit breaker state"""
         current_time = time.time()
@@ -337,7 +356,7 @@ class CircuitBreaker:
         else:
             avg_response_time = 0.0
 
-        self.stats["average_response_time"] = avg_response_time
+        self.stats.average_response_time = avg_response_time
 
         return {
             "name": self.name,
@@ -353,7 +372,15 @@ class CircuitBreaker:
                 "success_threshold": self.config.success_threshold,
                 "timeout": self.config.timeout,
             },
-            "stats": self.stats.copy(),
+            "stats": {
+                "total_calls": self.stats.total_calls,
+                "successful_calls": self.stats.successful_calls,
+                "failed_calls": self.stats.failed_calls,
+                "blocked_calls": self.stats.blocked_calls,
+                "state_changes": self.stats.state_changes,
+                "average_response_time": self.stats.average_response_time,
+                "slow_calls": self.stats.slow_calls,
+            },
             "recent_performance": self._get_recent_performance(),
         }
 
@@ -402,15 +429,10 @@ class CircuitBreaker:
             self.last_failure_time = 0.0
             self.state_change_time = time.time()
             self.call_history.clear()
-            self.stats = {
-                "total_calls": 0,
-                "successful_calls": 0,
-                "failed_calls": 0,
-                "blocked_calls": 0,
-                "state_changes": self.stats["state_changes"] + 1,
-                "average_response_time": 0.0,
-                "slow_calls": 0,
-            }
+            self.stats = CircuitBreakerStats(
+                state_changes=self.stats.state_changes + 1,
+                last_state_change=time.time(),
+            )
 
 
 class CircuitBreakerManager:
@@ -443,6 +465,31 @@ class CircuitBreakerManager:
         """Reset all circuit breakers"""
         for cb in self.circuit_breakers.values():
             cb.reset()
+
+    # services.resilience-compatible aliases
+    def get_breaker(self, service_name: str, config: CircuitBreakerConfig | None = None) -> CircuitBreaker:
+        """Alias for get_circuit_breaker (services.resilience API compat)."""
+        return self.get_circuit_breaker(service_name, config)
+
+    def get_status(self) -> Dict[str, Dict[str, Any]]:
+        """Return flat per-breaker status (services.resilience API compat)."""
+        with self._lock:
+            return {
+                name: {
+                    "state": cb.state.value,
+                    "total_calls": cb.stats.total_calls,
+                    "successful_calls": cb.stats.successful_calls,
+                    "failed_calls": cb.stats.failed_calls,
+                    "blocked_calls": cb.stats.blocked_calls,
+                    "state_changes": cb.stats.state_changes,
+                    "last_failure": cb.stats.last_failure_error,
+                }
+                for name, cb in self.circuit_breakers.items()
+            }
+
+    def reset_breaker(self, service_name: str) -> None:
+        """Alias for reset_circuit_breaker (services.resilience API compat)."""
+        self.reset_circuit_breaker(service_name)
 
 
 get_circuit_breaker_manager = lazy_singleton(CircuitBreakerManager)
