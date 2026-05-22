@@ -35,6 +35,7 @@ Config keys (inside ``config.config``)
 """
 
 import asyncio
+import hashlib
 import json
 import sys
 import tempfile
@@ -466,7 +467,10 @@ class ExternalConnectorAdapter(AbstractConnector):
             if field_name in data:
                 metadata[field_name] = data[field_name]
 
-        source_id = "ext:%s:%s" % (stream_name, hash(content_text) & 0xFFFFFFFF)
+        source_id = "ext:%s:%s" % (
+            stream_name,
+            hashlib.md5(content_text.encode("utf-8"), usedforsecurity=False).hexdigest()[:12],
+        )
 
         return ContentResult(
             source_id=source_id,

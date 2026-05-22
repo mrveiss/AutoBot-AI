@@ -59,6 +59,17 @@ class ConnectorConfig:
     """Configuration for a connector instance.
 
     Stored in Redis under key ``connector:{connector_id}``.
+
+    The ``config`` dict is type-specific.  For ``external_adapter`` connectors
+    (Issue #8150) the following keys are recognised:
+
+    * ``entrypoint`` (str) — path to the connector package's main.py
+    * ``source_config`` (dict) — credentials / settings passed as --config JSON
+    * ``selected_streams`` (list[str]) — streams to ingest; empty = all streams
+    * ``field_map`` (dict) — per-stream mapping to title/body/metadata fields;
+      unmapped fields are serialized as JSON and appended to content
+    * ``state_key`` (str) — Redis key for the STATE checkpoint; defaults to
+      ``connector:{connector_id}:external_state``
     """
 
     connector_id: str
