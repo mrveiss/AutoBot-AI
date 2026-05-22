@@ -22,7 +22,7 @@
       <span v-if="host.agent_version" class="meta-badge">v{{ host.agent_version }}</span>
       <span v-if="host.os_info" class="meta-badge">{{ host.os_info }}</span>
       <span v-if="host.ansible_name" class="meta-badge">
-        <i class="fas fa-terminal"></i> {{ host.ansible_name }}
+        <Icon name="terminal" /> {{ host.ansible_name }}
       </span>
     </div>
 
@@ -47,7 +47,7 @@
             :aria-label="`Provision ${role} on ${host.hostname}`"
             @click="$emit('provision', host.node_id, role)"
           >
-            <i class="fas fa-play"></i> Provision
+            <Icon name="play" /> Provision
           </button>
         </li>
       </ul>
@@ -56,6 +56,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import type { Host } from '@/composables/useHostInventory'
 import HealthBar from '@/components/admin/HealthBar.vue'

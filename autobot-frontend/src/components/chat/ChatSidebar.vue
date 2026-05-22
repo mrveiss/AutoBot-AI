@@ -11,7 +11,7 @@
         @click="controller.toggleSidebar()"
         :aria-label="store.sidebarCollapsed ? $t('chat.sidebar.expandSidebar') : $t('chat.sidebar.collapseSidebar')"
       >
-        <i :class="store.sidebarCollapsed ? 'fas fa-chevron-right' : 'fas fa-chevron-left'"></i>
+        <Icon :name="store.sidebarCollapsed ? 'chevron-right' : 'chevron-left'" />
       </BaseButton>
       <!--
         Mobile header: close button only.
@@ -30,7 +30,7 @@
           @click="emit('close-mobile')"
           :aria-label="$t('common.close')"
         >
-          <i class="fas fa-times"></i>
+          <Icon name="times" />
         </BaseButton>
       </div>
     </div>
@@ -50,7 +50,7 @@
             class="text-autobot-text-secondary"
             :title="$t('chat.sidebar.selectMultiple')"
           >
-            <i class="fas fa-check-square me-1"></i>{{ $t('common.select') }}
+            <Icon name="check-square" class="me-1" />{{ $t('common.select') }}
           </BaseButton>
           <div v-else class="flex items-center gap-2">
             <span class="text-xs text-autobot-text-secondary">{{ $t('chat.sidebar.nSelected', { count: sessionSelection.selectedCount.value }) }}</span>
@@ -110,7 +110,7 @@
                   :title="$t('common.share')"
                   tabindex="-1"
                 >
-                  <i class="fas fa-share-alt text-xs"></i>
+                  <Icon name="share-alt" class="text-xs" />
                 </BaseButton>
                 <BaseButton
                   variant="ghost"
@@ -120,7 +120,7 @@
                   :title="$t('chat.editName')"
                   tabindex="-1"
                 >
-                  <i class="fas fa-edit text-xs"></i>
+                  <Icon name="edit" class="text-xs" />
                 </BaseButton>
                 <BaseButton
                   variant="ghost"
@@ -130,7 +130,7 @@
                   :title="$t('common.delete')"
                   tabindex="-1"
                 >
-                  <i class="fas fa-trash text-xs"></i>
+                  <Icon name="trash" class="text-xs" />
                 </BaseButton>
               </div>
             </div>
@@ -159,7 +159,7 @@
             @click="controller.createNewSession()"
             :aria-label="$t('chat.sidebar.createNew')"
           >
-            <i class="fas fa-plus me-1"></i>
+            <Icon name="plus" class="me-1" />
             {{ $t('chat.sidebar.new') }}
           </BaseButton>
           <BaseButton
@@ -170,7 +170,7 @@
             :disabled="!store.currentSessionId"
             :aria-label="$t('chat.sidebar.resetChat')"
           >
-            <i class="fas fa-redo me-1"></i>
+            <Icon name="redo" class="me-1" />
             {{ $t('common.reset') }}
           </BaseButton>
           <BaseButton
@@ -181,7 +181,7 @@
             :disabled="!store.currentSessionId"
             :aria-label="$t('chat.sidebar.deleteChat')"
           >
-            <i class="fas fa-trash me-1"></i>
+            <Icon name="trash" class="me-1" />
             {{ $t('common.delete') }}
           </BaseButton>
           <BaseButton
@@ -191,7 +191,7 @@
             @click="controller.loadChatSessions()"
             :aria-label="$t('chat.sidebar.refreshList')"
           >
-            <i class="fas fa-sync me-1"></i>
+            <Icon name="sync" class="me-1" />
             {{ $t('common.refresh') }}
           </BaseButton>
         </div>
@@ -206,7 +206,7 @@
             :disabled="sessionSelection.selectedCount.value === 0"
             :aria-label="$t('chat.sidebar.deleteSelected')"
           >
-            <i class="fas fa-trash me-1.5"></i>
+            <Icon name="trash" class="me-1.5" />
             {{ $t('chat.sidebar.deleteNSelected', { count: sessionSelection.selectedCount.value }) }}
           </BaseButton>
         </div>
@@ -240,7 +240,7 @@
             :loading="isSystemReloading"
             :aria-label="$t('chat.sidebar.reloadSystem')"
           >
-            <i class="fas fa-sync me-1.5"></i>
+            <Icon name="sync" class="me-1.5" />
             {{ isSystemReloading ? $t('chat.sidebar.reloading') : $t('chat.sidebar.reloadSystem') }}
           </BaseButton>
 
@@ -308,6 +308,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 

@@ -15,11 +15,11 @@
           <!-- Header -->
           <div class="modal-header">
             <h3>
-              <i class="fas fa-share-alt"></i>
+              <Icon name="share-alt" />
               {{ $t('analytics.sources.shareSource') }}
             </h3>
             <button class="close-btn" @click="$emit('close')" :aria-label="$t('analytics.sources.form.close')">
-              <i class="fas fa-times"></i>
+              <Icon name="times" />
             </button>
           </div>
 
@@ -27,7 +27,7 @@
           <div class="modal-body">
             <!-- Source info -->
             <div v-if="source" class="source-info-bar">
-              <i :class="source.source_type === 'github' ? 'fab fa-github' : 'fas fa-folder'"></i>
+              <i :class="source.source_type === 'github' ? 'github' : 'folder'"></i>
               <div>
                 <div class="source-name">{{ source.name }}</div>
                 <div class="source-detail">{{ source.repo ?? source.clone_path }}</div>
@@ -50,7 +50,7 @@
                     v-model="form.access"
                     class="sr-only"
                   />
-                  <i :class="level.icon"></i>
+                  <Icon :name="level.icon" />
                   <span>{{ level.label }}</span>
                   <small>{{ level.description }}</small>
                 </label>
@@ -72,7 +72,7 @@
                 autocomplete="off"
               ></textarea>
               <span class="form-hint">
-                <i class="fas fa-info-circle"></i>
+                <Icon name="info-circle" />
                 {{ $t('analytics.sources.share.userIdsHelp') }}
               </span>
             </div>
@@ -82,7 +82,7 @@
               <div class="form-label">{{ $t('analytics.sources.share.currentlySharedWith') }}:</div>
               <div class="shared-tags">
                 <span v-for="uid in currentSharedWith" :key="uid" class="shared-tag">
-                  <i class="fas fa-user"></i>
+                  <Icon name="user" />
                   {{ uid }}
                 </span>
               </div>
@@ -90,7 +90,7 @@
 
             <!-- Submit error -->
             <div v-if="submitError" class="submit-error">
-              <i class="fas fa-exclamation-triangle"></i>
+              <Icon name="exclamation-triangle" />
               {{ submitError }}
             </div>
           </div>
@@ -104,7 +104,7 @@
               :disabled="submitting || !source"
               type="button"
             >
-              <i :class="submitting ? 'fas fa-spinner fa-spin' : 'fas fa-save'"></i>
+              <i :class="submitting ? 'fas fa-spinner fa-spin' : 'save'"></i>
               {{ submitting ? $t('analytics.sources.form.saving') : $t('analytics.sources.share.updateAccess') }}
             </button>
           </div>
@@ -125,6 +125,7 @@
  * Issue #1133: Code Source Registry for codebase analytics.
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFocusTrap } from '@/composables/useFocusTrap'
@@ -168,19 +169,19 @@ const accessLevels = computed(() => [
   {
     value: 'private' as const,
     label: t('analytics.sources.access.private'),
-    icon: 'fas fa-lock',
+    icon: 'lock',
     description: t('analytics.sources.access.onlyYou')
   },
   {
     value: 'shared' as const,
     label: t('analytics.sources.access.shared'),
-    icon: 'fas fa-users',
+    icon: 'users',
     description: t('analytics.sources.access.specificUsers')
   },
   {
     value: 'public' as const,
     label: t('analytics.sources.access.public'),
-    icon: 'fas fa-globe',
+    icon: 'globe',
     description: t('analytics.sources.access.allUsers')
   }
 ])

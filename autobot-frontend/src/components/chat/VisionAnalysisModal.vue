@@ -10,6 +10,7 @@
  * to insert results into the conversation. Issue #1242.
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
@@ -165,11 +166,11 @@ onUnmounted(() => {
       <!-- Header -->
       <div class="modal-header">
         <div class="header-title">
-          <i class="fas fa-eye"></i>
+          <Icon name="eye" />
           <h3>{{ $t('chat.vision.title') }}</h3>
         </div>
         <button @click="emit('close')" class="btn-close">
-          <i class="fas fa-times"></i>
+          <Icon name="times" />
         </button>
       </div>
 
@@ -192,7 +193,7 @@ onUnmounted(() => {
             hidden
           />
           <div v-if="!selectedFile" class="drop-placeholder">
-            <i class="fas fa-cloud-upload-alt"></i>
+            <Icon name="cloud-upload-alt" />
             <p>{{ $t('chat.vision.dropPrompt') }}</p>
             <span class="formats">{{ $t('chat.vision.formats') }}</span>
           </div>
@@ -203,7 +204,7 @@ onUnmounted(() => {
               <span class="filesize">{{ formatFileSize(selectedFile.size) }}</span>
             </div>
             <button @click.stop="clearFile" class="btn-clear">
-              <i class="fas fa-times"></i>
+              <Icon name="times" />
             </button>
           </div>
         </div>
@@ -235,23 +236,23 @@ onUnmounted(() => {
           class="btn-analyze"
           :disabled="!selectedFile || processing"
         >
-          <i :class="processing ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>
+          <i :class="processing ? 'fas fa-spinner fa-spin' : 'search'"></i>
           {{ processing ? $t('chat.vision.analyzing') : $t('chat.vision.analyzeImage') }}
         </button>
 
         <!-- Error -->
         <div v-if="error" class="error-banner">
-          <i class="fas fa-exclamation-triangle"></i>
+          <Icon name="exclamation-triangle" />
           <span>{{ error }}</span>
           <button @click="error = null" class="error-dismiss">
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
           </button>
         </div>
 
         <!-- Results -->
         <div v-if="analysisResult" class="results-section">
           <div class="results-header">
-            <h4><i class="fas fa-check-circle"></i> {{ $t('chat.vision.results') }}</h4>
+            <h4><Icon name="check-circle" /> {{ $t('chat.vision.results') }}</h4>
             <div class="results-meta">
               <span class="meta-badge">
                 {{ (analysisResult.confidence * 100).toFixed(1) }}%
@@ -314,7 +315,7 @@ onUnmounted(() => {
 
             <!-- Raw JSON toggle -->
             <button @click="showRawJson = !showRawJson" class="btn-toggle-json">
-              <i :class="showRawJson ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
+              <Icon :name="showRawJson ? 'chevron-up' : 'chevron-down'" />
               {{ showRawJson ? $t('chat.vision.hideRawJson') : $t('chat.vision.showRawJson') }}
             </button>
             <pre v-if="showRawJson" class="json-display">{{
@@ -327,7 +328,7 @@ onUnmounted(() => {
       <!-- Footer -->
       <div class="modal-footer">
         <button @click="exportResults" class="btn-secondary" :disabled="!analysisResult">
-          <i class="fas fa-download"></i> {{ $t('chat.vision.exportJson') }}
+          <Icon name="download" /> {{ $t('chat.vision.exportJson') }}
         </button>
         <div class="footer-right">
           <button @click="emit('close')" class="btn-secondary">{{ $t('common.cancel') }}</button>
@@ -336,7 +337,7 @@ onUnmounted(() => {
             class="btn-primary"
             :disabled="!analysisResult"
           >
-            <i class="fas fa-paper-plane"></i> {{ $t('chat.vision.sendToChat') }}
+            <Icon name="paper-plane" /> {{ $t('chat.vision.sendToChat') }}
           </button>
         </div>
       </div>

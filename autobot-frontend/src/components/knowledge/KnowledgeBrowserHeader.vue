@@ -10,7 +10,7 @@
         @click="$emit('select-category', cat.value)"
         class="category-tab"
       >
-        <i :class="cat.icon"></i>
+        <Icon :name="cat.icon" />
         {{ cat.label }}
         <span v-if="cat.count > 0" class="category-count">{{ cat.count }}</span>
       </BaseButton>
@@ -53,6 +53,7 @@
  * Issue #184: Split oversized Vue components
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import Icon from '@/components/ui/Icon.vue'
 

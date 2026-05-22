@@ -2,7 +2,7 @@
   <div class="cleanup-statistics">
     <div class="section-header">
       <div class="header-content">
-        <h4><i class="fas fa-broom"></i> {{ $t('knowledge.cleanup.title') }}</h4>
+        <h4><Icon name="broom" /> {{ $t('knowledge.cleanup.title') }}</h4>
         <p class="header-description">
           {{ $t('knowledge.cleanup.description') }}
         </p>
@@ -51,25 +51,25 @@
         <h5>{{ $t('knowledge.cleanup.scanResults') }}</h5>
         <div class="results-grid">
           <div class="result-item" :class="{ 'has-issues': scanResult.issues_found.empty_facts > 0 }">
-            <span class="result-icon"><i class="fas fa-file-circle-minus"></i></span>
+            <span class="result-icon"><Icon name="file" /></span>
             <span class="result-value">{{ scanResult.issues_found.empty_facts || 0 }}</span>
             <span class="result-label">{{ $t('knowledge.cleanup.emptyFacts') }}</span>
           </div>
 
           <div class="result-item" :class="{ 'has-issues': scanResult.issues_found.orphaned_tags > 0 }">
-            <span class="result-icon"><i class="fas fa-tags"></i></span>
+            <span class="result-icon"><Icon name="tags" /></span>
             <span class="result-value">{{ scanResult.issues_found.orphaned_tags || 0 }}</span>
             <span class="result-label">{{ $t('knowledge.cleanup.orphanedTags') }}</span>
           </div>
 
           <div class="result-item" :class="{ 'has-issues': scanResult.issues_found.malformed_metadata > 0 }">
-            <span class="result-icon"><i class="fas fa-code"></i></span>
+            <span class="result-icon"><Icon name="code" /></span>
             <span class="result-value">{{ scanResult.issues_found.malformed_metadata || 0 }}</span>
             <span class="result-label">{{ $t('knowledge.cleanup.metadataIssues') }}</span>
           </div>
 
           <div class="result-item total">
-            <span class="result-icon"><i class="fas fa-exclamation-triangle"></i></span>
+            <span class="result-icon"><Icon name="exclamation-triangle" /></span>
             <span class="result-value">{{ getTotalIssues }}</span>
             <span class="result-label">{{ $t('knowledge.cleanup.totalIssues') }}</span>
           </div>
@@ -84,7 +84,7 @@
           :disabled="isScanning || isCleaning"
           :loading="isScanning"
         >
-          <i v-if="!isScanning" class="fas fa-search"></i>
+          <Icon name="search" v-if="!isScanning" />
           {{ isScanning ? $t('knowledge.cleanup.scanning') : $t('knowledge.cleanup.scanForIssues') }}
         </BaseButton>
 
@@ -94,17 +94,17 @@
           :disabled="!scanResult || getTotalIssues === 0 || isCleaning || isScanning"
           :loading="isCleaning"
         >
-          <i v-if="!isCleaning" class="fas fa-broom"></i>
+          <Icon name="broom" v-if="!isCleaning" />
           {{ isCleaning ? $t('knowledge.cleanup.cleaning') : $t('knowledge.cleanup.runCleanup') }}
         </BaseButton>
       </div>
 
       <!-- Status Messages -->
       <div v-if="statusMessage" :class="['status-message', statusMessage.type]">
-        <i :class="statusMessage.icon"></i>
+        <Icon :name="statusMessage.icon" />
         <span>{{ statusMessage.text }}</span>
         <button @click="statusMessage = null" class="dismiss-btn">
-          <i class="fas fa-times"></i>
+          <Icon name="times" />
         </button>
       </div>
     </div>
@@ -112,6 +112,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -155,10 +156,10 @@ const getTotalIssues = computed(() => {
 // Methods
 const showStatus = (type: StatusMessage['type'], text: string) => {
   const icons = {
-    success: 'fas fa-check-circle',
-    error: 'fas fa-exclamation-circle',
-    warning: 'fas fa-exclamation-triangle',
-    info: 'fas fa-info-circle',
+    success: 'check-circle',
+    error: 'exclamation-circle',
+    warning: 'exclamation-triangle',
+    info: 'info-circle',
   }
   statusMessage.value = { type, text, icon: icons[type] }
 

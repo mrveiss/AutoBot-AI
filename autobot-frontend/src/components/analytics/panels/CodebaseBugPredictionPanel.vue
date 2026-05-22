@@ -6,7 +6,7 @@
 <template>
   <div class="bug-prediction-section analytics-section">
     <h3>
-      <i class="fas fa-bug"></i> {{ $t('analytics.codebase.bugPrediction.title') }}
+      <Icon name="bug" /> {{ $t('analytics.codebase.bugPrediction.title') }}
       <span v-if="analysis" class="total-count">
         ({{ atRiskCount }} files need attention)
       </span>
@@ -16,7 +16,7 @@
         class="refresh-btn"
         style="margin-left: 10px;"
       >
-        <i :class="loading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+        <i :class="loading ? 'fas fa-spinner fa-spin' : 'sync-alt'"></i>
       </button>
       <div class="section-export-buttons" v-if="analysis">
         <button
@@ -24,21 +24,21 @@
           class="export-btn"
           :title="$t('analytics.codebase.actions.exportMarkdown')"
         >
-          <i class="fas fa-file-alt"></i> MD
+          <Icon name="file-alt" /> MD
         </button>
         <button
           @click="emit('export', 'json')"
           class="export-btn"
           :title="$t('analytics.codebase.actions.exportJson')"
         >
-          <i class="fas fa-file-code"></i> JSON
+          <Icon name="file-code" /> JSON
         </button>
       </div>
     </h3>
 
     <!-- Loading State -->
     <div v-if="loading" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" class="animate-spin" />
       <span v-if="taskCurrentStep">{{ taskCurrentStep }}</span>
       <span v-else>{{ $t('analytics.codebase.bugPrediction.analyzing') }}</span>
       <div v-if="taskProgress" class="mini-progress">
@@ -48,16 +48,16 @@
 
     <!-- Interrupted State -->
     <div v-if="!loading && wasInterrupted" class="interrupted-state">
-      <i class="fas fa-info-circle"></i>
+      <Icon name="info-circle" />
       {{ $t('analytics.codebase.bugPrediction.interrupted') }}
       <button @click="emit('refresh')" class="rerun-btn">
-        <i class="fas fa-redo"></i> {{ $t('analytics.codebase.actions.retry') }}
+        <Icon name="redo" /> {{ $t('analytics.codebase.actions.retry') }}
       </button>
     </div>
 
     <!-- Error State -->
     <div v-else-if="!loading && error" class="error-state">
-      <i class="fas fa-exclamation-triangle"></i> {{ error }}
+      <Icon name="exclamation-triangle" /> {{ error }}
       <button @click="emit('refresh')" class="btn-link">
         {{ $t('analytics.codebase.actions.retry') }}
       </button>
@@ -91,7 +91,7 @@
       <!-- Top Risk Factors Summary -->
       <div v-if="topRiskFactors.length > 0" class="top-risk-factors-summary">
         <h4>
-          <i class="fas fa-exclamation-circle"></i>
+          <Icon name="exclamation-circle" />
           {{ $t('analytics.codebase.bugPrediction.topIssues') }}
         </h4>
         <div class="risk-factors-grid">
@@ -102,7 +102,7 @@
             :class="factor.severity"
           >
             <div class="factor-icon">
-              <i :class="getRiskFactorIcon(factor.name)"></i>
+              <Icon :name="getRiskFactorIcon(factor.name)" />
             </div>
             <div class="factor-details">
               <div class="factor-name">{{ formatFactorName(factor.name) }}</div>
@@ -145,7 +145,7 @@
       <!-- Files List with Detailed Info -->
       <div class="risk-files-list detailed">
         <h4>
-          <i class="fas fa-file-code"></i>
+          <Icon name="file-code" />
           {{
             activeFilter === 'all'
               ? 'Analyzed Files'
@@ -155,7 +155,7 @@
         </h4>
 
         <div v-if="filteredFiles.length === 0" class="no-files-message">
-          <i class="fas fa-check-circle"></i>
+          <Icon name="check-circle" />
           {{ $t('analytics.codebase.bugPrediction.noFilesInCategory') }}
         </div>
 
@@ -174,9 +174,7 @@
               <span class="risk-level-tag" :class="file.risk_level">{{ file.risk_level }}</span>
             </div>
             <div class="expand-icon">
-              <i
-                :class="expandedFiles.has(file.file_path) ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"
-              ></i>
+              <Icon :name="expandedFiles.has(file.file_path) ? 'chevron-up' : 'chevron-down'" />
             </div>
           </div>
 
@@ -186,7 +184,7 @@
               class="indicator high"
               :title="$t('analytics.codebase.risk.highComplexity')"
             >
-              <i class="fas fa-project-diagram"></i>
+              <Icon name="project-diagram" />
               {{ $t('analytics.codebase.risk.complex') }}
             </span>
             <span
@@ -194,7 +192,7 @@
               class="indicator warning"
               :title="$t('analytics.codebase.risk.frequentlyChanged')"
             >
-              <i class="fas fa-history"></i>
+              <Icon name="history" />
               {{ $t('analytics.codebase.risk.unstable') }}
             </span>
             <span
@@ -202,7 +200,7 @@
               class="indicator info"
               :title="$t('analytics.codebase.risk.largeFile')"
             >
-              <i class="fas fa-file-alt"></i>
+              <Icon name="file-alt" />
               {{ $t('analytics.codebase.risk.large') }}
             </span>
             <span
@@ -210,7 +208,7 @@
               class="indicator critical"
               :title="$t('analytics.codebase.risk.hasBugHistory')"
             >
-              <i class="fas fa-bug"></i>
+              <Icon name="bug" />
               {{ $t('analytics.codebase.risk.bugHistory') }}
             </span>
             <span
@@ -218,7 +216,7 @@
               class="indicator muted"
               :title="$t('analytics.codebase.risk.noTestsDetected')"
             >
-              <i class="fas fa-vial"></i>
+              <Icon name="vial" />
               {{ $t('analytics.codebase.risk.noTests') }}
             </span>
           </div>
@@ -226,7 +224,7 @@
           <div v-if="expandedFiles.has(file.file_path)" class="file-details">
             <div class="detail-section">
               <h5>
-                <i class="fas fa-chart-bar"></i>
+                <Icon name="chart-bar" />
                 {{ $t('analytics.codebase.bugPrediction.riskFactorBreakdown') }}
               </h5>
               <div class="factors-breakdown">
@@ -259,24 +257,24 @@
 
             <div v-if="file.prevention_tips && file.prevention_tips.length > 0" class="detail-section">
               <h5>
-                <i class="fas fa-lightbulb"></i>
+                <Icon name="lightbulb" />
                 {{ $t('analytics.codebase.bugPrediction.recommendedFixes') }}
               </h5>
               <ul class="tips-list">
                 <li v-for="(tip, tipIndex) in file.prevention_tips" :key="tipIndex">
-                  <i class="fas fa-wrench"></i> {{ tip }}
+                  <Icon name="wrench" /> {{ tip }}
                 </li>
               </ul>
             </div>
 
             <div v-if="file.suggested_tests && file.suggested_tests.length > 0" class="detail-section">
               <h5>
-                <i class="fas fa-vial"></i>
+                <Icon name="vial" />
                 {{ $t('analytics.codebase.bugPrediction.suggestedTests') }}
               </h5>
               <ul class="tests-list">
                 <li v-for="(test, testIndex) in file.suggested_tests" :key="testIndex">
-                  <i class="fas fa-flask"></i> {{ test }}
+                  <Icon name="vial" /> {{ test }}
                 </li>
               </ul>
             </div>
@@ -285,7 +283,7 @@
 
         <div v-if="filteredFiles.length > visibleCount" class="show-more-container">
           <button @click="visibleCount += PAGE_SIZE" class="show-more-btn">
-            <i class="fas fa-chevron-down"></i>
+            <Icon name="chevron-down" />
             Show More
             ({{ Math.min(PAGE_SIZE, filteredFiles.length - visibleCount) }} of
             {{ filteredFiles.length - visibleCount }} remaining)
@@ -294,7 +292,7 @@
       </div>
 
       <div v-if="analysis.timestamp" class="scan-timestamp">
-        <i class="fas fa-clock"></i>
+        <Icon name="clock" />
         {{ $t('analytics.codebase.bugPrediction.lastAnalysis') }}:
         {{ formatTimestamp(analysis.timestamp) }}
       </div>
@@ -304,7 +302,7 @@
       v-else-if="analysis && analysis.files.length === 0"
       class="success-state"
     >
-      <i class="fas fa-check-circle"></i>
+      <Icon name="check-circle" />
       {{ $t('analytics.codebase.bugPrediction.noFilesAnalyzed') }}
     </div>
 
@@ -317,6 +315,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 import { useI18n } from 'vue-i18n'
@@ -451,14 +450,14 @@ function getSeverityForFactor(
 
 function getRiskFactorIcon(factor: string): string {
   const icons: Record<string, string> = {
-    complexity: 'fas fa-project-diagram',
-    change_frequency: 'fas fa-history',
-    file_size: 'fas fa-file-alt',
-    bug_history: 'fas fa-bug',
-    test_coverage: 'fas fa-vial',
-    dependency_count: 'fas fa-sitemap',
+    complexity: 'project-diagram',
+    change_frequency: 'history',
+    file_size: 'file-alt',
+    bug_history: 'bug',
+    test_coverage: 'vial',
+    dependency_count: 'sitemap',
   }
-  return icons[factor] || 'fas fa-exclamation-circle'
+  return icons[factor] || 'exclamation-circle'
 }
 
 function getRiskFactorDescription(factor: string): string {

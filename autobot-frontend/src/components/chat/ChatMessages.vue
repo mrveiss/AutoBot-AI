@@ -88,7 +88,7 @@
               :aria-label="$t('chat.editMessage')"
               :title="$t('chat.editMessage')"
             >
-              <i class="fas fa-edit" aria-hidden="true"></i>
+              <Icon name="edit" />
             </BaseButton>
             <BaseButton
               variant="ghost"
@@ -98,7 +98,7 @@
               :aria-label="$t('chat.copyMessage')"
               :title="$t('chat.copyMessage')"
             >
-              <i class="fas fa-copy" aria-hidden="true"></i>
+              <Icon name="copy" />
             </BaseButton>
             <BaseButton
               variant="ghost"
@@ -108,7 +108,7 @@
               :aria-label="$t('chat.deleteMessage')"
               :title="$t('chat.deleteMessage')"
             >
-              <i class="fas fa-trash" aria-hidden="true"></i>
+              <Icon name="trash" />
             </BaseButton>
           </div>
         </div>
@@ -158,15 +158,15 @@
           <div v-if="message.metadata && shouldShowMetadata(message)" class="message-metadata">
             <div class="metadata-items">
               <span v-if="message.metadata.model" class="metadata-item">
-                <i class="fas fa-robot" aria-hidden="true"></i>
+                <Icon name="robot" />
                 {{ message.metadata.model }}
               </span>
               <span v-if="message.metadata.tokens" class="metadata-item">
-                <i class="fas fa-coins" aria-hidden="true"></i>
+                <Icon name="dollar-sign" />
                 {{ $t('chat.messages.tokens', { count: message.metadata.tokens }) }}
               </span>
               <span v-if="message.metadata.duration" class="metadata-item">
-                <i class="fas fa-clock" aria-hidden="true"></i>
+                <Icon name="clock" />
                 {{ message.metadata.duration }}ms
               </span>
             </div>
@@ -186,7 +186,7 @@
           <!-- Attachments -->
           <div v-if="message.attachments && message.attachments.length > 0" class="message-attachments">
             <div class="attachment-header">
-              <i class="fas fa-paperclip" aria-hidden="true"></i>
+              <Icon name="paperclip" />
               <span>{{ $t('chat.messages.attachments', { count: message.attachments.length }, message.attachments.length) }}</span>
             </div>
             <div class="attachment-list">
@@ -196,7 +196,7 @@
                 class="attachment-item"
                 @click="viewAttachment(attachment)"
               >
-                <i :class="getAttachmentIcon(attachment.type)"></i>
+                <Icon :name="getAttachmentIcon(attachment.type)" />
                 <span class="attachment-name">{{ attachment.name }}</span>
                 <span class="attachment-size">{{ formatFileSize(attachment.size) }}</span>
               </div>
@@ -212,7 +212,7 @@
           <!-- PRE-APPROVED STATE - Show blue auto-approval -->
           <div v-if="message.metadata?.approval_status === 'pre_approved'" class="approval-confirmed approval-pre-approved">
             <div class="approval-header">
-              <i class="fas fa-shield-check text-blue-600" aria-hidden="true"></i>
+              <Icon name="shield-check" class="text-blue-600" />
               <span class="font-semibold">{{ $t('chat.approval.autoApproved') }}</span>
             </div>
             <div class="approval-details">
@@ -230,7 +230,7 @@
           <!-- USER APPROVED STATE - Show green confirmation -->
           <div v-else-if="message.metadata?.approval_status === 'approved'" class="approval-confirmed approval-approved">
             <div class="approval-header">
-              <i class="fas fa-check-circle text-green-600" aria-hidden="true"></i>
+              <Icon name="check-circle" class="text-green-600" />
               <span class="font-semibold">{{ $t('chat.approval.commandApproved') }}</span>
             </div>
             <div class="approval-details">
@@ -248,7 +248,7 @@
           <!-- DENIED STATE - Show red rejection -->
           <div v-else-if="message.metadata?.approval_status === 'denied'" class="approval-confirmed approval-denied">
             <div class="approval-header">
-              <i class="fas fa-times-circle text-red-600" aria-hidden="true"></i>
+              <Icon name="times-circle" class="text-red-600" />
               <span class="font-semibold">{{ $t('chat.approval.commandDenied') }}</span>
             </div>
             <div class="approval-details">
@@ -267,7 +267,7 @@
           <!-- FIXED: Only show if requires_approval AND no approval_status yet -->
           <div v-else-if="message.metadata?.requires_approval && !message.metadata?.approval_status" class="approval-request">
             <div class="approval-header">
-              <i class="fas fa-exclamation-triangle text-yellow-600" aria-hidden="true"></i>
+              <Icon name="exclamation-triangle" class="text-yellow-600" />
               <span class="font-semibold">{{ $t('chat.approval.approvalRequired') }}</span>
             </div>
             <div class="approval-details">
@@ -293,7 +293,7 @@
               <!-- Interactive Command Warning (Issue #33) -->
               <div v-if="(message.metadata as any).is_interactive" class="approval-detail-item interactive-warning">
                 <div class="interactive-header">
-                  <i class="fas fa-keyboard text-blue-600" aria-hidden="true"></i>
+                  <Icon name="keyboard" class="text-blue-600" />
                   <span class="detail-label font-semibold text-blue-700">{{ $t('chat.approval.interactiveCommand') }}</span>
                 </div>
                 <div class="interactive-info">
@@ -327,7 +327,7 @@
                   class="cancel-comment-btn"
                   :aria-label="$t('chat.approval.cancelComment')"
                 >
-                  <i class="fas fa-times" aria-hidden="true"></i>
+                  <Icon name="times" />
                   <span>{{ $t('common.cancel') }}</span>
                 </BaseButton>
                 <BaseButton
@@ -338,7 +338,7 @@
                   class="submit-comment-btn"
                   :aria-label="$t('chat.approval.submitWithComment', { action: pendingApprovalDecision ? $t('chat.approval.approval') : $t('chat.approval.denial') })"
                 >
-                  <i class="fas fa-check" aria-hidden="true"></i>
+                  <Icon name="check" />
                   <span>{{ $t('chat.approval.submit') }} {{ pendingApprovalDecision ? $t('chat.approval.approval') : $t('chat.approval.denial') }}</span>
                 </BaseButton>
               </div>
@@ -353,12 +353,12 @@
                   class="checkbox-input"
                 />
                 <span class="checkbox-label">
-                  <i class="fas fa-shield-check" aria-hidden="true"></i>
+                  <Icon name="shield-check" />
                   {{ $t('chat.approval.autoApproveFuture') }}
                 </span>
               </label>
               <div v-if="autoApproveFuture" class="auto-approve-hint">
-                <i class="fas fa-info-circle" aria-hidden="true"></i>
+                <Icon name="info-circle" />
                 <span>{{ $t('chat.approval.autoApproveHint') }}</span>
               </div>
             </div>
@@ -372,12 +372,12 @@
                   class="checkbox-input"
                 />
                 <span class="checkbox-label">
-                  <i class="fas fa-folder-open" aria-hidden="true"></i>
+                  <Icon name="folder-open" />
                   {{ $t('chat.approval.rememberProject') }}
                 </span>
               </label>
               <div v-if="rememberForProject" class="remember-project-hint">
-                <i class="fas fa-info-circle" aria-hidden="true"></i>
+                <Icon name="info-circle" />
                 <span>{{ $t('chat.approval.rememberProjectHint', { path: currentProjectPath || $t('chat.approval.noProjectContext') }) }}</span>
               </div>
             </div>
@@ -391,7 +391,7 @@
                 class="approve-btn"
                 :aria-label="$t('chat.approval.approveCommand')"
               >
-                <i class="fas fa-check" aria-hidden="true"></i>
+                <Icon name="check" />
                 <span>{{ $t('chat.approval.approve') }}</span>
               </BaseButton>
               <BaseButton
@@ -402,7 +402,7 @@
                 class="comment-btn"
                 :aria-label="$t('chat.approval.addComment')"
               >
-                <i class="fas fa-comment" aria-hidden="true"></i>
+                <Icon name="comment" />
                 <span>{{ $t('chat.approval.comment') }}</span>
               </BaseButton>
               <BaseButton
@@ -413,7 +413,7 @@
                 class="deny-btn"
                 :aria-label="$t('chat.approval.denyCommand')"
               >
-                <i class="fas fa-times" aria-hidden="true"></i>
+                <Icon name="times" />
                 <span>{{ $t('chat.approval.deny') }}</span>
               </BaseButton>
             </div>
@@ -512,6 +512,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 import { useI18n } from 'vue-i18n'
@@ -744,33 +745,33 @@ const getSenderIcon = (sender: string, messageType?: string): string => {
   // Type-specific icons take precedence over sender icons
   if (messageType) {
     const typeIcons: Record<string, string> = {
-      thought: 'fas fa-brain',
-      planning: 'fas fa-list-check',
-      debug: 'fas fa-bug',
-      utility: 'fas fa-wrench',
-      sources: 'fas fa-book-open',
-      command_approval_request: 'fas fa-shield-halved',
-      terminal_output: 'fas fa-terminal',
-      terminal_command: 'fas fa-terminal',
-      overseer_plan: 'fas fa-sitemap',
-      overseer_step: 'fas fa-tasks',
-      llm_response: 'fas fa-robot',
-      llm_response_chunk: 'fas fa-robot'
+      thought: 'brain',
+      planning: 'list-check',
+      debug: 'bug',
+      utility: 'wrench',
+      sources: 'book-open',
+      command_approval_request: 'shield-alt',
+      terminal_output: 'terminal',
+      terminal_command: 'terminal',
+      overseer_plan: 'sitemap',
+      overseer_step: 'tasks',
+      llm_response: 'robot',
+      llm_response_chunk: 'robot'
     }
     if (typeIcons[messageType]) return typeIcons[messageType]
   }
 
   const icons: Record<string, string> = {
-    user: 'fas fa-user',
-    assistant: 'fas fa-robot',
-    system: 'fas fa-cog',
-    error: 'fas fa-exclamation-triangle',
-    thought: 'fas fa-brain',
-    'tool-code': 'fas fa-code',
-    'tool-output': 'fas fa-terminal'
+    user: 'user',
+    assistant: 'robot',
+    system: 'cog',
+    error: 'exclamation-triangle',
+    thought: 'brain',
+    'tool-code': 'code',
+    'tool-output': 'terminal'
   }
 
-  return icons[sender] || 'fas fa-comment'
+  return icons[sender] || 'comment'
 }
 
 const getSenderName = (sender: string): string => {
@@ -793,11 +794,11 @@ const getMessageTypeBadge = (message: ChatMessage): { label: string; icon: strin
   if (!msgType) return null
 
   const badges: Record<string, { label: string; icon: string; type: string }> = {
-    thought:  { label: t('chat.messages.badgeThought'),  icon: 'fas fa-brain',      type: 'thought' },
-    planning: { label: t('chat.messages.badgePlanning'), icon: 'fas fa-list-check',  type: 'planning' },
-    debug:    { label: t('chat.messages.badgeDebug'),    icon: 'fas fa-bug',         type: 'debug' },
-    utility:  { label: t('chat.messages.badgeUtility'),  icon: 'fas fa-wrench',      type: 'utility' },
-    sources:  { label: t('chat.messages.badgeSources'),  icon: 'fas fa-book-open',   type: 'sources' },
+    thought:  { label: t('chat.messages.badgeThought'),  icon: 'brain',      type: 'thought' },
+    planning: { label: t('chat.messages.badgePlanning'), icon: 'list-check',  type: 'planning' },
+    debug:    { label: t('chat.messages.badgeDebug'),    icon: 'bug',         type: 'debug' },
+    utility:  { label: t('chat.messages.badgeUtility'),  icon: 'wrench',      type: 'utility' },
+    sources:  { label: t('chat.messages.badgeSources'),  icon: 'book-open',   type: 'sources' },
   }
 
   return badges[String(msgType)] || null
@@ -1010,13 +1011,13 @@ const deleteMessage = (message: ChatMessage) => {
 }
 
 const getAttachmentIcon = (type: string): string => {
-  if (type.startsWith('image/')) return 'fas fa-image'
-  if (type.startsWith('video/')) return 'fas fa-video'
-  if (type.startsWith('audio/')) return 'fas fa-music'
-  if (type.includes('pdf')) return 'fas fa-file-pdf'
-  if (type.includes('word')) return 'fas fa-file-word'
-  if (type.includes('excel')) return 'fas fa-file-excel'
-  return 'fas fa-file'
+  if (type.startsWith('image/')) return 'image'
+  if (type.startsWith('video/')) return 'video'
+  if (type.startsWith('audio/')) return 'music'
+  if (type.includes('pdf')) return 'file-pdf'
+  if (type.includes('word')) return 'file-word'
+  if (type.includes('excel')) return 'file-excel'
+  return 'file'
 }
 
 // NOTE: formatFileSize removed - now using shared utility from @/utils/formatHelpers

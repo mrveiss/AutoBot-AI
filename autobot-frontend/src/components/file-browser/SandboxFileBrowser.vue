@@ -5,7 +5,7 @@
   <div class="sandbox-file-browser">
     <div class="sbfb-header">
       <h3 class="sbfb-title">
-        <i class="fas fa-folder-open"></i>
+        <Icon name="folder-open" />
         Sandbox Files
       </h3>
       <button
@@ -20,37 +20,37 @@
     </div>
 
     <div v-if="error" class="sbfb-error" role="alert">
-      <i class="fas fa-exclamation-circle"></i>
+      <Icon name="exclamation-circle" />
       <span>{{ error }}</span>
       <button class="btn-dismiss" :aria-label="'Dismiss error'" @click="clearError">
-        <i class="fas fa-times"></i>
+        <Icon name="times" />
       </button>
     </div>
 
     <!-- Stats banner -->
     <div v-if="stats" class="sbfb-stats">
       <span class="stat-item" title="Total files">
-        <i class="fas fa-file"></i> {{ stats.total_files }} files
+        <Icon name="file" /> {{ stats.total_files }} files
       </span>
       <span class="stat-item" title="Total directories">
-        <i class="fas fa-folder"></i> {{ stats.total_directories }} dirs
+        <Icon name="folder" /> {{ stats.total_directories }} dirs
       </span>
       <span class="stat-item" title="Total size">
-        <i class="fas fa-database"></i> {{ stats.total_size_mb.toFixed(2) }} MB
+        <Icon name="database" /> {{ stats.total_size_mb.toFixed(2) }} MB
       </span>
       <span class="stat-item" title="Max file size">
-        <i class="fas fa-weight-hanging"></i> max {{ stats.max_file_size_mb }} MB
+        <Icon name="cube" /> max {{ stats.max_file_size_mb }} MB
       </span>
     </div>
 
     <!-- File tree -->
     <div class="sbfb-tree" role="tree" aria-label="Sandbox file tree">
       <div v-if="loading && tree.length === 0" class="sbfb-loading">
-        <i class="fas fa-spinner fa-spin"></i> Loading…
+        <Icon name="spinner" class="animate-spin" /> Loading…
       </div>
 
       <div v-else-if="tree.length === 0 && !loading" class="sbfb-empty">
-        <i class="fas fa-folder-open"></i>
+        <Icon name="folder-open" />
         <span>Sandbox is empty</span>
       </div>
 
@@ -65,6 +65,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { onMounted } from 'vue'
 import { useFileSandbox } from '@/composables/useFileSandbox'
 import SandboxTreeNode from './SandboxTreeNode.vue'

@@ -3,7 +3,7 @@
     <!-- Header Section -->
     <div class="graph-header">
       <div class="header-content">
-        <h3><i class="fas fa-project-diagram"></i> {{ $t('knowledge.graph.title') }}</h3>
+        <h3><Icon name="project-diagram" /> {{ $t('knowledge.graph.title') }}</h3>
         <p class="header-description">{{ $t('knowledge.graph.description') }}</p>
       </div>
       <div class="header-actions">
@@ -13,7 +13,7 @@
           class="action-btn refresh"
           :title="$t('knowledge.graph.refreshGraphData')"
         >
-          <i class="fas fa-sync" :class="{ 'fa-spin': isLoading }"></i>
+          <Icon name="sync" />
           {{ $t('knowledge.graph.refresh') }}
         </button>
         <button
@@ -22,7 +22,7 @@
           class="action-btn"
           :title="$t('knowledge.graph.toggleLayout')"
         >
-          <i class="fas fa-th"></i>
+          <Icon name="th" />
           {{ layoutMode === 'force' ? $t('knowledge.graph.grid') : $t('knowledge.graph.force') }}
         </button>
         <button
@@ -31,7 +31,7 @@
           class="action-btn"
           :title="$t('knowledge.graph.fitGraphToView')"
         >
-          <i class="fas fa-expand"></i>
+          <Icon name="expand" />
           {{ $t('knowledge.graph.fit') }}
         </button>
         <button
@@ -40,7 +40,7 @@
           :class="{ active: viewMode === '3d' }"
           :title="viewMode === '2d' ? $t('knowledge.graph.switchTo3d') : $t('knowledge.graph.switchTo2d')"
         >
-          <i :class="viewMode === '2d' ? 'fas fa-cube' : 'fas fa-project-diagram'"></i>
+          <Icon :name="viewMode === '2d' ? 'cube' : 'project-diagram'" />
           {{ viewMode === '2d' ? $t('knowledge.graph.label3d') : $t('knowledge.graph.label2d') }}
         </button>
         <button
@@ -49,7 +49,7 @@
           :class="{ active: showCleanupPanel }"
           :title="$t('knowledge.graph.cleanupOrphanedEntities')"
         >
-          <i class="fas fa-broom"></i>
+          <Icon name="broom" />
           {{ $t('knowledge.graph.cleanup') }}
         </button>
       </div>
@@ -64,10 +64,10 @@
 
     <!-- Error Notification -->
     <div v-if="errorMessage" class="error-notification" role="alert">
-      <i class="fas fa-exclamation-circle"></i>
+      <Icon name="exclamation-circle" />
       <span>{{ errorMessage }}</span>
       <button @click="errorMessage = ''" class="close-btn">
-        <i class="fas fa-times"></i>
+        <Icon name="times" />
       </button>
     </div>
 
@@ -76,7 +76,7 @@
       <!-- Search -->
       <div class="control-group search-group">
         <label for="entity-search">
-          <i class="fas fa-search"></i>
+          <Icon name="search" />
         </label>
         <input
           id="entity-search"
@@ -91,7 +91,7 @@
           class="clear-btn"
           :title="$t('knowledge.graph.clearSearch')"
         >
-          <i class="fas fa-times"></i>
+          <Icon name="times" />
         </button>
       </div>
 
@@ -119,11 +119,11 @@
       <!-- Stats Summary -->
       <div class="stats-summary">
         <span class="stat">
-          <i class="fas fa-circle node-icon"></i>
+          <Icon name="circle" class="node-icon" />
           {{ filteredEntities.length }} {{ $t('knowledge.graph.entitiesStat') }}
         </span>
         <span class="stat">
-          <i class="fas fa-link edge-icon"></i>
+          <Icon name="link" class="edge-icon" />
           {{ relationCount }} {{ $t('knowledge.graph.relationsStat') }}
         </span>
       </div>
@@ -132,7 +132,7 @@
     <!-- Loading State -->
     <div v-if="isLoading" class="loading-state">
       <div class="spinner">
-        <i class="fas fa-circle-notch fa-spin"></i>
+        <Icon name="circle-notch" class="animate-spin" />
       </div>
       <p>{{ $t('knowledge.graph.loadingGraph') }}</p>
     </div>
@@ -140,12 +140,12 @@
     <!-- Empty State -->
     <div v-else-if="entities.length === 0 && !isLoading" class="empty-state">
       <div class="empty-icon">
-        <i class="fas fa-project-diagram"></i>
+        <Icon name="project-diagram" />
       </div>
       <h4>{{ $t('knowledge.graph.noEntitiesFound') }}</h4>
       <p>{{ $t('knowledge.graph.noEntitiesHint') }}</p>
       <button @click="showCreateModal = true" class="action-btn primary">
-        <i class="fas fa-plus"></i>
+        <Icon name="plus" />
         {{ $t('knowledge.graph.createEntity') }}
       </button>
     </div>
@@ -166,18 +166,18 @@
       <!-- Zoom Controls (2D only) -->
       <div class="zoom-controls">
         <button @click="zoomIn" :title="$t('knowledge.graph.zoomIn')">
-          <i class="fas fa-plus"></i>
+          <Icon name="plus" />
         </button>
         <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
         <button @click="zoomOut" :title="$t('knowledge.graph.zoomOut')">
-          <i class="fas fa-minus"></i>
+          <Icon name="minus" />
         </button>
         <button @click="fitGraph" :title="$t('knowledge.graph.fitToView')">
-          <i class="fas fa-expand"></i>
+          <Icon name="expand" />
         </button>
         <span class="control-separator">|</span>
         <button @click="toggleFullscreen" :title="isFullscreen ? $t('knowledge.graph.exitFullscreen') : $t('knowledge.graph.fullscreen')">
-          <i :class="isFullscreen ? 'fas fa-compress' : 'fas fa-expand-arrows-alt'"></i>
+          <Icon :name="isFullscreen ? 'compress' : 'expand-arrows-alt'" />
         </button>
       </div>
     </div>
@@ -195,7 +195,7 @@
         <template #fallback>
           <div class="graph3d-loading-skeleton">
             <div class="skeleton-spinner">
-              <i class="fas fa-spinner fa-spin"></i>
+              <Icon name="spinner" class="animate-spin" />
             </div>
             <p>{{ $t('knowledge.graph.loading3dVisualization') }}</p>
           </div>
@@ -214,7 +214,7 @@
             {{ selectedEntity.name }}
           </h4>
           <button @click="selectedEntity = null" class="close-btn">
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
           </button>
         </div>
 
@@ -239,7 +239,7 @@
 
           <!-- Observations -->
           <div class="observations-section" v-if="selectedEntity.observations?.length">
-            <h5><i class="fas fa-eye"></i> {{ $t('knowledge.graph.observations') }}</h5>
+            <h5><Icon name="eye" /> {{ $t('knowledge.graph.observations') }}</h5>
             <ul class="observations-list">
               <li v-for="(obs, idx) in selectedEntity.observations" :key="idx">
                 {{ obs }}
@@ -249,7 +249,7 @@
 
           <!-- Relations -->
           <div class="relations-section" v-if="getEntityRelations(selectedEntity.id).length">
-            <h5><i class="fas fa-link"></i> {{ $t('knowledge.graph.relationsSection') }}</h5>
+            <h5><Icon name="link" /> {{ $t('knowledge.graph.relationsSection') }}</h5>
             <ul class="relations-list">
               <li
                 v-for="relation in getEntityRelations(selectedEntity.id)"
@@ -258,7 +258,7 @@
               >
                 <span class="relation-type">{{ relation.type }}</span>
                 <span class="relation-target">
-                  <i class="fas fa-arrow-right"></i>
+                  <Icon name="arrow-right" />
                   {{ getEntityName(relation.from === selectedEntity.id ? relation.to : relation.from) }}
                 </span>
               </li>
@@ -268,11 +268,11 @@
           <!-- Actions -->
           <div class="panel-actions">
             <button @click="focusOnEntity(selectedEntity)" class="action-btn">
-              <i class="fas fa-crosshairs"></i>
+              <Icon name="crosshairs" />
               {{ $t('knowledge.graph.focus') }}
             </button>
             <button @click="highlightNeighbors(selectedEntity)" class="action-btn">
-              <i class="fas fa-expand-arrows-alt"></i>
+              <Icon name="expand-arrows-alt" />
               {{ $t('knowledge.graph.neighbors') }}
             </button>
           </div>
@@ -284,9 +284,9 @@
     <div v-if="showCreateModal" class="modal-overlay" @click.self="showCreateModal = false">
       <div class="modal-content">
         <div class="modal-header">
-          <h4><i class="fas fa-plus-circle"></i> {{ $t('knowledge.graph.createEntityTitle') }}</h4>
+          <h4><Icon name="plus-circle" /> {{ $t('knowledge.graph.createEntityTitle') }}</h4>
           <button @click="showCreateModal = false" class="close-btn">
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
           </button>
         </div>
         <form @submit.prevent="createEntity" class="entity-form">
@@ -331,8 +331,8 @@
               {{ $t('knowledge.graph.cancel') }}
             </button>
             <button type="submit" class="action-btn primary" :disabled="isCreating">
-              <i v-if="isCreating" class="fas fa-spinner fa-spin"></i>
-              <i v-else class="fas fa-plus"></i>
+              <Icon name="spinner" class="animate-spin" v-if="isCreating" />
+              <Icon name="plus" v-else />
               {{ $t('knowledge.graph.create') }}
             </button>
           </div>
@@ -386,6 +386,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, shallowRef, computed, onMounted, onUnmounted, watch, nextTick, defineAsyncComponent } from 'vue'
 // Type-only imports — runtime load handled by the shared composable (#5234).
 import type cytoscape from 'cytoscape'

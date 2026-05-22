@@ -3,7 +3,7 @@
     <label for="scope-select" class="scope-label">
       <span class="label-text">{{ $t('knowledge.scopeSelector.label') }}</span>
       <span v-if="showHelp" class="label-help">
-        <i class="fas fa-question-circle" @click="helpVisible = !helpVisible"></i>
+        <Icon name="question-circle" />
       </span>
     </label>
 
@@ -15,19 +15,19 @@
       :disabled="disabled"
     >
       <option value="private">
-        <i class="fas fa-lock"></i> {{ $t('knowledge.scopeSelector.private') }}
+        <Icon name="lock" /> {{ $t('knowledge.scopeSelector.private') }}
       </option>
       <option value="shared" v-if="allowShared">
-        <i class="fas fa-user-friends"></i> {{ $t('knowledge.scopeSelector.shared') }}
+        <Icon name="users" /> {{ $t('knowledge.scopeSelector.shared') }}
       </option>
       <option value="group" v-if="allowGroup && userGroups.length > 0">
-        <i class="fas fa-users"></i> {{ $t('knowledge.scopeSelector.group', { count: userGroups.length, plural: userGroups.length > 1 ? 's' : '' }) }}
+        <Icon name="users" /> {{ $t('knowledge.scopeSelector.group', { count: userGroups.length, plural: userGroups.length > 1 ? 's' : '' }) }}
       </option>
       <option value="organization" v-if="allowOrganization && hasOrganization">
-        <i class="fas fa-building"></i> {{ $t('knowledge.scopeSelector.organization') }}
+        <Icon name="desktop" /> {{ $t('knowledge.scopeSelector.organization') }}
       </option>
       <option value="system" v-if="allowSystem && isAdmin">
-        <i class="fas fa-globe"></i> {{ $t('knowledge.scopeSelector.system') }}
+        <Icon name="globe" /> {{ $t('knowledge.scopeSelector.system') }}
       </option>
     </select>
 
@@ -73,6 +73,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch } from 'vue'
 
 /**

@@ -8,6 +8,7 @@
  * Shows terminal commands, file operations, browser actions, etc.
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSessionCollaboration, type CollaboratorActivity } from '@/composables/useSessionCollaboration'

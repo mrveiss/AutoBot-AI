@@ -14,7 +14,7 @@
       <!-- Text Input Method -->
       <div class="upload-method">
         <div class="method-header">
-          <i class="fas fa-keyboard"></i>
+          <Icon name="keyboard" />
           <h4>{{ $t('knowledge.upload.textEntry') }}</h4>
         </div>
 
@@ -100,7 +100,7 @@
             :disabled="!textEntry.content.trim() || isSubmitting"
             class="submit-btn"
           >
-            <i class="fas fa-plus"></i>
+            <Icon name="plus" />
             {{ $t('knowledge.upload.addToKnowledgeBase') }}
           </button>
         </div>
@@ -109,7 +109,7 @@
       <!-- URL Import Method -->
       <div class="upload-method">
         <div class="method-header">
-          <i class="fas fa-globe"></i>
+          <Icon name="globe" />
           <h4>{{ $t('knowledge.upload.importFromUrl') }}</h4>
         </div>
 
@@ -154,7 +154,7 @@
             :disabled="!isValidUrl(urlEntry.url) || isSubmitting"
             class="submit-btn"
           >
-            <i class="fas fa-download"></i>
+            <Icon name="download" />
             {{ $t('knowledge.upload.importContent') }}
           </button>
         </div>
@@ -163,7 +163,7 @@
       <!-- File Upload Method (Issue #747: Enhanced with drag-drop, preview, auto-category) -->
       <div class="upload-method upload-method--file">
         <div class="method-header">
-          <i class="fas fa-file-upload"></i>
+          <Icon name="upload" />
           <h4>{{ $t('knowledge.upload.uploadFiles') }}</h4>
           <span v-if="selectedFiles.length > 0" class="file-count-badge">
             {{ selectedFiles.length }}
@@ -197,7 +197,7 @@
 
             <div class="drop-zone-content" :class="{ 'compact': selectedFiles.length > 0 }">
               <div class="drop-icon-wrapper">
-                <i :class="dropZoneIcon"></i>
+                <Icon :name="dropZoneIcon" />
               </div>
               <p class="drop-text">
                 <template v-if="isDragging">
@@ -217,11 +217,11 @@
           <div v-if="selectedFiles.length > 0" class="selected-files">
             <div class="files-header">
               <h5>
-                <i class="fas fa-folder-open"></i>
+                <Icon name="folder-open" />
                 {{ selectedFiles.length }} file{{ selectedFiles.length > 1 ? 's' : '' }} selected
               </h5>
               <button @click="clearAllFiles" class="clear-all-btn" :title="$t('knowledge.upload.clearAllTitle')">
-                <i class="fas fa-trash-alt"></i>
+                <Icon name="trash-alt" />
                 {{ $t('knowledge.upload.clearAll') }}
               </button>
             </div>
@@ -240,7 +240,7 @@
               >
                 <div class="file-item-main" @click="toggleFilePreview(fileItem.id)">
                   <div class="file-icon-wrapper">
-                    <i :class="getFileIcon(fileItem.file.name, false)"></i>
+                    <Icon :name="getFileIcon(fileItem.file.name, false)" />
                   </div>
 
                   <div class="file-info">
@@ -255,7 +255,7 @@
                         class="suggested-category"
                         :title="`Auto-detected category: ${fileItem.suggestedCategory}`"
                       >
-                        <i class="fas fa-magic"></i>
+                        <Icon name="magic" />
                         {{ fileItem.suggestedCategory }}
                       </span>
                     </div>
@@ -269,14 +269,14 @@
                       @click.stop="toggleFilePreview(fileItem.id)"
                       :title="$t('knowledge.upload.previewContentTitle')"
                     >
-                      <i :class="isFileExpanded(fileItem.id) ? 'fas fa-chevron-up' : 'fas fa-eye'"></i>
+                      <Icon :name="isFileExpanded(fileItem.id) ? 'chevron-up' : 'eye'" />
                     </button>
                     <button
                       class="remove-file-btn"
                       @click.stop="removeFile(index)"
                       :title="$t('knowledge.upload.removeFileTitle')"
                     >
-                      <i class="fas fa-times"></i>
+                      <Icon name="times" />
                     </button>
                   </div>
                 </div>
@@ -294,11 +294,11 @@
 
                 <!-- Upload Status -->
                 <div v-if="fileItem.status === 'completed'" class="file-status success">
-                  <i class="fas fa-check-circle"></i>
+                  <Icon name="check-circle" />
                   {{ $t('knowledge.upload.uploadedSuccessfully') }}
                 </div>
                 <div v-if="fileItem.status === 'failed'" class="file-status error">
-                  <i class="fas fa-exclamation-circle"></i>
+                  <Icon name="exclamation-circle" />
                   {{ fileItem.errorMessage || $t('knowledge.upload.uploadFailed') }}
                 </div>
 
@@ -313,7 +313,7 @@
                     </div>
                     <pre class="preview-content">{{ fileItem.preview }}</pre>
                     <div v-if="fileItem.previewTruncated" class="preview-truncated">
-                      <i class="fas fa-info-circle"></i>
+                      <Icon name="info-circle" />
                       {{ $t('knowledge.upload.previewTruncated') }}
                     </div>
                   </div>
@@ -360,11 +360,11 @@
               class="submit-btn upload-btn"
             >
               <template v-if="isSubmitting">
-                <i class="fas fa-spinner fa-spin"></i>
+                <Icon name="spinner" class="animate-spin" />
                 {{ $t('knowledge.upload.uploading') }}
               </template>
               <template v-else>
-                <i class="fas fa-cloud-upload-alt"></i>
+                <Icon name="cloud-upload-alt" />
                 Upload {{ selectedFiles.length }} file{{ selectedFiles.length > 1 ? 's' : '' }}
               </template>
             </button>
@@ -412,6 +412,7 @@
  * - Batch upload with parallel processing
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
@@ -557,9 +558,9 @@ function validateAccessLevelCombination(
 
 const dropZoneIcon = computed(() => {
   if (isDragging.value) {
-    return dragValid.value ? 'fas fa-download fa-bounce' : 'fas fa-ban'
+    return dragValid.value ? 'download' : 'ban'
   }
-  return selectedFiles.value.length > 0 ? 'fas fa-plus' : 'fas fa-cloud-upload-alt'
+  return selectedFiles.value.length > 0 ? 'plus' : 'cloud-upload-alt'
 })
 
 const hasAutoCategories = computed(() => {

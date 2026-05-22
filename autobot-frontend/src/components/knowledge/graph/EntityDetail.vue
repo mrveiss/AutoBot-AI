@@ -37,7 +37,7 @@
           :aria-label="$t('knowledge.graph.entity.closeAriaLabel')"
           @click="$emit('close')"
         >
-          <i class="fas fa-times"></i>
+          <Icon name="times" />
         </button>
       </div>
 
@@ -57,7 +57,7 @@
 
       <!-- Description -->
       <div class="detail-section">
-        <h5><i class="fas fa-align-left"></i> {{ $t('knowledge.graph.entity.description') }}</h5>
+        <h5><Icon name="list" /> {{ $t('knowledge.graph.entity.description') }}</h5>
         <p class="description-text">
           {{ entity.description || $t('knowledge.graph.entity.noDescription') }}
         </p>
@@ -68,7 +68,7 @@
         v-if="propertyEntries.length > 0"
         class="detail-section"
       >
-        <h5><i class="fas fa-list"></i> {{ $t('knowledge.graph.entity.properties') }}</h5>
+        <h5><Icon name="list" /> {{ $t('knowledge.graph.entity.properties') }}</h5>
         <table class="properties-table">
           <tbody>
             <tr
@@ -91,7 +91,7 @@
         class="detail-section"
       >
         <h5>
-          <i class="fas fa-file-alt"></i>
+          <Icon name="file-alt" />
           {{ $t('knowledge.graph.entity.sourceDocuments', { count: entity.source_document_ids.length }) }}
         </h5>
         <div class="source-list">
@@ -111,7 +111,7 @@
           class="action-btn"
           @click="$emit('view-timeline', entity.name)"
         >
-          <i class="fas fa-clock"></i>
+          <Icon name="clock" />
           {{ $t('knowledge.graph.entity.viewTimeline') }}
         </button>
       </div>
@@ -124,6 +124,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import Icon from '@/components/ui/Icon.vue'
 import {
   computed,
   onMounted,

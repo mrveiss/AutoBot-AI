@@ -34,7 +34,7 @@
 
     <!-- Empty state -->
     <div v-else-if="filteredFindings.length === 0" class="empty-state">
-      <i class="fas fa-check-circle"></i>
+      <Icon name="check-circle" />
       <p>{{ emptyMessage }}</p>
     </div>
 
@@ -97,7 +97,7 @@
                       class="btn-small"
                       :aria-label="$t('analytics.findings.table.copyPathAriaLabel')"
                     >
-                      <i class="fas fa-copy" aria-hidden="true"></i> {{ $t('analytics.findings.table.copyPath') }}
+                      <Icon name="copy" /> {{ $t('analytics.findings.table.copyPath') }}
                     </button>
                   </div>
                 </div>
@@ -111,6 +111,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useVirtualList } from '@/composables/useVirtualList'

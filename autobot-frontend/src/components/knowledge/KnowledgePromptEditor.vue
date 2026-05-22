@@ -15,6 +15,7 @@
  * - Unsaved changes warning
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -104,9 +105,9 @@ const detectedVariables = computed(() => {
 const characterCount = computed(() => editedContent.value.length)
 
 const categoryIcons: Record<string, string> = {
-  system: 'fas fa-cog',
-  agents: 'fas fa-robot',
-  templates: 'fas fa-file-code'
+  system: 'cog',
+  agents: 'robot',
+  templates: 'file-code'
 }
 
 const categoryLabels = computed<Record<string, string>>(() => ({
@@ -204,7 +205,7 @@ async function revertToVersion(version: PromptVersion): Promise<void> {
 }
 
 function getCategoryIcon(category: string): string {
-  return categoryIcons[category] || 'fas fa-file'
+  return categoryIcons[category] || 'file'
 }
 
 function formatDate(dateString?: string): string {
@@ -250,7 +251,7 @@ onBeforeUnmount(() => {
       </div>
       <div class="header-actions">
         <div class="search-box">
-          <i class="fas fa-search"></i>
+          <Icon name="search" />
           <input
             v-model="searchQuery"
             type="text"
@@ -270,13 +271,13 @@ onBeforeUnmount(() => {
 
     <!-- Messages -->
     <div v-if="error" class="alert alert-error">
-      <i class="fas fa-exclamation-circle"></i>
+      <Icon name="exclamation-circle" />
       {{ error }}
-      <button @click="error = null" class="close-btn" :aria-label="t('common.close')"><i class="fas fa-times"></i></button>
+      <button @click="error = null" class="close-btn" :aria-label="t('common.close')"><Icon name="times" /></button>
     </div>
 
     <div v-if="successMessage" class="alert alert-success">
-      <i class="fas fa-check-circle"></i>
+      <Icon name="check-circle" />
       {{ successMessage }}
     </div>
 
@@ -285,7 +286,7 @@ onBeforeUnmount(() => {
       <!-- Prompt List Sidebar -->
       <aside class="prompt-sidebar">
         <div v-if="isLoading" class="loading-state">
-          <i class="fas fa-spinner fa-spin"></i>
+          <Icon name="spinner" class="animate-spin" />
           <span>{{ $t('knowledge.promptEditor.loadingPrompts') }}</span>
         </div>
 
@@ -293,7 +294,7 @@ onBeforeUnmount(() => {
           <template v-for="(categoryPrompts, category) in groupedPrompts" :key="category">
             <div v-if="categoryPrompts.length > 0" class="prompt-category">
               <div class="category-header">
-                <i :class="getCategoryIcon(category)"></i>
+                <Icon :name="getCategoryIcon(category)" />
                 <span>{{ categoryLabels[category] }}</span>
                 <span class="count">{{ categoryPrompts.length }}</span>
               </div>
@@ -325,7 +326,7 @@ onBeforeUnmount(() => {
       <!-- Editor Area -->
       <div class="editor-area">
         <div v-if="!selectedPrompt" class="editor-empty">
-          <i class="fas fa-edit"></i>
+          <Icon name="edit" />
           <p>{{ $t('knowledge.promptEditor.selectPrompt') }}</p>
         </div>
 
@@ -347,7 +348,7 @@ onBeforeUnmount(() => {
                 size="sm"
                 @click="loadHistory"
               >
-                <i class="fas fa-history"></i>
+                <Icon name="history" />
                 {{ $t('knowledge.promptEditor.history') }}
               </BaseButton>
               <BaseButton
@@ -356,7 +357,7 @@ onBeforeUnmount(() => {
                 @click="revertChanges"
                 :disabled="!hasUnsavedChanges"
               >
-                <i class="fas fa-undo"></i>
+                <Icon name="undo" />
                 {{ $t('knowledge.promptEditor.revert') }}
               </BaseButton>
               <BaseButton
@@ -365,8 +366,8 @@ onBeforeUnmount(() => {
                 @click="handleSavePrompt"
                 :disabled="!hasUnsavedChanges || isSaving"
               >
-                <i v-if="isSaving" class="fas fa-spinner fa-spin"></i>
-                <i v-else class="fas fa-save"></i>
+                <Icon name="spinner" class="animate-spin" v-if="isSaving" />
+                <Icon name="save" v-else />
                 {{ $t('knowledge.promptEditor.save') }}
               </BaseButton>
             </div>
@@ -387,11 +388,11 @@ onBeforeUnmount(() => {
           <div class="editor-footer">
             <div class="footer-stats">
               <span class="stat">
-                <i class="fas fa-font"></i>
+                <Icon name="font" />
                 {{ $t('knowledge.promptEditor.characters', { count: characterCount }) }}
               </span>
               <span v-if="detectedVariables.length > 0" class="stat variables">
-                <i class="fas fa-code"></i>
+                <Icon name="code" />
                 {{ $t('knowledge.promptEditor.variables', { count: detectedVariables.length }) }}
               </span>
             </div>
@@ -418,7 +419,7 @@ onBeforeUnmount(() => {
     >
       <div class="history-modal">
         <div v-if="isLoadingHistory" class="loading-state">
-          <i class="fas fa-spinner fa-spin"></i>
+          <Icon name="spinner" class="animate-spin" />
           <span>{{ $t('knowledge.promptEditor.loadingHistory') }}</span>
         </div>
 
@@ -445,7 +446,7 @@ onBeforeUnmount(() => {
               size="sm"
               @click.stop="revertToVersion(version)"
             >
-              <i class="fas fa-undo"></i>
+              <Icon name="undo" />
               {{ $t('knowledge.promptEditor.revert') }}
             </BaseButton>
           </div>

@@ -55,7 +55,7 @@
             @click="toggleProblemType(String(type))"
           >
             <div class="header-info">
-              <i :class="isTypeExpanded(type) ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+              <Icon :name="isTypeExpanded(type) ? 'chevron-down' : 'chevron-right'" />
               <span class="header-name">{{ formatProblemType(String(type)) }}</span>
               <span class="header-count">({{ typeData.problems.length.toLocaleString() }})</span>
             </div>
@@ -121,6 +121,7 @@
  * Issue #184: Split oversized Vue components
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { useGroupingMemo } from '@/composables/useComputedMemo'
 import { useExpansion } from '@/composables/useExpansion'
 import EmptyState from '@/components/ui/EmptyState.vue'

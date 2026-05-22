@@ -6,7 +6,7 @@
 <template>
   <div class="ownership-section analytics-section">
     <h3>
-      <i class="fas fa-users-cog"></i> {{ $t('analytics.codebase.ownership.title') }}
+      <Icon name="users-cog" /> {{ $t('analytics.codebase.ownership.title') }}
       <span v-if="analysis" class="total-count">
         ({{ analysis.summary.total_contributors }} contributors)
       </span>
@@ -16,7 +16,7 @@
         class="refresh-btn"
         style="margin-left: 10px;"
       >
-        <i :class="loading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+        <i :class="loading ? 'fas fa-spinner fa-spin' : 'sync-alt'"></i>
       </button>
       <div class="section-export-buttons" v-if="analysis">
         <button
@@ -24,25 +24,25 @@
           class="export-btn"
           :title="$t('analytics.codebase.actions.exportMarkdown')"
         >
-          <i class="fas fa-file-alt"></i> MD
+          <Icon name="file-alt" /> MD
         </button>
         <button
           @click="emit('export', 'json')"
           class="export-btn"
           :title="$t('analytics.codebase.actions.exportJson')"
         >
-          <i class="fas fa-file-code"></i> JSON
+          <Icon name="file-code" /> JSON
         </button>
       </div>
     </h3>
 
     <div v-if="loading" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" class="animate-spin" />
       {{ $t('analytics.codebase.ownership.analyzing') }}
     </div>
 
     <div v-else-if="error" class="error-state">
-      <i class="fas fa-exclamation-triangle"></i> {{ error }}
+      <Icon name="exclamation-triangle" /> {{ error }}
       <button @click="emit('refresh')" class="btn-link">
         {{ $t('analytics.codebase.actions.retry') }}
       </button>
@@ -55,25 +55,25 @@
           :class="['tab-btn', { active: viewMode === 'overview' }]"
           @click="viewMode = 'overview'"
         >
-          <i class="fas fa-chart-pie"></i> {{ $t('analytics.codebase.ownership.overview') }}
+          <Icon name="chart-pie" /> {{ $t('analytics.codebase.ownership.overview') }}
         </button>
         <button
           :class="['tab-btn', { active: viewMode === 'contributors' }]"
           @click="viewMode = 'contributors'"
         >
-          <i class="fas fa-users"></i> {{ $t('analytics.codebase.ownership.contributors') }}
+          <Icon name="users" /> {{ $t('analytics.codebase.ownership.contributors') }}
         </button>
         <button
           :class="['tab-btn', { active: viewMode === 'files' }]"
           @click="viewMode = 'files'"
         >
-          <i class="fas fa-folder-tree"></i> {{ $t('analytics.codebase.ownership.filesTab') }}
+          <Icon name="folder" /> {{ $t('analytics.codebase.ownership.filesTab') }}
         </button>
         <button
           :class="['tab-btn', { active: viewMode === 'gaps' }]"
           @click="viewMode = 'gaps'"
         >
-          <i class="fas fa-exclamation-triangle"></i>
+          <Icon name="exclamation-triangle" />
           {{ $t('analytics.codebase.ownership.knowledgeGaps') }}
           <span v-if="analysis.summary.critical_gaps > 0" class="gap-badge critical">
             {{ analysis.summary.critical_gaps }}
@@ -156,7 +156,7 @@
           v-if="analysis.metrics.top_contributors.length > 0"
           class="top-contributors-preview"
         >
-          <h4><i class="fas fa-trophy"></i> {{ $t('analytics.codebase.ownership.topContributors') }}</h4>
+          <h4><Icon name="star" /> {{ $t('analytics.codebase.ownership.topContributors') }}</h4>
           <div class="contributor-list">
             <div
               v-for="(contrib, index) in analysis.metrics.top_contributors.slice(0, 5)"
@@ -176,7 +176,7 @@
           class="risk-distribution"
         >
           <h4>
-            <i class="fas fa-chart-bar"></i>
+            <Icon name="chart-bar" />
             {{ $t('analytics.codebase.ownership.knowledgeRiskDistribution') }}
           </h4>
           <div class="risk-badges">
@@ -206,15 +206,15 @@
           </div>
           <div class="expert-stats">
             <div class="stat">
-              <i class="fas fa-code"></i>
+              <Icon name="code" />
               <span>{{ expert.total_lines.toLocaleString() }} lines</span>
             </div>
             <div class="stat">
-              <i class="fas fa-code-commit"></i>
+              <Icon name="code-branch" />
               <span>{{ expert.total_commits }} commits</span>
             </div>
             <div class="stat">
-              <i class="fas fa-crown"></i>
+              <Icon name="star" />
               <span>{{ expert.files_owned }} files owned</span>
             </div>
           </div>
@@ -246,7 +246,7 @@
       <div v-if="viewMode === 'files'" class="ownership-files">
         <div v-if="analysis.directory_ownership.length > 0" class="directories-section">
           <h4>
-            <i class="fas fa-folder"></i>
+            <Icon name="folder" />
             {{ $t('analytics.codebase.ownership.directoryOwnership') }}
           </h4>
           <div class="directory-list">
@@ -261,7 +261,7 @@
                 <span class="dir-owner">{{ dir.primary_owner || 'Unknown' }}</span>
                 <span class="dir-pct">{{ dir.ownership_percentage }}%</span>
                 <span class="dir-bus-factor" :class="dir.bus_factor <= 1 ? 'low' : ''">
-                  <i class="fas fa-users"></i> {{ dir.bus_factor }}
+                  <Icon name="users" /> {{ dir.bus_factor }}
                 </span>
                 <span class="dir-lines">{{ dir.total_lines.toLocaleString() }} lines</span>
               </div>
@@ -271,7 +271,7 @@
 
         <div v-if="analysis.file_ownership.length > 0" class="files-section">
           <h4>
-            <i class="fas fa-file-code"></i>
+            <Icon name="file-code" />
             {{ $t('analytics.codebase.ownership.fileOwnership') }}
           </h4>
           <div class="file-list">
@@ -286,7 +286,7 @@
                 <span class="file-owner">{{ file.primary_owner || 'Unknown' }}</span>
                 <span class="file-pct">{{ file.ownership_percentage }}%</span>
                 <span class="file-bus-factor" :class="file.bus_factor <= 1 ? 'low' : ''">
-                  <i class="fas fa-users"></i> {{ file.bus_factor }}
+                  <Icon name="users" /> {{ file.bus_factor }}
                 </span>
                 <span class="file-lines">{{ file.total_lines }} lines</span>
               </div>
@@ -298,7 +298,7 @@
       <!-- Knowledge Gaps Tab -->
       <div v-if="viewMode === 'gaps'" class="ownership-gaps">
         <div v-if="analysis.knowledge_gaps.length === 0" class="success-state">
-          <i class="fas fa-check-circle"></i>
+          <Icon name="check-circle" />
           {{ $t('analytics.codebase.ownership.noKnowledgeGaps') }}
         </div>
         <div v-else class="gaps-list">
@@ -315,17 +315,17 @@
               <span class="gap-type">{{ formatFactorName(gap.gap_type) }}</span>
               <span class="gap-lines">{{ gap.affected_lines.toLocaleString() }} lines</span>
             </div>
-            <div class="gap-area"><i class="fas fa-folder"></i> {{ gap.area }}</div>
+            <div class="gap-area"><Icon name="folder" /> {{ gap.area }}</div>
             <div class="gap-description">{{ gap.description }}</div>
             <div class="gap-recommendation">
-              <i class="fas fa-lightbulb"></i> {{ gap.recommendation }}
+              <Icon name="lightbulb" /> {{ gap.recommendation }}
             </div>
           </div>
         </div>
       </div>
 
       <div class="scan-timestamp">
-        <i class="fas fa-clock"></i>
+        <Icon name="clock" />
         Analysis completed in {{ analysis.analysis_time_seconds.toFixed(2) }}s
       </div>
     </div>
@@ -339,6 +339,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 

@@ -2,10 +2,10 @@
   <div class="graph-rag-query">
     <!-- Header -->
     <div class="query-header">
-      <h4><i class="fas fa-search-plus"></i> {{ $t('knowledge.graphRAG.title') }}</h4>
+      <h4><Icon name="search-plus" /> {{ $t('knowledge.graphRAG.title') }}</h4>
       <p class="header-description">{{ $t('knowledge.graphRAG.description') }}</p>
       <div v-if="healthStatus" class="health-indicator" :class="healthStatus.status">
-        <i :class="healthIcon"></i>
+        <Icon :name="healthIcon" />
         <span>{{ healthStatus.status }}</span>
       </div>
     </div>
@@ -14,7 +14,7 @@
     <div class="query-section">
       <div class="form-group">
         <label for="query-input">
-          <i class="fas fa-question-circle"></i> {{ $t('knowledge.graphRAG.query') }}
+          <Icon name="question-circle" /> {{ $t('knowledge.graphRAG.query') }}
         </label>
         <input
           id="query-input"
@@ -29,7 +29,7 @@
       <div class="options-row">
         <div class="form-group compact">
           <label for="start-entity">
-            <i class="fas fa-play-circle"></i> {{ $t('knowledge.graphRAG.startEntity') }}
+            <Icon name="play-circle" /> {{ $t('knowledge.graphRAG.startEntity') }}
             <span class="label-hint">{{ $t('knowledge.graphRAG.startEntityHint') }}</span>
           </label>
           <input
@@ -43,7 +43,7 @@
 
         <div class="form-group compact">
           <label for="max-depth">
-            <i class="fas fa-layer-group"></i> {{ $t('knowledge.graphRAG.maxDepth') }}
+            <Icon name="layer-group" /> {{ $t('knowledge.graphRAG.maxDepth') }}
           </label>
           <select id="max-depth" v-model.number="maxDepth" :disabled="isSearching">
             <option :value="1">{{ $t('knowledge.graphRAG.hop1') }}</option>
@@ -54,7 +54,7 @@
 
         <div class="form-group compact">
           <label for="max-results">
-            <i class="fas fa-list-ol"></i> {{ $t('knowledge.graphRAG.maxResults') }}
+            <Icon name="list-ol" /> {{ $t('knowledge.graphRAG.maxResults') }}
           </label>
           <select id="max-results" v-model.number="maxResults" :disabled="isSearching">
             <option :value="5">5</option>
@@ -73,7 +73,7 @@
             :disabled="isSearching"
           />
           <span class="toggle-text">
-            <i class="fas fa-brain"></i>
+            <Icon name="brain" />
             {{ $t('knowledge.graphRAG.enableNeuralReranking') }}
             <span class="toggle-hint">{{ $t('knowledge.graphRAG.rerankingHint') }}</span>
           </span>
@@ -86,8 +86,8 @@
           class="action-btn primary"
           :disabled="isSearching || !queryText.trim()"
         >
-          <i v-if="isSearching" class="fas fa-spinner fa-spin"></i>
-          <i v-else class="fas fa-search"></i>
+          <Icon name="spinner" class="animate-spin" v-if="isSearching" />
+          <Icon name="search" v-else />
           {{ isSearching ? $t('knowledge.graphRAG.searching') : $t('knowledge.graphRAG.searchGraph') }}
         </button>
         <button
@@ -95,8 +95,8 @@
           class="action-btn"
           :disabled="isCheckingHealth"
         >
-          <i v-if="isCheckingHealth" class="fas fa-spinner fa-spin"></i>
-          <i v-else class="fas fa-heartbeat"></i>
+          <Icon name="spinner" class="animate-spin" v-if="isCheckingHealth" />
+          <Icon name="heartbeat" v-else />
           {{ $t('knowledge.graphRAG.checkHealth') }}
         </button>
       </div>
@@ -106,16 +106,16 @@
     <div v-if="searchResults" class="results-section">
       <div class="results-header">
         <h5>
-          <i class="fas fa-list"></i>
+          <Icon name="list" />
           {{ $t('knowledge.graphRAG.resultsFound', { count: searchResults.results.length }) }}
         </h5>
         <div v-if="searchResults.metrics" class="metrics-badges">
           <span class="metric-badge">
-            <i class="fas fa-clock"></i>
+            <Icon name="clock" />
             {{ searchResults.metrics.total_time?.toFixed(2) || '0' }}s
           </span>
           <span v-if="searchResults.metrics.graph_traversal_time" class="metric-badge">
-            <i class="fas fa-project-diagram"></i>
+            <Icon name="project-diagram" />
             Graph: {{ searchResults.metrics.graph_traversal_time.toFixed(2) }}s
           </span>
         </div>
@@ -147,7 +147,7 @@
             <p>{{ truncateContent(result.content) }}</p>
           </div>
           <div v-if="result.source_path" class="result-source">
-            <i class="fas fa-file"></i>
+            <Icon name="file" />
             {{ result.source_path }}
           </div>
           <div v-if="result.metadata" class="result-metadata">
@@ -159,7 +159,7 @@
       </div>
 
       <div v-else class="no-results">
-        <i class="fas fa-search"></i>
+        <Icon name="search" />
         <p>{{ $t('knowledge.graphRAG.noResultsFound') }}</p>
         <p class="hint">{{ $t('knowledge.graphRAG.noResultsHint') }}</p>
       </div>
@@ -167,10 +167,10 @@
 
     <!-- Error Notification -->
     <div v-if="errorMessage" class="error-notification" role="alert">
-      <i class="fas fa-exclamation-circle"></i>
+      <Icon name="exclamation-circle" />
       <span>{{ errorMessage }}</span>
       <button @click="errorMessage = ''" class="close-btn">
-        <i class="fas fa-times"></i>
+        <Icon name="times" />
       </button>
     </div>
   </div>
@@ -195,6 +195,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useKnowledgeGraphRAG } from '@/composables/knowledge/useKnowledgeGraphRAG'
@@ -230,12 +231,12 @@ const enableReranking = ref(true)
 // ============================================================================
 
 const healthIcon = computed(() => {
-  if (!healthStatus.value) return 'fas fa-question-circle'
+  if (!healthStatus.value) return 'question-circle'
   switch (healthStatus.value.status) {
-    case 'healthy': return 'fas fa-check-circle'
-    case 'degraded': return 'fas fa-exclamation-triangle'
-    case 'unhealthy': return 'fas fa-times-circle'
-    default: return 'fas fa-question-circle'
+    case 'healthy': return 'check-circle'
+    case 'degraded': return 'exclamation-triangle'
+    case 'unhealthy': return 'times-circle'
+    default: return 'question-circle'
   }
 })
 

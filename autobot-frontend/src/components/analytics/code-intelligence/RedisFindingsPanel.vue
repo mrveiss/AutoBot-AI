@@ -18,6 +18,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import FindingsTable from './FindingsTable.vue'
 import type { RedisOptimizationFinding } from '@/types/codeIntelligence'
 import Icon from '@/components/ui/Icon.vue'

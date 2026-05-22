@@ -32,7 +32,7 @@
         <!-- File List Panel in Tree View -->
         <div class="files-panel">
           <div class="files-header">
-            <h3><i class="fas fa-files"></i> {{ $t('fileBrowser.browser.contentsOf', { path: selectedPath || '/' }) }}</h3>
+            <h3><Icon name="files" /> {{ $t('fileBrowser.browser.contentsOf', { path: selectedPath || '/' }) }}</h3>
 
             <!-- File Upload (Inline) -->
             <FileUpload
@@ -43,10 +43,10 @@
 
             <div class="file-actions-inline">
               <button @click="refreshFiles" :aria-label="t('fileBrowser.browser.refreshAriaLabel')">
-                <i class="fas fa-sync-alt"></i> {{ $t('fileBrowser.browser.refresh') }}
+                <Icon name="sync-alt" /> {{ $t('fileBrowser.browser.refresh') }}
               </button>
               <button @click="toggleView" :aria-label="t('fileBrowser.browser.toggleViewAriaLabel')">
-                <i :class="viewMode === 'tree' ? 'fas fa-list' : 'fas fa-tree'"></i>
+                <i :class="viewMode === 'tree' ? 'list' : 'tree'"></i>
                 {{ viewMode === 'tree' ? $t('fileBrowser.browser.listView') : $t('fileBrowser.browser.treeView') }}
               </button>
             </div>
@@ -84,6 +84,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@/stores/useUserStore'

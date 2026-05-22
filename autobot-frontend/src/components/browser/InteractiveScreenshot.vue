@@ -12,6 +12,7 @@
  * Emits @interact({ action, params }) for the parent to proxy to the backend.
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, toRef, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
@@ -171,7 +172,7 @@ function submitType() {
         :title="t('browser.interactive.scrollUp')"
         @click="scrollBy(-300)"
       >
-        <i class="fas fa-chevron-up" />
+        <Icon name="chevron-up" />
       </button>
       <button
         class="toolbar-btn"
@@ -179,7 +180,7 @@ function submitType() {
         :title="t('browser.interactive.scrollDown')"
         @click="scrollBy(300)"
       >
-        <i class="fas fa-chevron-down" />
+        <Icon name="chevron-down" />
       </button>
       <button
         class="toolbar-btn"
@@ -187,7 +188,7 @@ function submitType() {
         :title="t('browser.interactive.pageUp')"
         @click="scrollBy(-720)"
       >
-        <i class="fas fa-angles-up" />
+        <Icon name="chevron-up" />
       </button>
       <button
         class="toolbar-btn"
@@ -195,7 +196,7 @@ function submitType() {
         :title="t('browser.interactive.pageDown')"
         @click="scrollBy(720)"
       >
-        <i class="fas fa-angles-down" />
+        <Icon name="chevron-down" />
       </button>
       <button
         class="toolbar-btn"
@@ -203,7 +204,7 @@ function submitType() {
         :title="t('browser.interactive.typeLabel')"
         @click="showTypeOverlay = !showTypeOverlay"
       >
-        <i class="fas fa-keyboard" />
+        <Icon name="keyboard" />
       </button>
     </div>
 
@@ -217,7 +218,7 @@ function submitType() {
         @keydown.escape="showTypeOverlay = false"
       />
       <button class="type-submit" :aria-label="t('common.submit')" @click="submitType">
-        <i class="fas fa-paper-plane" />
+        <Icon name="paper-plane" />
       </button>
     </div>
   </div>

@@ -5,19 +5,19 @@
         <tr>
           <th @click="$emit('sort', 'name')" class="sortable">
             {{ $t('fileBrowser.fileList.name') }}
-            <i :class="getSortIcon('name')" class="sort-icon"></i>
+            <Icon :name="getSortIcon('name')" />
           </th>
           <th @click="$emit('sort', 'type')" class="sortable">
             {{ $t('fileBrowser.fileList.type') }}
-            <i :class="getSortIcon('type')" class="sort-icon"></i>
+            <Icon :name="getSortIcon('type')" />
           </th>
           <th @click="$emit('sort', 'size')" class="sortable">
             {{ $t('fileBrowser.fileList.size') }}
-            <i :class="getSortIcon('size')" class="sort-icon"></i>
+            <Icon :name="getSortIcon('size')" />
           </th>
           <th @click="$emit('sort', 'modified')" class="sortable">
             {{ $t('fileBrowser.fileList.modified') }}
-            <i :class="getSortIcon('modified')" class="sort-icon"></i>
+            <Icon :name="getSortIcon('modified')" />
           </th>
           <th>{{ $t('fileBrowser.fileList.actions') }}</th>
         </tr>
@@ -36,7 +36,7 @@
           class="file-row"
         >
           <td class="file-name-cell">
-            <i :class="getFileIcon(file)" class="file-icon" aria-hidden="true"></i>
+            <Icon :name="getFileIcon(file)" />
             <span
               :class="{ clickable: file.is_dir }"
               class="file-name"
@@ -58,7 +58,7 @@
                 :aria-label="$t('fileBrowser.fileList.previewFile')"
                 :title="$t('fileBrowser.fileList.preview')"
               >
-                <i class="fas fa-eye" aria-hidden="true"></i>
+                <Icon name="eye" />
               </BaseButton>
               <BaseButton
                 v-if="file.is_dir"
@@ -69,7 +69,7 @@
                 :aria-label="$t('fileBrowser.fileList.openDirectory')"
                 :title="$t('fileBrowser.fileList.open')"
               >
-                <i class="fas fa-folder-open" aria-hidden="true"></i>
+                <Icon name="folder-open" />
               </BaseButton>
               <BaseButton
                 variant="ghost"
@@ -79,7 +79,7 @@
                 :aria-label="$t('fileBrowser.fileList.renameItem')"
                 :title="$t('fileBrowser.fileList.rename')"
               >
-                <i class="fas fa-edit" aria-hidden="true"></i>
+                <Icon name="edit" />
               </BaseButton>
               <BaseButton
                 variant="ghost"
@@ -89,7 +89,7 @@
                 :aria-label="$t('fileBrowser.fileList.deleteItem')"
                 :title="$t('fileBrowser.fileList.delete')"
               >
-                <i class="fas fa-trash" aria-hidden="true"></i>
+                <Icon name="trash" />
               </BaseButton>
             </div>
           </td>
@@ -105,6 +105,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, nextTick } from 'vue'
 import { formatDateTime } from '@/utils/formatHelpers'
 import { getFileIcon as getFileIconUtil } from '@/utils/iconMappings'
@@ -209,8 +210,8 @@ const handleRowKeydown = (event: KeyboardEvent, file: FileItem, index: number) =
 
 // Methods
 const getSortIcon = (field: string): string => {
-  if (props.sortField !== field) return 'fas fa-sort text-autobot-text-muted'
-  return props.sortOrder === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down'
+  if (props.sortField !== field) return 'sort'
+  return props.sortOrder === 'asc' ? 'sort-up' : 'sort-down'
 }
 
 // Icon mapping centralized in @/utils/iconMappings

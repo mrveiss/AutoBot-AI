@@ -17,7 +17,7 @@
         @click="$emit('new-folder')"
         :aria-label="$t('fileBrowser.header.newFolder')"
       >
-        <i class="fas fa-folder-plus"></i> {{ $t('fileBrowser.header.newFolder') }}
+        <Icon name="folder" /> {{ $t('fileBrowser.header.newFolder') }}
       </BaseButton>
       <BaseButton
         variant="outline-solid"
@@ -25,13 +25,14 @@
         @click="$emit('upload')"
         :aria-label="$t('fileBrowser.header.uploadFile')"
       >
-        <i class="fas fa-upload"></i> {{ $t('fileBrowser.header.uploadFile') }}
+        <Icon name="upload" /> {{ $t('fileBrowser.header.uploadFile') }}
       </BaseButton>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import FilePathNavigation from './FilePathNavigation.vue'
 

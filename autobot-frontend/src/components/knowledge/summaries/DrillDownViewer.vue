@@ -3,13 +3,13 @@
   <div class="drill-down-viewer">
     <!-- Loading -->
     <div v-if="loading" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" class="animate-spin" />
       <span>{{ $t('knowledge.summaries.drillDown.loading') }}</span>
     </div>
 
     <!-- Error -->
     <div v-else-if="error" class="error-banner">
-      <i class="fas fa-exclamation-triangle"></i>
+      <Icon name="exclamation-triangle" />
       <span>{{ error }}</span>
     </div>
 
@@ -38,10 +38,7 @@
             </span>
             {{ crumb.label }}
           </span>
-          <i
-            v-if="index < drillDownData.breadcrumb.length - 1"
-            class="fas fa-chevron-right breadcrumb-sep"
-          />
+          <Icon name="chevron-right" class="breadcrumb-sep" v-if="index < drillDownData.breadcrumb.length - 1" />
         </span>
       </nav>
 
@@ -75,7 +72,7 @@
         v-if="drillDownData.parent"
         class="parent-section"
       >
-        <h5><i class="fas fa-arrow-up"></i> {{ $t('knowledge.summaries.drillDown.parentSummary') }}</h5>
+        <h5><Icon name="arrow-up" /> {{ $t('knowledge.summaries.drillDown.parentSummary') }}</h5>
         <div
           class="parent-card"
           @click="navigateTo(drillDownData.parent.id)"
@@ -93,7 +90,7 @@
         class="children-section"
       >
         <h5>
-          <i class="fas fa-arrow-down"></i>
+          <Icon name="arrow-down" />
           {{ $t('knowledge.summaries.drillDown.subSummaries', { count: drillDownData.children.length }) }}
         </h5>
         <div class="children-list">
@@ -128,14 +125,14 @@
         class="chunks-section"
       >
         <h5>
-          <i class="fas fa-file-code"></i>
+          <Icon name="file-code" />
           {{ $t('knowledge.summaries.drillDown.sourceChunks', { count: drillDownData.source_chunks.length }) }}
         </h5>
         <button
           class="toggle-chunks-btn"
           @click="showChunks = !showChunks"
         >
-          <i :class="showChunks ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+          <Icon :name="showChunks ? 'eye-slash' : 'eye'" />
           {{ showChunks ? $t('knowledge.summaries.drillDown.hideSourceChunks') : $t('knowledge.summaries.drillDown.showSourceChunks') }}
         </button>
 
@@ -154,7 +151,7 @@
 
     <!-- No Data -->
     <div v-else class="empty-state">
-      <i class="fas fa-search-plus"></i>
+      <Icon name="search-plus" />
       <p>{{ $t('knowledge.summaries.drillDown.emptyState') }}</p>
     </div>
   </div>
@@ -165,6 +162,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, onMounted, watch } from 'vue'
 import {
   useKnowledgeGraph,

@@ -12,7 +12,7 @@
     <!-- Placeholder for empty content -->
     <div v-if="!richPayload" class="code-placeholder">
       <div class="placeholder-content">
-        <i class="fas fa-code"></i>
+        <Icon name="code" />
         <span>{{ $t('code.cellPlaceholder', 'Code') }}</span>
       </div>
     </div>
@@ -22,7 +22,7 @@
       <div class="code-header">
         <span v-if="language" class="code-language">{{ language }}</span>
         <button class="copy-button" @click="copyCode" :aria-label="copyAriaLabel">
-          <i :class="copyButtonIcon"></i>
+          <Icon :name="copyButtonIcon" />
           <span class="copy-text">{{ copyButtonText }}</span>
         </button>
       </div>
@@ -49,6 +49,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DOMPurify from 'dompurify'

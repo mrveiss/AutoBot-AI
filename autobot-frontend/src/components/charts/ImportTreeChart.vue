@@ -52,14 +52,14 @@
             @click="viewMode = 'network'"
             :title="$t('charts.importTree.networkView')"
           >
-            <i class="fas fa-project-diagram"></i>
+            <Icon name="project-diagram" />
           </button>
           <button
             :class="{ active: viewMode === 'tree' }"
             @click="viewMode = 'tree'"
             :title="$t('charts.importTree.treeView')"
           >
-            <i class="fas fa-list-tree"></i>
+            <Icon name="list" />
           </button>
         </div>
       </div>
@@ -90,21 +90,21 @@
           <div ref="cytoscapeContainer" class="cytoscape-container"></div>
           <div class="network-controls">
             <button @click="zoomIn" :title="$t('charts.importTree.controls.zoomIn')" :aria-label="$t('charts.importTree.controls.zoomIn')">
-              <i class="fas fa-plus"></i>
+              <Icon name="plus" />
             </button>
             <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
             <button @click="zoomOut" :title="$t('charts.importTree.controls.zoomOut')" :aria-label="$t('charts.importTree.controls.zoomOut')">
-              <i class="fas fa-minus"></i>
+              <Icon name="minus" />
             </button>
             <button @click="fitGraph" :title="$t('charts.importTree.controls.fitToView')" :aria-label="$t('charts.importTree.controls.fitToView')">
-              <i class="fas fa-expand"></i>
+              <Icon name="expand" />
             </button>
             <button @click="toggleLayout" :title="$t('charts.importTree.controls.toggleLayout')" :aria-label="$t('charts.importTree.controls.toggleLayout')">
-              <i class="fas fa-th"></i>
+              <Icon name="th" />
             </button>
             <span class="control-separator">|</span>
             <button @click="toggleFullscreen" :title="isFullscreen ? $t('charts.importTree.controls.exitFullscreen') : $t('charts.importTree.controls.fullscreen')" :aria-label="isFullscreen ? $t('charts.importTree.controls.exitFullscreen') : $t('charts.importTree.controls.fullscreen')">
-              <i :class="isFullscreen ? 'fas fa-compress' : 'fas fa-expand-arrows-alt'"></i>
+              <Icon :name="isFullscreen ? 'compress' : 'expand-arrows-alt'" />
             </button>
           </div>
 
@@ -114,7 +114,7 @@
               <span class="detail-icon">{{ getFileIcon(selectedNode.path) }}</span>
               <span class="detail-name">{{ selectedNode.shortName }}</span>
               <button class="close-btn" @click="selectedNode = null" :title="$t('charts.importTree.controls.close')" :aria-label="$t('charts.importTree.controls.close')">
-                <i class="fas fa-times"></i>
+                <Icon name="times" />
               </button>
             </div>
             <div class="detail-content">
@@ -228,6 +228,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 import { useI18n } from 'vue-i18n'

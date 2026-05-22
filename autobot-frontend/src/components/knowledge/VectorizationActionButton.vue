@@ -10,7 +10,7 @@
     :title="tooltipText"
     @click.stop="handleClick"
   >
-    <i :class="iconClass"></i>
+    <Icon :name="iconClass" />
     <span v-if="showLabel" class="btn-label">{{ labelText }}</span>
   </button>
 </template>
@@ -81,9 +81,9 @@ const buttonClass = computed(() => {
 })
 
 const iconClass = computed(() => {
-  if (props.status === 'pending') return 'fas fa-spinner fa-spin'
-  if (isRetry.value) return 'fas fa-redo'
-  return 'fas fa-cube'
+  if (props.status === 'pending') return 'spinner'
+  if (isRetry.value) return 'redo'
+  return 'cube'
 })
 
 const labelText = computed(() => {

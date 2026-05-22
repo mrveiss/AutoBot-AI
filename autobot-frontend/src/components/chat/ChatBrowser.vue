@@ -10,12 +10,12 @@
         </div>
 
         <div class="flex items-center gap-2 text-sm">
-          <i class="fas fa-globe" :class="iconClass"></i>
+          <Icon name="globe" />
           <span class="font-medium">{{ $t('chat.browser.title') }}</span>
 
           <!-- Session State Badge -->
           <div class="session-badge" :class="sessionBadgeClass">
-            <i :class="sessionIcon"></i>
+            <Icon :name="sessionIcon" />
             <span class="text-xs font-semibold">{{ sessionStateText }}</span>
           </div>
         </div>
@@ -42,7 +42,7 @@
           :title="$t('chat.browser.refreshSession')"
           :disabled="isConnecting"
         >
-          <i class="fas fa-sync" :class="{ 'fa-spin': isConnecting }"></i>
+          <Icon name="sync" />
         </button>
       </div>
     </div>
@@ -58,7 +58,7 @@
       />
       <div v-else class="flex-1 flex items-center justify-center bg-autobot-bg-secondary">
         <div class="text-center">
-          <i class="fas fa-spinner fa-spin text-4xl text-autobot-text-muted mb-4"></i>
+          <Icon name="spinner" class="animate-spin text-4xl text-autobot-text-muted mb-4" />
           <p class="text-autobot-text-muted">{{ isConnecting ? $t('chat.browser.connecting') : $t('chat.browser.noChatSession') }}</p>
         </div>
       </div>
@@ -71,6 +71,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
@@ -132,10 +133,10 @@ const sessionBadgeClass = computed(() => ({
 }))
 
 const sessionIcon = computed(() => {
-  if (interactionRequired.value) return 'fas fa-hand-paper'
-  if (browserStatus.value === 'connected') return 'fas fa-check-circle'
-  if (browserStatus.value === 'connecting') return 'fas fa-spinner fa-spin'
-  return 'fas fa-times-circle'
+  if (interactionRequired.value) return 'hand-paper'
+  if (browserStatus.value === 'connected') return 'check-circle'
+  if (browserStatus.value === 'connecting') return 'spinner'
+  return 'times-circle'
 })
 
 const iconClass = computed(() => ({

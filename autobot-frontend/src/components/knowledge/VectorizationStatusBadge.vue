@@ -4,7 +4,7 @@
     :class="badgeClass"
     :title="tooltipText"
   >
-    <i :class="iconClass"></i>
+    <Icon :name="iconClass" />
     <span v-if="showLabel" class="badge-label">{{ labelText }}</span>
   </span>
 </template>
@@ -53,13 +53,13 @@ const badgeClass = computed(() => {
 const iconClass = computed(() => {
   switch (props.status) {
     case 'vectorized':
-      return 'fas fa-check-circle'
+      return 'check-circle'
     case 'pending':
-      return 'fas fa-spinner fa-spin'
+      return 'spinner'
     case 'failed':
-      return 'fas fa-times-circle'
+      return 'times-circle'
     default:
-      return 'fas fa-question-circle'
+      return 'question-circle'
   }
 })
 

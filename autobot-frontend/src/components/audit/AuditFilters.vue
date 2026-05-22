@@ -152,6 +152,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import type { AuditFilter, AuditResult } from '@/types/audit'
 import Icon from '@/components/ui/Icon.vue'

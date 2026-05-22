@@ -6,20 +6,20 @@
     <!-- Header -->
     <div class="diagram-header">
       <div class="header-content">
-        <h3><i class="fas fa-sitemap"></i> {{ title || t('visualizations.systemArchitecture.defaultTitle') }}</h3>
+        <h3><Icon name="sitemap" /> {{ title || t('visualizations.systemArchitecture.defaultTitle') }}</h3>
         <p class="header-description">{{ t('visualizations.systemArchitecture.headerDescription') }}</p>
       </div>
       <div class="header-actions">
         <button @click="refreshArchitecture" :disabled="isLoading" class="action-btn">
-          <i class="fas fa-sync" :class="{ 'fa-spin': isLoading }"></i>
+          <Icon name="sync" />
           {{ t('visualizations.systemArchitecture.refresh') }}
         </button>
         <button @click="autoLayout" class="action-btn">
-          <i class="fas fa-magic"></i>
+          <Icon name="magic" />
           {{ t('visualizations.systemArchitecture.autoLayout') }}
         </button>
         <button @click="exportDiagram" class="action-btn">
-          <i class="fas fa-download"></i>
+          <Icon name="download" />
           {{ t('visualizations.systemArchitecture.export') }}
         </button>
       </div>
@@ -36,7 +36,7 @@
             :class="{ active: currentView === view.id }"
             @click="currentView = view.id"
           >
-            <i :class="view.icon"></i>
+            <Icon :name="view.icon" />
             {{ view.label }}
           </button>
         </div>
@@ -65,7 +65,7 @@
 
     <!-- Loading State -->
     <div v-if="isLoading" class="loading-state">
-      <div class="spinner"><i class="fas fa-circle-notch fa-spin"></i></div>
+      <div class="spinner"><Icon name="circle-notch" class="animate-spin" /></div>
       <p>{{ t('visualizations.systemArchitecture.loadingArchitecture') }}</p>
     </div>
 
@@ -317,17 +317,17 @@
       <!-- Zoom Controls -->
       <div class="zoom-controls">
         <button @click="zoomIn" :title="t('visualizations.systemArchitecture.zoomIn')">
-          <i class="fas fa-plus"></i>
+          <Icon name="plus" />
         </button>
         <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
         <button @click="zoomOut" :title="t('visualizations.systemArchitecture.zoomOut')">
-          <i class="fas fa-minus"></i>
+          <Icon name="minus" />
         </button>
         <button @click="resetView" :title="t('visualizations.systemArchitecture.resetView')">
-          <i class="fas fa-expand"></i>
+          <Icon name="expand" />
         </button>
         <button @click="showGrid = !showGrid" :title="t('visualizations.systemArchitecture.toggleGrid')" :class="{ active: showGrid }">
-          <i class="fas fa-th"></i>
+          <Icon name="th" />
         </button>
       </div>
 
@@ -368,7 +368,7 @@
             {{ selectedComponent.name }}
           </h4>
           <button @click="selectedComponent = null" class="close-btn">
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
           </button>
         </div>
 
@@ -399,13 +399,13 @@
 
           <!-- Description -->
           <div class="description-section" v-if="selectedComponent.description">
-            <h5><i class="fas fa-info-circle"></i> {{ t('visualizations.systemArchitecture.descriptionLabel') }}</h5>
+            <h5><Icon name="info-circle" /> {{ t('visualizations.systemArchitecture.descriptionLabel') }}</h5>
             <p>{{ selectedComponent.description }}</p>
           </div>
 
           <!-- Metrics -->
           <div class="metrics-section" v-if="selectedComponent.detailedMetrics">
-            <h5><i class="fas fa-chart-bar"></i> {{ t('visualizations.systemArchitecture.metricsLabel') }}</h5>
+            <h5><Icon name="chart-bar" /> {{ t('visualizations.systemArchitecture.metricsLabel') }}</h5>
             <div class="metrics-grid">
               <div
                 v-for="(value, key) in selectedComponent.detailedMetrics"
@@ -420,7 +420,7 @@
 
           <!-- Connections -->
           <div class="connections-section" v-if="getComponentConnections(selectedComponent.id).length">
-            <h5><i class="fas fa-link"></i> {{ t('visualizations.systemArchitecture.connectionsLabel') }}</h5>
+            <h5><Icon name="link" /> {{ t('visualizations.systemArchitecture.connectionsLabel') }}</h5>
             <ul class="connections-list">
               <li
                 v-for="conn in getComponentConnections(selectedComponent.id)"
@@ -431,7 +431,7 @@
                   {{ conn.type }}
                 </span>
                 <span class="conn-direction">
-                  <i :class="conn.from === selectedComponent.id ? 'fas fa-arrow-right' : 'fas fa-arrow-left'"></i>
+                  <Icon :name="conn.from === selectedComponent.id ? 'arrow-right' : 'arrow-left'" />
                 </span>
                 <span class="conn-target">
                   {{ getComponentName(conn.from === selectedComponent.id ? conn.to : conn.from) }}
@@ -443,11 +443,11 @@
           <!-- Actions -->
           <div class="panel-actions">
             <button @click="focusOnComponent(selectedComponent)" class="action-btn">
-              <i class="fas fa-crosshairs"></i>
+              <Icon name="crosshairs" />
               {{ t('visualizations.systemArchitecture.focus') }}
             </button>
             <button @click="expandConnections(selectedComponent)" class="action-btn">
-              <i class="fas fa-expand-arrows-alt"></i>
+              <Icon name="expand-arrows-alt" />
               {{ t('visualizations.systemArchitecture.expand') }}
             </button>
           </div>
@@ -509,6 +509,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getConfig } from '@/config/ssot-config'
@@ -625,9 +626,9 @@ const viewBox = ref('0 0 1600 800')
 
 // View modes
 const viewModes = computed<ViewMode[]>(() => [
-  { id: 'physical', label: t('visualizations.systemArchitecture.physical'), icon: 'fas fa-server' },
-  { id: 'logical', label: t('visualizations.systemArchitecture.logical'), icon: 'fas fa-project-diagram' },
-  { id: 'dataflow', label: t('visualizations.systemArchitecture.dataFlow'), icon: 'fas fa-exchange-alt' }
+  { id: 'physical', label: t('visualizations.systemArchitecture.physical'), icon: 'server' },
+  { id: 'logical', label: t('visualizations.systemArchitecture.logical'), icon: 'project-diagram' },
+  { id: 'dataflow', label: t('visualizations.systemArchitecture.dataFlow'), icon: 'exchange-alt' }
 ])
 
 // ============================================================================

@@ -4,7 +4,7 @@
     <div class="landing-header">
       <div class="landing-header-text">
         <h1 class="landing-title">
-          <i class="fas fa-chart-bar"></i>
+          <Icon name="chart-bar" />
           {{ $t('analytics.codebase.title') }}
         </h1>
         <p class="landing-subtitle">{{ $t('analytics.codebase.landing.subtitle') }}</p>
@@ -13,7 +13,7 @@
 
     <!-- Loading State -->
     <div v-if="loading" class="landing-loading">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" class="animate-spin" />
       {{ $t('analytics.sources.loading') }}
     </div>
 
@@ -35,15 +35,15 @@
         <!-- Card Header -->
         <div class="card-header">
           <div class="card-icon">
-            <i :class="source.source_type === 'github' ? 'fab fa-github' : 'fas fa-folder'"></i>
+            <i :class="source.source_type === 'github' ? 'github' : 'folder'"></i>
           </div>
           <div class="card-badges">
             <span class="status-badge" :class="`status-badge--${source.status}`">
-              <i :class="getStatusIcon(source.status)"></i>
+              <Icon :name="getStatusIcon(source.status)" />
               {{ source.status }}
             </span>
             <span class="access-badge" :class="`access-badge--${source.access}`">
-              <i :class="getAccessIcon(source.access)"></i>
+              <Icon :name="getAccessIcon(source.access)" />
               {{ source.access }}
             </span>
           </div>
@@ -54,20 +54,20 @@
           <div class="card-name">{{ source.name }}</div>
           <div class="card-meta">
             <span v-if="source.repo" class="card-repo">
-              <i class="fas fa-link"></i> {{ source.repo }}
+              <Icon name="link" /> {{ source.repo }}
             </span>
             <span v-else-if="source.clone_path" class="card-repo">
-              <i class="fas fa-folder-open"></i> {{ source.clone_path }}
+              <Icon name="folder-open" /> {{ source.clone_path }}
             </span>
             <span v-if="source.branch" class="card-branch">
-              <i class="fas fa-code-branch"></i> {{ source.branch }}
+              <Icon name="code-branch" /> {{ source.branch }}
             </span>
           </div>
         </div>
 
         <!-- Error Message -->
         <div v-if="source.status === 'error' && source.error_message" class="card-error">
-          <i class="fas fa-exclamation-circle"></i>
+          <Icon name="exclamation-circle" />
           {{ source.error_message }}
         </div>
 
@@ -79,7 +79,7 @@
             :title="source.status === 'syncing' ? $t('analytics.sources.syncing') : $t('analytics.sources.syncNow')"
             @click="syncSource(source)"
           >
-            <i :class="syncingId === source.id ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+            <i :class="syncingId === source.id ? 'fas fa-spinner fa-spin' : 'sync-alt'"></i>
           </button>
           <button
             class="btn-card-action btn-card-action--delete"
@@ -87,14 +87,14 @@
             :title="$t('analytics.sources.deleteTitle')"
             @click="deleteSource(source)"
           >
-            <i :class="deletingId === source.id ? 'fas fa-spinner fa-spin' : 'fas fa-trash-alt'"></i>
+            <i :class="deletingId === source.id ? 'fas fa-spinner fa-spin' : 'trash-alt'"></i>
           </button>
         </div>
 
         <!-- Timestamps -->
         <div class="card-timestamps">
           <div class="timestamp-row">
-            <i class="fas fa-sync-alt"></i>
+            <Icon name="sync-alt" />
             <span v-if="source.last_synced" class="timestamp-text">
               {{ $t('analytics.sources.synced') }} {{ formatRelativeTime(source.last_synced) }}
             </span>
@@ -103,7 +103,7 @@
             </span>
           </div>
           <div class="timestamp-row">
-            <i class="fas fa-database"></i>
+            <Icon name="database" />
             <span
               v-if="summaries[source.id]?.last_indexed"
               class="timestamp-text"
@@ -116,7 +116,7 @@
             </span>
           </div>
           <div v-if="summaries[source.id]?.last_commit" class="timestamp-row">
-            <i class="fas fa-code-commit"></i>
+            <Icon name="code-branch" />
             <span class="timestamp-text">
               {{ formatRelativeTime(summaries[source.id].last_commit!.timestamp) }}
             </span>
@@ -148,7 +148,7 @@
         @click="showAddModal = true"
         @keydown.enter="showAddModal = true"
       >
-        <i class="fas fa-plus"></i>
+        <Icon name="plus" />
         <span>{{ $t('analytics.codebase.landing.addProject') }}</span>
       </div>
     </div>
@@ -174,6 +174,7 @@
  * Issue #1458
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -292,21 +293,21 @@ function formatRelativeTime(isoString: string): string {
 
 function getStatusIcon(status: string): string {
   const icons: Record<string, string> = {
-    configured: 'fas fa-cog',
+    configured: 'cog',
     syncing: 'fas fa-spinner fa-spin',
-    ready: 'fas fa-check-circle',
-    error: 'fas fa-exclamation-circle'
+    ready: 'check-circle',
+    error: 'exclamation-circle'
   }
-  return icons[status] ?? 'fas fa-question-circle'
+  return icons[status] ?? 'question-circle'
 }
 
 function getAccessIcon(access: string): string {
   const icons: Record<string, string> = {
-    private: 'fas fa-lock',
-    shared: 'fas fa-users',
-    public: 'fas fa-globe'
+    private: 'lock',
+    shared: 'users',
+    public: 'globe'
   }
-  return icons[access] ?? 'fas fa-lock'
+  return icons[access] ?? 'lock'
 }
 
 // ---- Source Actions (#1468, #5153 B) ---------------------------------------

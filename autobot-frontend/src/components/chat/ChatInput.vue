@@ -28,7 +28,7 @@
           class="retry-upload-btn"
           :aria-label="$t('chat.input.retryUpload')"
         >
-          <i class="fas fa-redo" aria-hidden="true"></i>
+          <Icon name="redo" />
         </BaseButton>
       </div>
     </div>
@@ -37,7 +37,7 @@
     <div v-if="attachedFiles.length > 0" class="attached-files mb-4">
       <div class="attached-files-header">
         <h4 class="text-sm font-medium text-autobot-text-secondary">
-          <i class="fas fa-paperclip me-1" aria-hidden="true"></i>
+          <Icon name="paperclip" class="me-1" />
           {{ $t('chat.input.filesAttached', { count: attachedFiles.length }) }}
         </h4>
         <BaseButton variant="ghost" size="sm" @click="clearAllFiles" class="text-red-600 hover:text-red-800">
@@ -52,7 +52,7 @@
           class="attached-file-item"
         >
           <div class="file-icon">
-            <i :class="getFileIcon(file.type)"></i>
+            <Icon :name="getFileIcon(file.type)" />
           </div>
           <div class="file-info">
             <span class="file-name">{{ file.name }}</span>
@@ -65,7 +65,7 @@
             class="remove-file-btn"
             :aria-label="$t('chat.input.removeFile')"
           >
-            <i class="fas fa-times" aria-hidden="true"></i>
+            <Icon name="times" />
           </BaseButton>
         </div>
       </div>
@@ -119,7 +119,7 @@
                 class="knowledge-checkbox sr-only"
                 :disabled="isDisabled"
               />
-              <i class="fas fa-brain" aria-hidden="true"></i>
+              <Icon name="brain" />
               <span class="toggle-label">KB</span>
             </label>
 
@@ -130,7 +130,7 @@
               :title="$t('chat.input.overseerMode')"
               @click.prevent="toggleOverseer"
             >
-              <i class="fas fa-sitemap" aria-hidden="true"></i>
+              <Icon name="sitemap" />
               <span class="toggle-label">{{ $t('chat.input.overseerLabel') }}</span>
             </label>
 
@@ -146,7 +146,7 @@
               :disabled="isDisabled"
               :aria-label="$t('chat.input.attachFile')"
             >
-              <i class="fas fa-paperclip" aria-hidden="true"></i>
+              <Icon name="paperclip" />
             </BaseButton>
 
             <!-- Vision Analysis Button (#1242) -->
@@ -158,7 +158,7 @@
               :disabled="isDisabled"
               :aria-label="$t('chat.input.analyzeImage')"
             >
-              <i class="fas fa-eye" aria-hidden="true"></i>
+              <Icon name="eye" />
             </BaseButton>
 
             <!-- Voice Input Button -->
@@ -171,7 +171,7 @@
               :disabled="isDisabled"
               :aria-label="$t('chat.input.voiceInput')"
             >
-              <i :class="isVoiceRecording ? 'fas fa-stop' : 'fas fa-microphone'" aria-hidden="true"></i>
+              <Icon :name="isVoiceRecording ? 'stop' : 'microphone'" />
             </BaseButton>
 
             <!-- Emoji Button -->
@@ -183,7 +183,7 @@
               :disabled="isDisabled"
               :aria-label="$t('chat.input.addEmoji')"
             >
-              <i class="fas fa-smile" aria-hidden="true"></i>
+              <Icon name="user" />
             </BaseButton>
 
             <!-- Vertical Divider + Quick Actions Toggle (#1569) -->
@@ -195,7 +195,7 @@
               :aria-label="showQuickActions ? 'Hide quick actions' : 'Show quick actions'"
               @click="showQuickActions = !showQuickActions"
             >
-              <i class="fas fa-ellipsis-h"></i>
+              <Icon name="ellipsis-h" />
             </BaseButton>
 
             <!-- Quick Actions (#1569: togglable) -->
@@ -210,7 +210,7 @@
                 :disabled="isDisabled"
                 :aria-label="action.description"
               >
-                <i :class="action.icon"></i>
+                <Icon :name="action.icon" />
                 <span class="action-label">{{ action.label }}</span>
               </BaseButton>
             </template>
@@ -228,10 +228,10 @@
           :aria-label="isSending ? $t('chat.input.sending') : canSend ? $t('chat.input.sendMessage') : $t('chat.input.enterMessage')"
         >
           <div v-if="!isSending && messageQueueLength > 0" class="queue-indicator">
-            <i class="fas fa-paper-plane" aria-hidden="true"></i>
+            <Icon name="paper-plane" />
             <span class="queue-count">{{ messageQueueLength }}</span>
           </div>
-          <i v-else-if="!isSending" class="fas fa-paper-plane" aria-hidden="true"></i>
+          <Icon name="paper-plane" v-else-if="!isSending"  aria-hidden="true" />
         </BaseButton>
       </div>
 
@@ -239,7 +239,7 @@
       <div class="input-status-bar">
         <div class="status-left">
           <span v-if="isTypingIndicatorVisible" class="typing-indicator">
-            <i class="fas fa-keyboard" aria-hidden="true"></i>
+            <Icon name="keyboard" />
             {{ $t('chat.input.typing') }}
           </span>
           <span v-if="characterCount > 0" class="character-count" :class="{ 'warning': isNearLimit }">
@@ -249,7 +249,7 @@
 
         <div class="status-right">
           <span v-if="isVoiceRecording" class="voice-status">
-            <i class="fas fa-circle text-red-500 animate-pulse" aria-hidden="true"></i>
+            <Icon name="circle" class="text-red-500 animate-pulse" />
             {{ $t('chat.input.recording') }}
           </span>
           <span class="keyboard-hint">{{ $t('chat.input.keyboardHint') }}</span>
@@ -262,7 +262,7 @@
       <div class="emoji-header">
         <span class="emoji-title">{{ $t('chat.input.addEmoji') }}</span>
         <BaseButton variant="ghost" size="xs" @click="showEmojiPicker = false" class="close-emoji-btn" :aria-label="$t('chat.input.closeEmojiPicker')">
-          <i class="fas fa-times" aria-hidden="true"></i>
+          <Icon name="times" />
         </BaseButton>
       </div>
       <div class="emoji-grid">
@@ -298,6 +298,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, nextTick, onMounted, onUnmounted, inject, watch, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useChatStore } from '@/stores/useChatStore'
@@ -369,10 +370,10 @@ watch(showQuickActions, (val) => localStorage.setItem('autobot_showQuickActions'
 
 // Quick actions
 const quickActions = computed(() => [
-  { id: 'help', label: t('chat.input.help'), icon: 'fas fa-question-circle', description: t('chat.input.helpDesc') },
-  { id: 'summarize', label: t('chat.input.summarize'), icon: 'fas fa-compress', description: t('chat.input.summarizeDesc') },
-  { id: 'translate', label: t('agent.translate'), icon: 'fas fa-language', description: t('chat.input.translateDesc') },
-  { id: 'explain', label: t('chat.input.explain'), icon: 'fas fa-lightbulb', description: t('chat.input.explainDesc') },
+  { id: 'help', label: t('chat.input.help'), icon: 'question-circle', description: t('chat.input.helpDesc') },
+  { id: 'summarize', label: t('chat.input.summarize'), icon: 'compress', description: t('chat.input.summarizeDesc') },
+  { id: 'translate', label: t('agent.translate'), icon: 'language', description: t('chat.input.translateDesc') },
+  { id: 'explain', label: t('chat.input.explain'), icon: 'lightbulb', description: t('chat.input.explainDesc') },
 ])
 
 // Common emojis
@@ -759,13 +760,13 @@ const getFileIcon = (type: string): string => {
 
   // Add color classes based on MIME type
   const colorMap: Record<string, string> = {
-    'fas fa-image': 'text-green-600',
-    'fas fa-video': 'text-blue-600',
-    'fas fa-music': 'text-purple-600',
-    'fas fa-file-pdf': 'text-red-600',
-    'fas fa-file-word': 'text-blue-600',
-    'fas fa-file-excel': 'text-green-600',
-    'fas fa-file-alt': 'text-autobot-text-secondary'
+    'image': 'text-green-600',
+    'video': 'text-blue-600',
+    'music': 'text-purple-600',
+    'file-pdf': 'text-red-600',
+    'file-word': 'text-blue-600',
+    'file-excel': 'text-green-600',
+    'file-alt': 'text-autobot-text-secondary'
   }
 
   const color = colorMap[icon] || 'text-autobot-text-secondary'

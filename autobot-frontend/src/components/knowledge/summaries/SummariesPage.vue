@@ -69,6 +69,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import SummarySearch from './SummarySearch.vue'
 import DocumentOverview from './DocumentOverview.vue'

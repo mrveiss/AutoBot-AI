@@ -35,7 +35,7 @@
           class="nav-item"
           :class="{ active: isActiveTab(tab.route) }"
         >
-          <i :class="tab.icon"></i>
+          <Icon :name="tab.icon" />
           <span>{{ tab.label }}</span>
         </router-link>
       </nav>
@@ -74,7 +74,7 @@
               class="feature-card"
               @click="navigateTo(tab.route)"
             >
-              <i :class="tab.icon" class="feature-icon"></i>
+              <Icon :name="tab.icon" />
               <h4>{{ tab.label }}</h4>
               <p>{{ tab.description }}</p>
             </div>
@@ -90,6 +90,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -105,25 +106,25 @@ const tabs = computed(() => [
   {
     route: '/knowledge/graph/pipeline',
     label: t('knowledge.graphView.pipeline'),
-    icon: 'fas fa-play-circle',
+    icon: 'play-circle',
     description: t('knowledge.graphView.pipelineDescription'),
   },
   {
     route: '/knowledge/graph/entities',
     label: t('knowledge.graphView.entitiesTab'),
-    icon: 'fas fa-project-diagram',
+    icon: 'project-diagram',
     description: t('knowledge.graphView.entitiesDescription'),
   },
   {
     route: '/knowledge/graph/timeline',
     label: t('knowledge.graphView.timeline'),
-    icon: 'fas fa-stream',
+    icon: 'stream',
     description: t('knowledge.graphView.timelineDescription'),
   },
   {
     route: '/knowledge/graph/summaries',
     label: t('knowledge.graphView.summariesTab'),
-    icon: 'fas fa-layer-group',
+    icon: 'layer-group',
     description: t('knowledge.graphView.summariesDescription'),
   },
 ])

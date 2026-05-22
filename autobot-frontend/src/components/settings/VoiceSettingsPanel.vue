@@ -52,17 +52,17 @@ VoiceSettingsPanel.vue - Voice profile selection and management (#1054)
           :title="$t('voice.deleteVoice')"
           @click.prevent="handleDelete(voice.id, voice.name)"
         >
-          <i class="fas fa-trash"></i>
+          <Icon name="trash" />
         </button>
       </label>
     </div>
 
     <div v-if="loading" class="loading-indicator">
-      <i class="fas fa-spinner fa-spin"></i> {{ $t('voice.loadingVoices') }}
+      <Icon name="spinner" class="animate-spin" /> {{ $t('voice.loadingVoices') }}
     </div>
 
     <div v-if="personalityVoiceId || hasLanguageVoices" class="personality-voice-hint">
-      <i class="fas fa-user-circle"></i>
+      <Icon name="user-circle" />
       <div class="personality-voice-details">
         <div v-if="personalityVoiceId">
           {{ $t('voice.personalityOverride') }}
@@ -79,7 +79,7 @@ VoiceSettingsPanel.vue - Voice profile selection and management (#1054)
     <!-- Add Voice -->
     <div class="add-voice-section">
       <button class="add-voice-btn" @click="showAddDialog = true">
-        <i class="fas fa-plus"></i> {{ $t('voice.addVoiceProfile') }}
+        <Icon name="plus" /> {{ $t('voice.addVoiceProfile') }}
       </button>
     </div>
 
@@ -100,14 +100,14 @@ VoiceSettingsPanel.vue - Voice profile selection and management (#1054)
           <label>{{ $t('voice.audioSample') }}</label>
           <div class="audio-options">
             <button class="option-btn" @click="triggerFileUpload">
-              <i class="fas fa-upload"></i> {{ $t('voice.uploadFile') }}
+              <Icon name="upload" /> {{ $t('voice.uploadFile') }}
             </button>
             <button
               class="option-btn"
               :class="{ recording: isRecording }"
               @click="toggleRecording"
             >
-              <i :class="isRecording ? 'fas fa-stop' : 'fas fa-microphone'"></i>
+              <Icon :name="isRecording ? 'stop' : 'microphone'" />
               {{ isRecording ? $t('voice.stop') : $t('voice.record') }}
             </button>
           </div>
@@ -119,7 +119,7 @@ VoiceSettingsPanel.vue - Voice profile selection and management (#1054)
             @change="handleFileSelect"
           />
           <div v-if="audioFile" class="audio-preview">
-            <i class="fas fa-file-audio"></i> {{ audioFileName }}
+            <Icon name="microphone" /> {{ audioFileName }}
           </div>
         </div>
         <div class="dialog-actions">
@@ -138,6 +138,7 @@ VoiceSettingsPanel.vue - Voice profile selection and management (#1054)
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useVoiceProfiles } from '@/composables/useVoiceProfiles'

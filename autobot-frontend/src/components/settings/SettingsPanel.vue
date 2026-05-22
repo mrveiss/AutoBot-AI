@@ -52,7 +52,7 @@
     <!-- Save Settings Button -->
     <div v-if="isSettingsLoaded && hasUnsavedChanges" class="settings-actions">
       <button @click="saveSettings" :disabled="isSaving" class="save-settings-btn">
-        <i :class="isSaving ? 'fas fa-spinner fa-spin' : 'fas fa-save'"></i>
+        <i :class="isSaving ? 'fas fa-spinner fa-spin' : 'save'"></i>
         {{ isSaving ? $t('settings.saving') : $t('settings.save') }}
       </button>
       <button @click="discardChanges" :disabled="isSaving" class="discard-btn">
@@ -66,6 +66,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, reactive, onMounted, provide } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
