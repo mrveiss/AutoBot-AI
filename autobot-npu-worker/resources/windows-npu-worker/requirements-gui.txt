@@ -10,7 +10,7 @@ PySide6-Essentials>=6.6.0
 PyYAML>=6.0.1
 
 # HTTP Requests for API calls
-requests>=2.31.0
+requests>=2.33.0  # GH#8326: CVE-2026-25645
 
 # System Monitoring
 psutil>=5.9.0
