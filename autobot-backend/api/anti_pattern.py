@@ -17,7 +17,15 @@ from fastapi.responses import JSONResponse
 from api.schemas_code import (
     AnalysisResponse,
     AntiPatternAnalysisRequest,
+    AntiPatternCachedResultResponse,
+    AntiPatternCircularDepsResultResponse,
+    AntiPatternCodeSmellsResultResponse,
+    AntiPatternDeadCodeResultResponse,
+    AntiPatternFeatureEnvyResultResponse,
+    AntiPatternGodClassesResultResponse,
+    AntiPatternHealthScoreResultResponse,
     AntiPatternSummary,
+    AntiPatternTypesResultResponse,
     SeveritySummary,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -108,7 +116,7 @@ ANTI_PATTERN_TYPE_DEFINITIONS = (
 # Lazy initialization for detector (thread-safe)
 import asyncio
 
-from api.schemas_common import DataResponse
+from api.schemas_common import DataResponse  # noqa: E402
 
 _detector_instance = None
 _detector_lock = asyncio.Lock()
@@ -213,7 +221,7 @@ async def analyze_anti_patterns(request: AntiPatternAnalysisRequest):
         raise HTTPException(status_code=500, detail="Analysis failed")
 
 
-@router.get("/cached", response_model=DataResponse)
+@router.get("/cached", response_model=DataResponse[AntiPatternCachedResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_cached_analysis",
@@ -245,7 +253,7 @@ async def get_cached_analysis():
         raise HTTPException(status_code=500, detail="Failed to retrieve cache")
 
 
-@router.post("/god-classes", response_model=DataResponse)
+@router.post("/god-classes", response_model=DataResponse[AntiPatternGodClassesResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_god_classes",
@@ -291,7 +299,7 @@ async def detect_god_classes(request: AntiPatternAnalysisRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/circular-dependencies", response_model=DataResponse)
+@router.post("/circular-dependencies", response_model=DataResponse[AntiPatternCircularDepsResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_circular_dependencies",
@@ -332,7 +340,7 @@ async def detect_circular_dependencies(request: AntiPatternAnalysisRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/feature-envy", response_model=DataResponse)
+@router.post("/feature-envy", response_model=DataResponse[AntiPatternFeatureEnvyResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_feature_envy",
@@ -373,7 +381,7 @@ async def detect_feature_envy(request: AntiPatternAnalysisRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/code-smells", response_model=DataResponse)
+@router.post("/code-smells", response_model=DataResponse[AntiPatternCodeSmellsResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_code_smells",
@@ -424,7 +432,7 @@ async def detect_code_smells(request: AntiPatternAnalysisRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/dead-code", response_model=DataResponse)
+@router.post("/dead-code", response_model=DataResponse[AntiPatternDeadCodeResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_dead_code",
@@ -465,7 +473,7 @@ async def detect_dead_code(request: AntiPatternAnalysisRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/health-score", response_model=DataResponse)
+@router.post("/health-score", response_model=DataResponse[AntiPatternHealthScoreResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_health_score",
@@ -517,7 +525,7 @@ async def get_health_score(request: AntiPatternAnalysisRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/types", response_model=DataResponse)
+@router.get("/types", response_model=DataResponse[AntiPatternTypesResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_anti_pattern_types",
