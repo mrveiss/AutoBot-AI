@@ -259,6 +259,9 @@ class VectorSearchEngine:
             return self._cpu
 
         # "auto": NPU > GPU > CPU
+        # Note: IVFPQ activation for large collections (>ivfpq_min_vectors) is handled
+        # inside FAISSIVFPQBuilder.build_or_load(), called from GPUVectorIndex
+        # initialization when IndexType.IVF_PQ is selected via VectorSearchConfig.
         if _npu_enabled():
             logger.debug("VectorSearchEngine: auto-selected NPU backend")
             return self._npu

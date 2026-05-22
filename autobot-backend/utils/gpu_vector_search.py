@@ -98,6 +98,13 @@ class VectorSearchConfig:
     batch_size: int = 1000
     max_vectors_in_memory: int = 1_000_000
 
+    # IVFPQ settings (for collections > 100K vectors)
+    ivfpq_m_pq: int = 96  # sub-vectors for PQ (dim/8)
+    ivfpq_nbits: int = 8  # bits per sub-code
+    ivfpq_nprobe: int = 64  # cells to probe at search time
+    ivfpq_index_dir: str = "/tmp/autobot_faiss_indexes"
+    ivfpq_min_vectors: int = 100_000  # threshold to activate IVFPQ
+
     # Persistence
     index_path: str | None = None
     auto_save: bool = True
@@ -244,8 +251,13 @@ class GPUVectorIndex:
 
         elif self.config.index_type == IndexType.IVF_PQ:
             quantizer = faiss.IndexFlatIP(dim)
-            # PQ with 8 sub-quantizers
-            index = faiss.IndexIVFPQ(quantizer, dim, self.config.nlist, 8, 8)
+            index = faiss.IndexIVFPQ(
+                quantizer,
+                dim,
+                self.config.nlist,
+                self.config.ivfpq_m_pq,
+                self.config.ivfpq_nbits,
+            )
             return index
 
         elif self.config.index_type == IndexType.HNSW:
