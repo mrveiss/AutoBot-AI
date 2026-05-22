@@ -39,6 +39,7 @@ from api.schemas_workflows import (
     StructuredThinkingProcessThoughtResponse,
     StructuredThinkingSessionDetailResponse,
     StructuredThinkingSessionsResponse,
+    StructuredThinkingSummaryData,
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -328,7 +329,7 @@ async def process_thought_mcp(request: ProcessThoughtRequest) -> Metadata:
     return response
 
 
-@router.post("/mcp/generate_summary", response_model=DataResponse)
+@router.post("/mcp/generate_summary", response_model=DataResponse[StructuredThinkingSummaryData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="generate_summary_mcp",

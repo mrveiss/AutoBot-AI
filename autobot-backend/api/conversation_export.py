@@ -19,7 +19,6 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 
 from api.schemas_agent import ConversationImportRequest, ConversationImportResponse
-from api.schemas_common import DataResponse
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -152,7 +151,7 @@ async def export_conversation(
     return _build_export_response(content, session_id, format)
 
 
-@router.get("/conversations/export-all", response_model=DataResponse)
+@router.get("/conversations/export-all", response_class=Response)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_all_conversations",

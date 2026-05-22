@@ -26,6 +26,7 @@ from api.schemas_system import (
     AssessmentPhaseDefinitionsData,
     CreateAssessmentRequest,
     ParseToolOutputData,
+    AssessmentMutationData,
     ParseToolOutputRequest,
     RecoverErrorRequest,
 )
@@ -233,7 +234,7 @@ async def get_assessment_summary(
     )
 
 
-@router.delete("/assessments/{assessment_id}", response_model=DataResponse)
+@router.delete("/assessments/{assessment_id}", response_model=DataResponse[AssessmentMutationData])
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="delete_assessment",
@@ -371,7 +372,7 @@ async def advance_phase(
     )
 
 
-@router.post("/assessments/{assessment_id}/hosts", response_model=DataResponse)
+@router.post("/assessments/{assessment_id}/hosts", response_model=DataResponse[AssessmentMutationData])
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="add_host",
@@ -420,7 +421,7 @@ async def add_host(
     )
 
 
-@router.post("/assessments/{assessment_id}/ports", response_model=DataResponse)
+@router.post("/assessments/{assessment_id}/ports", response_model=DataResponse[AssessmentMutationData])
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="add_port",
@@ -471,7 +472,7 @@ async def add_port(
     )
 
 
-@router.post("/assessments/{assessment_id}/vulnerabilities", response_model=DataResponse)
+@router.post("/assessments/{assessment_id}/vulnerabilities", response_model=DataResponse[AssessmentMutationData])
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="add_vulnerability",
@@ -524,7 +525,7 @@ async def add_vulnerability(
     )
 
 
-@router.post("/assessments/{assessment_id}/findings", response_model=DataResponse)
+@router.post("/assessments/{assessment_id}/findings", response_model=DataResponse[AssessmentMutationData])
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="add_finding",

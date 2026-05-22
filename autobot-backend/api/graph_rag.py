@@ -28,6 +28,7 @@ from fastapi.responses import JSONResponse
 
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
+    GraphRagMetricsData,
     GraphRAGSearchRequest,
     GraphRAGSearchResponse,
 )
@@ -201,7 +202,7 @@ async def graph_rag_search(
 register_app_state_probe("graph_rag", "graph_rag_service")
 
 
-@router.get("/metrics", response_model=DataResponse)
+@router.get("/metrics", response_model=DataResponse[GraphRagMetricsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="graph_rag_metrics",

@@ -16,7 +16,9 @@ from fastapi import APIRouter, HTTPException, Query, Request
 
 from api.schemas_agent import (
     SkillActionRequest,
+    SkillCatalogInstallData,
     SkillConfigUpdate,
+    SkillFeedbackData,
     SkillFeedbackRequest,
     SkillInstallRequest,
 )
@@ -235,7 +237,7 @@ async def list_catalog(
     return {"catalog_url": catalog_url, "page": page, "page_size": page_size, "skills": entries, "total": len(entries)}
 
 
-@router.post("/catalog/{name}/install", summary="Install a skill from an HTTP catalog", response_model=DataResponse)
+@router.post("/catalog/{name}/install", summary="Install a skill from an HTTP catalog", response_model=DataResponse[SkillCatalogInstallData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="install_catalog_skill",
@@ -431,7 +433,7 @@ async def get_skill_metrics(
         raise HTTPException(status_code=500, detail="Failed to retrieve metrics")
 
 
-@router.post("/{name}/feedback", summary="Submit skill feedback", response_model=DataResponse)
+@router.post("/{name}/feedback", summary="Submit skill feedback", response_model=DataResponse[SkillFeedbackData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="submit_skill_feedback",

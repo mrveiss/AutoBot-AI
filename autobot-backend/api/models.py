@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 
 from api.schemas_common import DataResponse
+from api.schemas_system import ModelsAvailableData
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -22,7 +23,7 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
-@router.get("/available", response_model=DataResponse)
+@router.get("/available", response_model=DataResponse[ModelsAvailableData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_available_models",

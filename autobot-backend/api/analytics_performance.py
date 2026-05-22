@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from api.schemas_analytics import (
+    AnalyticsPerformanceAnalyzeData,
     ImpactLevel,
     PerformanceAnalysisResult,
     PerformanceAnalyzeContentResponse,
@@ -477,7 +478,7 @@ def _calculate_analysis_score(
     return critical, high, medium, low, score
 
 
-@router.get("/analyze", response_model=DataResponse)
+@router.get("/analyze", response_model=DataResponse[AnalyticsPerformanceAnalyzeData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_path",

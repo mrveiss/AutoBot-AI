@@ -23,6 +23,7 @@ from agents.overseer.types import (
     OutputExplanation,
     StepStatus,
 )
+from api.schemas_agent import OverseerQueryData
 from api.schemas_common import DataResponse
 from api.schemas_system import OverseerStatusResponse
 from auth_middleware import get_current_user
@@ -463,7 +464,7 @@ async def overseer_websocket(websocket: WebSocket, session_id: str):
         await handler.disconnect()
 
 
-@router.post("/query/{session_id}", response_model=DataResponse)
+@router.post("/query/{session_id}", response_model=DataResponse[OverseerQueryData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="submit_query",

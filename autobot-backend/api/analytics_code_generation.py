@@ -29,6 +29,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
 from api.schemas_analytics import (
+    AnalyticsCodeGenRollbackData,
     CodeGenerationRefactoringTypesResponse,
     CodeGenerationRequest,
     CodeGenerationResponse,
@@ -909,7 +910,7 @@ async def get_versions(admin_check: bool = Depends(check_admin_permission), file
     }
 
 
-@router.post("/rollback", response_model=DataResponse)
+@router.post("/rollback", response_model=DataResponse[AnalyticsCodeGenRollbackData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="rollback_code",
