@@ -322,8 +322,9 @@ const decisionsCount = computed(() => {
     delete: 0
   };
 
+  const selectedIds = new Set(selectedPendingItems.value.map(item => item.id));
   Object.entries(itemDecisions.value).forEach(([itemId, decision]) => {
-    if (selectedItems.value[itemId] && decision) {
+    if (selectedIds.has(itemId) && decision) {
       counts[decision]++;
     }
   });
@@ -339,7 +340,7 @@ const loadPendingItems = async () => {
     const response = await apiService.get(`${getApiBase()}/chat-knowledge/knowledge/pending/${props.chatId}`);
 
     if (response.success) {
-      pendingItems.value = response.pending_items;
+      pendingItems.value = response.data?.pending_items ?? [];
 
       // Initialize decisions (useBatchSelection handles selection state)
       pendingItems.value.forEach(item => {
@@ -439,7 +440,7 @@ const compileChat = async () => {
 
     if (response.success) {
       showToast(t('knowledge.persistence.compiledSuccess'), 'success');
-      emit('chat-compiled', response.compiled);
+      emit('chat-compiled', response.data?.compiled);
       closeDialog();
     }
 
