@@ -424,7 +424,7 @@ class GPUVectorIndex:
             # Convert distance to similarity score
             # For IP (inner product), higher is better
             # For L2, lower is better - convert to similarity
-            if self.config.index_type in (IndexType.FLAT_IP, IndexType.IVF_FLAT):
+            if self.config.index_type in (IndexType.FLAT_IP, IndexType.IVF_FLAT, IndexType.SQ8):
                 score = float(dist)  # Already similarity
             else:
                 score = 1.0 / (1.0 + float(dist))  # Convert L2 distance to similarity
@@ -541,7 +541,7 @@ class GPUVectorIndex:
 
                 doc_id = self.id_map.get(idx, f"unknown_{idx}")
 
-                if self.config.index_type in (IndexType.FLAT_IP, IndexType.IVF_FLAT):
+                if self.config.index_type in (IndexType.FLAT_IP, IndexType.IVF_FLAT, IndexType.SQ8):
                     score = float(dist)
                 else:
                     score = 1.0 / (1.0 + float(dist))

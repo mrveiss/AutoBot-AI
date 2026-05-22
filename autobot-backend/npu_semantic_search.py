@@ -781,7 +781,7 @@ class NPUSemanticSearch:
         underlying ``asyncio.to_thread`` is dispatched once instead of N times.
         Returns a dict mapping original query index → (results, metrics).
         """
-        kb_collection = getattr(self.knowledge_base, "_async_chroma_collection", None)
+        kb_collection = self.collections.get("text")
         if kb_collection is None:
             return {}
 
@@ -812,11 +812,11 @@ class NPUSemanticSearch:
 
             results: List[SearchResult] = []
             for j, doc_id in enumerate(ids or []):
-                score = 1.0 - (dists[j] if dists else 0.0)
+                score = 1.0 - (dists[j] if dists and j < len(dists) else 0.0)
                 results.append(
                     SearchResult(
-                        content=(docs[j] if docs else ""),
-                        metadata=(metas[j] if metas else {}),
+                        content=(docs[j] if docs and j < len(docs) else ""),
+                        metadata=(metas[j] if metas and j < len(metas) else {}),
                         score=score,
                         doc_id=doc_id,
                         device_used=embedding_device,
@@ -873,11 +873,15 @@ class NPUSemanticSearch:
             logger.info("✅ Batch search: all %s queries from cache", len(queries))
             return output  # type: ignore[return-value]
 
-        emb_tasks = [
-            self._generate_optimized_embedding(queries[i], enable_npu_acceleration, None)
-            for i in miss_indices
-        ]
-        emb_results = await asyncio.gather(*emb_tasks, return_exceptions=True)
+        _emb_sem = asyncio.Semaphore(10)
+
+        async def _embed_with_limit(i: int):
+            async with _emb_sem:
+                return await self._generate_optimized_embedding(queries[i], enable_npu_acceleration, None)
+
+        emb_results = await asyncio.gather(
+            *[_embed_with_limit(i) for i in miss_indices], return_exceptions=True
+        )
 
         valid_miss_indices: List[int] = []
         valid_embeddings: List[List[float]] = []
@@ -893,17 +897,16 @@ class NPUSemanticSearch:
             valid_miss_indices.append(orig_idx)
             valid_embeddings.append(emb_array.tolist() if hasattr(emb_array, "tolist") else list(emb_array))
 
-        if valid_miss_indices and getattr(self.knowledge_base, "_async_chroma_collection", None) is not None:
+        if valid_miss_indices and self.collections.get("text") is not None:
             batch_hits = await self._batch_chromadb_search(
                 valid_miss_indices, valid_embeddings, similarity_top_k, filters, embedding_device
             )
             for orig_idx, result_tuple in batch_hits.items():
                 output[orig_idx] = result_tuple
                 self._cache_result(cache_keys[orig_idx], result_tuple)
-            for orig_idx in valid_miss_indices:
-                if output[orig_idx] is None:
-                    output[orig_idx] = self._create_error_search_result()
-        elif valid_miss_indices:
+
+        uncovered = [i for i in valid_miss_indices if output[i] is None]
+        if uncovered:
             semaphore = asyncio.Semaphore(10)
 
             async def _search_with_semaphore(idx: int) -> Tuple[int, Any]:
@@ -917,7 +920,7 @@ class NPUSemanticSearch:
                     return idx, result
 
             fallback_results = await asyncio.gather(
-                *[_search_with_semaphore(i) for i in valid_miss_indices], return_exceptions=True
+                *[_search_with_semaphore(i) for i in uncovered], return_exceptions=True
             )
             for item in fallback_results:
                 if isinstance(item, Exception):
