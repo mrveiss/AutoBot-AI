@@ -1579,7 +1579,7 @@ class NPUSemanticSearch:
             # Optimize for maximum throughput
             self.batch_size_npu = 64  # Larger batches
             self.batch_size_gpu = 256
-            self.cache_max_size = max(_SEARCH_CACHE_MAX_SIZE, 50)
+            self.cache_max_size = min(_SEARCH_CACHE_MAX_SIZE, 50)
             self.similarity_threshold = 0.8  # Higher threshold for quality
             optimizations["focus"] = "Optimized for maximum throughput"
 

@@ -856,6 +856,7 @@ class FactsMixin:
         """Re-vectorize fact after content update (Issue #398: extracted).
 
         Issue #165: Uses NPU worker for hardware-accelerated embedding generation.
+        Issue #8405: Routes add through VectorWriteBuffer when available.
         """
         from knowledge.utils import sanitize_metadata_for_chromadb as _sanitize
 
@@ -865,10 +866,15 @@ class FactsMixin:
 
         # Issue #165: Generate embedding using NPU worker with fallback
         embedding = await _generate_embedding_with_npu_fallback(content)
-        doc = Document(text=content, doc_id=fact_id, metadata=sanitized_metadata)
-        doc.embedding = embedding
 
-        await asyncio.to_thread(self.vector_store.add, [doc])
+        # Issue #8405: Route through VectorWriteBuffer when available, like _vectorize_fact_in_chromadb.
+        write_buffer = getattr(self, "_write_buffer", None)
+        if write_buffer is not None:
+            await write_buffer.write(fact_id, embedding, content, sanitized_metadata)
+        else:
+            doc = Document(text=content, doc_id=fact_id, metadata=sanitized_metadata)
+            doc.embedding = embedding
+            await asyncio.to_thread(self.vector_store.add, [doc])
         logger.info("Re-vectorized updated fact %s", fact_id)
 
     async def _refresh_content_hash(self, fact_id: str, old_content: str, new_content: str) -> None:

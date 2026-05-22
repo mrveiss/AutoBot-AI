@@ -381,7 +381,17 @@ class KnowledgeBaseCore:
         # Issue #8391: Instantiate VectorWriteBuffer backed by this collection.
         # buffer.start() is called in lifespan after KB init succeeds.
         from knowledge.write_buffer import VectorWriteBuffer, make_chromadb_flush_fn
-        self._write_buffer = VectorWriteBuffer(flush_fn=make_chromadb_flush_fn(self.vector_store))
+
+        # Issue #8406: Decrement total_vectors counter when a flush batch is dropped so
+        # the optimistic increment made at write time is corrected on failure.
+        async def _on_write_buffer_flush_error(count: int, exc: Exception) -> None:
+            logger.error("VectorWriteBuffer flush lost %d vectors; decrementing total_vectors: %s", count, exc)
+            await self._decrement_stat("total_vectors", count)
+
+        self._write_buffer = VectorWriteBuffer(
+            flush_fn=make_chromadb_flush_fn(self.vector_store),  # Issue #8401: LlamaIndex vs raw collection
+            on_flush_error=_on_write_buffer_flush_error,
+        )
 
         logger.info(
             "ChromaDB vector store initialized: collection='%s'",

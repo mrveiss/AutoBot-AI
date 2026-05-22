@@ -60,10 +60,13 @@ class VectorWriteBuffer:
         flush_fn: Callable[[List[BufferedWrite]], Coroutine[Any, Any, None]],
         flush_size: int = FLUSH_SIZE_THRESHOLD,
         flush_interval: float = FLUSH_INTERVAL_SECONDS,
+        on_flush_error: Optional[Callable[[int, Exception], Coroutine[Any, Any, None]]] = None,
     ) -> None:
         self._flush_fn = flush_fn
         self._flush_size = flush_size
         self._flush_interval = flush_interval
+        # Issue #8406: Optional callback invoked with (dropped_count, exc) on flush failure.
+        self._on_flush_error = on_flush_error
         # ID → entry; new writes overwrite stale ones (last-write-wins)
         self._buffer: Dict[str, BufferedWrite] = {}
         self._lock = asyncio.Lock()
@@ -147,8 +150,13 @@ class VectorWriteBuffer:
         try:
             await self._flush_fn(batch)
             logger.debug("VectorWriteBuffer flushed %d entries (flush #%d)", len(batch), self._flush_count)
-        except Exception:
+        except Exception as exc:
             logger.exception("VectorWriteBuffer flush failed — %d entries dropped", len(batch))
+            if self._on_flush_error is not None:
+                try:
+                    await self._on_flush_error(len(batch), exc)
+                except Exception:
+                    logger.exception("on_flush_error callback raised")
 
         return len(batch)
 
