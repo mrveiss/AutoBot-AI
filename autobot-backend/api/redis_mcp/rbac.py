@@ -99,3 +99,67 @@ def validate_key_namespace(key: str, is_admin: bool, access: ToolAccess) -> tupl
                 f"Write denied: key '{key}' is outside the " f"allowed namespace '{AGENT_NAMESPACE_PREFIX}*'"
             )
     return True, None
+
+
+# ---------------------------------------------------------------------------
+# Voice-context toolset bundles (#7344)
+# ---------------------------------------------------------------------------
+
+# Tool capability tags for bundle membership (data-driven, not name-based)
+# New tools auto-classify based on their declared ToolAccess level.
+_BUNDLE_TAG_MAP: dict[str, set[str]] = {
+    "voice_safe": {"read"},           # read-only tools only
+    "voice_extended": {"read", "scoped_write"},  # read + scoped writes
+    "voice_admin": {"read", "scoped_write", "full", "approval"},  # all non-blocked
+}
+
+# Map ToolAccess → capability tag
+_ACCESS_TO_TAG: dict[ToolAccess, str] = {
+    ToolAccess.READ: "read",
+    ToolAccess.SCOPED_WRITE: "scoped_write",
+    ToolAccess.FULL_WRITE: "full",
+    ToolAccess.APPROVAL_REQUIRED: "approval",
+    ToolAccess.BLOCKED: "blocked",
+}
+
+
+def get_tool_capability_tag(tool_name: str, is_admin: bool) -> str:
+    """Return the capability tag for a tool given the user's role."""
+    access = get_tool_access(tool_name, is_admin)
+    return _ACCESS_TO_TAG.get(access, "blocked")
+
+
+def filter_tools_for_bundle(
+    tools: list[str],
+    bundle: str,
+    is_admin: bool,
+    disabled_tools: list[str] | None = None,
+) -> list[str]:
+    """Filter tool names by the active voice bundle.
+
+    Args:
+        tools: All tool names to consider
+        bundle: Bundle name — one of voice_safe, voice_extended, voice_admin
+        is_admin: Whether the current user has admin role
+        disabled_tools: Additional tool names explicitly disabled (per-bundle override)
+
+    Returns:
+        Filtered list of tool names permitted in this bundle for this role.
+    """
+    allowed_tags = _BUNDLE_TAG_MAP.get(bundle, _BUNDLE_TAG_MAP["voice_safe"])
+    denied = set(disabled_tools or [])
+    result = []
+    for tool in tools:
+        if tool in denied:
+            continue
+        tag = get_tool_capability_tag(tool, is_admin)
+        if tag in allowed_tags:
+            result.append(tool)
+    logger.debug(
+        "voice_bundle bundle=%s is_admin=%s tools_in=%d tools_out=%d",
+        bundle,
+        is_admin,
+        len(tools),
+        len(result),
+    )
+    return result
