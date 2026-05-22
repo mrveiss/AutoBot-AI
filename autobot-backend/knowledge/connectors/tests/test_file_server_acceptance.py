@@ -24,7 +24,9 @@ def _file_server_config(tmp_path) -> ConnectorConfig:
         name="Test File Server",
         config={
             "base_path": str(tmp_path),
-            "include_patterns": ["**/*.txt", "**/*.md"],
+            # Use patterns without mandatory directory prefix so root-level
+            # test files are discovered (fnmatch: "**/*.txt" requires a "/").
+            "include_patterns": ["*.txt", "*.md", "docs/**/*.txt", "docs/**/*.md"],
             "exclude_patterns": [],
         },
     )
