@@ -29,10 +29,17 @@ from ..streaming import StreamingManager
 logger = get_logger(__name__)
 config = get_config_manager()
 
-_OLLAMA_TOOL_CAPABLE_MODELS: frozenset[str] = frozenset({
-    "llama3.1", "llama3.2", "llama3.3", "mistral-nemo", "mistral-large",
-    "qwen2.5", "firefunction-v2",
-})
+_OLLAMA_TOOL_CAPABLE_MODELS: frozenset[str] = frozenset(
+    {
+        "llama3.1",
+        "llama3.2",
+        "llama3.3",
+        "mistral-nemo",
+        "mistral-large",
+        "qwen2.5",
+        "firefunction-v2",
+    }
+)
 
 
 def _model_supports_tools(model: str) -> bool:
@@ -109,11 +116,14 @@ class OllamaProvider:
         }
         if request.tools and _model_supports_tools(model):
             data["tools"] = [
-                {"type": "function", "function": {
-                    "name": t.name,
-                    "description": t.description,
-                    "parameters": t.input_schema,
-                }}
+                {
+                    "type": "function",
+                    "function": {
+                        "name": t.name,
+                        "description": t.description,
+                        "parameters": t.input_schema,
+                    },
+                }
                 for t in request.tools
             ]
         return data
@@ -153,11 +163,13 @@ class OllamaProvider:
         result = []
         for tc in raw_calls:
             fn = tc.get("function", {}) if isinstance(tc, dict) else {}
-            result.append(ToolCall(
-                id=tc.get("id", ""),
-                name=fn.get("name", ""),
-                arguments=fn.get("arguments", {}),
-            ))
+            result.append(
+                ToolCall(
+                    id=tc.get("id", ""),
+                    name=fn.get("name", ""),
+                    arguments=fn.get("arguments", {}),
+                )
+            )
         return result
 
     def build_response(
@@ -490,7 +502,9 @@ class OllamaProvider:
             processing_time = time.time() - start_time
             content = self.extract_content(response)
             tool_calls = self.extract_tool_calls(response) or None
-            llm_response = self.build_response(content, response, model, processing_time, request.request_id, tool_calls=tool_calls)
+            llm_response = self.build_response(
+                content, response, model, processing_time, request.request_id, tool_calls=tool_calls
+            )
             try:
                 asyncio.get_running_loop().create_task(
                     obs_registry.notify_response(llm_response, processing_time * 1000, 0.0)
