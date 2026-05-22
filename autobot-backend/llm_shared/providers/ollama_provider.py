@@ -90,6 +90,8 @@ class OllamaProvider(BaseProvider):
             if chat_template:
                 # Issue #4525: when a chat_template is set, render messages to a
                 # prompt string and POST to /api/generate directly.
+                # Issue #6770: route through the shared "ollama_service" circuit breaker
+                # so total_calls is incremented (same breaker as the delegate path).
                 base_url = self._resolve_base_url()
                 model = request.model_name or self._get_setting("default_model", "")
                 raw_messages = [
@@ -110,18 +112,25 @@ class OllamaProvider(BaseProvider):
                 if request.max_tokens:
                     payload["options"]["num_predict"] = request.max_tokens
 
-                http_client = get_http_client()
-                timeout = aiohttp.ClientTimeout(total=None, connect=5.0, sock_read=None)
-                async with await http_client.post(
-                    f"{base_url}{PATH_OLLAMA_GENERATE}",
-                    headers={"Content-Type": "application/json"},
-                    json=payload,
-                    timeout=timeout,
-                ) as resp:
-                    if resp.status != 200:
-                        body = await resp.text()
-                        raise RuntimeError(f"Ollama generate returned HTTP {resp.status}: {body}")
-                    data = await resp.json()
+                from circuit_breaker import get_circuit_breaker_manager
+
+                cb = get_circuit_breaker_manager().get_circuit_breaker("ollama_service")
+
+                async def _generate() -> Dict[str, Any]:
+                    http_client = get_http_client()
+                    timeout = aiohttp.ClientTimeout(total=None, connect=5.0, sock_read=None)
+                    async with await http_client.post(
+                        f"{base_url}{PATH_OLLAMA_GENERATE}",
+                        headers={"Content-Type": "application/json"},
+                        json=payload,
+                        timeout=timeout,
+                    ) as resp:
+                        if resp.status != 200:
+                            body = await resp.text()
+                            raise RuntimeError(f"Ollama generate returned HTTP {resp.status}: {body}")
+                        return await resp.json()
+
+                data = await cb.call_async(_generate)
                 content = data.get("response", "")
                 usage = {
                     "prompt_tokens": data.get("prompt_eval_count", 0),
