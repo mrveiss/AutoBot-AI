@@ -22,12 +22,22 @@ from circuit_breaker import circuit_breaker_async
 from config.manager import get_config_manager
 from constants.api_constants import PATH_OLLAMA_CHAT
 
-from ..models import LLMRequest, LLMResponse, LLMSettings
+from ..models import LLMRequest, LLMResponse, LLMSettings, ToolCall
 from ..observability import registry as obs_registry
 from ..streaming import StreamingManager
 
 logger = get_logger(__name__)
 config = get_config_manager()
+
+_OLLAMA_TOOL_CAPABLE_MODELS: frozenset[str] = frozenset({
+    "llama3.1", "llama3.2", "llama3.3", "mistral-nemo", "mistral-large",
+    "qwen2.5", "firefunction-v2",
+})
+
+
+def _model_supports_tools(model: str) -> bool:
+    model_lower = model.lower()
+    return any(capable in model_lower for capable in _OLLAMA_TOOL_CAPABLE_MODELS)
 
 
 class OllamaProvider:
@@ -83,7 +93,7 @@ class OllamaProvider:
         Returns:
             Request data dictionary
         """
-        return {
+        data: dict = {
             "model": model,
             "messages": request.messages,
             "stream": use_streaming,
@@ -97,6 +107,16 @@ class OllamaProvider:
                 "num_ctx": self.settings.num_ctx,
             },
         }
+        if request.tools and _model_supports_tools(model):
+            data["tools"] = [
+                {"type": "function", "function": {
+                    "name": t.name,
+                    "description": t.description,
+                    "parameters": t.input_schema,
+                }}
+                for t in request.tools
+            ]
+        return data
 
     def extract_content(self, response: dict) -> str:
         """
@@ -116,6 +136,30 @@ class OllamaProvider:
             logger.warning("Unexpected response structure: %s", response)
             return str(response)
 
+    def extract_tool_calls(self, response: dict) -> list[ToolCall]:
+        """
+        Extract tool calls from Ollama response message.
+
+        Args:
+            response: Response dictionary from Ollama
+
+        Returns:
+            List of ToolCall objects, empty if none present
+        """
+        msg = response.get("message", {})
+        raw_calls = msg.get("tool_calls") if isinstance(msg, dict) else None
+        if not raw_calls:
+            return []
+        result = []
+        for tc in raw_calls:
+            fn = tc.get("function", {}) if isinstance(tc, dict) else {}
+            result.append(ToolCall(
+                id=tc.get("id", ""),
+                name=fn.get("name", ""),
+                arguments=fn.get("arguments", {}),
+            ))
+        return result
+
     def build_response(
         self,
         content: str,
@@ -124,6 +168,7 @@ class OllamaProvider:
         processing_time: float,
         request_id: str,
         fallback_used: bool = False,
+        tool_calls: list[ToolCall] | None = None,
     ) -> LLMResponse:
         """
         Build LLMResponse from extracted content.
@@ -135,6 +180,7 @@ class OllamaProvider:
             processing_time: Time taken to process
             request_id: Request identifier
             fallback_used: Whether fallback was used
+            tool_calls: Optional list of ToolCall objects
 
         Returns:
             LLMResponse object
@@ -148,6 +194,7 @@ class OllamaProvider:
             metadata=response.get("stats", {}),
             usage=response.get("usage", {}),
             fallback_used=fallback_used,
+            tool_calls=tool_calls or None,
         )
 
     def build_error_response(self, model: str, error: Exception) -> dict:
@@ -442,7 +489,8 @@ class OllamaProvider:
             response = await self._execute_request(url, headers, data, request.request_id, model, use_streaming)
             processing_time = time.time() - start_time
             content = self.extract_content(response)
-            llm_response = self.build_response(content, response, model, processing_time, request.request_id)
+            tool_calls = self.extract_tool_calls(response) or None
+            llm_response = self.build_response(content, response, model, processing_time, request.request_id, tool_calls=tool_calls)
             try:
                 asyncio.get_running_loop().create_task(
                     obs_registry.notify_response(llm_response, processing_time * 1000, 0.0)
@@ -463,4 +511,6 @@ class OllamaProvider:
 
 __all__ = [
     "OllamaProvider",
+    "_model_supports_tools",
+    "_OLLAMA_TOOL_CAPABLE_MODELS",
 ]
