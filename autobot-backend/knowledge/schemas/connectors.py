@@ -3,7 +3,7 @@
 # Author: mrveiss
 """Response schemas for the knowledge connector endpoints (Issue #5317)."""
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -15,6 +15,8 @@ class ConnectorTypeEntry(BaseModel):
 
     connector_type: str
     tier: int
+    # Issue #8147: JSONSchema describing ContentResult.metadata for this type.
+    output_schema: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ConnectorTypesResponse(BaseModel):
@@ -57,6 +59,8 @@ class ConnectorConfigDict(BaseModel):
     include_patterns: List[str]
     exclude_patterns: List[str]
     tier: int
+    # Issue #8148: max parallel source fetches for this connector instance.
+    max_concurrency: int | None = None
 
 
 class ConnectorEntry(BaseModel):
@@ -135,7 +139,11 @@ class ConnectorSyncResponse(BaseModel):
 
 
 class ConnectorHistoryEntry(BaseModel):
-    """Single history record stored per sync run."""
+    """Single history record stored per sync run.
+
+    Issue #8149: enriched with duration_seconds, source counters, and
+    structured per-source error list.
+    """
 
     model_config = ConfigDict(extra="allow")
 
@@ -146,7 +154,11 @@ class ConnectorHistoryEntry(BaseModel):
     added: int | None = None
     updated: int | None = None
     deleted: int | None = None
-    errors: int | None = None
+    # Issue #8149: was scalar error count; now structured list.
+    errors: List[str] | int | None = None
+    duration_seconds: float | None = None
+    sources_total: int | None = None
+    sources_done: int | None = None
 
 
 class ConnectorHistoryResponse(BaseModel):
@@ -157,6 +169,37 @@ class ConnectorHistoryResponse(BaseModel):
     connector_id: str
     history: List[ConnectorHistoryEntry]
     total: int
+
+
+class ConnectorJobResponse(BaseModel):
+    """GET /knowledge_base/connectors/{connector_id}/job — in-flight job state.
+
+    Issue #8149: Returns 404 when no sync is currently in flight.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    connector_id: str
+    job_id: str
+    started_at: str
+    status: str  # "running" | "success" | "failed" | "partial"
+    sources_total: int
+    sources_done: int
+    sources_failed: int
+    worker_id: str
+    last_updated: str
+
+
+class ConnectorLeaderResponse(BaseModel):
+    """GET /knowledge_base/connectors/scheduler/leader.
+
+    Issue #8149: Returns the currently elected scheduler leader worker ID,
+    or leader=null when no leader holds the lease.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    leader: Optional[str] = None
 
 
 class CreateConnectorRequest(BaseModel):
@@ -170,6 +213,8 @@ class CreateConnectorRequest(BaseModel):
     schedule_cron: str | None = None
     include_patterns: List[str] = Field(default_factory=list)
     exclude_patterns: List[str] = Field(default_factory=list)
+    # Issue #8148: optional per-instance concurrency override (None = class default).
+    max_concurrency: int | None = None
 
 
 class UpdateConnectorRequest(BaseModel):
@@ -182,3 +227,5 @@ class UpdateConnectorRequest(BaseModel):
     schedule_cron: str | None = None
     include_patterns: List[str] | None = None
     exclude_patterns: List[str] | None = None
+    # Issue #8148: update per-instance concurrency without a full config replace.
+    max_concurrency: int | None = None

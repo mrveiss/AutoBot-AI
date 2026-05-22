@@ -10,14 +10,18 @@ Connector configs are stored in Redis (knowledge DB) under
 ``connector:{connector_id}:history``.
 
 Endpoints:
+    GET  /api/knowledge_base/connector_types
     GET  /api/knowledge_base/connectors
     POST /api/knowledge_base/connectors
+    GET  /api/knowledge_base/connectors/health
+    GET  /api/knowledge_base/connectors/scheduler/leader      (Issue #8149)
     GET  /api/knowledge_base/connectors/{connector_id}
     PUT  /api/knowledge_base/connectors/{connector_id}
     DELETE /api/knowledge_base/connectors/{connector_id}
     POST /api/knowledge_base/connectors/{connector_id}/test
     POST /api/knowledge_base/connectors/{connector_id}/sync
     GET  /api/knowledge_base/connectors/{connector_id}/history
+    GET  /api/knowledge_base/connectors/{connector_id}/job    (Issue #8149)
 """
 
 import asyncio
@@ -45,6 +49,8 @@ from knowledge.schemas.connectors import (
     ConnectorHistoryResponse,
     ConnectorsHealthResponse,
     ConnectorsListResponse,
+    ConnectorJobResponse,
+    ConnectorLeaderResponse,
     ConnectorSyncResponse,
     ConnectorTestResponse,
     ConnectorTypesResponse,
@@ -69,7 +75,10 @@ _SUPPORTED_TYPES = ["file_server", "web_crawler", "database"]
 
 _REDIS_KEY_PREFIX = "connector:"
 _HISTORY_KEY_SUFFIX = ":history"
+_JOB_KEY_SUFFIX = ":job:current"
 _MAX_HISTORY = 50
+# Suffixes / infixes that mark non-config Redis keys under connector: namespace.
+_NON_CONFIG_INFIXES = (_HISTORY_KEY_SUFFIX, _JOB_KEY_SUFFIX, ":schedule:", "scheduler:")
 
 
 def _connector_key(connector_id: str) -> str:
@@ -97,6 +106,7 @@ async def _save_connector(cfg: ConnectorConfig) -> None:
         "exclude_patterns": cfg.exclude_patterns,
         "tier": int(getattr(cfg, "tier", 0)),
         "auth_type": getattr(cfg, "auth_type", None),
+        "max_concurrency": cfg.max_concurrency,
     }
     await asyncio.to_thread(
         redis.set,
@@ -119,6 +129,7 @@ def _deserialize_connector(raw: Any) -> ConnectorConfig:
     if isinstance(raw, bytes):
         raw = raw.decode("utf-8")
     data = json.loads(raw)
+    raw_mc = data.get("max_concurrency")
     return ConnectorConfig(
         connector_id=data["connector_id"],
         connector_type=data["connector_type"],
@@ -133,6 +144,7 @@ def _deserialize_connector(raw: Any) -> ConnectorConfig:
         exclude_patterns=data.get("exclude_patterns", []),
         tier=int(data.get("tier", 0)),
         auth_type=data.get("auth_type"),
+        max_concurrency=int(raw_mc) if raw_mc is not None else None,
     )
 
 
@@ -153,16 +165,20 @@ async def _list_connector_ids() -> List[str]:
     ids: List[str] = []
     async_scan = hasattr(redis, "scan_iter") and asyncio.iscoroutinefunction(getattr(redis, "scan_iter", None))
 
+    def _is_config_key(key_str: str) -> bool:
+        stripped = key_str[len(_REDIS_KEY_PREFIX) :]
+        return not any(infix in stripped for infix in _NON_CONFIG_INFIXES)
+
     if async_scan:
         async for key in redis.scan_iter(match=pattern):
             key_str = key.decode("utf-8") if isinstance(key, bytes) else key
-            if _HISTORY_KEY_SUFFIX not in key_str:
+            if _is_config_key(key_str):
                 ids.append(key_str[len(_REDIS_KEY_PREFIX) :])
     else:
         keys = await asyncio.to_thread(lambda: list(redis.scan_iter(match=pattern)))
         for key in keys:
             key_str = key.decode("utf-8") if isinstance(key, bytes) else key
-            if _HISTORY_KEY_SUFFIX not in key_str:
+            if _is_config_key(key_str):
                 ids.append(key_str[len(_REDIS_KEY_PREFIX) :])
 
     return ids
@@ -221,17 +237,23 @@ async def _run_sync_background(connector_id: str, incremental: bool) -> None:
         cfg.last_sync_at = sync_result.completed_at or now_utc()
         await _save_connector(cfg)
 
+        completed_at = sync_result.completed_at
+        duration_seconds = None
+        if completed_at is not None:
+            duration_seconds = (completed_at - sync_result.started_at).total_seconds()
         history_entry = {
             "connector_id": connector_id,
             "started_at": sync_result.started_at.isoformat(),
-            "completed_at": (sync_result.completed_at.isoformat() if sync_result.completed_at else None),
+            "completed_at": (completed_at.isoformat() if completed_at else None),
             "status": sync_result.status,
             "added": sync_result.added,
             "updated": sync_result.updated,
             "deleted": sync_result.deleted,
             "errors": sync_result.errors,
-            # Issue #8146: expose whether this run resumed from a checkpoint.
             "resumed_from_checkpoint": getattr(sync_result, "resumed_from_checkpoint", False),
+            "duration_seconds": duration_seconds,
+            "sources_total": sync_result.sources_total,
+            "sources_done": sync_result.sources_done,
         }
         await _append_history(connector_id, history_entry)
 
@@ -260,6 +282,7 @@ async def list_connector_types():
             {
                 "connector_type": type_name,
                 "tier": int(getattr(klass, "tier", 0)),
+                "output_schema": klass.output_schema(),
             }
         )
     types.sort(key=lambda t: (t["tier"], t["connector_type"]))
@@ -333,6 +356,7 @@ async def create_connector(request: CreateConnectorRequest):
         exclude_patterns=request.exclude_patterns,
         tier=int(getattr(klass, "tier", 0)),
         auth_type=auth_type,
+        max_concurrency=request.max_concurrency,
     )
     instance = _load_or_create_instance(cfg)
     healthy = await instance.test_connection()
@@ -346,6 +370,32 @@ async def create_connector(request: CreateConnectorRequest):
     await _maybe_schedule(cfg)
     logger.info("Created connector %s (%s)", connector_id, request.connector_type)
     return {"connector_id": connector_id, "config": _cfg_to_dict(cfg)}
+
+
+@router.get("/knowledge_base/connectors/scheduler/leader", response_model=ConnectorLeaderResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_scheduler_leader",
+    error_code_prefix="KNOWLEDGE_CONNECTORS",
+)
+async def get_scheduler_leader():
+    """Return the currently elected scheduler leader worker ID (Issue #8149).
+
+    Returns ``leader: null`` when no worker holds the lease (scheduler idle or
+    between leader transitions).
+    """
+    from knowledge.connectors.scheduler import _LEADER_KEY
+
+    from autobot_shared.redis_client import get_async_redis_client
+
+    redis = await get_async_redis_client(database="knowledge")
+    if redis is None:
+        return {"leader": None}
+    raw = await redis.get(_LEADER_KEY)
+    if raw is None:
+        return {"leader": None}
+    leader = raw.decode("utf-8") if isinstance(raw, bytes) else raw
+    return {"leader": leader}
 
 
 @router.get("/knowledge_base/connectors/health", response_model=ConnectorsHealthResponse)
@@ -533,6 +583,51 @@ async def get_sync_history(connector_id: str, limit: int = 20):
     return {"connector_id": connector_id, "history": history, "total": len(history)}
 
 
+@router.get("/knowledge_base/connectors/{connector_id}/job", response_model=ConnectorJobResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_connector_job",
+    error_code_prefix="KNOWLEDGE_CONNECTORS",
+)
+async def get_connector_job(connector_id: str):
+    """Return in-flight job state for a connector sync (Issue #8149).
+
+    Returns 404 when no sync is currently in flight (or the 24h TTL expired).
+    """
+    cfg = await _load_connector(connector_id)
+    if cfg is None:
+        raise HTTPException(status_code=404, detail=ERR_CONNECTOR_NOT_FOUND)
+
+    from autobot_shared.redis_client import get_async_redis_client
+
+    redis = await get_async_redis_client(database="knowledge")
+    if redis is None:
+        raise HTTPException(status_code=503, detail="Redis unavailable")
+
+    job_key = "connector:%s:job:current" % connector_id
+    raw = await redis.get(job_key)
+    if raw is None:
+        raise HTTPException(status_code=404, detail="No active job for connector %s" % connector_id)
+
+    try:
+        state = json.loads(raw.decode("utf-8") if isinstance(raw, bytes) else raw)
+    except Exception as exc:
+        logger.warning("Malformed job state for connector %s: %s", connector_id, exc)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    return {
+        "connector_id": connector_id,
+        "job_id": state.get("job_id", ""),
+        "started_at": state.get("started_at", ""),
+        "status": state.get("status", "unknown"),
+        "sources_total": state.get("sources_total", 0),
+        "sources_done": state.get("sources_done", 0),
+        "sources_failed": state.get("sources_failed", 0),
+        "worker_id": state.get("worker_id", ""),
+        "last_updated": state.get("last_updated", ""),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers (kept short per function-length policy)
 # ---------------------------------------------------------------------------
@@ -587,6 +682,7 @@ def _cfg_to_dict(cfg: ConnectorConfig) -> Dict[str, Any]:
         "exclude_patterns": cfg.exclude_patterns,
         "tier": _resolve_tier(cfg),
         "auth_type": getattr(cfg, "auth_type", None),
+        "max_concurrency": cfg.max_concurrency,
     }
 
 
@@ -620,6 +716,8 @@ def _apply_updates(cfg: ConnectorConfig, req: UpdateConnectorRequest) -> None:
         cfg.include_patterns = req.include_patterns
     if req.exclude_patterns is not None:
         cfg.exclude_patterns = req.exclude_patterns
+    if req.max_concurrency is not None:
+        cfg.max_concurrency = req.max_concurrency
 
 
 async def _maybe_schedule(cfg: ConnectorConfig) -> None:

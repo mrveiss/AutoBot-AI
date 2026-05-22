@@ -68,6 +68,21 @@ class FileServerConnector(AbstractConnector):
     # Issue #4421: zero-config — needs only a mount point, no credentials.
     tier = 0
 
+    @classmethod
+    def output_schema(cls) -> dict:
+        """Issue #8147: JSONSchema for FileServerConnector ContentResult.metadata."""
+        return {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "name": {"type": "string"},
+                "relative_path": {"type": "string"},
+                "extension": {"type": "string"},
+                "connector_id": {"type": "string"},
+            },
+            "required": ["path", "name", "extension"],
+        }
+
     def __init__(self, config: ConnectorConfig) -> None:
         super().__init__(config)
         cfg = config.config

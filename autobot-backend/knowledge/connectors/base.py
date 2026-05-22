@@ -15,9 +15,11 @@ and updated sync() to skip already-processed sources on restart.
 """
 
 import asyncio
+import json
+import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Awaitable, Callable, List, Set, TypeVar
+from typing import Any, Awaitable, Callable, Dict, List, Set, TypeVar
 
 from autobot_shared.datetime_utils import datetime_now
 from autobot_shared.logging_manager import get_logger
@@ -37,6 +39,9 @@ _DEFAULT_RETRYABLE_STATUS: tuple = (429, 500, 502, 503, 504)
 
 # Issue #8146: Checkpoint TTL — 24h prevents stale state on repeated crash loops.
 _CHECKPOINT_TTL_SECONDS = 86400
+
+_JOB_KEY_SUFFIX = ":job:current"
+_JOB_TTL_S = 86400  # 24 h
 
 
 class RetryableError(Exception):
@@ -107,6 +112,25 @@ class AbstractConnector(ABC):
             return BearerAuth  # from knowledge.connectors.auth
         """
         return None
+
+    @classmethod
+    def output_schema(cls) -> Dict[str, Any]:
+        """Return a JSONSchema dict describing ContentResult.metadata shape.
+
+        Issue #8147: Used for validation at ingest time and UI field rendering.
+        Default returns an empty dict (no schema → backward compatible).
+        """
+        return {}
+
+    @property
+    def max_concurrency(self) -> int:
+        """Max parallel source fetches. Default 1 (sequential, backward compatible).
+
+        Issue #8148: Connectors opt in by overriding this to a value > 1.
+        The config field ``max_concurrency`` takes precedence when set.
+        """
+        cfg_val = self.config.max_concurrency
+        return cfg_val if cfg_val is not None else 1
 
     async def fetch_with_retry(
         self,
@@ -239,7 +263,8 @@ class AbstractConnector(ABC):
         Each source is processed independently so a single failure does not
         abort the rest of the sync.  On restart after a crash, sources that
         were already successfully processed are skipped via a Redis checkpoint
-        (Issue #8146).
+        (Issue #8146).  When ``max_concurrency > 1``, sources are processed
+        in parallel via ``asyncio.gather + Semaphore`` (Issue #8148).
 
         Args:
             incremental: When True, only process sources that changed since
@@ -262,6 +287,7 @@ class AbstractConnector(ABC):
             await self._clear_checkpoint()
 
         since = self.config.last_sync_at if incremental else None
+        job_id = str(uuid.uuid4())
 
         try:
             already_processed = await self._read_checkpoint()
@@ -274,6 +300,7 @@ class AbstractConnector(ABC):
                 result.resumed_from_checkpoint = True
 
             changes = await self.detect_changes(since=since)
+            result.sources_total = len(changes)
             self.logger.info(
                 "Connector %s detected %d changes (incremental=%s)",
                 self.config.connector_id,
@@ -281,11 +308,46 @@ class AbstractConnector(ABC):
                 incremental,
             )
 
-            for change in changes:
-                if change.source_id in already_processed:
-                    continue
-                await self._process_change(change, result)
-                await self._write_checkpoint(change.source_id)
+            await self._write_job_state(
+                job_id=job_id,
+                status="running",
+                started_at=started_at,
+                sources_total=result.sources_total,
+                sources_done=0,
+                sources_failed=0,
+            )
+
+            concurrency = self.max_concurrency
+            pending = [c for c in changes if c.source_id not in already_processed]
+            if concurrency <= 1:
+                for change in pending:
+                    await self._process_change(change, result)
+                    await self._write_checkpoint(change.source_id)
+                    await self._write_job_state(
+                        job_id=job_id,
+                        status="running",
+                        started_at=started_at,
+                        sources_total=result.sources_total,
+                        sources_done=result.sources_done,
+                        sources_failed=result.sources_failed,
+                    )
+            else:
+                sem = asyncio.Semaphore(concurrency)
+
+                async def bounded(change: ChangeInfo) -> None:
+                    async with sem:
+                        await self._process_change(change, result)
+                        await self._write_checkpoint(change.source_id)
+                        await self._write_job_state(
+                            job_id=job_id,
+                            status="running",
+                            started_at=started_at,
+                            sources_total=result.sources_total,
+                            sources_done=result.sources_done,
+                            sources_failed=result.sources_failed,
+                        )
+
+                await asyncio.gather(*[bounded(c) for c in pending], return_exceptions=True)
 
             result.status = "success" if not result.errors else "partial"
             await self._clear_checkpoint()
@@ -295,6 +357,14 @@ class AbstractConnector(ABC):
             result.status = "failed"
         finally:
             result.completed_at = datetime_now()
+            await self._write_job_state(
+                job_id=job_id,
+                status=result.status,
+                started_at=started_at,
+                sources_total=result.sources_total,
+                sources_done=result.sources_done,
+                sources_failed=result.sources_failed,
+            )
 
         return result
 
@@ -303,24 +373,75 @@ class AbstractConnector(ABC):
         try:
             if change.change_type == "deleted":
                 result.deleted += 1
+                result.sources_done += 1
                 return
 
             content = await self.fetch_content(change.source_id)
             if content is None:
                 self.logger.warning("fetch_content returned None for %s", change.source_id)
                 result.errors.append("No content for source_id=%s" % change.source_id)
+                result.sources_failed += 1
+                result.sources_done += 1
                 return
 
+            self._validate_metadata(content, result)
             await self._ingest_content(content)
 
             if change.change_type == "added":
                 result.added += 1
             else:
                 result.updated += 1
+            result.sources_done += 1
 
         except Exception as exc:
             self.logger.error("Error processing source %s: %s", change.source_id, exc)
             result.errors.append("source_id=%s: %s" % (change.source_id, exc))
+            result.sources_failed += 1
+            result.sources_done += 1
+
+    def _validate_metadata(self, content: ContentResult, result: SyncResult) -> None:
+        """Validate content.metadata against output_schema() if one is declared.
+
+        Issue #8147: Soft validation — logs a warning and appends to
+        result.errors but does NOT abort ingestion.
+        """
+        schema = self.output_schema()
+        if not schema:
+            return
+
+        required = schema.get("required", [])
+        props = schema.get("properties", {})
+
+        missing = [k for k in required if k not in content.metadata]
+        if missing:
+            msg = "source_id=%s: metadata missing required fields %s" % (content.source_id, missing)
+            self.logger.warning("Output schema violation: %s", msg)
+            result.errors.append(msg)
+
+        for key, prop_schema in props.items():
+            if key not in content.metadata:
+                continue
+            expected_type = prop_schema.get("type")
+            if expected_type is None:
+                continue
+            _TYPE_MAP: Dict[str, type] = {
+                "string": str,
+                "integer": int,
+                "number": (int, float),
+                "boolean": bool,
+                "array": list,
+                "object": dict,
+            }
+            py_type = _TYPE_MAP.get(expected_type)
+            if py_type and not isinstance(content.metadata[key], py_type):
+                msg = "source_id=%s: metadata field '%s' expected %s, got %s" % (
+                    content.source_id,
+                    key,
+                    expected_type,
+                    type(content.metadata[key]).__name__,
+                )
+                self.logger.warning("Output schema type mismatch: %s", msg)
+                result.errors.append(msg)
 
     async def _ingest_content(self, content: ContentResult) -> None:
         """Store fetched content in the knowledge base (Issue #1254: extracted).
@@ -355,3 +476,45 @@ class AbstractConnector(ABC):
             content.source_id,
             self.config.connector_id,
         )
+
+    # ------------------------------------------------------------------
+    # Job state helpers (Issue #8149)
+    # ------------------------------------------------------------------
+
+    def _job_redis_key(self) -> str:
+        return "connector:%s%s" % (self.config.connector_id, _JOB_KEY_SUFFIX)
+
+    async def _write_job_state(
+        self,
+        job_id: str,
+        status: str,
+        started_at: datetime,
+        sources_total: int,
+        sources_done: int,
+        sources_failed: int,
+    ) -> None:
+        """Write current job state to Redis with a 24h TTL."""
+        import os
+
+        from autobot_shared.redis_client import get_async_redis_client
+
+        redis = await get_async_redis_client(database="knowledge")
+        if redis is None:
+            return
+        try:
+            state = json.dumps(
+                {
+                    "job_id": job_id,
+                    "started_at": started_at.isoformat(),
+                    "status": status,
+                    "sources_total": sources_total,
+                    "sources_done": sources_done,
+                    "sources_failed": sources_failed,
+                    "worker_id": "%s-%d" % (os.uname().nodename, os.getpid()),
+                    "last_updated": datetime_now().isoformat(),
+                },
+                ensure_ascii=False,
+            )
+            await redis.set(self._job_redis_key(), state, ex=_JOB_TTL_S)
+        except Exception as exc:
+            self.logger.debug("Job state write failed (non-critical): %s", exc)

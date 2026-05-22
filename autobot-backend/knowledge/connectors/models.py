@@ -78,6 +78,8 @@ class ConnectorConfig:
     # Issue #8145: auth type string derived from connector_class.auth_schema().__name__,
     # or None for connectors that declare no typed auth.
     auth_type: str | None = None
+    # Issue #8148: max parallel source fetches; None = use connector class default.
+    max_concurrency: int | None = None
 
 
 @dataclass
@@ -107,3 +109,7 @@ class SyncResult:
     # Issue #8146: True when sync resumed from a Redis checkpoint instead of
     # starting from scratch (crash-recovery path).
     resumed_from_checkpoint: bool = False
+    # Issue #8149: per-source progress counters for live job state tracking.
+    sources_total: int = 0
+    sources_done: int = 0
+    sources_failed: int = 0
