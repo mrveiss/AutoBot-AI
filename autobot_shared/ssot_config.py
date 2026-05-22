@@ -1210,6 +1210,8 @@ class MiscConfig(BaseSettings):
     log_backup_count: int = Field(default=0, alias="AUTOBOT_LOG_BACKUP_COUNT")
     log_max_bytes: int = Field(default=0, alias="AUTOBOT_LOG_MAX_BYTES")
     mcp_token: str = Field(default="", alias="AUTOBOT_MCP_TOKEN")
+    voice_toolset_bundle: str = Field(default="voice_safe", alias="AUTOBOT_VOICE_TOOLSETS")
+    voice_disabled_tools: str = Field(default="", alias="AUTOBOT_VOICE_DISABLED_TOOLS")
     memory_log_threshold_mb: int = Field(default=0, alias="AUTOBOT_MEMORY_LOG_THRESHOLD_MB")
     memory_pool_size: int = Field(default=0, alias="AUTOBOT_MEMORY_POOL_SIZE")
     memory_threshold_mb: int = Field(default=0, alias="AUTOBOT_MEMORY_THRESHOLD_MB")
