@@ -36,7 +36,6 @@ from knowledge.connectors.models import (
     SyncResult,
 )
 
-
 # ---------------------------------------------------------------------------
 # Minimal concrete connector for testing
 # ---------------------------------------------------------------------------
@@ -260,9 +259,7 @@ class TestSyncCheckpoint:
     @pytest.mark.asyncio
     async def test_crash_and_resume_skips_processed(self):
         """Crash-resume: source already in checkpoint is skipped."""
-        self.conn.detect_changes = AsyncMock(
-            return_value=[self._change("s1"), self._change("s2")]
-        )
+        self.conn.detect_changes = AsyncMock(return_value=[self._change("s1"), self._change("s2")])
         self.conn._process_change = AsyncMock()
         # Pretend s1 was already processed in a prior crashed run
         self.conn._read_checkpoint = AsyncMock(return_value={"s1"})
@@ -273,9 +270,7 @@ class TestSyncCheckpoint:
 
         assert result.resumed_from_checkpoint is True
         # Only s2 should be processed
-        processed_ids = [
-            call.args[0].source_id for call in self.conn._process_change.call_args_list
-        ]
+        processed_ids = [call.args[0].source_id for call in self.conn._process_change.call_args_list]
         assert "s1" not in processed_ids
         assert "s2" in processed_ids
 
@@ -295,9 +290,7 @@ class TestSyncCheckpoint:
         # _clear_checkpoint called at the start (full-refresh) and end (success)
         assert len(clear_calls) >= 1
         # s1 should still be processed despite being in checkpoint
-        processed_ids = [
-            call.args[0].source_id for call in self.conn._process_change.call_args_list
-        ]
+        processed_ids = [call.args[0].source_id for call in self.conn._process_change.call_args_list]
         # full-refresh does NOT skip sources from checkpoint —
         # checkpoint is cleared before _read_checkpoint is called, so it returns {}
         # (our mock still returns {"s1"} so check we at least cleared once)

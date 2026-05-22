@@ -68,8 +68,7 @@ def validate_config_against_schema(auth_cls: type, config: dict) -> list[str]:
     errors: list[str] = []
     for f in dataclasses.fields(auth_cls):
         has_default = (
-            f.default is not dataclasses.MISSING
-            or f.default_factory is not dataclasses.MISSING  # type: ignore[misc]
+            f.default is not dataclasses.MISSING or f.default_factory is not dataclasses.MISSING  # type: ignore[misc]
         )
         if not has_default and f.name not in config:
             errors.append("missing required auth field: %s" % f.name)
