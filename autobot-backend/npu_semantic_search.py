@@ -33,7 +33,6 @@ from config import cfg
 
 # Import existing AutoBot components
 from constants.threshold_constants import TimingConstants
-from constants.ttl_constants import TTL_5_MINUTES
 from knowledge.backends import get_default_client
 from knowledge.embedding_cache import get_embedding_cache
 from knowledge_base import KnowledgeBase
@@ -85,6 +84,11 @@ def _resolve_npu_embedding_cache_ttl() -> int:
 
 
 _NPU_EMBEDDING_CACHE_TTL: int = _resolve_npu_embedding_cache_ttl()
+
+# Issue #8154: Search result cache — resolved from SSOT config with env-var overrides.
+# AUTOBOT_SEARCH_RESULT_CACHE_SIZE (default 10000) and AUTOBOT_SEARCH_RESULT_CACHE_TTL (default 1800s).
+_SEARCH_CACHE_MAX_SIZE: int = config.cache.l1.search_result_cache_max_size
+_SEARCH_CACHE_TTL: int = config.cache.l1.search_result_cache_ttl
 
 # Issue #380: Module-level tuple for default target modalities in cross-modal search
 _DEFAULT_TARGET_MODALITIES = ("text", "image", "audio", "multimodal")
@@ -189,8 +193,8 @@ class NPUSemanticSearch:
         # Use Issue #65 P0 optimized EmbeddingCache (60-80% improvement for repeated queries)
         self.embedding_cache = get_embedding_cache()
         self.search_results_cache = {}  # Cache for complete search results
-        self.cache_max_size = 100
-        self.cache_ttl_seconds = TTL_5_MINUTES
+        self.cache_max_size = _SEARCH_CACHE_MAX_SIZE
+        self.cache_ttl_seconds = _SEARCH_CACHE_TTL
 
         # Performance optimization settings
         self.batch_size_npu = 32  # Optimal NPU batch size
@@ -763,6 +767,76 @@ class NPUSemanticSearch:
                 processed_results.append(result)
         return processed_results
 
+    async def _batch_chromadb_search(
+        self,
+        miss_indices: List[int],
+        miss_embeddings: List[List[float]],
+        similarity_top_k: int,
+        filters: Dict[str, Any] | None,
+        embedding_device: str,
+    ) -> Dict[int, Tuple[List[SearchResult], SearchMetrics]]:
+        """Issue #8153: run all cache-miss queries against ChromaDB in one call.
+
+        Passes the full list of query embeddings to ``query_batch()`` so the
+        underlying ``asyncio.to_thread`` is dispatched once instead of N times.
+        Returns a dict mapping original query index → (results, metrics).
+        """
+        kb_collection = getattr(self.knowledge_base, "_async_chroma_collection", None)
+        if kb_collection is None:
+            return {}
+
+        start = time.time()
+        try:
+            batch_result = await kb_collection.query_batch(
+                query_embeddings=miss_embeddings,
+                n_results=similarity_top_k,
+                where=filters,
+            )
+        except Exception as exc:
+            logger.error("batch_chromadb_search failed: %s", exc)
+            return {}
+
+        query_time_ms = (time.time() - start) * 1000
+        out: Dict[int, Tuple[List[SearchResult], SearchMetrics]] = {}
+
+        ids_per_query = batch_result.get("ids") or []
+        docs_per_query = batch_result.get("documents") or [None] * len(ids_per_query)
+        metas_per_query = batch_result.get("metadatas") or [None] * len(ids_per_query)
+        dists_per_query = batch_result.get("distances") or [None] * len(ids_per_query)
+
+        for slice_idx, orig_idx in enumerate(miss_indices):
+            ids = ids_per_query[slice_idx] if slice_idx < len(ids_per_query) else []
+            docs = docs_per_query[slice_idx] if slice_idx < len(docs_per_query) else None
+            metas = metas_per_query[slice_idx] if slice_idx < len(metas_per_query) else None
+            dists = dists_per_query[slice_idx] if slice_idx < len(dists_per_query) else None
+
+            results: List[SearchResult] = []
+            for j, doc_id in enumerate(ids or []):
+                score = 1.0 - (dists[j] if dists else 0.0)
+                results.append(
+                    SearchResult(
+                        content=(docs[j] if docs else ""),
+                        metadata=(metas[j] if metas else {}),
+                        score=score,
+                        doc_id=doc_id,
+                        device_used=embedding_device,
+                        processing_time_ms=query_time_ms / max(len(miss_indices), 1),
+                        embedding_model="chromadb",
+                    )
+                )
+
+            metrics = SearchMetrics(
+                total_documents_searched=len(results),
+                embedding_generation_time_ms=0.0,
+                similarity_computation_time_ms=query_time_ms / max(len(miss_indices), 1),
+                total_search_time_ms=query_time_ms / max(len(miss_indices), 1),
+                device_used=embedding_device,
+                hardware_utilization={},
+            )
+            out[orig_idx] = (results, metrics)
+
+        return out
+
     async def batch_search(
         self,
         queries: List[str],
@@ -770,40 +844,94 @@ class NPUSemanticSearch:
         filters: Dict[str, Any] | None = None,
         enable_npu_acceleration: bool = True,
     ) -> List[Tuple[List[SearchResult], SearchMetrics]]:
-        """
-        Perform batch semantic search for multiple queries with NPU acceleration.
+        """Batch semantic search — uses a single ChromaDB call for all queries.
 
-        Args:
-            queries: List of search query strings
-            similarity_top_k: Number of results per query
-            filters: Optional metadata filters
-            enable_npu_acceleration: Whether to use NPU acceleration
+        Issue #8153: replaces N individual ``enhanced_search`` dispatches with:
+          1. Cache check for all queries (no I/O).
+          2. Concurrent embedding generation for cache misses.
+          3. One ``query_batch()`` call → one ``asyncio.to_thread`` dispatch.
+          4. Per-query result slicing from the batched response.
 
-        Returns:
-            List of tuples (search_results, metrics) for each query
+        Falls back to the individual ``enhanced_search`` path when the knowledge
+        base ChromaDB collection is not available.
         """
         if not queries:
             return []
 
         logger.info("🔍 Batch search: %s queries (top_k=%s)", len(queries), similarity_top_k)
 
-        semaphore = asyncio.Semaphore(10)
+        cache_keys = [self._generate_cache_key(q, similarity_top_k, filters) for q in queries]
+        output: List[Tuple[List[SearchResult], SearchMetrics] | None] = [None] * len(queries)
 
-        async def _search_with_semaphore(query: str):
-            """Execute single search with semaphore for concurrency control."""
-            async with semaphore:
-                return await self.enhanced_search(
-                    query=query,
-                    similarity_top_k=similarity_top_k,
-                    filters=filters,
-                    enable_npu_acceleration=enable_npu_acceleration,
-                )
+        miss_indices = [i for i, k in enumerate(cache_keys) if self._get_cached_result(k) is None]
 
-        results = await asyncio.gather(*[_search_with_semaphore(q) for q in queries], return_exceptions=True)
+        for i in range(len(queries)):
+            if i not in miss_indices:
+                output[i] = self._get_cached_result(cache_keys[i])
 
-        processed_results = self._process_batch_results(results)
-        logger.info("✅ Batch search completed: %s results", len(processed_results))
-        return processed_results
+        if not miss_indices:
+            logger.info("✅ Batch search: all %s queries from cache", len(queries))
+            return output  # type: ignore[return-value]
+
+        emb_tasks = [
+            self._generate_optimized_embedding(queries[i], enable_npu_acceleration, None)
+            for i in miss_indices
+        ]
+        emb_results = await asyncio.gather(*emb_tasks, return_exceptions=True)
+
+        valid_miss_indices: List[int] = []
+        valid_embeddings: List[List[float]] = []
+        embedding_device = "batch_mixed"
+
+        for pos, (orig_idx, emb_result) in enumerate(zip(miss_indices, emb_results)):
+            if isinstance(emb_result, Exception):
+                logger.error("Embedding failed for query %s: %s", orig_idx, emb_result)
+                output[orig_idx] = self._create_error_search_result()
+                continue
+            emb_array, device = emb_result
+            embedding_device = device
+            valid_miss_indices.append(orig_idx)
+            valid_embeddings.append(emb_array.tolist() if hasattr(emb_array, "tolist") else list(emb_array))
+
+        if valid_miss_indices and getattr(self.knowledge_base, "_async_chroma_collection", None) is not None:
+            batch_hits = await self._batch_chromadb_search(
+                valid_miss_indices, valid_embeddings, similarity_top_k, filters, embedding_device
+            )
+            for orig_idx, result_tuple in batch_hits.items():
+                output[orig_idx] = result_tuple
+                self._cache_result(cache_keys[orig_idx], result_tuple)
+            for orig_idx in valid_miss_indices:
+                if output[orig_idx] is None:
+                    output[orig_idx] = self._create_error_search_result()
+        elif valid_miss_indices:
+            semaphore = asyncio.Semaphore(10)
+
+            async def _search_with_semaphore(idx: int) -> Tuple[int, Any]:
+                async with semaphore:
+                    result = await self.enhanced_search(
+                        query=queries[idx],
+                        similarity_top_k=similarity_top_k,
+                        filters=filters,
+                        enable_npu_acceleration=enable_npu_acceleration,
+                    )
+                    return idx, result
+
+            fallback_results = await asyncio.gather(
+                *[_search_with_semaphore(i) for i in valid_miss_indices], return_exceptions=True
+            )
+            for item in fallback_results:
+                if isinstance(item, Exception):
+                    logger.error("Fallback search failed: %s", item)
+                else:
+                    idx, result_tuple = item
+                    output[idx] = result_tuple
+
+        for i in range(len(queries)):
+            if output[i] is None:
+                output[i] = self._create_error_search_result()
+
+        logger.info("✅ Batch search completed: %s results", len(output))
+        return output  # type: ignore[return-value]
 
     def _calculate_device_summary(self, device_results: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Calculate summary statistics for a device's benchmark results (Issue #665: extracted helper)."""
@@ -952,6 +1080,12 @@ class NPUSemanticSearch:
                 anonymized_telemetry=False,
             )
 
+            # Issue #8155: build collection metadata with hnsw:space + optional SQ8.
+            _quantization_type: str = config.misc.hnsw_quantization_type
+            _base_hnsw: Dict[str, Any] = {"hnsw:space": "cosine"}
+            if _quantization_type:
+                _base_hnsw["hnsw:quantization_type"] = _quantization_type
+
             # Initialize collections for each modality
             for modality, collection_name in self.collection_names.items():
                 try:
@@ -960,13 +1094,23 @@ class NPUSemanticSearch:
                     logger.info(f"✅ Loaded existing ChromaDB collection: {collection_name}")
                 except ValueError:
                     # Create new collection if it doesn't exist
-                    collection = self.chroma_client.create_collection(
-                        name=collection_name,
-                        metadata={
-                            "modality": modality,
-                            "description": f"AutoBot {modality} embeddings",
-                        },
-                    )
+                    col_meta: Dict[str, Any] = {
+                        "modality": modality,
+                        "description": f"AutoBot {modality} embeddings",
+                        **_base_hnsw,
+                    }
+                    try:
+                        collection = self.chroma_client.create_collection(
+                            name=collection_name,
+                            metadata=col_meta,
+                        )
+                    except Exception:
+                        # Quantization key rejected by this ChromaDB version — retry without it.
+                        fallback_meta = {k: v for k, v in col_meta.items() if k != "hnsw:quantization_type"}
+                        collection = self.chroma_client.create_collection(
+                            name=collection_name,
+                            metadata=fallback_meta,
+                        )
                     logger.info(f"✅ Created new ChromaDB collection: {collection_name}")
 
                 self.collections[modality] = collection

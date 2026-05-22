@@ -162,6 +162,41 @@ class AsyncChromaCollection:
             include=include,
         )
 
+    async def query_batch(
+        self,
+        query_embeddings: List[List[float]],
+        n_results: int = 10,
+        where: Dict[str, Any] | None = None,
+        where_document: Dict[str, Any] | None = None,
+        include: List[str] | None = None,
+    ) -> Dict[str, Any]:
+        """Batch vector search — all embeddings in a single ChromaDB call.
+
+        Issue #8153: eliminates per-query thread dispatch overhead. ChromaDB
+        returns nested-list results: results["ids"][i] is the hit-list for
+        query i. Callers must slice the returned dict by query index.
+
+        Args:
+            query_embeddings: N query vectors; each is a list[float].
+            n_results: Number of results per query.
+            where: Optional metadata filter applied to every query.
+            where_document: Optional document content filter.
+            include: Fields to include (default: documents, metadatas, distances).
+
+        Returns:
+            Dict with nested lists, one inner list per query vector.
+        """
+        if include is None:
+            include = _DEFAULT_QUERY_INCLUDE
+        return await asyncio.to_thread(
+            self._collection.query,
+            query_embeddings=query_embeddings,
+            n_results=n_results,
+            where=where,
+            where_document=where_document,
+            include=include,
+        )
+
     async def get(
         self,
         ids: List[str] | None = None,

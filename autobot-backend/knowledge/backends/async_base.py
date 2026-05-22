@@ -99,6 +99,31 @@ class AsyncBaseCollection(ABC):
     ) -> Dict[str, Any]:
         """Vector search. Returns nested-list dict, one inner list per query."""
 
+    async def query_batch(
+        self,
+        query_embeddings: Sequence[Embedding],
+        n_results: int = 10,
+        where: Where | None = None,
+        where_document: WhereDocument | None = None,
+        include: Sequence[str] | None = None,
+    ) -> Dict[str, Any]:
+        """Batch vector search — multiple embeddings in a single backend call.
+
+        Issue #8153: default implementation forwards to ``query()`` so all
+        existing subclasses gain the method without changes. Backend adapters
+        that support native multi-query (ChromaDB, etc.) should override.
+
+        Returns nested-list dict: ``results["ids"][i]`` is the hit list for
+        query ``i``.
+        """
+        return await self.query(
+            query_embeddings=list(query_embeddings),
+            n_results=n_results,
+            where=where,
+            where_document=where_document,
+            include=include,
+        )
+
     @abstractmethod
     async def delete(
         self,
