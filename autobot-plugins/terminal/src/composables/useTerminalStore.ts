@@ -55,6 +55,13 @@ export const useTerminalStore = defineStore('autobot-terminal', () => {
     return sessions.value
   }
 
+  const ensureCommandHistoryMap = () => {
+    if (!(commandHistory.value instanceof Map)) {
+      commandHistory.value = new Map(Object.entries(commandHistory.value as unknown as Record<string, string[]>))
+    }
+    return commandHistory.value
+  }
+
   const getSession = (id: string) => ensureMap().get(id)
 
   const createSession = (id: string, host: HostConfig): TerminalSession => {
@@ -76,12 +83,13 @@ export const useTerminalStore = defineStore('autobot-terminal', () => {
   const setSelectedHost = (host: HostConfig) => { selectedHost.value = host }
 
   const addCommandToHistory = (hostId: string, command: string) => {
-    if (!commandHistory.value.has(hostId)) commandHistory.value.set(hostId, [])
-    const h = commandHistory.value.get(hostId)!
+    const hist = ensureCommandHistoryMap()
+    if (!hist.has(hostId)) hist.set(hostId, [])
+    const h = hist.get(hostId)!
     if (h[h.length - 1] !== command) { h.push(command); if (h.length > 100) h.shift() }
   }
 
-  const getCommandHistory = (hostId: string) => commandHistory.value.get(hostId) || []
+  const getCommandHistory = (hostId: string) => ensureCommandHistoryMap().get(hostId) || []
 
   const addTab = (tab: TerminalTab) => {
     terminalTabs.value.forEach(t => (t.isActive = false))

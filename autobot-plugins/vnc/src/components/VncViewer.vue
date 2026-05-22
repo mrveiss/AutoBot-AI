@@ -44,16 +44,7 @@
 // Copyright (c) 2025 mrveiss
 
 import { computed } from 'vue'
-
-export interface VncHost {
-  id: string
-  name: string
-  host: string
-  port: number
-  description?: string
-  /** If true, an nginx proxy exists for this host so it can be embedded. Default: id === 'main' */
-  proxied?: boolean
-}
+import type { VncHost } from '../types'
 
 const props = defineProps<{
   /** Whether the viewer is in connected/active state (v-model). */
