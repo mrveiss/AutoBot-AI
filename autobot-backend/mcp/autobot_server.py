@@ -31,10 +31,11 @@ Observability:
 import asyncio
 import json
 import time
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
 from services.run_jwt import validate_run_jwt
 
@@ -321,6 +322,49 @@ class AutoBotMCPServer:
         scopes = [s.strip() for s in scopes_part.split(",") if s.strip()]
         return scopes if scopes else None
 
+    async def _validate_redis_token(self, token: str) -> Optional[List[str]]:
+        """Look up *token* in Redis and return its scopes, or None if not found.
+
+        Token format: ``<secret>:<scope1>,<scope2>`` — the secret portion is
+        the Redis lookup key under ``mcp:token:by_secret:{secret}``.  On a
+        successful lookup ``last_used`` is updated in-place.
+
+        This method is called as a fallback when ``_validate_token()`` rejects
+        the token (i.e. the secret does not match the static env-var secret).
+        Redis-issued tokens created via ``POST /api/mcp/tokens`` are validated
+        here, enabling runtime token issuance and revocation without restart.
+        """
+        if not token:
+            return None
+        try:
+            secret_part, _ = token.split(":", 1)
+        except ValueError:
+            return None
+
+        try:
+            redis = await get_async_redis_client(database="main")
+            if redis is None:
+                logger.warning("_validate_redis_token: Redis unavailable")
+                return None
+
+            key = f"mcp:token:by_secret:{secret_part}"
+            raw = await redis.get(key)
+            if raw is None:
+                return None
+
+            record = json.loads(raw if isinstance(raw, str) else raw.decode("utf-8"))
+            scopes: List[str] = record.get("scopes") or []
+            if not scopes:
+                return None
+
+            # Update last_used timestamp
+            record["last_used"] = time.time()
+            await redis.set(key, json.dumps(record, ensure_ascii=False))
+            return scopes
+        except Exception as exc:
+            logger.warning("_validate_redis_token: unexpected error: %s", exc)
+            return None
+
     def _check_scope(self, scopes: List[str], tool_name: str) -> bool:
         """Return True if *scopes* grants access to *tool_name*."""
         prefix = tool_name.split(".")[0]  # "kb", "memory", "agents"
@@ -376,6 +420,9 @@ class AutoBotMCPServer:
             rate_key = run_jwt_token[:16]
         else:
             scopes = self._validate_token(auth_token)
+            if scopes is None:
+                # Fallback: check Redis-issued tokens (Issue #6453)
+                scopes = await self._validate_redis_token(auth_token)
             if scopes is None:
                 return _err(-32001, "Unauthorized: invalid or missing token", req_id)
             rate_key = auth_token[:16]
