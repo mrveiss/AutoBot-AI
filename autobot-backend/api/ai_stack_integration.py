@@ -18,7 +18,20 @@ from api.schemas_agent import (
     EnhancedKnowledgeSearchData,
     MultiAgentQueryData,
 )
-from api.schemas_ai_stack import AIStackAgentPayload, AIStackAgentsData
+from api.schemas_ai_stack import (
+    AIStackAgentPayload,
+    AIStackAgentsData,
+    ClassificationResult,
+    CodeSearchResult,
+    DevelopmentSpeedupResult,
+    DocumentAnalysisResult,
+    EnhancedChatResult,
+    KnowledgeExtractionResult,
+    QueryReformulationResult,
+    RAGQueryResult,
+    SystemKnowledgeResult,
+    WebResearchResult,
+)
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     ContentClassificationRequest,
@@ -90,7 +103,7 @@ async def list_ai_agents(admin_check: bool = Depends(check_admin_permission)):
 # ====================================================================
 
 
-@router.post("/rag/query", response_model=DataResponse[AIStackAgentPayload])
+@router.post("/rag/query", response_model=DataResponse[RAGQueryResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="rag_query",
@@ -132,7 +145,7 @@ async def rag_query(
     return create_success_response(rag_result, "RAG query completed successfully")
 
 
-@router.post("/rag/reformulate", response_model=DataResponse[AIStackAgentPayload])
+@router.post("/rag/reformulate", response_model=DataResponse[QueryReformulationResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reformulate_query",
@@ -154,7 +167,7 @@ async def reformulate_query(
     return create_success_response(result, "Query reformulated successfully")
 
 
-@router.post("/rag/analyze-documents", response_model=DataResponse[AIStackAgentPayload])
+@router.post("/rag/analyze-documents", response_model=DataResponse[DocumentAnalysisResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_documents",
@@ -177,7 +190,7 @@ async def analyze_documents(documents: List[Metadata], admin_check: bool = Depen
 # ====================================================================
 
 
-@router.post("/chat/enhanced", response_model=DataResponse[AIStackAgentPayload])
+@router.post("/chat/enhanced", response_model=DataResponse[EnhancedChatResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_chat",
@@ -225,7 +238,7 @@ async def enhanced_chat(
 # ====================================================================
 
 
-@router.post("/knowledge/extract", response_model=DataResponse[AIStackAgentPayload])
+@router.post("/knowledge/extract", response_model=DataResponse[KnowledgeExtractionResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="extract_knowledge",
@@ -295,7 +308,7 @@ async def enhanced_knowledge_search(
     return create_success_response(results, "Enhanced knowledge search completed")
 
 
-@router.get("/knowledge/system", response_model=DataResponse[AIStackAgentPayload])
+@router.get("/knowledge/system", response_model=DataResponse[SystemKnowledgeResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_knowledge",
@@ -356,7 +369,7 @@ async def comprehensive_research(request: ResearchRequest, admin_check: bool = D
     return create_success_response(results, "Comprehensive research completed successfully")
 
 
-@router.post("/research/web", response_model=DataResponse[AIStackAgentPayload])
+@router.post("/research/web", response_model=DataResponse[WebResearchResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="web_research",
@@ -384,7 +397,7 @@ async def web_research(
 # ====================================================================
 
 
-@router.post("/development/search-code", response_model=DataResponse[AIStackAgentPayload])
+@router.post("/development/search-code", response_model=DataResponse[CodeSearchResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_code",
@@ -406,7 +419,7 @@ async def search_code(request: KbCodeSearchRequest, admin_check: bool = Depends(
     return create_success_response(result, "Code search completed successfully")
 
 
-@router.post("/development/analyze-speedup", response_model=DataResponse[AIStackAgentPayload])
+@router.post("/development/analyze-speedup", response_model=DataResponse[DevelopmentSpeedupResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_development_speedup",
@@ -434,7 +447,7 @@ async def analyze_development_speedup(
 # ====================================================================
 
 
-@router.post("/classification/classify", response_model=DataResponse[AIStackAgentPayload])
+@router.post("/classification/classify", response_model=DataResponse[ClassificationResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="classify_content",
@@ -599,7 +612,7 @@ async def multi_agent_query(
 # ====================================================================
 
 
-@router.post("/legacy/rag-search", response_model=DataResponse[AIStackAgentPayload])
+@router.post("/legacy/rag-search", response_model=DataResponse[RAGQueryResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="legacy_rag_search",
@@ -619,7 +632,7 @@ async def legacy_rag_search(
     return await rag_query(request)
 
 
-@router.post("/legacy/enhanced-chat", response_model=DataResponse[AIStackAgentPayload])
+@router.post("/legacy/enhanced-chat", response_model=DataResponse[EnhancedChatResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="legacy_enhanced_chat",

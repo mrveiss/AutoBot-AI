@@ -140,7 +140,7 @@ class AgentExecutor:
         start_time = datetime.now(tz=timezone.utc)
 
         try:
-            self.distributed_manager.add_active_task(selected_agent.agent_id, task_id)
+            await self.distributed_manager.add_active_task(selected_agent.agent_id, task_id)
             agent_request = self._create_agent_request(
                 task_id, selected_agent.agent_type, request, context, chat_history
             )
@@ -155,7 +155,7 @@ class AgentExecutor:
                 task_id,
             )
         finally:
-            self.distributed_manager.remove_active_task(selected_agent.agent_id, task_id)
+            await self.distributed_manager.remove_active_task(selected_agent.agent_id, task_id)
 
     async def _select_distributed_agent(
         self,

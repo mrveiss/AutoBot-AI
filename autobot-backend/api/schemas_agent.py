@@ -913,6 +913,57 @@ class AgentStatusData(BaseModel):
     development_tools: bool
 
 
+# ---------------------------------------------------------------------------
+# Typed inner result models for AgentTaskData subclasses (Issue #6407)
+# extra='allow' keeps the schema backward-compatible while the external
+# AI Stack service response is fully documented.
+# ---------------------------------------------------------------------------
+
+
+class GoalExecutionResult(BaseModel):
+    """Result payload for enhanced goal execution via multi-agent coordination."""
+
+    model_config = {"extra": "allow"}
+
+    final_answer: str | None = None
+    steps_taken: int | None = None
+    reasoning: str | None = None
+    agents_output: Dict[str, Any] | None = None
+
+
+class MultiAgentCoordinationResult(BaseModel):
+    """Result payload for multi-agent task coordination."""
+
+    model_config = {"extra": "allow"}
+
+    outcome: str | None = None
+    subtask_results: List[Any] | None = None
+    coordinated_response: str | None = None
+    agents_output: Dict[str, Any] | None = None
+
+
+class ResearchResult(BaseModel):
+    """Result payload for comprehensive research tasks."""
+
+    model_config = {"extra": "allow"}
+
+    summary: str | None = None
+    findings: List[Any] | None = None
+    sources_consulted: List[str] | None = None
+    confidence: float | None = None
+
+
+class DevelopmentAnalysisResult(BaseModel):
+    """Result payload for development codebase analysis."""
+
+    model_config = {"extra": "allow"}
+
+    recommendations: List[Any] | None = None
+    issues_found: int | None = None
+    speedup_opportunities: List[Any] | None = None
+    analysis_summary: str | None = None
+
+
 class AgentTaskData(BaseModel):
     """Base for agent execution payload models that invoke AI Stack multi-agent queries."""
 
@@ -930,6 +981,7 @@ class EnhancedGoalData(AgentTaskData):
     enhanced_context_used: bool
     knowledge_base_integrated: bool
     timestamp: str
+    result: GoalExecutionResult | None = None
 
 
 class MultiAgentCoordinationData(AgentTaskData):
@@ -940,6 +992,7 @@ class MultiAgentCoordinationData(AgentTaskData):
     subtasks_count: int
     dependencies_count: int
     timestamp: str
+    result: MultiAgentCoordinationResult | None = None
 
 
 class AgentResearchData(AgentTaskData):
@@ -950,6 +1003,7 @@ class AgentResearchData(AgentTaskData):
     include_web: bool
     include_code_search: bool
     sources: List[str] | None = None
+    result: ResearchResult | None = None
 
 
 class DevelopmentAnalysisData(AgentTaskData):
@@ -959,6 +1013,7 @@ class DevelopmentAnalysisData(AgentTaskData):
     target_path: str
     include_performance: bool
     include_optimization: bool
+    result: DevelopmentAnalysisResult | None = None
 
 
 class MultiAgentQueryData(BaseModel):

@@ -14,6 +14,14 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Tuple
 
 from constants.threshold_constants import TimingConstants, WorkStealingConfig
 
+from .state_persistence import (
+    delete_task_state,
+    delete_task_timing_state,
+    load_task_state,
+    persist_task_assigned,
+    persist_task_progress,
+    persist_task_reassignment,
+)
 from .types import CircuitState, DistributedAgentInfo
 
 if TYPE_CHECKING:
@@ -47,6 +55,7 @@ class DistributedAgentManager:
         progress_ttl_seconds: int = WorkStealingConfig.PROGRESS_TTL_SECONDS,
         circuit_failure_threshold: int = 3,
         circuit_recovery_timeout_seconds: int = 300,
+        deployment_id: str = "autobot",
     ):
         """
         Initialize the distributed agent manager.
@@ -80,11 +89,14 @@ class DistributedAgentManager:
         self.circuit_failure_threshold = circuit_failure_threshold
         self.circuit_recovery_timeout_seconds = circuit_recovery_timeout_seconds
 
-        # task_id -> assigned_at (UTC) — set when add_active_task is called
+        # Redis-scoped deployment identifier (Issue #6479)
+        self._deployment_id = deployment_id
+
+        # task_id -> assigned_at (UTC) — write-through cache; persisted in Redis (#6479)
         self._task_assigned_at: Dict[str, datetime] = {}
-        # task_id -> last_progress_at (UTC) — updated via report_task_progress
+        # task_id -> last_progress_at (UTC) — write-through cache; persisted in Redis (#6479)
         self._task_last_progress: Dict[str, datetime] = {}
-        # task_id -> reassignment_count
+        # task_id -> reassignment_count — write-through cache; persisted in Redis (#6479)
         self._task_reassignment_count: Dict[str, int] = {}
 
     async def start(self, event_emitter: Any | None = None) -> bool:
@@ -104,6 +116,9 @@ class DistributedAgentManager:
         try:
             self.is_running = True
 
+            # Rehydrate stale-detection state from Redis so grace periods survive restarts.
+            await self._rehydrate_from_redis()
+
             # Initialize built-in distributed agents
             await self._initialize_distributed_agents()
 
@@ -117,6 +132,20 @@ class DistributedAgentManager:
             logger.error("Failed to start distributed mode: %s", e)
             self.is_running = False
             return False
+
+    async def _rehydrate_from_redis(self) -> None:
+        """Populate in-memory dicts from Redis on startup (Issue #6479)."""
+        assigned, progress, reassign = await load_task_state(self._deployment_id)
+        self._task_assigned_at.update(assigned)
+        self._task_last_progress.update(progress)
+        self._task_reassignment_count.update(reassign)
+        total = len(assigned)
+        if total:
+            logger.info(
+                "Distributed manager rehydrated %d task(s) from Redis (deployment=%s)",
+                total,
+                self._deployment_id,
+            )
 
     async def stop(self) -> None:
         """Stop distributed agent management."""
@@ -368,35 +397,43 @@ class DistributedAgentManager:
         """Get info for a specific agent."""
         return self.distributed_agents.get(agent_id)
 
-    def add_active_task(self, agent_id: str, task_id: str) -> None:
+    async def add_active_task(self, agent_id: str, task_id: str) -> None:
         """Add an active task to an agent and record its assignment timestamp.
 
         Issue #2109: records assigned_at for stale-detection.
+        Issue #6479: persists assigned_at to Redis (write-through cache).
         """
         if agent_id in self.distributed_agents:
             self.distributed_agents[agent_id].active_tasks.add(task_id)
-            self._task_assigned_at[task_id] = now_utc()
+            assigned_at = now_utc()
+            self._task_assigned_at[task_id] = assigned_at
+            await persist_task_assigned(self._deployment_id, task_id, assigned_at)
 
-    def remove_active_task(self, agent_id: str, task_id: str) -> None:
+    async def remove_active_task(self, agent_id: str, task_id: str) -> None:
         """Remove an active task from an agent and clean up tracking state.
 
         Issue #2109: clears assigned_at / progress / reassignment metadata.
+        Issue #6479: deletes Redis hash entries for the task.
         """
         if agent_id in self.distributed_agents:
             self.distributed_agents[agent_id].active_tasks.discard(task_id)
         self._task_assigned_at.pop(task_id, None)
         self._task_last_progress.pop(task_id, None)
         self._task_reassignment_count.pop(task_id, None)
+        await delete_task_state(self._deployment_id, task_id)
 
-    def report_task_progress(self, task_id: str) -> None:
+    async def report_task_progress(self, task_id: str) -> None:
         """Record that a task has made progress, resetting its stale timer.
 
         Call this from the agent when partial results arrive so the
         work-stealer does not reclaim an actively-running task.
 
         Issue #2109: progress-protection guard rail.
+        Issue #6479: persists last_progress to Redis.
         """
-        self._task_last_progress[task_id] = now_utc()
+        progress_at = now_utc()
+        self._task_last_progress[task_id] = progress_at
+        await persist_task_progress(self._deployment_id, task_id, progress_at)
 
     # ------------------------------------------------------------------
     # Work-stealing helpers (Issue #2109)
@@ -472,6 +509,10 @@ class DistributedAgentManager:
         self._task_reassignment_count[task_id] = count
         self._task_assigned_at.pop(task_id, None)
         self._task_last_progress.pop(task_id, None)
+        # Persist incremented count; clear only timing entries so count survives
+        # the next add_active_task call (Issue #6479).
+        await persist_task_reassignment(self._deployment_id, task_id, count)
+        await delete_task_timing_state(self._deployment_id, task_id)
 
         # Mark source agent degraded in its health record so the router
         # prefers other agents until the next successful health check.
