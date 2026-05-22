@@ -2080,8 +2080,11 @@ class AdapterTestResponse(BaseModel):
     """Response for GET /{adapter_type}/test."""
 
     adapter_type: str = ""
-    status: str = ""
-    details: Dict[str, Any] = Field(default_factory=dict)
+    healthy: bool = False
+    diagnostics: List[Any] = Field(default_factory=list)
+    models_available: List[Any] = Field(default_factory=list)
+    response_time: float = 0.0
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class AdapterModelsResponse(BaseModel):
