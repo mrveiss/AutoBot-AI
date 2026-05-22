@@ -11,7 +11,7 @@ from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.task_result import task_pending_approval, task_success
-from event_manager import get_event_manager
+from events.bus import publish_event, PersistStrategy
 from models.task_context import TaskExecutionContext
 
 from .base import TaskHandler
@@ -26,7 +26,7 @@ class RespondConversationallyHandler(TaskHandler):
         """Execute conversational response task and publish via event manager."""
         response_text = ctx.get_payload_value("response_text", "No response provided.")
 
-        await get_event_manager().publish("llm_response", {"response": response_text})
+        await publish_event("global", "llm_response", {"response": response_text}, persist=PersistStrategy.NONE)
 
         result = task_success(
             "Responded conversationally.",
@@ -50,13 +50,13 @@ class AskUserForManualHandler(TaskHandler):
         program_name = ctx.require_payload_value("program_name")
         question_text = ctx.require_payload_value("question_text")
 
-        await get_event_manager().publish(
+        await publish_event("global", 
             "ask_user_for_manual",
             {
                 "task_id": ctx.task_id,
                 "program_name": program_name,
                 "question_text": question_text,
-            },
+            }, persist=PersistStrategy.NONE
         )
 
         result = task_success(f"Asked user for manual for {program_name}.")
@@ -77,9 +77,9 @@ class AskUserCommandApprovalHandler(TaskHandler):
         """Execute command approval request task requiring user confirmation."""
         command_to_approve = ctx.require_payload_value("command")
 
-        await get_event_manager().publish(
+        await publish_event("global", 
             "ask_user_command_approval",
-            {"task_id": ctx.task_id, "command": command_to_approve},
+            {"task_id": ctx.task_id, "command": command_to_approve}, persist=PersistStrategy.NONE
         )
 
         result = task_pending_approval(f"Requested user approval for command: {command_to_approve}")

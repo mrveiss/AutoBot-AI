@@ -1094,9 +1094,9 @@ class AutoResearchAgent(AsyncRedisClientMixin):
         )
 
         try:
-            from event_manager import get_event_manager
+            from events.bus import publish_event, PersistStrategy
 
-            await get_event_manager().publish(
+            await publish_event("global", 
                 event_type="research_checkpoint_pending",
                 payload={
                     "session_id": session.id,
@@ -1104,7 +1104,7 @@ class AutoResearchAgent(AsyncRedisClientMixin):
                     "decision_key": dec_key,
                     "context": context,
                     "timeout_seconds": self.config.checkpoint_timeout_seconds,
-                },
+                }, persist=PersistStrategy.NONE
             )
         except Exception:
             logger.warning(

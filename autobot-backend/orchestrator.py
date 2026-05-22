@@ -828,11 +828,18 @@ class Orchestrator:
         self.config.phi2_enabled = enabled
         logger.info("Phi-2 enabled status set to: %s", self.config.phi2_enabled)
         try:
-            from utils.event_manager import event_manager
+            import asyncio
+            from events.bus import PersistStrategy, get_event_bus
 
-            event_manager.publish("settings_update", {"phi2_enabled": enabled})
-        except ImportError:
-            logger.debug("Event manager not available for settings update")
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(
+                    get_event_bus().publish(
+                        "global", "settings_update", {"phi2_enabled": enabled}, persist=PersistStrategy.NONE
+                    )
+                )
+        except Exception:
+            logger.debug("Event bus not available for settings update")
 
     async def get_status(self) -> Dict[str, Any]:
         uptime = datetime.now(tz=timezone.utc) - self.start_time if self.start_time else 0

@@ -165,9 +165,9 @@ class ApprovalHandler:
 
             # IMPLEMENTED: Real-time WebSocket broadcasting via event_manager
             try:
-                from event_manager import get_event_manager
+                from events.bus import publish_event, PersistStrategy
 
-                await get_event_manager().publish(
+                await publish_event("global", 
                     event_type="command_approval_status",
                     payload={
                         "conversation_id": session.conversation_id,
@@ -177,7 +177,7 @@ class ApprovalHandler:
                         "approved": approved,
                         "comment": comment,
                         "pre_approved": pre_approved,
-                    },
+                    }, persist=PersistStrategy.NONE
                 )
                 logger.info(
                     f"✅ Approval status broadcast sent: "

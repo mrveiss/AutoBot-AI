@@ -111,6 +111,12 @@ class EventBus:
         """Unsubscribe a listener from EventManager events."""
         get_event_manager().unsubscribe(event_type, listener)
 
+    def register_ws_broadcast(
+        self, callback: Callable[[Dict[str, Any]], Awaitable[None]] | None
+    ) -> None:
+        """Register (or clear) the EventManager WebSocket broadcast callback."""
+        get_event_manager().register_websocket_broadcast(callback)
+
 
 get_event_bus = lazy_singleton(EventBus)
 

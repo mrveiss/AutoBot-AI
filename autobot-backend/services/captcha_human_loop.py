@@ -56,7 +56,7 @@ except ImportError:  # pragma: no cover
     from typing import Any as Page  # type: ignore[assignment, misc]
 
 from constants.threshold_constants import TimingConstants
-from event_manager import get_event_manager
+from events.bus import publish_event, PersistStrategy
 
 logger = get_logger(__name__)
 
@@ -499,7 +499,7 @@ class CaptchaHumanLoop:
         screenshot_b64: str,
     ) -> None:
         """Send WebSocket notification that CAPTCHA was detected."""
-        await get_event_manager().publish(
+        await publish_event("global", 
             "captcha_detected",
             {
                 "captcha_id": captcha_id,
@@ -510,31 +510,31 @@ class CaptchaHumanLoop:
                 "timeout_seconds": self.timeout_seconds,
                 "timestamp": utc_timestamp(),
                 "message": f"CAPTCHA detected at {url}. Please solve manually via VNC.",
-            },
+            }, persist=PersistStrategy.NONE
         )
 
     async def _notify_captcha_timeout(self, captcha_id: str, url: str) -> None:
         """Send WebSocket notification that CAPTCHA resolution timed out."""
-        await get_event_manager().publish(
+        await publish_event("global", 
             "captcha_timeout",
             {
                 "captcha_id": captcha_id,
                 "url": url,
                 "timestamp": utc_timestamp(),
                 "message": f"CAPTCHA resolution timed out for {url}. Source will be skipped.",
-            },
+            }, persist=PersistStrategy.NONE
         )
 
     async def _notify_captcha_resolved(self, captcha_id: str, url: str, status: CaptchaResolutionStatus) -> None:
         """Send WebSocket notification that CAPTCHA was resolved."""
-        await get_event_manager().publish(
+        await publish_event("global", 
             "captcha_resolved",
             {
                 "captcha_id": captcha_id,
                 "url": url,
                 "status": status.value,
                 "timestamp": utc_timestamp(),
-            },
+            }, persist=PersistStrategy.NONE
         )
 
     def get_pending_captchas(self) -> Dict[str, Any]:

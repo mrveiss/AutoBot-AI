@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from events.event_types import HEARTBEAT_RUN_COMPLETED, HEARTBEAT_RUN_STARTED
-from live_event_manager import publish_live_event
+from events.bus import publish_event
 from models.agent import Agent
 from models.heartbeat import (
     AgentRuntimeState,
@@ -235,7 +235,7 @@ class HeartbeatScheduler:
             run_jwt = ""
 
         logger.info("Heartbeat run %s started for agent %s", run_id, agent_id)
-        await publish_live_event(
+        await publish_event(
             f"heartbeat:{agent_id}",
             HEARTBEAT_RUN_STARTED,
             {"run_id": str(run_id), "agent_id": agent_id, "trigger": trigger.value},
@@ -305,7 +305,7 @@ class HeartbeatScheduler:
                 f"Run finished with status={final_status}",
             )
             await session.commit()
-        await publish_live_event(
+        await publish_event(
             f"heartbeat:{agent_id}",
             HEARTBEAT_RUN_COMPLETED,
             {
