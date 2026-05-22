@@ -92,7 +92,7 @@ class ConnectorRegistry:
         logger.debug("Removed connector instance: %s", connector_id)
 
     @classmethod
-    def get(cls, connector_id: str) -> "object" | None:
+    def get(cls, connector_id: str) -> object | None:
         """Return a running connector by ID, or None if not found."""
         return cls._instances.get(connector_id)
 

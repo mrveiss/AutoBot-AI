@@ -102,6 +102,27 @@ class WebCrawlerConnector(AbstractConnector):
     # Issue #4421: zero-config — unauthenticated crawl via web_fetch.
     tier = 0
 
+    @classmethod
+    def output_schema(cls) -> dict:
+        """Issue #8147: JSONSchema for WebCrawlerConnector ContentResult.metadata."""
+        return {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string"},
+                "domain": {"type": "string"},
+                "title": {"type": "string"},
+                "connector_id": {"type": "string"},
+                "source": {"type": "string"},
+            },
+            "required": ["url", "domain"],
+        }
+
+    @property
+    def max_concurrency(self) -> int:
+        """Issue #8148: default 5 concurrent page fetches; config overrides."""
+        cfg_val = self.config.max_concurrency
+        return cfg_val if cfg_val is not None else 5
+
     def __init__(self, config: ConnectorConfig) -> None:
         super().__init__(config)
         cfg = config.config
