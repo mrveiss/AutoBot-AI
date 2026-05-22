@@ -16,7 +16,7 @@ import asyncio
 import uuid
 from typing import Any, Dict, Tuple
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from autobot_shared.logging_manager import get_logger
