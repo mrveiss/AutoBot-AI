@@ -59,14 +59,16 @@ def _build_services_status(state: Any) -> Dict[str, str]:
     }
 
 
-def _build_capabilities(ai_stack_ready: bool, ai_agents_ready: bool) -> Dict[str, bool]:
+def _build_capabilities(
+    ai_stack_ready: bool, ai_agents_ready: bool, npu_ready: bool
+) -> Dict[str, bool]:
     """Build capabilities dict from AI readiness flags."""
     return {
         "rag_enhanced_search": ai_stack_ready,
         "multi_agent_coordination": ai_agents_ready,
         "knowledge_extraction": ai_stack_ready,
         "enhanced_chat": ai_stack_ready,
-        "npu_acceleration": ai_agents_ready,
+        "npu_acceleration": npu_ready,
     }
 
 
@@ -125,6 +127,7 @@ def register_root_endpoints(app: FastAPI) -> None:
         services = _build_services_status(state)
         ai_stack_ready = services.get("ai_stack") == "connected"
         ai_agents_ready = services.get("ai_stack_agents") == "ready"
+        npu_ready = bool(getattr(state, "npu_worker_ready", False))
         return {
             "status": "healthy",
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
@@ -136,7 +139,7 @@ def register_root_endpoints(app: FastAPI) -> None:
             # consumers don't conflate this with the (much larger) total in
             # /api/agents/registry. (#6749 follow-up — Chrome-plugin TODO #8.)
             "ai_stack_agent_count": _get_agent_count(state),
-            "capabilities": _build_capabilities(ai_stack_ready, ai_agents_ready),
+            "capabilities": _build_capabilities(ai_stack_ready, ai_agents_ready, npu_ready),
             "circuit_breakers": _get_circuit_breaker_states(),
         }
 

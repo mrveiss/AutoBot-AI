@@ -493,21 +493,26 @@ async def _init_npu_worker_websocket():
         logger.warning("NPU worker WebSocket initialization failed: %s", npu_ws_error)
 
 
-async def _warmup_npu_connection():
+async def _warmup_npu_connection(app: FastAPI) -> None:
     """
     Warm up NPU worker connection for fast first-request embedding (NON-CRITICAL).
 
     Issue #165: Pre-initializes the NPU connection pool and performs a test
     embedding to ensure the NPU worker's model is ready. This eliminates
     cold-start latency on the first real embedding request.
+
+    Sets app.state.npu_worker_ready so /api/health can report accurate
+    npu_acceleration capability status (#6768).
     """
     logger.info("✅ [ 82%] NPU Warmup: Warming up NPU connection...")
+    npu_ready = False
     try:
         from knowledge.facts import warmup_npu_connection
 
         result = await warmup_npu_connection()
 
         if result["status"] == "success":
+            npu_ready = True
             logger.info(
                 "✅ [ 82%] NPU Warmup: Connection ready (%.1fms, %d dimensions)",
                 result.get("warmup_time_ms", 0),
@@ -520,6 +525,8 @@ async def _warmup_npu_connection():
 
     except Exception as warmup_error:
         logger.warning("NPU warmup failed: %s", warmup_error)
+    finally:
+        app.state.npu_worker_ready = npu_ready
 
 
 async def _start_doc_sync_queue_worker(app: FastAPI) -> None:
@@ -1409,7 +1416,7 @@ async def initialize_background_services(app: FastAPI):
         # self-health endpoint (circular deadlock). Phase 2 re-enabled (#970).
         await _init_knowledge_base(app)
         await _init_npu_worker_websocket()
-        await _warmup_npu_connection()
+        await _warmup_npu_connection(app)
         await _init_memory_graph(app)
         await _init_slm_client()
         await _init_background_llm_sync(app)
