@@ -13,5 +13,6 @@ from autobot_shared.ssot_constants import (  # noqa: F401,F403
     PATH_HEALTH,
     PATH_OLLAMA_CHAT,
     PATH_OLLAMA_GENERATE,
+    PATH_OLLAMA_PULL,
     PATH_OLLAMA_TAGS,
 )

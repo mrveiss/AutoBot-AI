@@ -10,15 +10,16 @@ streaming).  This adapter's sole responsibility is the ``test_environment()``
 diagnostic method used by ``api/adapters.py``.
 """
 
+import json
 import time
-from typing import List
+from typing import AsyncIterator, List
 
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import get_ollama_url
-from constants.api_constants import PATH_OLLAMA_TAGS
+from constants.api_constants import PATH_OLLAMA_PULL, PATH_OLLAMA_TAGS
 
 from ..models import LLMRequest, LLMResponse
 from .base import (
@@ -112,6 +113,37 @@ class OllamaAdapter(AdapterBase):
         """Discover available Ollama models."""
         result = await self.test_environment()
         return result.models_available
+
+    async def pull_model(self, model: str) -> AsyncIterator[dict]:
+        """Pull an Ollama model with streaming progress events.
+
+        Yields dicts with keys: status, digest (optional), total (optional),
+        completed (optional), error (optional).
+        """
+        ollama_url = self.config.settings.get("base_url") or get_ollama_url()
+        http_client = get_http_client()
+        payload = {"model": model, "stream": True}
+        try:
+            async with await http_client.post(
+                f"{ollama_url}{PATH_OLLAMA_PULL}",
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=None),
+            ) as resp:
+                if resp.status != 200:
+                    body = await resp.text()
+                    yield {"status": "error", "error": f"HTTP {resp.status}: {body}"}
+                    return
+                async for raw_line in resp.content:
+                    line = raw_line.strip()
+                    if not line:
+                        continue
+                    try:
+                        yield json.loads(line)
+                    except json.JSONDecodeError:
+                        logger.debug("OllamaAdapter.pull_model: non-JSON line: %s", line)
+        except Exception as exc:
+            logger.warning("OllamaAdapter.pull_model failed: %s", exc)
+            yield {"status": "error", "error": str(exc)}
 
 
 __all__ = ["OllamaAdapter"]

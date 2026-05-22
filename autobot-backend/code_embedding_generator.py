@@ -111,8 +111,8 @@ class CodeEmbeddingGenerator:
         def _load_sync():
             from transformers import AutoModel, AutoTokenizer
 
-            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            self.model = AutoModel.from_pretrained(self.model_name)
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, resume_download=True)
+            self.model = AutoModel.from_pretrained(self.model_name, resume_download=True)
 
             if self.npu_available:
                 self._convert_to_openvino()
