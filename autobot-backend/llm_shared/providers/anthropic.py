@@ -43,7 +43,7 @@ from constants.model_constants import (
     ANTHROPIC_CLAUDE_SONNET4,
     ANTHROPIC_CLAUDE_SONNET4_6,
 )
-from llm_shared.models import LLMRequest, LLMResponse
+from llm_shared.models import LLMRequest, LLMResponse, ToolCall
 from llm_shared.types import ProviderType
 
 from ..base_provider import BaseProvider
@@ -198,6 +198,14 @@ class AnthropicProvider(BaseProvider):
         if system_content:
             kwargs["system"] = system_content
 
+        if request.tools:
+            kwargs["tools"] = [
+                {"name": t.name, "description": t.description, "input_schema": t.input_schema}
+                for t in request.tools
+            ]
+            if request.tool_choice:
+                kwargs["tool_choice"] = {"type": request.tool_choice}
+
         api_kwargs: Dict[str, Any] = request.metadata.get("api_kwargs") or {}
         preserve_reasoning: bool = bool(api_kwargs.get("preserve_reasoning", False))
         kwargs, extra_headers = _build_api_kwargs(kwargs, api_kwargs)
@@ -231,17 +239,31 @@ class AnthropicProvider(BaseProvider):
             total_tokens = response.usage.input_tokens + response.usage.output_tokens
             processing_time = time.time() - start
 
+            tool_calls = []
+            for block in response.content:
+                if getattr(block, "type", None) == "tool_use":
+                    tool_calls.append(
+                        ToolCall(
+                            id=block.id,
+                            name=block.name,
+                            arguments=block.input if isinstance(block.input, dict) else {},
+                        )
+                    )
+            finish_reason = "tool_calls" if tool_calls else response.stop_reason
+
             return LLMResponse(
                 content=content,
                 model=response.model,
                 provider=self.provider_name,
                 processing_time=processing_time,
                 request_id=request.request_id,
+                finish_reason=finish_reason,
                 usage={
                     "prompt_tokens": response.usage.input_tokens,
                     "completion_tokens": response.usage.output_tokens,
                     "total_tokens": total_tokens,
                 },
+                tool_calls=tool_calls or None,
                 provider_metadata=self._build_provider_metadata(
                     model_api_name=response.model,
                     api_kwargs_applied=call_kwargs,

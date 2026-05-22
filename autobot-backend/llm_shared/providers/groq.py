@@ -33,7 +33,7 @@ from constants.model_constants import (
     GROQ_LLAMA33_70B,
     GROQ_MIXTRAL_8X7B,
 )
-from llm_shared.models import LLMRequest, LLMResponse
+from llm_shared.models import LLMRequest, LLMResponse, ToolCall
 from llm_shared.types import ProviderType
 
 from ..base_provider import BaseProvider
@@ -107,9 +107,33 @@ class GroqProvider(BaseProvider):
                 params["max_tokens"] = request.max_tokens
             if request.stop:
                 params["stop"] = request.stop
+            if request.tools:
+                params["tools"] = [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": t.name,
+                            "description": t.description,
+                            "parameters": t.input_schema,
+                        },
+                    }
+                    for t in request.tools
+                ]
+                if request.tool_choice:
+                    params["tool_choice"] = request.tool_choice
             response = await client.chat.completions.create(**params)
             choice = response.choices[0]
             processing_time = time.time() - start
+            tool_calls = []
+            if choice.message.tool_calls:
+                import json as _json
+
+                for tc in choice.message.tool_calls:
+                    try:
+                        args = _json.loads(tc.function.arguments) if tc.function.arguments else {}
+                    except Exception:
+                        args = {}
+                    tool_calls.append(ToolCall(id=tc.id, name=tc.function.name, arguments=args))
             return LLMResponse(
                 content=choice.message.content or "",
                 model=response.model,
@@ -122,6 +146,7 @@ class GroqProvider(BaseProvider):
                     "completion_tokens": response.usage.completion_tokens,
                     "total_tokens": response.usage.total_tokens,
                 },
+                tool_calls=tool_calls or None,
                 provider_metadata=self._build_provider_metadata(
                     model_api_name=response.model,
                     api_kwargs_applied=params,
