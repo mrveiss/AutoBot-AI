@@ -433,3 +433,38 @@ class TestPromptOptimizerLoop:
         optimizer._redis.get.return_value = None
         result = await optimizer.load_archive("nonexistent-session-id")
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_multi_scorer_final_score_is_average(self, mock_llm) -> None:
+        """final_score must be the mean of all scorer scores — Issue #3211."""
+        scorer_a = AsyncMock()
+        scorer_a.name = "scorer_a"
+        scorer_a.score.return_value = ScorerResult(score=0.6, raw_score=6, metadata={}, scorer_name="scorer_a")
+
+        scorer_b = AsyncMock()
+        scorer_b.name = "scorer_b"
+        scorer_b.score.return_value = ScorerResult(score=0.8, raw_score=8, metadata={}, scorer_name="scorer_b")
+
+        opt = PromptOptimizer(
+            scorers={"scorer_a": scorer_a, "scorer_b": scorer_b},
+            llm_service=mock_llm,
+        )
+        opt._redis = AsyncMock()
+
+        target = PromptOptTarget(
+            agent_name="test",
+            current_prompt="base",
+            scorer_chain=["scorer_a", "scorer_b"],
+            mutation_count=1,
+            top_k=1,
+        )
+
+        async def benchmark_fn(prompt: str) -> str:
+            return "output"
+
+        session = await opt.optimize(target, benchmark_fn, max_rounds=1)
+
+        assert session.best_variant is not None
+        assert abs(session.best_variant.final_score - 0.7) < 1e-9, (
+            f"Expected final_score=0.7 (average of 0.6+0.8), got {session.best_variant.final_score}"
+        )

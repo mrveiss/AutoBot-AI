@@ -453,3 +453,160 @@ class TestCancelExperiment:
 
         assert response.status_code == 409
         assert "not currently running" in response.json()["detail"].lower()
+
+
+# ---------------------------------------------------------------------------
+# Prompt Optimizer endpoints — Issue #3211
+# ---------------------------------------------------------------------------
+
+
+def _make_optimizer(
+    current_session=None,
+    registered_targets: list[str] | None = None,
+) -> MagicMock:
+    """Build a mock PromptOptimizer."""
+    opt = MagicMock()
+    opt.current_session = current_session
+    opt.get_registered_targets = MagicMock(return_value=registered_targets or [])
+    opt.get_target = MagicMock(return_value=None)
+    opt.cancel = MagicMock()
+    return opt
+
+
+def _build_app_with_optimizer(optimizer: MagicMock) -> FastAPI:
+    """Build app with autoresearch router and a pre-set optimizer on app.state."""
+    with patch("auth_middleware.check_admin_permission", return_value=True):
+        from services.autoresearch.routes import router
+
+    app = FastAPI()
+    app.include_router(router, prefix="/autoresearch")
+    app.state.autoresearch_optimizer = optimizer
+    app.state.autoresearch_store = _make_store()
+    app.state.autoresearch_runner = _make_runner()
+    return app
+
+
+class TestGetOptimizerStatus:
+    """Tests for GET /autoresearch/prompt-optimizer/status — Issue #3211."""
+
+    def test_status_no_session(self) -> None:
+        opt = _make_optimizer(current_session=None)
+        app = _build_app_with_optimizer(opt)
+        client = TestClient(app)
+
+        response = client.get("/autoresearch/prompt-optimizer/status")
+
+        assert response.status_code == 200
+        assert response.json() == {"running": False, "session": None}
+
+    def test_status_with_session(self) -> None:
+        session = MagicMock()
+        session.to_dict.return_value = {"status": "running", "round": 1}
+        opt = _make_optimizer(current_session=session)
+        app = _build_app_with_optimizer(opt)
+        client = TestClient(app)
+
+        response = client.get("/autoresearch/prompt-optimizer/status")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["running"] is True
+        assert data["session"]["status"] == "running"
+
+
+class TestStartOptimization:
+    """Tests for POST /autoresearch/prompt-optimizer/start — Issue #3211."""
+
+    def test_start_success(self) -> None:
+        target_entry = (MagicMock(), MagicMock())
+        opt = _make_optimizer(current_session=None)
+        opt.get_target = MagicMock(return_value=target_entry)
+        app = _build_app_with_optimizer(opt)
+        client = TestClient(app)
+
+        response = client.post(
+            "/autoresearch/prompt-optimizer/start",
+            json={"agent_name": "autoresearch_hypothesis", "max_rounds": 2},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "started"
+        assert data["agent_name"] == "autoresearch_hypothesis"
+
+    def test_start_conflict_when_already_running(self) -> None:
+        session = MagicMock()
+        opt = _make_optimizer(current_session=session)
+        app = _build_app_with_optimizer(opt)
+        client = TestClient(app)
+
+        response = client.post(
+            "/autoresearch/prompt-optimizer/start",
+            json={"agent_name": "autoresearch_hypothesis"},
+        )
+
+        assert response.status_code == 409
+
+    def test_start_unknown_target_returns_400(self) -> None:
+        opt = _make_optimizer(current_session=None)
+        opt.get_target = MagicMock(return_value=None)
+        opt.get_registered_targets = MagicMock(return_value=["autoresearch_hypothesis"])
+        app = _build_app_with_optimizer(opt)
+        client = TestClient(app)
+
+        response = client.post(
+            "/autoresearch/prompt-optimizer/start",
+            json={"agent_name": "nonexistent_agent"},
+        )
+
+        assert response.status_code == 400
+        assert "nonexistent_agent" in response.json()["detail"]
+
+
+class TestCancelOptimization:
+    """Tests for POST /autoresearch/prompt-optimizer/cancel — Issue #3211."""
+
+    def test_cancel_running_session(self) -> None:
+        session = MagicMock()
+        opt = _make_optimizer(current_session=session)
+        app = _build_app_with_optimizer(opt)
+        client = TestClient(app)
+
+        response = client.post("/autoresearch/prompt-optimizer/cancel")
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "cancelling"
+        opt.cancel.assert_called_once()
+
+    def test_cancel_no_session_returns_409(self) -> None:
+        opt = _make_optimizer(current_session=None)
+        app = _build_app_with_optimizer(opt)
+        client = TestClient(app)
+
+        response = client.post("/autoresearch/prompt-optimizer/cancel")
+
+        assert response.status_code == 409
+
+
+class TestListOptimizationTargets:
+    """Tests for GET /autoresearch/prompt-optimizer/targets — Issue #3211."""
+
+    def test_returns_registered_targets(self) -> None:
+        opt = _make_optimizer(registered_targets=["autoresearch_hypothesis", "agent_b"])
+        app = _build_app_with_optimizer(opt)
+        client = TestClient(app)
+
+        response = client.get("/autoresearch/prompt-optimizer/targets")
+
+        assert response.status_code == 200
+        assert response.json() == {"targets": ["autoresearch_hypothesis", "agent_b"]}
+
+    def test_returns_empty_when_no_targets(self) -> None:
+        opt = _make_optimizer(registered_targets=[])
+        app = _build_app_with_optimizer(opt)
+        client = TestClient(app)
+
+        response = client.get("/autoresearch/prompt-optimizer/targets")
+
+        assert response.status_code == 200
+        assert response.json() == {"targets": []}
