@@ -2568,6 +2568,8 @@ class MergeConflictResolveResponse(BaseModel):
     file_path: str = ""
     resolved_count: int = 0
     results: List[Dict[str, Any]] = Field(default_factory=list)
+    summary: Dict[str, Any] = Field(default_factory=dict)
+    safe_mode: bool = True
     timestamp: str = ""
 
 
