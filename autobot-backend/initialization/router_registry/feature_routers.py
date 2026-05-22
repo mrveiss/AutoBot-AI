@@ -743,7 +743,7 @@ def load_feature_routers() -> List[Tuple]:
             len(failed),
             ", ".join(r["name"] for r in failed),
         )
-        if config.feature_routers_strict.lower() in {"1", "true", "yes"}:
+        if config.misc.feature_routers_strict.lower() in {"1", "true", "yes"}:
             raise RuntimeError(
                 f"AUTOBOT_FEATURE_ROUTERS_STRICT=1 — {len(failed)} feature router(s) "
                 f"failed to load: {', '.join(r['name'] for r in failed)}"
