@@ -167,12 +167,12 @@ class TestHelpers:
 
 @pytest.fixture()
 def mock_bs4():
-    """Patch _fetch_bs4 to return fixture site pages (coroutine-compatible)."""
+    """Patch WebFetcher.fetch_raw_html to return fixture site pages (coroutine-compatible)."""
 
     async def _side_effect(url, timeout=30.0):
         return _fixture_bs4(url, timeout)
 
-    with patch("knowledge.connectors.web_crawler._fetch_bs4", side_effect=_side_effect):
+    with patch("knowledge.connectors.web_crawler.WebFetcher.fetch_raw_html", side_effect=_side_effect):
         yield
 
 
