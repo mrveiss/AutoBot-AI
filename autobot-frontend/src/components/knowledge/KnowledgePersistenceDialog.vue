@@ -15,6 +15,9 @@
         </BaseButton>
       </div>
 
+      <!-- Load Error -->
+      <BaseAlert v-if="loadError" variant="error" :message="loadError" dismissible @dismiss="loadError = null" class="dialog-load-error" />
+
       <!-- Chat Context Info -->
       <div v-if="chatContext" class="context-info">
         <div class="context-topic">
@@ -335,6 +338,7 @@ const compileOptions = ref({
 });
 const loading = ref(false);
 const submitError = ref<string | null>(null);
+const loadError = ref<string | null>(null);
 
 const hasDecisions = computed(() => Object.keys(itemDecisions.value).length > 0);
 
@@ -357,6 +361,7 @@ const decisionsCount = computed(() => {
 const loadPendingItems = async (): Promise<void> => {
   try {
     loading.value = true;
+    loadError.value = null;
     // Issue #552: Fixed path to match backend (hyphen instead of underscore)
     const response = await apiService.get(`${getApiBase()}/chat-knowledge/knowledge/pending/${props.chatId}`) as { success: boolean; pending_items: PendingKnowledgeItem[] };
 
@@ -370,7 +375,7 @@ const loadPendingItems = async (): Promise<void> => {
     }
   } catch (error) {
     logger.error('Failed to load pending knowledge:', error);
-    submitError.value = t('knowledge.persistence.failedToLoad');
+    loadError.value = error instanceof Error ? error.message : t('knowledge.persistence.failedToLoad');
   } finally {
     loading.value = false;
   }

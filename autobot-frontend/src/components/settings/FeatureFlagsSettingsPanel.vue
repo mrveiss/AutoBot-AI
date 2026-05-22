@@ -17,12 +17,14 @@ Issue #4273: Wire orphaned components EnforcementModeSelector, FlagChangeHistory
 
     <!-- Error State -->
     <div v-else-if="error" class="error-state">
-      <Icon name="exclamation-circle" />
-      <p>{{ error }}</p>
-      <button @click="loadData" class="retry-btn">
-        <Icon name="redo" />
-        {{ $t('featureFlags.retry') }}
-      </button>
+      <BaseAlert variant="error" :message="error">
+        <template #actions>
+          <button @click="loadData" class="retry-btn">
+            <Icon name="redo" />
+            {{ $t('featureFlags.retry') }}
+          </button>
+        </template>
+      </BaseAlert>
     </div>
 
     <!-- Main Content -->
