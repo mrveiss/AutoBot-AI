@@ -381,7 +381,7 @@ class KnowledgeBaseCore:
         # Issue #8391: Instantiate VectorWriteBuffer backed by this collection.
         # buffer.start() is called in lifespan after KB init succeeds.
         from knowledge.write_buffer import VectorWriteBuffer, make_chromadb_flush_fn
-        self._write_buffer = VectorWriteBuffer(flush_fn=make_chromadb_flush_fn(raw_collection))
+        self._write_buffer = VectorWriteBuffer(flush_fn=make_chromadb_flush_fn(self.vector_store))
 
         logger.info(
             "ChromaDB vector store initialized: collection='%s'",

@@ -51,6 +51,6 @@ class CacheProtocol(Protocol):
         """
         ...
 
-    def clear(self) -> None:
+    async def clear(self) -> None:
         """Clear all items from cache."""
         ...

@@ -312,7 +312,7 @@ class FileListCache:
                 self._stats.invalidations += 1
         return evicted
 
-    def clear(self) -> None:
+    async def clear(self) -> None:
         """
         Clear all items from cache (CacheProtocol).
 

@@ -317,7 +317,7 @@ class EmbeddingCache:
             "arc_p": self._p,
         }
 
-    def clear(self) -> None:
+    async def clear(self) -> None:
         """Clear all cached embeddings and reset ARC state."""
         self._t1.clear()
         self._t2.clear()

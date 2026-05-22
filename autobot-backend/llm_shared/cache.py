@@ -347,7 +347,7 @@ class LLMResponseCache:
             "l1_max_size": self._memory_cache_max_size,
         }
 
-    def clear(self) -> None:
+    async def clear(self) -> None:
         """Clear L1 memory cache (CacheProtocol compliance)."""
         self._memory_cache.clear()
         self._memory_cache_access.clear()

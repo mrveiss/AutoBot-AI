@@ -446,7 +446,7 @@ class ASTCache:
                 evicted += 1
         return evicted
 
-    def clear(self) -> None:
+    async def clear(self) -> None:
         """
         Clear all items from cache (CacheProtocol).
 

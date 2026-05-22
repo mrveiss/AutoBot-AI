@@ -968,7 +968,7 @@ async def clear_cache(cache_name: str, admin_check: bool = Depends(check_admin_p
 
         coordinator = await get_cache_coordinator()
         if cache_name in coordinator._caches:
-            coordinator._caches[cache_name].clear()
+            await coordinator._caches[cache_name].clear()
             return {
                 "status": "cleared",
                 "cache": cache_name,
