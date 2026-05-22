@@ -17,6 +17,8 @@ Usage:
     instance = ConnectorRegistry.create(config)
     ConnectorRegistry.add_instance(instance)
     running = ConnectorRegistry.get("my-connector-id")
+
+Issue #8152: create() now async with migration support.
 """
 
 from __future__ import annotations
@@ -62,16 +64,49 @@ class ConnectorRegistry:
         return decorator
 
     @classmethod
-    def create(cls, config: ConnectorConfig) -> "object":
+    async def create(cls, config: ConnectorConfig) -> "object":
         """Instantiate a connector from a :class:`ConnectorConfig`.
 
+        If the stored config version differs from the connector class's
+        ``config_version``, calls ``migrate_config()`` before instantiation
+        and persists the updated config back to Redis (Issue #8152).
+
         Raises:
-            ValueError: If ``config.connector_type`` is not registered.
+            ValueError: If ``config.connector_type`` is not registered or
+                        migration raises an exception.
         """
+        import json
+
         klass = cls._connectors.get(config.connector_type)
         if klass is None:
             registered = list(cls._connectors.keys())
             raise ValueError("Unknown connector type '%s'. Registered types: %s" % (config.connector_type, registered))
+
+        stored_version = config.config.get("_version", 1)
+        current_version = getattr(klass, "config_version", 1)
+        if stored_version != current_version:
+            try:
+                config.config = klass.migrate_config(stored_version, dict(config.config))
+                config.config["_version"] = current_version
+                logger.info(
+                    "Migrated connector %s config from v%d to v%d",
+                    config.connector_id,
+                    stored_version,
+                    current_version,
+                )
+                await cls._persist_config(config)
+            except Exception as exc:
+                logger.error(
+                    "Config migration failed for connector %s (v%d→v%d): %s",
+                    config.connector_id,
+                    stored_version,
+                    current_version,
+                    exc,
+                )
+                raise ValueError(
+                    "Config migration failed for connector '%s': %s" % (config.connector_id, exc)
+                ) from exc
+
         instance = klass(config)
         logger.info(
             "Created connector instance: id=%s type=%s",
@@ -79,6 +114,33 @@ class ConnectorRegistry:
             config.connector_type,
         )
         return instance
+
+    @classmethod
+    async def _persist_config(cls, config: "ConnectorConfig") -> None:
+        """Persist the migrated config dict back to Redis (Issue #8152).
+
+        Reads the existing blob, patches the ``config`` field, and writes it
+        back.  Failures are logged at WARNING and never propagate — a failed
+        persist means the migration runs again on next load, which is safe.
+        """
+        import json
+
+        try:
+            from autobot_shared.redis_client import get_async_redis_client
+
+            redis = await get_async_redis_client(database="knowledge")
+            if redis is None:
+                return
+            key = "connector:%s" % config.connector_id
+            raw = await redis.get(key)
+            if raw is None:
+                return
+            data = json.loads(raw.decode("utf-8") if isinstance(raw, bytes) else raw)
+            data["config"] = config.config
+            await redis.set(key, json.dumps(data, ensure_ascii=False))
+            logger.debug("Persisted migrated config for connector %s", config.connector_id)
+        except Exception as exc:
+            logger.warning("Failed to persist migrated config for %s: %s", config.connector_id, exc)
 
     @classmethod
     def add_instance(cls, instance: "object") -> None:

@@ -208,13 +208,13 @@ async def _delete_connector_keys(connector_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _load_or_create_instance(cfg: ConnectorConfig):
+async def _load_or_create_instance(cfg: ConnectorConfig):
     """Return existing instance or create+register a new one (Issue #1254)."""
     existing = ConnectorRegistry.get(cfg.connector_id)
     if existing is not None:
         existing.config = cfg
         return existing
-    instance = ConnectorRegistry.create(cfg)
+    instance = await ConnectorRegistry.create(cfg)
     ConnectorRegistry.add_instance(instance)
     return instance
 
@@ -226,7 +226,7 @@ async def _run_sync_background(connector_id: str, incremental: bool) -> None:
         logger.error("Background sync: connector %s not found", connector_id)
         return
 
-    instance = _load_or_create_instance(cfg)
+    instance = await _load_or_create_instance(cfg)
     try:
         sync_result = await instance.sync(incremental=incremental)
     except Exception as exc:
@@ -358,7 +358,7 @@ async def create_connector(request: CreateConnectorRequest):
         auth_type=auth_type,
         max_concurrency=request.max_concurrency,
     )
-    instance = _load_or_create_instance(cfg)
+    instance = await _load_or_create_instance(cfg)
     healthy = await instance.test_connection()
     if not healthy:
         ConnectorRegistry.remove_instance(connector_id)
@@ -446,7 +446,7 @@ async def _hydrate_all_instances() -> None:
             cfg = await _load_connector(cid)
             if cfg is None:
                 continue
-            _load_or_create_instance(cfg)
+            await _load_or_create_instance(cfg)
         except Exception as exc:  # noqa: BLE001 — isolate bad records per Issue #5055
             logger.warning("Skipping corrupted connector %s: %s", cid, exc)
 
@@ -520,7 +520,7 @@ async def test_connector_connection(connector_id: str):
     cfg = await _load_connector(connector_id)
     if cfg is None:
         raise HTTPException(status_code=404, detail=ERR_CONNECTOR_NOT_FOUND)
-    instance = _load_or_create_instance(cfg)
+    instance = await _load_or_create_instance(cfg)
     try:
         healthy = await instance.test_connection()
     except Exception as exc:

@@ -8,6 +8,7 @@ Issue #1254: Defines the dataclass models used across the connector framework â€
 SourceInfo, ContentResult, ChangeInfo, ConnectorConfig, ConnectorStatus, SyncResult.
 Issue #8145: Added auth_type field to ConnectorConfig for API introspection.
 Issue #8146: Added resumed_from_checkpoint to SyncResult.
+Issue #8152: Added config_version field to ConnectorConfig.
 """
 
 from dataclasses import dataclass, field
@@ -91,6 +92,9 @@ class ConnectorConfig:
     auth_type: str | None = None
     # Issue #8148: max parallel source fetches; None = use connector class default.
     max_concurrency: int | None = None
+    # Issue #8152: schema version â€” used by ConnectorRegistry.create() to detect
+    # and apply config migrations before instantiation.
+    config_version: int = 1
 
 
 @dataclass

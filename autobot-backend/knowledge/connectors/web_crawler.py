@@ -10,6 +10,7 @@ Issue #8144: Migrated HTTP fetches to use AbstractConnector.fetch_with_retry() s
 transient 429/5xx responses are retried with exponential backoff instead of failing.
 Issue #8284: sync() override now integrates #8146 checkpoint (read/write/clear).
 Issue #8286: Connection-level failures (status_code=None) now also raise RetryableError.
+Issue #8152: Added config_version=2 and migrate_config() (v1→v2: max_depth→crawl_depth).
 """
 
 import hashlib
@@ -104,6 +105,8 @@ class WebCrawlerConnector(AbstractConnector):
     connector_type = "web_crawler"
     # Issue #4421: zero-config — unauthenticated crawl via web_fetch.
     tier = 0
+    # Issue #8152: v2 renamed max_depth → crawl_depth.
+    config_version = 2
 
     @classmethod
     def output_schema(cls) -> dict:
@@ -120,6 +123,17 @@ class WebCrawlerConnector(AbstractConnector):
             "required": ["url", "domain"],
         }
 
+    @classmethod
+    def migrate_config(cls, stored_version: int, config: dict) -> dict:
+        """Migrate WebCrawlerConnector config to current version (Issue #8152).
+
+        v1→v2: renamed ``max_depth`` to ``crawl_depth``.
+        """
+        if stored_version < 2:
+            if "max_depth" in config and "crawl_depth" not in config:
+                config["crawl_depth"] = config.pop("max_depth")
+        return config
+
     @property
     def max_concurrency(self) -> int:
         """Issue #8148: default 5 concurrent page fetches; config overrides."""
@@ -130,7 +144,7 @@ class WebCrawlerConnector(AbstractConnector):
         super().__init__(config)
         cfg = config.config
         self._seed_urls: List[str] = cfg.get("urls", [])
-        self._max_depth: int = int(cfg.get("max_depth", 1))
+        self._max_depth: int = int(cfg.get("crawl_depth", cfg.get("max_depth", 1)))
         self._max_pages: int = int(cfg.get("max_pages", 100))
         self._respect_robots: bool = bool(cfg.get("respect_robots", True))
         self._same_origin: bool = bool(cfg.get("same_origin", True))
