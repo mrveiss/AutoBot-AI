@@ -12,7 +12,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { VncViewer, VncToolbar } from '@autobot/vnc'
 import type { VncHost } from '@autobot/vnc'
-import { getVNCHosts } from '@/config/ssot-config'
+import { getVNCHosts, getSlmApiBase } from '@/config/ssot-config'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -156,7 +156,7 @@ onMounted(() => fetchDynamicEndpoints())
     </div>
 
     <div class="mt-4">
-      <VncToolbar :connected="isConnected" @error="onToolbarError" />
+      <VncToolbar :connected="isConnected" :api-base-url="getSlmApiBase()" @error="onToolbarError" />
     </div>
   </div>
 </template>

@@ -11,7 +11,7 @@
 
 import { ref, computed } from 'vue'
 import { SshTerminal } from '@autobot/terminal'
-import { getHosts } from '@/config/ssot-config'
+import { getHosts, getSlmApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('TerminalTool')
@@ -92,6 +92,7 @@ function onError(message: string) {
         <SshTerminal
           v-if="selectedHostId"
           :host-id="selectedHostId"
+          :ws-base-path="`${getSlmApiBase()}/terminal/ws/ssh/`"
           class="h-full"
           @connected="onConnected"
           @disconnected="onDisconnected"
