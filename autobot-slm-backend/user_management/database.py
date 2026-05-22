@@ -86,6 +86,7 @@ def get_slm_engine() -> AsyncEngine:
                     pool_recycle=pool["pool_recycle"],
                     pool_timeout=pool["pool_timeout"],
                     pool_pre_ping=True,
+                    connect_args={"timeout": 10},
                 )
                 logger.info("Created SLM database engine")
     return _slm_engine
@@ -110,6 +111,7 @@ def get_autobot_engine() -> AsyncEngine:
                     pool_recycle=pool["pool_recycle"],
                     pool_timeout=pool["pool_timeout"],
                     pool_pre_ping=True,
+                    connect_args={"timeout": 10},
                 )
                 logger.info("Created AutoBot database engine")
     return _autobot_engine
