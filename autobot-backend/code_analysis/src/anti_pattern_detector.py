@@ -77,6 +77,29 @@ _ENTRY_POINT_SUFFIXES = (
 )
 
 
+# Issue #6748: Vue <script setup> composable-opportunity detector regexes
+_VUE_SCRIPT_SETUP_RE = re.compile(r"<script\b[^>]*\bsetup\b[^>]*>", re.IGNORECASE)
+_VUE_SCRIPT_END_RE = re.compile(r"</script\s*>", re.IGNORECASE)
+_VUE_COMP_CALL_RE = re.compile(
+    r"(?:const|let|var)\s+\w+\s*(?::[^=]+)?\s*=\s*"
+    r"(ref|reactive|computed|watch(?:Effect)?|on(?:Mounted|Unmounted|BeforeMount|Created))"
+    r"(<[^>]*>)?\s*\(",
+)
+_COMPOSABLE_THRESHOLD = 5
+_COMPOSABLE_EXCL_DIRS = frozenset({"composables", "node_modules", ".git", "__pycache__"})
+
+
+def _extract_script_setup(content: str) -> str | None:
+    """Return the text inside <script setup> … </script>, or None if absent."""
+    m_start = _VUE_SCRIPT_SETUP_RE.search(content)
+    if m_start is None:
+        return None
+    m_end = _VUE_SCRIPT_END_RE.search(content, m_start.end())
+    if m_end is None:
+        return None
+    return content[m_start.end() : m_end.start()]
+
+
 # Issue #6758: AST cache to avoid re-parsing files in cross-file finalize pass
 # Cache key: (file_path, mtime) -> AST. This prevents double-parsing when both
 # per-file and cross-file rules analyze the same file.
@@ -153,6 +176,8 @@ class AntiPatternType(Enum):
     DUPLICATE_CLASS_SHAPE = "duplicate_class_shape"
     # Issue #6871: modules with zero production callers (closed tracker, unwired code)
     UNWIRED_TRACKER = "unwired_tracker"
+    # Issue #6748: repeated reactive boilerplate that should be extracted to a composable
+    COMPOSABLE_OPPORTUNITY = "composable_opportunity"
 
 
 @dataclass
@@ -400,6 +425,8 @@ class AntiPatternDetector:
         anti_patterns.extend(await self._detect_duplicate_class_shapes())
         # Issue #6871: modules with zero production callers (closed tracker, unwired code)
         anti_patterns.extend(await self._detect_unwired_trackers(root_path))
+        # Issue #6748: repeated Vue reactive boilerplate that should be a composable
+        anti_patterns.extend(await self._detect_composable_opportunities(root_path))
 
         # Phase 3: Generate report
         analysis_time = time.time() - start_time
@@ -452,6 +479,8 @@ class AntiPatternDetector:
         results.extend(await self._detect_duplicate_class_shapes())
         # Issue #6871: include unwired-tracker findings in the cross-file pass
         results.extend(await self._detect_unwired_trackers(root_path))
+        # Issue #6748: repeated Vue reactive boilerplate
+        results.extend(await self._detect_composable_opportunities(root_path))
         return results
 
     async def _parse_codebase(self, root_path: str, patterns: List[str], exclude_patterns: List[str]) -> None:
@@ -1820,6 +1849,110 @@ class AntiPatternDetector:
 
         logger.info("[#6871] Unwired-tracker scan: %d findings in %s", len(issues), root_path)
         return issues
+
+    # ========== COMPOSABLE_OPPORTUNITY detector (#6748) ==========
+
+    async def _detect_composable_opportunities(self, root_path: str = ".") -> List[AntiPatternInstance]:
+        """Cluster Vue components that repeat the same reactive boilerplate.
+
+        Walks autobot-frontend/src/components/**/*.vue, extracts each
+        <script setup> block, normalises the composition-API calls into a
+        frozenset signature, and flags any signature that appears in
+        _COMPOSABLE_THRESHOLD or more distinct component files.
+        """
+        frontend_root = self._find_vue_components_root(root_path)
+        if frontend_root is None:
+            return []
+
+        sig_to_files: Dict[str, List[str]] = {}
+        for vue_file in sorted(frontend_root.rglob("*.vue")):
+            if any(part in _COMPOSABLE_EXCL_DIRS for part in vue_file.parts):
+                continue
+            sig = self._vue_file_signature(vue_file)
+            if not sig:
+                continue
+            sig_key = "|".join(sorted(sig))
+            sig_to_files.setdefault(sig_key, []).append(str(vue_file))
+
+        results: List[AntiPatternInstance] = []
+        for sig_key, files in sig_to_files.items():
+            if len(files) < _COMPOSABLE_THRESHOLD:
+                continue
+            sig = frozenset(sig_key.split("|"))
+            name = self._suggest_composable_name(sig)
+            results.append(
+                AntiPatternInstance(
+                    pattern_type=AntiPatternType.COMPOSABLE_OPPORTUNITY,
+                    severity=Severity.LOW,
+                    file_path=files[0],
+                    line_number=1,
+                    entity_name=name,
+                    description=(
+                        f"{len(files)} components share the same reactive boilerplate "
+                        f"({sig_key[:80]}). Extract to {name}()."
+                    ),
+                    metrics={
+                        "component_count": len(files),
+                        "files": files[:10],
+                        "pattern_hash": sig_key,
+                    },
+                    suggestion=(
+                        f"Create `composables/{name}.ts` and replace the repeated "
+                        f"reactive block with a single import."
+                    ),
+                    refactoring_effort="low",
+                    related_entities=files[:10],
+                )
+            )
+
+        logger.info("[#6748] Composable-opportunity scan: %d findings", len(results))
+        return results
+
+    @staticmethod
+    def _find_vue_components_root(root_path: str) -> Path | None:
+        """Walk up from root_path to find autobot-frontend/src/components/."""
+        p = Path(root_path).resolve()
+        for _ in range(6):
+            candidate = p / "autobot-frontend" / "src" / "components"
+            if candidate.is_dir():
+                return candidate
+            p = p.parent
+        return None
+
+    @staticmethod
+    def _vue_file_signature(vue_file: Path) -> frozenset[str]:
+        """Return normalised frozenset of composition-API calls in vue_file's <script setup>."""
+        try:
+            content = vue_file.read_text(encoding="utf-8")
+        except OSError:
+            return frozenset()
+        script = _extract_script_setup(content)
+        if script is None:
+            return frozenset()
+        calls: Set[str] = set()
+        for m in _VUE_COMP_CALL_RE.finditer(script):
+            api = m.group(1)
+            raw_generic = (m.group(2) or "").strip("<> ")
+            # Replace | with _or_ so the |-joined sig_key can be safely split
+            generic = raw_generic.replace(" ", "").replace("|", "_or_").lower()
+            calls.add(f"{api}_{generic}" if generic else api)
+        return frozenset(calls)
+
+    @staticmethod
+    def _suggest_composable_name(sig: frozenset[str]) -> str:
+        """Heuristically derive a composable name from its signature."""
+        normalised = {s.lower() for s in sig}
+        # loading + error pattern
+        if any("string" in s and "null" in s for s in normalised) and any(
+            s in ("ref", "ref_bool", "ref_false", "ref_true", "ref_boolean") for s in normalised
+        ):
+            return "useLoadingState"
+        ref_count = sum(1 for s in normalised if s.startswith("ref"))
+        if ref_count >= 2:
+            return "useSharedState"
+        if any("watch" in s for s in normalised):
+            return "useReactiveWatcher"
+        return "useSharedPattern"
 
     # ========== Report Generation ==========
 
