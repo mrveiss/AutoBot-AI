@@ -2,7 +2,7 @@
   <div class="async-error-fallback">
     <div class="error-container">
       <div class="error-icon">
-        <i class="fas fa-exclamation-triangle"></i>
+        <Icon name="exclamation-triangle" />
       </div>
       <div class="error-content">
         <h3 class="error-title">Failed to Load Component</h3>
@@ -29,7 +29,7 @@
             @click="retry"
             :disabled="retrying || retryCount >= maxRetries"
           >
-            <i class="fas fa-redo" :class="{ 'fa-spin': retrying }"></i>
+            <Icon name="redo" :spin="retrying" />
             {{ retrying ? 'Retrying...' : `Retry${retryCount > 0 ? ` (${retryCount}/${maxRetries})` : ''}` }}
           </BaseButton>
 
@@ -37,7 +37,7 @@
             variant="secondary"
             @click="reload"
           >
-            <i class="fas fa-refresh"></i>
+            <Icon name="refresh" />
             Reload Page
           </BaseButton>
 
@@ -45,7 +45,7 @@
             variant="outline-solid"
             @click="goHome"
           >
-            <i class="fas fa-home"></i>
+            <Icon name="home" />
             Go to Home
           </BaseButton>
 
@@ -66,6 +66,7 @@ import { ref, computed, inject, withDefaults } from 'vue'
 import { useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
+import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('AsyncErrorFallback')
 
@@ -340,10 +341,6 @@ if (props.error) {
   display: flex;
   gap: var(--spacing-3);
   flex-wrap: wrap;
-}
-
-.fa-spin {
-  animation: fa-spin 1s infinite linear;
 }
 
 @keyframes fa-spin {

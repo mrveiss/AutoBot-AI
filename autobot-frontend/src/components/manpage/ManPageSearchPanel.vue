@@ -1,7 +1,7 @@
 <template>
   <BasePanel v-if="show" variant="bordered" size="medium">
     <template #header>
-      <h3><i class="fas fa-search"></i> {{ $t('manpage.searchPanel.title') }}</h3>
+      <h3><Icon name="search" /> {{ $t('manpage.searchPanel.title') }}</h3>
     </template>
 
     <div class="search-input">
@@ -18,7 +18,7 @@
         @click="$emit('search')"
         :disabled="!query.trim() || loading"
       >
-        <i class="fas fa-search"></i>
+        <Icon name="search" />
         {{ $t('manpage.searchPanel.search') }}
       </BaseButton>
     </div>
@@ -65,6 +65,7 @@
 import BasePanel from '@/components/base/BasePanel.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import Icon from '@/components/ui/Icon.vue'
 
 interface SearchResult {
   command: string

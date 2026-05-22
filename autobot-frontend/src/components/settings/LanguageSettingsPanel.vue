@@ -11,7 +11,7 @@ Issue #1330: Language switcher component in Settings
   <form class="language-panel" @submit.prevent>
     <div class="panel-header">
       <h3 class="panel-title">
-        <i class="fas fa-globe" aria-hidden="true"></i>
+        <Icon name="globe" aria-hidden="true" />
         {{ t('settings.languageTitle') }}
       </h3>
     </div>
@@ -19,7 +19,7 @@ Issue #1330: Language switcher component in Settings
     <div class="panel-content">
       <fieldset class="preference-section">
         <legend class="preference-label">
-          <i class="fas fa-language" aria-hidden="true"></i>
+          <Icon name="language" aria-hidden="true" />
           {{ t('settings.languageSelect') }}
         </legend>
         <p class="preference-hint">
@@ -40,15 +40,12 @@ Issue #1330: Language switcher component in Settings
               {{ name }}
             </option>
           </select>
-          <i class="fas fa-chevron-down select-icon" aria-hidden="true"></i>
+          <Icon name="chevron-down" class="select-icon" aria-hidden="true" />
         </div>
       </fieldset>
 
       <div v-if="statusMessage" class="status-message" :class="statusType">
-        <i
-          :class="statusType === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle'"
-          aria-hidden="true"
-        ></i>
+        <Icon :name="statusType === 'success' ? 'check-circle' : 'exclamation-circle'" aria-hidden="true" />
         {{ statusMessage }}
       </div>
     </div>
@@ -67,6 +64,7 @@ import { useI18n } from 'vue-i18n'
 import { usePreferences } from '@/composables/usePreferences'
 import { useAvailableLanguages } from '@/composables/useAvailableLanguages'
 import { createLogger } from '@/utils/debugUtils'
+import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('LanguageSettingsPanel')
 const { t } = useI18n()

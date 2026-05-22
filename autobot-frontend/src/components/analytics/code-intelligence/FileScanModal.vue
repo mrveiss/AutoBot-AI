@@ -10,7 +10,7 @@
         <div class="modal-header">
           <h3>{{ $t('analytics.findings.fileScan.title') }}</h3>
           <button class="close-btn" @click="$emit('close')">
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
           </button>
         </div>
 
@@ -67,6 +67,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import Icon from '@/components/ui/Icon.vue'
 
 const { t } = useI18n()
 

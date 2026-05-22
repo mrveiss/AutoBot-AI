@@ -18,7 +18,7 @@
 
     <!-- Search bar -->
     <div class="search-bar">
-      <i class="fas fa-search"></i>
+      <Icon name="search" />
       <input
         :value="searchQuery"
         type="text"
@@ -34,7 +34,7 @@
         class="clear-btn"
         :aria-label="$t('knowledge.browserHeader.clearSearch')"
       >
-        <i class="fas fa-times"></i>
+        <Icon name="times" />
       </BaseButton>
     </div>
   </div>
@@ -54,6 +54,7 @@
  */
 
 import BaseButton from '@/components/base/BaseButton.vue'
+import Icon from '@/components/ui/Icon.vue'
 
 interface CategoryOption {
   value: string | null

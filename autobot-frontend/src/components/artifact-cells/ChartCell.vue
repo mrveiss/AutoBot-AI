@@ -12,7 +12,7 @@
     <!-- Placeholder for empty content -->
     <div v-if="!richPayload" class="chart-placeholder">
       <div class="placeholder-content">
-        <i class="fas fa-chart-bar"></i>
+        <Icon name="chart-bar" />
         <span>{{ $t('charts.cellPlaceholder', 'Chart') }}</span>
       </div>
     </div>
@@ -20,7 +20,7 @@
     <!-- Error state -->
     <div v-else-if="hasError" class="chart-error-boundary">
       <div class="error-content">
-        <i class="fas fa-exclamation-circle"></i>
+        <Icon name="exclamation-circle" />
         <div class="error-message">
           <h4>{{ $t('charts.renderError', 'Chart rendering failed') }}</h4>
           <p v-if="errorMessage" class="error-details">{{ errorMessage }}</p>
@@ -69,6 +69,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import Icon from '@/components/ui/Icon.vue'
 
 const { t } = useI18n()
 

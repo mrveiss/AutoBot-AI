@@ -7,7 +7,7 @@
       :aria-live="variant === 'error' ? 'assertive' : 'polite'"
     >
       <div class="error-banner-content">
-        <i :class="['error-banner-icon', iconClass]"></i>
+        <Icon :name="iconName" class="error-banner-icon" />
         <div class="error-banner-message">
           <slot>{{ message }}</slot>
         </div>
@@ -19,7 +19,7 @@
         :aria-label="$t('common.dismiss')"
         @click="handleDismiss"
       >
-        <i class="fas fa-times"></i>
+        <Icon name="times" />
       </BaseButton>
     </div>
   </Transition>
@@ -28,6 +28,7 @@
 <script setup lang="ts">
 import { computed, useSlots } from 'vue'
 import BaseButton from './BaseButton.vue'
+import Icon, { type IconName } from '@/components/ui/Icon.vue'
 
 interface Props {
   message?: string | null
@@ -49,13 +50,13 @@ const slots = useSlots()
 
 const visible = computed(() => !!slots.default?.() || !!props.message)
 
-const iconClass = computed(() => {
-  const variantIconMap: Record<string, string> = {
-    error: 'fas fa-exclamation-circle',
-    warning: 'fas fa-exclamation-triangle',
-    info: 'fas fa-info-circle'
+const iconName = computed<IconName>(() => {
+  const variantIconMap: Record<string, IconName> = {
+    error: 'exclamation-circle',
+    warning: 'exclamation-triangle',
+    info: 'info-circle',
   }
-  return variantIconMap[props.variant] || variantIconMap.error
+  return variantIconMap[props.variant] ?? 'exclamation-circle'
 })
 
 const handleDismiss = () => {

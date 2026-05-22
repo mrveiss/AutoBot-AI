@@ -6,7 +6,7 @@
 <template>
   <div class="api-endpoints-section analytics-section">
     <h3>
-      <i class="fas fa-plug"></i> {{ $t('analytics.codebase.apiCoverage.title') }}
+      <Icon name="plug" /> {{ $t('analytics.codebase.apiCoverage.title') }}
       <span v-if="analysis" class="total-count">
         ({{ analysis.coverage_percentage?.toFixed(1) || 0 }}% coverage)
       </span>
@@ -25,7 +25,7 @@
           :title="$t('analytics.codebase.actions.exportMarkdown')"
           :disabled="!analysis"
         >
-          <i class="fas fa-file-alt"></i> MD
+          <Icon name="file-alt" /> MD
         </button>
         <button
           @click="emit('export', 'json')"
@@ -33,17 +33,17 @@
           :title="$t('analytics.codebase.actions.exportJson')"
           :disabled="!analysis"
         >
-          <i class="fas fa-file-code"></i> JSON
+          <Icon name="file-code" /> JSON
         </button>
       </div>
     </h3>
 
     <div v-if="loading" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i> {{ $t('analytics.codebase.apiCoverage.scanning') }}
+      <Icon name="spinner" :spin="true" /> {{ $t('analytics.codebase.apiCoverage.scanning') }}
     </div>
 
     <div v-else-if="error" class="error-state">
-      <i class="fas fa-exclamation-triangle"></i> {{ error }}
+      <Icon name="exclamation-triangle" /> {{ error }}
       <button @click="emit('refresh')" class="btn-link">
         {{ $t('analytics.codebase.actions.retry') }}
       </button>
@@ -225,7 +225,7 @@
       </div>
 
       <div v-if="analysis.scan_timestamp" class="scan-timestamp">
-        <i class="fas fa-clock"></i> {{ $t('analytics.codebase.actions.lastScan') }}:
+        <Icon name="clock" /> {{ $t('analytics.codebase.actions.lastScan') }}:
         {{ formatTimestamp(analysis.scan_timestamp) }}
       </div>
     </div>
@@ -241,6 +241,7 @@
 <script setup lang="ts">
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { useExpansion } from '@/composables/useExpansion'
+import Icon from '@/components/ui/Icon.vue'
 
 interface ApiEndpointInfo {
   path: string

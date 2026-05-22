@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import DependencyTreemap from '@/components/charts/DependencyTreemap.vue'
 import ModuleImportsChart from '@/components/charts/ModuleImportsChart.vue'
+import Icon from '@/components/ui/Icon.vue'
 
 // Lazy-load Cytoscape-based components to defer ~300KB library loading
 const ImportTreeChart = defineAsyncComponent(() => import('@/components/charts/ImportTreeChart.vue'))
@@ -97,19 +98,19 @@ const emit = defineEmits<{
   <!-- Dependency Analysis Section -->
   <div class="dependency-section">
     <div class="section-header">
-      <h3><i class="fas fa-project-diagram"></i> {{ $t('analytics.codebase.dependencies.title') }}</h3>
+      <h3><Icon name="project-diagram" /> {{ $t('analytics.codebase.dependencies.title') }}</h3>
       <button @click="emit('load-dependency-data')" class="refresh-btn" :disabled="dependencyLoading">
-        <i :class="dependencyLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+        <Icon :name="dependencyLoading ? 'spinner' : 'sync-alt'" :spin="dependencyLoading" />
       </button>
     </div>
 
     <div v-if="dependencyLoading" class="charts-loading">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" :spin="true" />
       <span>{{ $t('analytics.codebase.dependencies.analyzing') }}</span>
     </div>
 
     <div v-else-if="dependencyError" class="charts-error">
-      <i class="fas fa-exclamation-triangle"></i>
+      <Icon name="exclamation-triangle" />
       <span>{{ dependencyError }}</span>
       <button @click="emit('load-dependency-data')" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
     </div>
@@ -165,7 +166,7 @@ const emit = defineEmits<{
       <!-- Circular Dependencies Warning -->
       <div v-if="dependencyData.circular_dependencies && dependencyData.circular_dependencies.length > 0" class="circular-deps-warning">
         <div class="warning-header">
-          <i class="fas fa-exclamation-triangle"></i>
+          <Icon name="exclamation-triangle" />
           <span>{{ $t('analytics.codebase.dependencies.circularDetected') }}</span>
         </div>
         <div class="circular-deps-list">
@@ -174,7 +175,7 @@ const emit = defineEmits<{
             :key="index"
             class="circular-dep-item"
           >
-            <i class="fas fa-sync-alt"></i>
+            <Icon name="sync-alt" />
             <span>{{ Array.isArray(cycle) ? cycle.join(' ↔ ') : (cycle.modules || []).join(' ↔ ') }}</span>
           </div>
         </div>
@@ -185,7 +186,7 @@ const emit = defineEmits<{
 
       <!-- Top External Dependencies Table -->
       <div v-if="dependencyData.external_dependencies && dependencyData.external_dependencies.length > 0" class="external-deps-table">
-        <h4><i class="fas fa-cube"></i> {{ $t('analytics.codebase.dependencies.topExternal') }}</h4>
+        <h4><Icon name="cube" /> {{ $t('analytics.codebase.dependencies.topExternal') }}</h4>
         <div class="deps-table-content">
           <div
             v-for="(dep, index) in dependencyData.external_dependencies.slice(0, 20)"
@@ -206,7 +207,7 @@ const emit = defineEmits<{
     >
       <template #actions>
         <button @click="emit('load-dependency-data')" class="btn-primary" :disabled="dependencyLoading">
-          <i class="fas fa-project-diagram"></i> {{ $t('analytics.codebase.dependencies.analyze') }}
+          <Icon name="project-diagram" /> {{ $t('analytics.codebase.dependencies.analyze') }}
         </button>
       </template>
     </EmptyState>
@@ -215,16 +216,16 @@ const emit = defineEmits<{
   <!-- Import Tree Section -->
   <div class="import-tree-section">
     <div class="section-header">
-      <h3><i class="fas fa-sitemap"></i> {{ $t('analytics.codebase.importTree.title') }}</h3>
+      <h3><Icon name="sitemap" /> {{ $t('analytics.codebase.importTree.title') }}</h3>
       <button @click="emit('load-import-tree')" class="refresh-btn" :disabled="importTreeLoading">
-        <i :class="importTreeLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+        <Icon :name="importTreeLoading ? 'spinner' : 'sync-alt'" :spin="importTreeLoading" />
         {{ importTreeLoading ? $t('analytics.codebase.actions.loading') : $t('analytics.codebase.actions.refresh') }}
       </button>
     </div>
 
     <!-- Error state -->
     <div v-if="importTreeError" class="section-error">
-      <i class="fas fa-exclamation-triangle"></i>
+      <Icon name="exclamation-triangle" />
       <span>{{ importTreeError }}</span>
       <button @click="emit('load-import-tree')" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
     </div>
@@ -261,7 +262,7 @@ const emit = defineEmits<{
     >
       <template #actions>
         <button @click="emit('load-import-tree')" class="btn-primary" :disabled="importTreeLoading">
-          <i class="fas fa-sitemap"></i> {{ $t('analytics.codebase.importTree.analyze') }}
+          <Icon name="sitemap" /> {{ $t('analytics.codebase.importTree.analyze') }}
         </button>
       </template>
     </EmptyState>
@@ -270,16 +271,16 @@ const emit = defineEmits<{
   <!-- Function Call Graph Section -->
   <div class="call-graph-section">
     <div class="section-header">
-      <h3><i class="fas fa-project-diagram"></i> {{ $t('analytics.codebase.callGraph.title') }}</h3>
+      <h3><Icon name="project-diagram" /> {{ $t('analytics.codebase.callGraph.title') }}</h3>
       <button @click="emit('load-call-graph')" class="refresh-btn" :disabled="callGraphLoading">
-        <i :class="callGraphLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+        <Icon :name="callGraphLoading ? 'spinner' : 'sync-alt'" :spin="callGraphLoading" />
         {{ callGraphLoading ? $t('analytics.codebase.actions.loading') : $t('analytics.codebase.actions.refresh') }}
       </button>
     </div>
 
     <!-- Error state -->
     <div v-if="callGraphError" class="section-error">
-      <i class="fas fa-exclamation-triangle"></i>
+      <Icon name="exclamation-triangle" />
       <span>{{ callGraphError }}</span>
       <button @click="emit('load-call-graph')" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
     </div>
@@ -318,7 +319,7 @@ const emit = defineEmits<{
     >
       <template #actions>
         <button @click="emit('load-call-graph')" class="btn-primary" :disabled="callGraphLoading">
-          <i class="fas fa-project-diagram"></i> {{ $t('analytics.codebase.callGraph.analyze') }}
+          <Icon name="project-diagram" /> {{ $t('analytics.codebase.callGraph.analyze') }}
         </button>
       </template>
     </EmptyState>

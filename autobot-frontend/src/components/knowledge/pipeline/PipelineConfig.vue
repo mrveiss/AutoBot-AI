@@ -2,7 +2,7 @@
 <template>
   <div class="pipeline-config">
     <div class="config-header">
-      <h4><i class="fas fa-sliders-h"></i> {{ $t('knowledge.pipeline.config.title') }}</h4>
+      <h4><Icon name="sliders-h" /> {{ $t('knowledge.pipeline.config.title') }}</h4>
       <p class="header-description">
         {{ $t('knowledge.pipeline.config.description') }}
       </p>
@@ -107,7 +107,7 @@
     <!-- Generated Config Preview -->
     <div class="preview-section">
       <h5>
-        <i class="fas fa-code"></i>
+        <Icon name="code" />
         {{ $t('knowledge.pipeline.config.configurationPreview') }}
       </h5>
       <pre class="config-preview">{{ configPreview }}</pre>
@@ -116,10 +116,10 @@
     <!-- Actions -->
     <div class="config-actions">
       <button class="action-btn secondary" @click="resetDefaults">
-        <i class="fas fa-undo"></i> {{ $t('knowledge.pipeline.config.resetDefaults') }}
+        <Icon name="undo" /> {{ $t('knowledge.pipeline.config.resetDefaults') }}
       </button>
       <button class="action-btn primary" @click="emitConfig">
-        <i class="fas fa-check"></i> {{ $t('knowledge.pipeline.config.applyConfiguration') }}
+        <Icon name="check" /> {{ $t('knowledge.pipeline.config.applyConfiguration') }}
       </button>
     </div>
   </div>
@@ -132,6 +132,7 @@
 
 import { ref, reactive, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import Icon from '@/components/ui/Icon.vue'
 
 interface StageTask {
   id: string

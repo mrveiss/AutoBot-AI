@@ -1,13 +1,13 @@
 <template>
   <BasePanel v-if="show" variant="bordered" size="medium">
     <template #header>
-      <h3><i class="fas fa-tasks"></i> {{ $t('manpage.progressTracking.title') }}</h3>
+      <h3><Icon name="tasks" /> {{ $t('manpage.progressTracking.title') }}</h3>
       <BaseButton
         size="sm"
         variant="outline-solid"
         @click="$emit('hide')"
       >
-        <i class="fas fa-times"></i>
+        <Icon name="times" />
         {{ $t('manpage.progressTracking.hide') }}
       </BaseButton>
     </template>
@@ -85,6 +85,7 @@ import { computed } from 'vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
+import Icon from '@/components/ui/Icon.vue'
 
 interface ProgressMessage {
   text: string

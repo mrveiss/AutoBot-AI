@@ -50,7 +50,7 @@
         <!-- KB Facts Preview -->
         <div v-if="includeKnowledge" class="space-y-2">
           <div v-if="factsLoading" class="flex items-center gap-2 text-sm text-autobot-text-secondary p-3">
-            <i class="fas fa-spinner fa-spin"></i>
+            <Icon name="spinner" :spin="true" />
             {{ $t('chat.share.loadingFacts') }}
           </div>
 
@@ -119,6 +119,7 @@ import ApiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { useBatchSelection } from '@/composables/useBatchSelection'
+import Icon from '@/components/ui/Icon.vue'
 
 const { t } = useI18n()
 const logger = createLogger('ShareConversationDialog')

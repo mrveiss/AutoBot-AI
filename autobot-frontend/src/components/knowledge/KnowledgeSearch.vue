@@ -12,14 +12,14 @@
           :class="['mode-button', { active: !useRagSearch }]"
           @click="useRagSearch = false"
         >
-          <i class="fas fa-search"></i>
+          <Icon name="search" />
           {{ $t('knowledge.search.traditionalSearch') }}
         </button>
         <button
           :class="['mode-button', 'rag-button', { active: useRagSearch }]"
           @click="useRagSearch = true"
         >
-          <i class="fas fa-brain"></i>
+          <Icon name="brain" />
           {{ $t('knowledge.search.ragEnhanced') }}
         </button>
       </div>
@@ -36,7 +36,7 @@
     <!-- Category Filter -->
     <div class="category-filter">
       <label class="filter-label">
-        <i class="fas fa-filter"></i>
+        <Icon name="filter" />
         {{ $t('knowledge.search.filterByCategory') }}
       </label>
       <div class="filter-controls">
@@ -61,20 +61,20 @@
           class="clear-filter-button"
           :title="$t('knowledge.search.clearCategoryFilter')"
         >
-          <i class="fas fa-times"></i>
+          <Icon name="times" />
         </button>
         <span v-if="loadingCategories" class="loading-indicator">
-          <i class="fas fa-spinner fa-spin"></i>
+          <Icon name="spinner" :spin="true" />
         </span>
       </div>
       <span v-if="selectedCategory" class="active-filter-badge">
         {{ $t('knowledge.search.filtering', { category: formatCategory(selectedCategory) }) }}
       </span>
       <div v-if="categoriesError" class="categories-error">
-        <i class="fas fa-exclamation-triangle"></i>
+        <Icon name="exclamation-triangle" />
         {{ categoriesError }}
         <button @click="loadCategories" class="retry-button">
-          <i class="fas fa-redo"></i> {{ $t('knowledge.search.retry') }}
+          <Icon name="redo" /> {{ $t('knowledge.search.retry') }}
         </button>
       </div>
     </div>
@@ -82,7 +82,7 @@
     <!-- Issue #685: Access Level Filter -->
     <div class="access-level-filter">
       <label class="filter-label">
-        <i class="fas fa-shield-alt"></i>
+        <Icon name="shield-alt" />
         {{ $t('knowledge.search.filterByAccessLevel') }}
       </label>
       <div class="filter-chips">
@@ -101,7 +101,7 @@
           class="clear-chip"
           :title="$t('knowledge.search.clearAccessLevelFilter')"
         >
-          <i class="fas fa-times"></i>
+          <Icon name="times" />
           {{ $t('knowledge.search.clear') }}
         </button>
       </div>
@@ -171,7 +171,7 @@
       <div v-if="useRagSearch && ragResponse?.synthesized_response" class="rag-synthesis">
         <div class="synthesis-header">
           <h4>
-            <i class="fas fa-brain rag-icon"></i>
+            <Icon name="brain" class="rag-icon" />
             {{ $t('knowledge.search.aiSynthesis') }}
           </h4>
           <div v-if="ragResponse.rag_analysis" class="analysis-badges">
@@ -190,7 +190,7 @@
 
         <div v-if="ragResponse.reformulated_query && ragResponse.reformulated_query !== ragResponse.query" class="query-reformulation">
           <p class="reformulated-note">
-            <i class="fas fa-lightbulb"></i>
+            <Icon name="lightbulb" />
             {{ $t('knowledge.search.enhancedQuery') }}: "{{ ragResponse.reformulated_query }}"
           </p>
         </div>
@@ -229,7 +229,7 @@
       <!-- RAG Error Handling -->
       <div v-if="useRagSearch && ragError" class="rag-error">
         <div class="error-header">
-          <i class="fas fa-exclamation-triangle"></i>
+          <Icon name="exclamation-triangle" />
           {{ $t('knowledge.search.ragUnavailable') }}
         </div>
         <p>{{ ragError }}</p>
@@ -251,6 +251,7 @@ import { useDebouncedFn } from '@/composables/useDebounce'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import KBSearchResultPanel from './KBSearchResultPanel.vue'
 import { createLogger } from '@/utils/debugUtils'
+import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('KnowledgeSearch')
 

@@ -6,7 +6,7 @@
 <template>
   <div class="config-duplicates-section analytics-section">
     <h3>
-      <i class="fas fa-clone"></i> {{ $t('analytics.codebase.duplicates.configTitle') }}
+      <Icon name="clone" /> {{ $t('analytics.codebase.duplicates.configTitle') }}
       <span v-if="analysis" class="total-count">
         ({{ analysis.duplicates_found }} duplicates)
       </span>
@@ -25,7 +25,7 @@
           :title="$t('analytics.codebase.actions.exportMarkdown')"
           :disabled="!analysis"
         >
-          <i class="fas fa-file-alt"></i> MD
+          <Icon name="file-alt" /> MD
         </button>
         <button
           @click="emit('export', 'json')"
@@ -33,18 +33,18 @@
           :title="$t('analytics.codebase.actions.exportJson')"
           :disabled="!analysis"
         >
-          <i class="fas fa-file-code"></i> JSON
+          <Icon name="file-code" /> JSON
         </button>
       </div>
     </h3>
 
     <div v-if="loading" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" :spin="true" />
       {{ $t('analytics.codebase.duplicates.scanningConfig') }}
     </div>
 
     <div v-else-if="error" class="error-state">
-      <i class="fas fa-exclamation-triangle"></i> {{ error }}
+      <Icon name="exclamation-triangle" /> {{ error }}
       <button @click="emit('refresh')" class="btn-link">
         {{ $t('analytics.codebase.actions.retry') }}
       </button>
@@ -96,7 +96,7 @@
       </div>
 
       <div class="recommendation-box">
-        <i class="fas fa-lightbulb"></i>
+        <Icon name="lightbulb" />
         <span>{{ $t('analytics.codebase.duplicates.recommendation') }}</span>
       </div>
     </div>
@@ -105,7 +105,7 @@
       v-else-if="analysis && analysis.duplicates_found === 0"
       class="success-state"
     >
-      <i class="fas fa-check-circle"></i>
+      <Icon name="check-circle" />
       {{ $t('analytics.codebase.duplicates.noDuplicatesFound') }}
     </div>
 
@@ -119,6 +119,7 @@
 
 <script setup lang="ts">
 import EmptyState from '@/components/ui/EmptyState.vue'
+import Icon from '@/components/ui/Icon.vue'
 
 interface ConfigDuplicatesResult {
   duplicates_found: number
