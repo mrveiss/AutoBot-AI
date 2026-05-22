@@ -16,22 +16,27 @@ Refactored in #5058: god-class decomposed into collaborators.
   - PerformanceTracker (orchestration/performance_tracker.py) — metrics
   - Three execution entry points unified: process_user_request → execute_enhanced_workflow
     → create_workflow_plan + WorkflowRunner.execute_workflow
+
+Primitives extracted in #5060:
+  - retry_with_backoff  (orchestration/primitives/retry.py)
+  - publish_event       (orchestration/primitives/events.py)
+  Supporting modules:   orchestration/orchestrator_config.py
+                        orchestration/orchestrator_stubs.py
+                        orchestration/orchestrator_legacy_api.py
+                        orchestration/orchestrator_prompts.py
 """
 
 import asyncio
 import json
 import time
 import uuid
-import warnings
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.prompt_rules import LEDGER_VS_EXECUTOR_RULE
 from config.manager import get_config_manager as _get_config_manager
-from constants.threshold_constants import LLMDefaults, TimingConstants
+from constants.threshold_constants import TimingConstants
 from enhanced_orchestration.agent_router import AgentRouter
 from enhanced_orchestration.collaboration_coordinator import CollaborationCoordinator
 
@@ -66,9 +71,21 @@ from orchestration import (
 )
 from orchestration.causal_error_analyzer import CausalErrorAnalyzer  # noqa: F401 (GH #6816)
 from orchestration.causal_validator import CausalValidator  # noqa: F401 (GH #6816)
+from orchestration.orchestrator_config import OrchestratorConfig
+from orchestration.orchestrator_legacy_api import _DeprecatedRequestMixin
+from orchestration.orchestrator_prompts import build_planning_prompt
+from orchestration.orchestrator_stubs import (
+    AGENT_MANAGER_AVAILABLE,
+    CLASSIFICATION_AVAILABLE,
+    WORKFLOW_TYPES_AVAILABLE,
+    AgentManager,
+    GemmaClassificationAgent,
+    WorkflowStep,
+)
 from orchestration.performance_tracker import PerformanceTracker
+from orchestration.primitives.events import PersistStrategy, publish_event as _publish_event
+from orchestration.primitives.retry import retry_with_backoff  # noqa: F401 — re-exported
 from services.llm_service import get_llm_service
-from task_execution_tracker import Priority, TaskType, get_task_tracker
 
 # Shared agent selection utilities (Issue #292)
 from utils.agent_selection import find_best_agent_for_task as _find_best_agent
@@ -91,48 +108,8 @@ except ImportError:
 
 from agents.agent_client import AgentRegistry as _AgentClientRegistry
 from autobot_types import TaskComplexity
-
-try:
-    from agents.gemma_classification_agent import GemmaClassificationAgent
-
-    CLASSIFICATION_AVAILABLE = True
-except ImportError:
-    CLASSIFICATION_AVAILABLE = False
-
-try:
-    from agents.agent_manager import AgentManager
-
-    AGENT_MANAGER_AVAILABLE = True
-except ImportError:
-    AGENT_MANAGER_AVAILABLE = False
-
-    class AgentManager:
-        async def initialize(self):
-            """Initialize placeholder - no operation when unavailable."""
-
-        async def cleanup(self):
-            """Cleanup placeholder - no operation when unavailable."""
-
-        async def execute_agent_task(self, agent_name, task, context=None):
-            return {"error": "Agent manager not available", "agent_name": agent_name}
-
-
 from autobot_shared.status_enums import Priority as TaskPriority  # #7504 consolidation
 from autobot_shared.status_enums import WorkflowStatus  # #6973 consolidation
-
-try:
-    from workflow_templates import WorkflowStep
-
-    WORKFLOW_TYPES_AVAILABLE = True
-except ImportError:
-    WORKFLOW_TYPES_AVAILABLE = False
-
-    @dataclass
-    class WorkflowStep:
-        id: str
-        agent_type: str
-        action: str
-        description: str
 
 
 class OrchestrationMode(Enum):
@@ -142,42 +119,15 @@ class OrchestrationMode(Enum):
     SEQUENTIAL = "sequential"
 
 
-class OrchestratorConfig:
-    """Configuration for the Orchestrator"""
-
-    def __init__(self, config_manager):
-        self.config_manager = config_manager
-        self._load_config()
-
-    def _load_config(self):
-        llm_config = self.config_manager.get_llm_config()
-        self.orchestrator_llm_model = llm_config.get(
-            "orchestrator_llm",
-            llm_config.get("ollama", {}).get("selected_model"),
-        )
-        default_model = llm_config.get("ollama", {}).get("selected_model")
-        self.task_llm_model = llm_config.get("task_llm", f"ollama_{default_model}")
-        self.ollama_models = llm_config.get("ollama", {}).get("models", {})
-        self.phi2_enabled = False
-
-        self.max_parallel_tasks = self.config_manager.get("orchestrator.max_parallel_tasks", 3)
-        self.task_timeout = self.config_manager.get("orchestrator.task_timeout", 300)
-        self.retry_attempts = self.config_manager.get("orchestrator.retry_attempts", 3)
-        self.agent_timeout = self.config_manager.get("orchestrator.agent_timeout", 120)
-        self.max_agents = self.config_manager.get("orchestrator.max_agents", 5)
-        self.enable_caching = self.config_manager.get("orchestrator.enable_caching", True)
-        self.enable_streaming = self.config_manager.get("orchestrator.enable_streaming", True)
-
-        logger.info("Orchestrator configured with model: %s", self.orchestrator_llm_model)
-
-
-class Orchestrator:
+class Orchestrator(_DeprecatedRequestMixin):
     """
     Orchestrator for AutoBot — single conductor.
 
     Issue #5040: Merged all orchestrator implementations into one class.
     Issue #5058: Decomposed into collaborators; one workflow execution path via
     WorkflowRunner; one PerformanceTracker; no _ma_ prefixes.
+    Issue #5060: Deprecated request API extracted to _DeprecatedRequestMixin;
+    retry/event primitives extracted to orchestration/primitives/.
     """
 
     # ------------------------------------------------------------------ init
@@ -453,113 +403,9 @@ class Orchestrator:
         logger.info("Orchestrator session %s completed (uptime %s)", self.session_id, uptime)
         logger.info("  Tasks completed: %s  failed: %s", self.metrics["tasks_completed"], self.metrics["tasks_failed"])
 
-    # ----------------------------------------------------- process_user_request
-
-    def _start_request_tracking(self, task_id, user_message, priority, context) -> None:
-        get_task_tracker().start_task(
-            task_id=task_id,
-            task_type=TaskType.USER_REQUEST,
-            description=user_message[:200],
-            priority=Priority(priority.value),
-            context=context or {},
-        )
-
-    def _update_success_metrics(self, processing_time: float) -> None:
-        self.metrics["tasks_completed"] += 1
-        self.metrics["total_processing_time"] += processing_time
-        self.metrics["average_response_time"] = self.metrics["total_processing_time"] / self.metrics["tasks_completed"]
-
-    async def process_user_request(
-        self,
-        user_message: str,
-        conversation_id: str | None = None,
-        mode: OrchestrationMode = OrchestrationMode.ENHANCED,
-        priority: TaskPriority = TaskPriority.NORMAL,
-        context: Dict[str, Any] | None = None,
-    ) -> Dict[str, Any]:
-        """Process user request. Issue #281, #620, #5058.
-
-        .. deprecated::
-            No live callers exist. Call execute_enhanced_workflow directly (GH#7423).
-
-        SIMPLE mode: direct LLM call (fast path, no workflow planning).
-        All other modes: delegate to execute_enhanced_workflow (unified path).
-        """
-        warnings.warn(
-            "process_user_request is deprecated and has no live callers — use execute_enhanced_workflow directly. (GH#7423)",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        start_time = time.time()
-        task_id = str(uuid.uuid4())
-        logger.info("Processing user request %s: %s...", task_id, user_message[:100])
-
-        try:
-            self._start_request_tracking(task_id, user_message, priority, context)
-            classification_result = await self._classify_task(user_message)
-            target_llm_model = self._select_model_for_task(classification_result)
-
-            if mode == OrchestrationMode.SIMPLE:
-                result = await self._process_simple_request(user_message, task_id, target_llm_model, context)
-            else:
-                result = await self.execute_enhanced_workflow(user_request=user_message, context=context or {})
-
-            processing_time = time.time() - start_time
-            self._update_success_metrics(processing_time)
-            get_task_tracker().complete_task(task_id, result)
-            logger.info("✅ Request %s completed in %.2fs", task_id, processing_time)
-            return {
-                "task_id": task_id,
-                "success": True,
-                "result": result,
-                "processing_time": processing_time,
-                "classification": classification_result.to_dict() if classification_result else None,
-                "model_used": target_llm_model,
-                "mode": mode.value,
-            }
-        except Exception as e:
-            processing_time = time.time() - start_time
-            self.metrics["tasks_failed"] += 1
-            get_task_tracker().fail_task(task_id, str(e))
-            logger.error("❌ Request %s failed after %.2fs: %s", task_id, processing_time, e)
-            return {
-                "task_id": task_id,
-                "success": False,
-                "error": str(e),
-                "processing_time": processing_time,
-                "mode": mode.value,
-            }
-
-    async def _classify_task(self, user_message: str) -> Any | None:
-        if not self.classification_agent:
-            return None
-        try:
-            result = await self.classification_agent.classify_user_request(user_message)
-            logger.info("Task classified: %s complexity", result.complexity.value)
-            return result
-        except Exception as e:
-            logger.warning("Classification failed: %s", e)
-            return None
-
-    def _select_model_for_task(self, classification_result: Any | None) -> str:
-        if classification_result and classification_result.complexity == TaskComplexity.SIMPLE:
-            model = config_manager.get_default_llm_model()
-            logger.info("Using fast model for simple task: %s", model)
-            return model
-        return self.config.orchestrator_llm_model
-
-    async def _process_simple_request(
-        self, user_message: str, task_id: str, model: str, context: Dict | None
-    ) -> Dict[str, Any]:
-        # #6983: migrated to LLMService.chat() — context is forwarded as additional kwargs
-        # since LLMService.chat() has no positional `context` parameter (was specific to LLMInterface)
-        response = await self.llm_service.chat(
-            [{"role": "user", "content": user_message}],
-            model_name=model,
-            max_tokens=LLMDefaults.ENRICHED_MAX_TOKENS,
-            context=context,
-        )
-        return {"type": "simple_response", "content": response.content, "sources": [{"type": "llm", "model": model}]}
+    # process_user_request and its helpers (_start_request_tracking,
+    # _update_success_metrics, _classify_task, _select_model_for_task,
+    # _process_simple_request) are inherited from _DeprecatedRequestMixin (#5060).
 
     # ------------------------------------------------- execute_enhanced_workflow
 
@@ -743,41 +589,7 @@ class Orchestrator:
             {agent: [cap.value for cap in caps] for agent, caps in self.agent_capabilities.items()},
             indent=2,
         )
-        return f"""
-        You are an expert workflow planner. Analyze this goal and create an execution plan.
-
-        Goal: {goal}
-
-        Available agents and their capabilities:
-        {capabilities_json}
-
-        {LEDGER_VS_EXECUTOR_RULE}
-
-        Create a workflow plan with:
-        1. Required agents and their specific tasks
-        2. Task dependencies (which tasks must complete before others)
-        3. Execution strategy (sequential, parallel, pipeline, collaborative)
-        4. Success criteria
-        5. Estimated duration and resource requirements
-
-        Respond in JSON format:
-        {{
-            "strategy": "parallel|sequential|pipeline|collaborative",
-            "tasks": [
-                {{
-                    "agent": "agent_type",
-                    "action": "specific_action",
-                    "inputs": {{}},
-                    "dependencies": ["task_ids"],
-                    "priority": 1-10,
-                    "capabilities_required": ["capability_names"]
-                }}
-            ],
-            "success_criteria": ["criteria1", "criteria2"],
-            "estimated_duration": 60.0,
-            "resource_requirements": {{}}
-        }}
-        """
+        return build_planning_prompt(goal, capabilities_json)
 
     def _parse_planning_response(self, response: Any, goal: str) -> Dict[str, Any]:
         if response.tier_used.value in FALLBACK_TIERS:
@@ -828,12 +640,8 @@ class Orchestrator:
         self.config.phi2_enabled = enabled
         logger.info("Phi-2 enabled status set to: %s", self.config.phi2_enabled)
         try:
-            from events.bus import PersistStrategy, get_event_bus
-
             asyncio.get_running_loop().create_task(
-                get_event_bus().publish(
-                    "global", "settings_update", {"phi2_enabled": enabled}, persist=PersistStrategy.NONE
-                )
+                _publish_event("global", "settings_update", {"phi2_enabled": enabled}, persist=PersistStrategy.NONE)
             )
         except RuntimeError:
             logger.debug("No running event loop; settings_update event not published")

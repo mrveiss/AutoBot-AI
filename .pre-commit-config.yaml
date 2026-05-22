@@ -552,6 +552,15 @@ repos:
   # WARN/AUDIT rules print but exit 0. See docs/developer/CANONICAL_RULES.md.
   - repo: local
     hooks:
+      - id: python-file-size
+        name: Python file size guard (#5060, max 600 lines)
+        entry: python3 scripts/check_python_file_size.py
+        language: python
+        files: \.py$
+        exclude: ^(\.worktrees/|autobot-infrastructure/|autobot-backend/code_analysis/)
+        stages: [pre-commit]
+        description: "Reject Python files exceeding 600 lines to prevent god-module regressions (#5060)"
+
       - id: canonical-check-py
         name: Canonical check — Python (#7458)
         entry: python tools/lint/canonical_check.py --files
