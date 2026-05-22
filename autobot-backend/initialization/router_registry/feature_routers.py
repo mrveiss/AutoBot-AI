@@ -423,39 +423,10 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["knowledge-relations"],
         "knowledge_relations",
     ),
-    # Issue #708: knowledge_search_aggregator, knowledge_ai_stack, knowledge_debug
-    # consolidated into knowledge.py as sub-routers (backend.api.knowledge includes them)
-    # Issue #4179: Register unregistered knowledge routers
-    (
-        "api.knowledge_search_aggregator",
-        "/unified",
-        ["knowledge-unified"],
-        "knowledge_search_aggregator",
-    ),
-    (
-        "api.knowledge_ai_stack",
-        "",
-        ["knowledge-enhanced"],
-        "knowledge_ai_stack",
-    ),
-    (
-        "api.knowledge_debug",
-        "",
-        [],
-        "knowledge_debug",
-    ),
-    (
-        "api.knowledge_boards",
-        "",
-        [],
-        "knowledge_boards",
-    ),
-    (
-        "api.knowledge_vectorization",
-        "",
-        ["knowledge_vectorization"],
-        "knowledge_vectorization",
-    ),
+    # NOTE (#4203): knowledge_search_aggregator, knowledge_ai_stack, knowledge_debug,
+    # knowledge_boards, knowledge_vectorization removed from here — already registered
+    # unconditionally in core_routers.py (_get_knowledge_routers). Duplicate registration
+    # caused the same routes to appear twice in the OpenAPI schema.
     (
         "api.conversation_files",
         "/conversation-files",
@@ -606,15 +577,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["resilience", "monitoring"],
         "error_resilience",
     ),
-    # User management (users, teams, organizations) — router defines /user-management internally
-    (
-        "api.user_management",
-        "",
-        ["user-management", "users"],
-        "user_management",
-    ),
-    # Issue #1803: Plugin manager endpoints (list, discover, load/unload/enable/disable, config)
-    ("plugin_manager", "", ["plugins"], "plugin_manager"),
+    # NOTE (#4203): user_management and plugin_manager removed from here — already registered
+    # unconditionally in core_routers.py. Duplicate registration caused routes to appear twice.
     # Issue #1803: Plugin and agent marketplace — community catalog
     ("api.marketplace", "/marketplace", ["marketplace", "plugins"], "marketplace"),
     # Issue #6481: User-extensible marketplace sources (custom marketplaces)
@@ -629,12 +593,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ("api.chat_sessions", "", ["chat-sessions"], "chat_sessions"),
     # Issue #5061: First-run onboarding presets + doctor
     ("api.onboarding", "/onboarding", ["onboarding"], "onboarding"),
-    (
-        "api.diagnostics",
-        "/api/diagnostics",
-        ["diagnostics"],
-        "diagnostics",
-    ),
+    # NOTE (#4203): api.diagnostics removed — already registered in monitoring_routers.py
+    # at prefix "" (routes define their own /diagnostics path prefix internally).
     (
         "api.presence_ws",
         "",
