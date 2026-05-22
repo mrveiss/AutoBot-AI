@@ -663,7 +663,7 @@
     msg: >-
       SLM backend Python import failed — see error above and in
       {{ slm_log_dir }}/slm-startup-smoke.log.
-      Last output: {{ _slm_import_check.stdout_lines | default([]) | last(20) }}
+      Last output: {{ (_slm_import_check.stdout_lines | default([]))[-20:] }}
   when: _slm_import_check.rc | default(0) != 0
   tags: ['slm', 'service']
 
@@ -749,7 +749,7 @@
 
     - name: "SLM | Display last 30 lines of backend log on failure"
       ansible.builtin.debug:
-        msg: "{{ _slm_backend_log_output.stdout_lines | default([]) | last(30) }}"
+        msg: "{{ (_slm_backend_log_output.stdout_lines | default([]))[-30:] }}"
       tags: ['slm', 'service', 'debug']
 
     - name: "SLM | Fail with diagnostic context"
