@@ -8,6 +8,8 @@ Handles backup execution, verification, and restore operations
 for stateful services (Redis, PostgreSQL, etc).
 """
 
+from __future__ import annotations
+
 import asyncio
 import hashlib
 import logging

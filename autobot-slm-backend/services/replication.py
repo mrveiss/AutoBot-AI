@@ -8,6 +8,8 @@ Orchestrates Redis replication with Ansible and provides data sync verification.
 Issue #726 Phase 4: Redis replication orchestration
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 from datetime import datetime, timezone
