@@ -33,6 +33,8 @@ const logger = createLogger('SshTerminal')
 const props = defineProps<{
   hostId: string
   chatSessionId?: string | null
+  /** WebSocket base path for SSH connections. Defaults to /api/terminal/ws/ssh/ */
+  wsBasePath?: string
 }>()
 
 const emit = defineEmits<{
@@ -55,7 +57,8 @@ const buildWsUrl = () => {
   const params = props.chatSessionId ? `?conversation_id=${props.chatSessionId}` : ''
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const host = window.location.host
-  return `${protocol}//${host}/api/terminal/ws/ssh/${props.hostId}${params}`
+  const basePath = props.wsBasePath ?? '/api/terminal/ws/ssh/'
+  return `${protocol}//${host}${basePath}${props.hostId}${params}`
 }
 
 const { send: wsSend, connect: wsConnect, disconnect: wsDisconnect, isConnected: wsIsConnected } = useWebSocket(wsUrl, {
