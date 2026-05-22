@@ -3360,7 +3360,7 @@ class AnalyticsEvolutionExportResponse(BaseModel):
 
     status: str
     export_format: str = "json"
-    data: List[Dict[str, Any]] = Field(default_factory=list)
+    data: List[EvolutionQualitySnapshot] = Field(default_factory=list)
     record_count: int = 0
     exported_at: str = ""
 
