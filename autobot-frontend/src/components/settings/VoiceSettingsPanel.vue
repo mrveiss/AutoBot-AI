@@ -311,7 +311,7 @@ async function handleDelete(voiceId: string, name: string) {
 }
 
 .delete-btn:hover {
-  color: #ef4444;
+  color: var(--color-error);
   background: rgba(239, 68, 68, 0.1);
 }
 
@@ -321,7 +321,7 @@ async function handleDelete(voiceId: string, name: string) {
 }
 
 .error-msg {
-  color: #ef4444;
+  color: var(--color-error);
   font-size: var(--text-sm, 14px);
   padding: var(--spacing-sm, 8px);
 }
@@ -422,8 +422,8 @@ async function handleDelete(voiceId: string, name: string) {
 }
 
 .option-btn.recording {
-  border-color: #ef4444;
-  color: #ef4444;
+  border-color: var(--color-error);
+  color: var(--color-error);
 }
 
 .audio-preview {

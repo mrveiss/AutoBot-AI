@@ -180,13 +180,13 @@ async function handleScan() {
 }
 
 .file-input.error {
-  border-color: #ef4444;
+  border-color: var(--color-error);
 }
 
 .error-text {
   display: block;
   margin-top: var(--spacing-1);
-  color: #ef4444;
+  color: var(--color-error);
   font-size: var(--text-sm);
 }
 
