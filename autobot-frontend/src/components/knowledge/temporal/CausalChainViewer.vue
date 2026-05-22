@@ -2,7 +2,7 @@
 <template>
   <div class="causal-chain-viewer">
     <div class="chain-header">
-      <h4><i class="fas fa-code-branch"></i> {{ $t('knowledge.temporal.causalChain.title') }}</h4>
+      <h4><Icon name="code-branch" /> {{ $t('knowledge.temporal.causalChain.title') }}</h4>
       <p class="header-description">
         {{ $t('knowledge.temporal.causalChain.description') }}
       </p>
@@ -28,7 +28,7 @@
 
     <!-- Loading -->
     <div v-if="loading" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" :spin="true" />
       <span>{{ $t('knowledge.temporal.causalChain.tracing') }}</span>
     </div>
 
@@ -89,7 +89,7 @@
 
     <!-- Empty -->
     <div v-else class="empty-state">
-      <i class="fas fa-code-branch"></i>
+      <Icon name="code-branch" />
       <p>{{ $t('knowledge.temporal.causalChain.emptyState') }}</p>
     </div>
   </div>
@@ -103,6 +103,7 @@
 import { ref, onMounted, watch } from 'vue'
 import type { TemporalEvent } from '@/composables/useKnowledgeGraph'
 import { useKnowledgeGraph } from '@/composables/useKnowledgeGraph'
+import Icon from '@/components/ui/Icon.vue'
 const props = defineProps<{
   eventId: string
   initialEvents?: TemporalEvent[]

@@ -140,7 +140,7 @@
                 :class="{ active: voiceDisplayMode === 'modal' }"
                 type="button"
               >
-                <i class="fas fa-expand-alt mr-1"></i>
+                <Icon name="expand-alt" class="mr-1" />
                 {{ $t('profile.fullScreen') }}
               </button>
               <button
@@ -149,7 +149,7 @@
                 :class="{ active: voiceDisplayMode === 'sidepanel' }"
                 type="button"
               >
-                <i class="fas fa-columns mr-1"></i>
+                <Icon name="columns" class="mr-1" />
                 {{ $t('profile.sidePanel') }}
               </button>
             </div>
@@ -230,6 +230,7 @@ import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useInitialFocus } from '@/composables/useInitialFocus'
 import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
+import Icon from '@/components/ui/Icon.vue'
 
 const props = defineProps<{
   isOpen: boolean

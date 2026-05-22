@@ -17,10 +17,10 @@ Issue #4273: Wire orphaned components EnforcementModeSelector, FlagChangeHistory
 
     <!-- Error State -->
     <div v-else-if="error" class="error-state">
-      <i class="fas fa-exclamation-circle"></i>
+      <Icon name="exclamation-circle" />
       <p>{{ error }}</p>
       <button @click="loadData" class="retry-btn">
-        <i class="fas fa-redo"></i>
+        <Icon name="redo" />
         {{ $t('featureFlags.retry') }}
       </button>
     </div>
@@ -89,6 +89,7 @@ import EndpointEnforcement from '@/components/feature-flags/EndpointEnforcement.
 import FlagChangeHistory from '@/components/feature-flags/FlagChangeHistory.vue';
 import AccessMetrics from '@/components/feature-flags/AccessMetrics.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
+import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('FeatureFlagsSettingsPanel');
 const { t } = useI18n();

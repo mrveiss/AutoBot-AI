@@ -1,7 +1,7 @@
 <template>
   <div class="code-smells-section analytics-section">
     <h3>
-      <i class="fas fa-bug"></i> {{ $t('analytics.codeSmells.title') }}
+      <Icon name="bug" /> {{ $t('analytics.codeSmells.title') }}
       <span v-if="codeHealthScore" class="health-badge" :class="getHealthGradeClass(codeHealthScore.grade)">
         {{ codeHealthScore.grade }} ({{ codeHealthScore.health_score }}/100)
       </span>
@@ -10,10 +10,10 @@
       </span>
       <div v-if="smells.length > 0" class="section-export-buttons">
         <button @click="emit('export', 'md')" class="export-btn" :title="$t('analytics.codebase.actions.exportMarkdown')">
-          <i class="fas fa-file-alt"></i> MD
+          <Icon name="file-alt" /> MD
         </button>
         <button @click="emit('export', 'json')" class="export-btn" :title="$t('analytics.codebase.actions.exportJson')">
-          <i class="fas fa-file-code"></i> JSON
+          <Icon name="file-code" /> JSON
         </button>
       </div>
     </h3>
@@ -128,6 +128,7 @@ import { computed } from 'vue'
 import { useGroupingMemo } from '@/composables/useComputedMemo'
 import { useExpansion } from '@/composables/useExpansion'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import Icon from '@/components/ui/Icon.vue'
 
 interface CodeSmell {
   severity: string

@@ -67,7 +67,7 @@
       @click="clearFilters"
       :disabled="!hasActiveFilters"
     >
-      <i class="fas fa-times"></i>
+      <Icon name="times" />
       {{ $t('operations.filters.clear') }}
     </button>
   </div>
@@ -78,6 +78,7 @@ import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { OperationsFilter, OperationStatus, OperationType } from '@/types/operations'
 import { STATUS_CONFIG, OPERATION_TYPE_LABELS } from '@/types/operations'
+import Icon from '@/components/ui/Icon.vue'
 
 const { t } = useI18n()
 

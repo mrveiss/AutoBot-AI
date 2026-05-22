@@ -1,7 +1,7 @@
 <template>
   <div ref="container" class="graph3d-container">
     <div v-if="isEmpty" class="graph3d-empty">
-      <i class="fas fa-project-diagram"></i>
+      <Icon name="project-diagram" />
       <p>{{ $t('knowledge.graph.noEntities3D') }}</p>
     </div>
   </div>
@@ -36,6 +36,7 @@ import SpriteText from 'three-spritetext'
 import * as THREE from 'three'
 import { getCssVar } from '@/composables/useCssVars'
 import { createLogger } from '@/utils/debugUtils'
+import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('KnowledgeGraph3D')
 

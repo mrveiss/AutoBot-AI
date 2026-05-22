@@ -23,6 +23,7 @@ import {
 } from '@/utils/VisionMultimodalApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { normalizeUrl } from '@/utils/urlUtils'
+import Icon from '@/components/ui/Icon.vue'
 
 const { t } = useI18n()
 const logger = createLogger('VisualBrowserPanel')
@@ -210,20 +211,20 @@ onMounted(() => {
         <!-- Back / Forward / Reload -->
         <div class="nav-controls">
           <button @click="goBack" :disabled="!isConnected || loading" class="nav-btn" :title="$t('chat.visualBrowser.back')" :aria-label="$t('chat.visualBrowser.back')">
-            <i class="fas fa-arrow-left"></i>
+            <Icon name="arrow-left" />
           </button>
           <button @click="goForward" :disabled="!isConnected || loading" class="nav-btn" :title="$t('chat.visualBrowser.forward')" :aria-label="$t('chat.visualBrowser.forward')">
-            <i class="fas fa-arrow-right"></i>
+            <Icon name="arrow-right" />
           </button>
           <button @click="reload" :disabled="!isConnected || loading" class="nav-btn" :title="$t('chat.visualBrowser.reload')" :aria-label="$t('chat.visualBrowser.reload')">
 
-            <i class="fas fa-redo" :class="{ 'fa-spin': loading }"></i>
+            <Icon name="redo" :spin="loading" />
           </button>
         </div>
 
         <!-- URL Input -->
         <div class="url-bar">
-          <i class="fas fa-globe url-icon"></i>
+          <Icon name="globe" class="url-icon" />
           <input
             v-model="url"
             @keydown="handleKeydown"
@@ -236,13 +237,13 @@ onMounted(() => {
         <!-- Go button -->
         <button @click="navigate" :disabled="loading" class="go-btn" :aria-label="$t('chat.visualBrowser.go')">
 
-          <i class="fas fa-search" v-if="!loading"></i>
-          <i class="fas fa-spinner fa-spin" v-else></i>
+          <Icon name="search" v-if="!loading" />
+          <Icon name="spinner" :spin="true" v-else />
         </button>
 
         <!-- Screenshot button -->
         <button @click="captureScreenshot" :disabled="!isConnected || loading" class="nav-btn screenshot-btn" :title="$t('chat.visualBrowser.refreshScreenshot')" :aria-label="$t('chat.visualBrowser.refreshScreenshot')">
-          <i class="fas fa-camera"></i>
+          <Icon name="camera" />
         </button>
 
         <!-- Automation toggle (#1242) -->
@@ -253,16 +254,16 @@ onMounted(() => {
           :title="$t('chat.visualBrowser.toggleAutomation')"
           :aria-label="$t('chat.visualBrowser.toggleAutomation')"
         >
-          <i class="fas fa-robot"></i>
+          <Icon name="robot" />
         </button>
       </div>
     </div>
 
     <!-- Error Banner -->
     <div v-if="error" class="error-banner">
-      <i class="fas fa-exclamation-triangle"></i>
+      <Icon name="exclamation-triangle" />
       <span>{{ error }}</span>
-      <button @click="error = null" class="error-dismiss" :aria-label="$t('common.dismiss')"><i class="fas fa-times"></i></button>
+      <button @click="error = null" class="error-dismiss" :aria-label="$t('common.dismiss')"><Icon name="times" /></button>
     </div>
 
     <!-- Content Area (viewport + optional automation panel) (#1242) -->
@@ -271,13 +272,13 @@ onMounted(() => {
       <div class="browser-viewport">
         <!-- Loading Spinner -->
         <div v-if="loading && !screenshot" class="viewport-state">
-          <i class="fas fa-spinner fa-spin viewport-icon"></i>
+          <Icon name="spinner" :spin="true" class="viewport-icon" />
           <p class="viewport-msg">{{ $t('common.loading') }}</p>
         </div>
 
         <!-- Disconnected / not started -->
         <div v-else-if="!isConnected" class="viewport-state">
-          <i class="fas fa-globe viewport-icon viewport-icon--dim"></i>
+          <Icon name="globe" class="viewport-icon viewport-icon--dim" />
           <h3 class="viewport-title">{{ $t('chat.visualBrowser.browserTitle') }}</h3>
           <p class="viewport-msg">{{ $t('chat.visualBrowser.startBrowsing') }}</p>
         </div>
@@ -295,10 +296,10 @@ onMounted(() => {
 
         <!-- Connected but no screenshot yet -->
         <div v-else class="viewport-state">
-          <i class="fas fa-camera viewport-icon viewport-icon--dim"></i>
+          <Icon name="camera" class="viewport-icon viewport-icon--dim" />
           <p class="viewport-msg">{{ $t('chat.visualBrowser.noScreenshot') }}</p>
           <button @click="captureScreenshot" class="capture-btn">
-            <i class="fas fa-camera mr-2"></i>{{ $t('chat.visualBrowser.captureScreenshot') }}
+            <Icon name="camera" class="mr-2" />{{ $t('chat.visualBrowser.captureScreenshot') }}
           </button>
         </div>
       </div>
@@ -427,7 +428,8 @@ onMounted(() => {
 
 .url-icon {
   color: var(--text-muted);
-  font-size: var(--text-sm);
+  width: var(--text-sm);
+  height: var(--text-sm);
   flex-shrink: 0;
 }
 
@@ -523,7 +525,8 @@ onMounted(() => {
 }
 
 .viewport-icon {
-  font-size: var(--text-5xl);
+  width: var(--text-5xl);
+  height: var(--text-5xl);
   color: var(--text-secondary);
 }
 

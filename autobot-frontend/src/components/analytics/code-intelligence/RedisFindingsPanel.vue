@@ -6,7 +6,7 @@
 <template>
   <div class="redis-panel">
     <div class="panel-header">
-      <h3><i class="fas fa-database"></i> {{ $t('analytics.findings.redis.title') }}</h3>
+      <h3><Icon name="database" /> {{ $t('analytics.findings.redis.title') }}</h3>
       <span v-if="findings.length > 0" class="count-badge">{{ findings.length }}</span>
     </div>
     <FindingsTable
@@ -20,6 +20,7 @@
 <script setup lang="ts">
 import FindingsTable from './FindingsTable.vue'
 import type { RedisOptimizationFinding } from '@/types/codeIntelligence'
+import Icon from '@/components/ui/Icon.vue'
 
 defineProps<{
   findings: RedisOptimizationFinding[]

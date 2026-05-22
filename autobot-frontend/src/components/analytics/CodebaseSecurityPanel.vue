@@ -6,7 +6,7 @@
 <template>
   <div class="code-intelligence-section analytics-section">
     <h3>
-      <i class="fas fa-brain"></i> {{ $t('analytics.codebase.intelligence.title') }}
+      <Icon name="brain" /> {{ $t('analytics.codebase.intelligence.title') }}
       <span v-if="props.totalFindings > 0" class="total-count">
         ({{ props.totalFindings.toLocaleString() }} findings)
       </span>
@@ -16,7 +16,7 @@
           class="action-btn"
           :title="$t('analytics.codebase.intelligence.scanFileTitle')"
         >
-          <i class="fas fa-file-code"></i> {{ $t('analytics.codebase.intelligence.scanFile') }}
+          <Icon name="file-code" /> {{ $t('analytics.codebase.intelligence.scanFile') }}
         </button>
         <button
           @click="emit('run-analysis')"
@@ -105,6 +105,7 @@ import SecurityFindingsPanel from '@/components/analytics/code-intelligence/Secu
 import PerformanceFindingsPanel from '@/components/analytics/code-intelligence/PerformanceFindingsPanel.vue'
 import RedisFindingsPanel from '@/components/analytics/code-intelligence/RedisFindingsPanel.vue'
 import FileScanModal from '@/components/analytics/code-intelligence/FileScanModal.vue'
+import Icon from '@/components/ui/Icon.vue'
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const { t } = useI18n()

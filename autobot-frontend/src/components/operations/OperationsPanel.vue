@@ -42,7 +42,7 @@
     <!-- Empty detail pane -->
     <div class="operations-pane detail-pane empty-detail" v-else>
       <div class="empty-placeholder">
-        <i class="fas fa-info-circle"></i>
+        <Icon name="info-circle" />
         <p>{{ $t('operations.panel.selectOperation') }}</p>
       </div>
     </div>
@@ -55,6 +55,7 @@ import { useI18n } from 'vue-i18n'
 import type { Operation, OperationsFilter } from '@/types/operations'
 import OperationsList from './OperationsList.vue'
 import OperationDetail from './OperationDetail.vue'
+import Icon from '@/components/ui/Icon.vue'
 
 interface Props {
   operations: Operation[]

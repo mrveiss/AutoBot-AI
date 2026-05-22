@@ -11,7 +11,7 @@
 
     <!-- Settings status message -->
     <div v-if="settingsLoadingStatus === 'offline'" class="settings-status offline">
-      <i class="fas fa-exclamation-triangle"></i>
+      <Icon name="exclamation-triangle" />
       <span>{{ $t('settings.backendOffline') }}</span>
     </div>
 
@@ -56,7 +56,7 @@
         {{ isSaving ? $t('settings.saving') : $t('settings.save') }}
       </button>
       <button @click="discardChanges" :disabled="isSaving" class="discard-btn">
-        <i class="fas fa-undo"></i>
+        <Icon name="undo" />
         {{ $t('settings.discardChanges') }}
       </button>
     </div>
@@ -89,6 +89,7 @@ import {
   createDefaultCacheConfig,
   createCacheActivityItem
 } from '@/types/settings'
+import Icon from '@/components/ui/Icon.vue'
 import type {
   SettingsStructure,
   SettingsTab,

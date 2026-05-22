@@ -23,6 +23,7 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import { formatTimeAgo } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
+import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('ConnectorManager')
 const { t } = useI18n()
@@ -223,7 +224,7 @@ onMounted(() => {
 
     <!-- Loading State -->
     <div v-if="store.connectorsLoading" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" :spin="true" />
       <p>{{ $t('knowledge.connectors.loadingConnectors') }}</p>
     </div>
 

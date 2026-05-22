@@ -9,7 +9,7 @@
         class="reconnect-btn"
         @click="connect"
       >
-        <i class="fas fa-sync-alt"></i> Reconnect
+        <Icon name="sync-alt" /> Reconnect
       </button>
     </div>
 
@@ -27,6 +27,7 @@ import '@xterm/xterm/css/xterm.css'
 import { createLogger } from '@/utils/debugUtils'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useWebSocket } from '@/composables/useWebSocket'
+import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('SSHTerminal')
 

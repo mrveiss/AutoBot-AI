@@ -1,7 +1,7 @@
 <template>
   <div class="problems-section analytics-section">
     <h3>
-      <i class="fas fa-exclamation-triangle"></i> {{ $t('analytics.problems.title') }}
+      <Icon name="exclamation-triangle" /> {{ $t('analytics.problems.title') }}
       <span v-if="problems && problems.length > 0" class="total-count">
         ({{ problems.length.toLocaleString() }} {{ $t('analytics.problems.total') }})
       </span>
@@ -13,7 +13,7 @@
           :disabled="!problems || problems.length === 0"
           :title="$t('analytics.problems.exportMarkdown')"
         >
-          <i class="fas fa-file-alt"></i> MD
+          <Icon name="file-alt" /> MD
         </button>
         <button
           @click="emit('export', 'json')"
@@ -21,7 +21,7 @@
           :disabled="!problems || problems.length === 0"
           :title="$t('analytics.problems.exportJson')"
         >
-          <i class="fas fa-file-code"></i> JSON
+          <Icon name="file-code" /> JSON
         </button>
       </div>
     </h3>
@@ -124,6 +124,7 @@
 import { useGroupingMemo } from '@/composables/useComputedMemo'
 import { useExpansion } from '@/composables/useExpansion'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import Icon from '@/components/ui/Icon.vue'
 
 interface Problem {
   severity: string

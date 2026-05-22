@@ -3,10 +3,10 @@
     <!-- Breadcrumb Navigation -->
     <div class="breadcrumb">
       <button @click="$emit('navigate-to-path', '/')" class="breadcrumb-item" type="button">
-        <i class="fas fa-home"></i> {{ $t('fileBrowser.pathNavigation.home') }}
+        <Icon name="home" /> {{ $t('fileBrowser.pathNavigation.home') }}
       </button>
       <span v-for="(part, index) in pathParts" :key="index" class="breadcrumb-item">
-        <i class="fas fa-chevron-right breadcrumb-separator"></i>
+        <Icon name="chevron-right" class="breadcrumb-separator" />
         <button @click="$emit('navigate-to-path', getPathUpTo(index))" class="clickable" type="button">
           {{ part }}
         </button>
@@ -22,7 +22,7 @@
         class="path-field"
       />
       <button @click="$emit('navigate-to-path', pathInput)" class="path-go-btn">
-        <i class="fas fa-arrow-right"></i>
+        <Icon name="arrow-right" />
       </button>
     </div>
   </div>
@@ -30,6 +30,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import Icon from '@/components/ui/Icon.vue'
 
 interface Props {
   currentPath: string

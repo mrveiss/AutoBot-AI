@@ -4,23 +4,23 @@
     <!-- Sidebar -->
     <aside class="graph-sidebar">
       <div class="sidebar-header">
-        <h3><i class="fas fa-project-diagram"></i> {{ $t('knowledge.graphView.title') }}</h3>
+        <h3><Icon name="project-diagram" /> {{ $t('knowledge.graphView.title') }}</h3>
       </div>
 
       <!-- Quick Stats -->
       <div class="quick-stats">
         <div class="stat-row">
-          <i class="fas fa-circle"></i>
+          <Icon name="circle" />
           <span class="stat-label">{{ $t('knowledge.graphView.entities') }}</span>
           <span class="stat-value">{{ stats.entityCount }}</span>
         </div>
         <div class="stat-row">
-          <i class="fas fa-clock"></i>
+          <Icon name="clock" />
           <span class="stat-label">{{ $t('knowledge.graphView.events') }}</span>
           <span class="stat-value">{{ stats.eventCount }}</span>
         </div>
         <div class="stat-row">
-          <i class="fas fa-layer-group"></i>
+          <Icon name="layer-group" />
           <span class="stat-label">{{ $t('knowledge.graphView.summaries') }}</span>
           <span class="stat-value">{{ stats.summaryCount }}</span>
         </div>
@@ -43,7 +43,7 @@
       <!-- Back Link -->
       <div class="sidebar-footer">
         <router-link to="/knowledge" class="back-link">
-          <i class="fas fa-arrow-left"></i>
+          <Icon name="arrow-left" />
           {{ $t('knowledge.graphView.backToKnowledgeBase') }}
         </router-link>
       </div>
@@ -60,7 +60,7 @@
       >
         <div class="welcome-card">
           <h2>
-            <i class="fas fa-project-diagram"></i>
+            <Icon name="project-diagram" />
             {{ $t('knowledge.graphView.knowledgeGraphPipeline') }}
           </h2>
           <p>
@@ -94,6 +94,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useKnowledgeGraph } from '@/composables/useKnowledgeGraph'
+import Icon from '@/components/ui/Icon.vue'
 
 const route = useRoute()
 const router = useRouter()
