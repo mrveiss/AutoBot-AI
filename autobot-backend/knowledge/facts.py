@@ -597,12 +597,15 @@ class FactsMixin:
         # ChromaVectorStore.add() expects nodes with embeddings already set
         embedding = await _generate_embedding_with_npu_fallback(content)
 
-        # Create Document for LlamaIndex with embedding
-        doc = Document(text=content, doc_id=fact_id, metadata=sanitized_metadata)
-        doc.embedding = embedding
-
-        # Add to vector store
-        await asyncio.to_thread(self.vector_store.add, [doc])
+        # Issue #8391: Route through VectorWriteBuffer when available (LSM-style batching).
+        # Falls back to direct LlamaIndex add() when buffer is not yet started.
+        write_buffer = getattr(self, "_write_buffer", None)
+        if write_buffer is not None:
+            await write_buffer.write(fact_id, embedding, content, sanitized_metadata)
+        else:
+            doc = Document(text=content, doc_id=fact_id, metadata=sanitized_metadata)
+            doc.embedding = embedding
+            await asyncio.to_thread(self.vector_store.add, [doc])
 
         logger.info("Vectorized fact %s in ChromaDB", fact_id)
 

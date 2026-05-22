@@ -472,6 +472,19 @@ async def _init_knowledge_base(app: FastAPI):
         mgr = getattr(app.state, "chat_workflow_manager", None)
         if mgr is not None and knowledge_base is not None and mgr.knowledge_service is None:
             await mgr.set_knowledge_base(knowledge_base)
+
+        # Issue #8391: Start VectorWriteBuffer background flush task.
+        write_buffer = getattr(knowledge_base, "_write_buffer", None)
+        if write_buffer is not None:
+            await write_buffer.start()
+
+        # Issue #8392: Start CollectionTierManager background reaper.
+        try:
+            from knowledge.tiering import get_tier_manager
+            await get_tier_manager().start()
+            app.state.tier_manager = get_tier_manager()
+        except Exception as _tm_err:
+            logger.warning("CollectionTierManager startup failed: %s", _tm_err)
     except Exception as kb_error:
         logger.warning("Knowledge base initialization failed: %s", kb_error)
         app.state.knowledge_base = None
@@ -1482,6 +1495,18 @@ async def cleanup_services(app: FastAPI):
             logger.info("Connector scheduler stopped")
         except Exception as _cs_err:
             logger.warning("Connector scheduler shutdown failed: %s", _cs_err)
+
+        # Issue #8391: Stop VectorWriteBuffer (flushes pending writes).
+        kb = getattr(app.state, "knowledge_base", None)
+        if kb is not None:
+            write_buffer = getattr(kb, "_write_buffer", None)
+            if write_buffer is not None:
+                await write_buffer.stop()
+
+        # Issue #8392: Stop CollectionTierManager reaper.
+        tier_manager = getattr(app.state, "tier_manager", None)
+        if tier_manager is not None:
+            await tier_manager.stop()
 
         # Issue #165: Stop documentation watcher
         try:

@@ -1568,7 +1568,7 @@ class NPUSemanticSearch:
             # Optimize for fastest response times
             self.batch_size_npu = 16  # Smaller batches for lower latency
             self.batch_size_gpu = 64
-            self.cache_max_size = 200  # Larger cache
+            self.cache_max_size = max(_SEARCH_CACHE_MAX_SIZE, 200)
             self.similarity_threshold = 0.6  # Lower threshold for more results
             optimizations["focus"] = "Optimized for minimum latency"
 
@@ -1576,7 +1576,7 @@ class NPUSemanticSearch:
             # Optimize for maximum throughput
             self.batch_size_npu = 64  # Larger batches
             self.batch_size_gpu = 256
-            self.cache_max_size = 50  # Smaller cache to save memory
+            self.cache_max_size = max(_SEARCH_CACHE_MAX_SIZE, 50)
             self.similarity_threshold = 0.8  # Higher threshold for quality
             optimizations["focus"] = "Optimized for maximum throughput"
 
@@ -1591,7 +1591,7 @@ class NPUSemanticSearch:
             # Balanced optimization
             self.batch_size_npu = 32
             self.batch_size_gpu = 128
-            self.cache_max_size = 100
+            self.cache_max_size = max(_SEARCH_CACHE_MAX_SIZE, 100)
             self.similarity_threshold = 0.7
             optimizations["focus"] = "Balanced optimization"
 
