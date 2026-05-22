@@ -5,6 +5,7 @@
 LRU Cache Manager - In-memory LRU caching with statistics
 """
 
+import asyncio
 import threading
 from collections import OrderedDict
 from typing import Any, Dict
@@ -37,7 +38,8 @@ class LRUCacheManager:
         self._cache: OrderedDict = OrderedDict()
         self._hits = 0
         self._misses = 0
-        self._lock = threading.Lock()  # Lock for thread-safe cache access
+        self._lock = threading.Lock()
+        self._async_lock = asyncio.Lock()
 
     @property
     def name(self) -> str:
@@ -118,7 +120,7 @@ class LRUCacheManager:
 
     async def clear(self) -> None:
         """Clear all items from cache."""
-        with self._lock:
+        async with self._async_lock:
             self._cache.clear()
             self._hits = 0
             self._misses = 0
