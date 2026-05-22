@@ -64,7 +64,6 @@ from knowledge.connectors.models import (
 )
 from knowledge.connectors.web_crawler import WebCrawlerConnector
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

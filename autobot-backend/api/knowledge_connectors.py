@@ -166,20 +166,20 @@ async def _list_connector_ids() -> List[str]:
     async_scan = hasattr(redis, "scan_iter") and asyncio.iscoroutinefunction(getattr(redis, "scan_iter", None))
 
     def _is_config_key(key_str: str) -> bool:
-        stripped = key_str[len(_REDIS_KEY_PREFIX):]
+        stripped = key_str[len(_REDIS_KEY_PREFIX) :]
         return not any(infix in stripped for infix in _NON_CONFIG_INFIXES)
 
     if async_scan:
         async for key in redis.scan_iter(match=pattern):
             key_str = key.decode("utf-8") if isinstance(key, bytes) else key
             if _is_config_key(key_str):
-                ids.append(key_str[len(_REDIS_KEY_PREFIX):])
+                ids.append(key_str[len(_REDIS_KEY_PREFIX) :])
     else:
         keys = await asyncio.to_thread(lambda: list(redis.scan_iter(match=pattern)))
         for key in keys:
             key_str = key.decode("utf-8") if isinstance(key, bytes) else key
             if _is_config_key(key_str):
-                ids.append(key_str[len(_REDIS_KEY_PREFIX):])
+                ids.append(key_str[len(_REDIS_KEY_PREFIX) :])
 
     return ids
 
