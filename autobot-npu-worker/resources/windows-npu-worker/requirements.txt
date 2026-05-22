@@ -8,7 +8,7 @@ uvicorn[standard]>=0.24.0
 pydantic>=2.5.0
 
 # Async HTTP Client
-aiohttp>=3.9.0
+aiohttp>=3.13.4  # GH#8323: 13 CVEs including zip bomb, request smuggling
 
 # Redis Client
 redis>=7.4.0
@@ -52,7 +52,7 @@ onnxscript>=0.1.0
 # CPU-only version keeps installation smaller - actual inference uses ONNX Runtime.
 # Note: This installs from PyTorch's CPU-only index for Windows.
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch>=2.0.0
+torch>=2.6.0  # GH#8324: CVE-2025-32434 — torch.load RCE via weights_only=True
 
 # =============================================================================
 # Scientific Computing
