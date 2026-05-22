@@ -70,6 +70,7 @@ class IndexType(Enum):
     IVF_FLAT = "ivf_flat"  # Inverted file index, faster for large datasets
     IVF_PQ = "ivf_pq"  # Product quantization, memory efficient
     HNSW = "hnsw"  # Hierarchical NSW, good recall/speed tradeoff
+    SQ8 = "sq8"  # Issue #8155: Scalar Quantization 8-bit — 4× memory reduction, <1% recall loss
 
 
 class SearchBackend(Enum):
@@ -265,6 +266,11 @@ class GPUVectorIndex:
             index.hnsw.efConstruction = 200
             index.hnsw.efSearch = 64
             return index
+
+        elif self.config.index_type == IndexType.SQ8:
+            # Issue #8155: Scalar Quantization 8-bit — 4× memory reduction vs float32.
+            # Uses inner-product metric (cosine after L2-norm) matching FLAT_IP behaviour.
+            return faiss.IndexScalarQuantizer(dim, faiss.ScalarQuantizer.QT_8bit, faiss.METRIC_INNER_PRODUCT)
 
         else:
             # Default to flat IP

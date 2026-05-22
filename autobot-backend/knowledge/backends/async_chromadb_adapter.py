@@ -131,6 +131,28 @@ class AsyncChromaDBCollection(AsyncBaseCollection):
             kwargs["include"] = list(include)
         return await self._raw.query(**kwargs)
 
+    async def query_batch(
+        self,
+        query_embeddings: Sequence[Embedding],
+        n_results: int = 10,
+        where: Where | None = None,
+        where_document: WhereDocument | None = None,
+        include: Sequence[str] | None = None,
+    ) -> dict:
+        """Issue #8153: batch multiple embeddings into a single ChromaDB call.
+
+        Delegates to ``AsyncChromaCollection.query_batch()`` which wraps the
+        underlying synchronous ``collection.query()`` in one ``asyncio.to_thread``
+        dispatch regardless of how many embeddings are in the batch.
+        """
+        return await self._raw.query_batch(
+            query_embeddings=[list(e) for e in query_embeddings],
+            n_results=n_results,
+            where=where,
+            where_document=where_document,
+            include=list(include) if include is not None else None,
+        )
+
     async def delete(
         self,
         *,

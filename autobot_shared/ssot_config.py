@@ -711,6 +711,16 @@ class CacheL1Config(BaseSettings):
         alias="AUTOBOT_CACHE_L1_SEMANTIC_MAX_SIZE",
         description="Max entries in semantic query cache ChromaDB collection",
     )
+    search_result_cache_max_size: int = Field(
+        default=10000,
+        alias="AUTOBOT_SEARCH_RESULT_CACHE_SIZE",
+        description="Max entries in NPU semantic search result cache (#8154)",
+    )
+    search_result_cache_ttl: int = Field(
+        default=1800,
+        alias="AUTOBOT_SEARCH_RESULT_CACHE_TTL",
+        description="TTL in seconds for NPU search result cache entries (#8154)",
+    )
 
 
 class CacheL2Config(BaseSettings):
@@ -1196,6 +1206,15 @@ class MiscConfig(BaseSettings):
     gc_threshold_2: int = Field(default=0, alias="AUTOBOT_GC_THRESHOLD_2")
     hnsw_construction_ef: str = Field(default="", alias="AUTOBOT_HNSW_CONSTRUCTION_EF")
     hnsw_m: str = Field(default="", alias="AUTOBOT_HNSW_M")
+    hnsw_quantization_type: str = Field(
+        default="",
+        alias="AUTOBOT_HNSW_QUANTIZATION_TYPE",
+        description=(
+            "ChromaDB HNSW quantization type (e.g. 'sq' for SQ8). "
+            "Only applies to ChromaDB versions that support hnsw:quantization_type metadata (#8155). "
+            "Empty string disables quantization (safe default for ChromaDB 1.5.x)."
+        ),
+    )
     hnsw_search_ef: str = Field(default="", alias="AUTOBOT_HNSW_SEARCH_EF")
     hnsw_space: str = Field(default="", alias="AUTOBOT_HNSW_SPACE")
     inference_profiling: str = Field(default="", alias="AUTOBOT_INFERENCE_PROFILING")

@@ -90,6 +90,10 @@ class KnowledgeBaseCore:
         self.hnsw_construction_ef = config.get("memory.chromadb.hnsw.construction_ef", 300)
         self.hnsw_search_ef = config.get("memory.chromadb.hnsw.search_ef", 100)
         self.hnsw_m = config.get("memory.chromadb.hnsw.M", 32)
+        # Issue #8155: SQ8 scalar quantization — opt-in via AUTOBOT_HNSW_QUANTIZATION_TYPE=sq.
+        # Empty string (default) disables quantization (safe for ChromaDB 1.5.x which rejects
+        # the key; non-empty value is added to hnsw_metadata and tried at collection creation).
+        self.hnsw_quantization_type: str = ssot_config.misc.hnsw_quantization_type
 
     def _init_connection_vars(self) -> None:
         """Initialize connection and state variables (Issue #398: extracted)."""
@@ -337,12 +341,18 @@ class KnowledgeBaseCore:
 
     def _build_hnsw_metadata(self) -> dict:
         """Build HNSW metadata for ChromaDB collection (Issue #398: extracted)."""
-        return {
+        meta: dict = {
             "hnsw:space": self.hnsw_space,
             "hnsw:construction_ef": self.hnsw_construction_ef,
             "hnsw:search_ef": self.hnsw_search_ef,
             "hnsw:M": self.hnsw_m,
         }
+        if self.hnsw_quantization_type:
+            # Issue #8155: SQ8 scalar quantization reduces vector storage 4× with <1% recall
+            # loss. Gated by AUTOBOT_HNSW_QUANTIZATION_TYPE because ChromaDB 1.5.x rejects
+            # this key; set to "sq" on installations that support it.
+            meta["hnsw:quantization_type"] = self.hnsw_quantization_type
+        return meta
 
     async def _create_chroma_collection(self, chroma_client, hnsw_metadata: dict):
         """Create ChromaDB collection with HNSW parameters (Issue #398: extracted)."""
