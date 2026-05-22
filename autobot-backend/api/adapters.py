@@ -8,8 +8,10 @@ Issue #1403: Provides environment test, model listing, and adapter
 status endpoints for the formal adapter registry.
 """
 
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from api.schemas_agent import (
     AdapterListResponse,
@@ -101,6 +103,37 @@ async def list_adapter_models(
             "total": len(models),
         },
     )
+
+
+@router.post("/ollama/pull")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="ollama_pull_model",
+    error_code_prefix="ADAPTERS",
+)
+async def ollama_pull_model(
+    body: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    """Pull an Ollama model with streaming progress events (#8344).
+
+    Request body: {"model": "llama3.2"}
+    Response: newline-delimited JSON stream of Ollama progress events.
+    """
+    model = body.get("model")
+    if not model:
+        raise HTTPException(status_code=400, detail="model is required")
+
+    registry = get_adapter_registry()
+    adapter = registry.get("ollama")
+    if not adapter:
+        raise HTTPException(status_code=404, detail="Ollama adapter not registered")
+
+    async def _stream():
+        async for event in adapter.pull_model(model):
+            yield json.dumps(event) + "\n"
+
+    return StreamingResponse(_stream(), media_type="application/x-ndjson")
 
 
 @register_health_probe("adapters")

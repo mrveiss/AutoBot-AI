@@ -19,7 +19,7 @@ from autobot_shared.singleton_factory import lazy_singleton
 
 logger = get_logger(__name__)
 
-_VALID_PREFIXES = {"agent", "task", "workflow", "global", "heartbeat"}
+_VALID_PREFIXES = {"agent", "task", "workflow", "heartbeat"}
 
 
 def _is_valid_channel(channel: str) -> bool:

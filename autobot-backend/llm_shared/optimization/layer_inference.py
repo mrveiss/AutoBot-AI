@@ -191,7 +191,7 @@ class LayerInferenceEngine:
             kwargs["cache_dir"] = self._config.cache_dir
 
         logger.debug("Loading model config for %s", model_name)
-        auto_cfg = AutoConfig.from_pretrained(model_name, **kwargs)
+        auto_cfg = AutoConfig.from_pretrained(model_name, resume_download=True, **kwargs)
         cfg_dict: Dict[str, Any] = auto_cfg.to_dict()
         logger.info(
             "Loaded model config for %s: arch=%s",
@@ -465,7 +465,7 @@ class LayerInferenceEngine:
         kwargs: Dict[str, Any] = {"use_fast": True}
         if self._config.cache_dir:
             kwargs["cache_dir"] = self._config.cache_dir
-        return AutoTokenizer.from_pretrained(self._config.model_name, **kwargs)
+        return AutoTokenizer.from_pretrained(self._config.model_name, resume_download=True, **kwargs)
 
     def _resolve_checkpoint_path(self) -> str:
         """Return the checkpoint path for the configured model.

@@ -9,7 +9,7 @@ Core user model with authentication, profile, and tenant association.
 
 import uuid
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -147,7 +147,7 @@ class User(Base, TimestampMixin):
     )
 
     # Relationships
-    organization: Mapped[Optional["Organization"]] = relationship(
+    organization: Mapped["Organization | None"] = relationship(
         "Organization",
         back_populates="users",
     )
@@ -178,7 +178,7 @@ class User(Base, TimestampMixin):
         cascade="all, delete-orphan",
     )
 
-    mfa: Mapped[Optional["UserMFA"]] = relationship(
+    mfa: Mapped["UserMFA | None"] = relationship(
         "UserMFA",
         back_populates="user",
         uselist=False,
