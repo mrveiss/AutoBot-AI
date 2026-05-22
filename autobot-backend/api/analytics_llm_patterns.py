@@ -380,8 +380,12 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
             # Store usage record
             date_key = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
             usage_key = f"{self._usage_key}:{date_key}"
-            await redis.lpush(usage_key, json.dumps(record))
-            await redis.expire(usage_key, TTL_30_DAYS)  # 30 days
+            # Issue #8163: pipeline LPUSH+EXPIRE to avoid a race where the
+            # key survives forever if the process dies between the two calls.
+            async with redis.pipeline() as pipe:
+                await pipe.lpush(usage_key, json.dumps(record))
+                await pipe.expire(usage_key, TTL_30_DAYS)
+                await pipe.execute()
 
             # Update cache tracking
             cache_key = f"{self._cache_key}:{prompt_hash}"
@@ -401,8 +405,8 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
                     "preview": self._get_prompt_preview(request.prompt),
                 }
 
-            await redis.set(cache_key, json.dumps(data))
-            await redis.expire(cache_key, TTL_30_DAYS)
+            # Issue #8163: atomic SET EX replaces the two-call SET + EXPIRE.
+            await redis.set(cache_key, json.dumps(data), ex=TTL_30_DAYS)
 
             # Update stats
             await self._update_stats(request.model, cost, request.success)
