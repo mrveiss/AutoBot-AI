@@ -66,7 +66,7 @@ router = APIRouter(
     dependencies=[Depends(check_admin_permission)],
 )
 
-_SUPPORTED_TYPES = ["file_server", "web_crawler", "database"]
+_SUPPORTED_TYPES = ["file_server", "web_crawler", "database", "notion"]
 
 
 # ---------------------------------------------------------------------------

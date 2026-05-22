@@ -8,6 +8,8 @@ Issue #1254: Ingests content from web URLs using the web_fetch foundation packag
 Issue #7402: Wire dead ``max_depth`` parameter to Frontier + RobotsCache + WebFetcher.
 Issue #8144: Migrated HTTP fetches to use AbstractConnector.fetch_with_retry() so
 transient 429/5xx responses are retried with exponential backoff instead of failing.
+Issue #8284: sync() override now integrates #8146 checkpoint (read/write/clear).
+Issue #8286: Connection-level failures (status_code=None) now also raise RetryableError.
 """
 
 import hashlib
@@ -144,8 +146,8 @@ class WebCrawlerConnector(AbstractConnector):
 
         async def _do_fetch():
             r = await WebFetcher.fetch(url)
-            if not r.success and r.status_code in (429, 500, 502, 503, 504):
-                raise RetryableError("HTTP %s" % r.status_code, r.status_code)
+            if not r.success and (r.status_code is None or r.status_code in (429, 500, 502, 503, 504)):
+                raise RetryableError("HTTP %s" % (r.status_code or "connection error"), r.status_code or 0)
             return r
 
         try:
@@ -186,8 +188,8 @@ class WebCrawlerConnector(AbstractConnector):
 
         async def _do_fetch():
             r = await WebFetcher.fetch(url)
-            if not r.success and r.status_code in (429, 500, 502, 503, 504):
-                raise RetryableError("HTTP %s" % r.status_code, r.status_code)
+            if not r.success and (r.status_code is None or r.status_code in (429, 500, 502, 503, 504)):
+                raise RetryableError("HTTP %s" % (r.status_code or "connection error"), r.status_code or 0)
             return r
 
         try:
@@ -215,7 +217,8 @@ class WebCrawlerConnector(AbstractConnector):
         """Override base sync to run full BFS crawl via crawl().
 
         Calls ``crawl()`` with config-driven depth and ingests all results.
-        The scheduler triggers this path via ``connector.sync(incremental=True)``.
+        Integrates the #8146 checkpoint so crash-resume skips already-crawled
+        seeds and full-refresh (incremental=False) restarts from scratch (#8284).
         """
         from datetime import datetime as _dt
 
@@ -226,16 +229,36 @@ class WebCrawlerConnector(AbstractConnector):
             completed_at=None,
             status="failed",
         )
+
+        if not incremental:
+            await self._clear_checkpoint()
+
+        already_processed = await self._read_checkpoint()
+        pending_seeds = [
+            url for url in self._seed_urls if _url_to_source_id(url) not in already_processed
+        ]
+        if already_processed:
+            result.resumed_from_checkpoint = True
+            self.logger.info(
+                "WebCrawlerConnector %s resuming from checkpoint (%d seeds already processed)",
+                self.config.connector_id,
+                len(already_processed),
+            )
+
         try:
             fetched = await self.crawl(
-                seed_urls=self._seed_urls,
+                seed_urls=pending_seeds,
                 max_depth=self._max_depth,
                 max_pages=self._max_pages,
                 respect_robots=self._respect_robots,
                 ingest=True,
                 same_origin=self._same_origin,
             )
+            for url in pending_seeds:
+                await self._write_checkpoint(_url_to_source_id(url))
             result.status = "success" if not result.errors else "partial"
+            if result.status == "success":
+                await self._clear_checkpoint()
             self.logger.info(
                 "WebCrawlerConnector sync complete: %d pages fetched, %d ingested, %d errors",
                 len(fetched),
@@ -373,8 +396,8 @@ class WebCrawlerConnector(AbstractConnector):
 
         async def _do_fetch():
             h, s = await WebFetcher.fetch_raw_html(url, timeout=30.0)
-            if s is not None and s in (429, 500, 502, 503, 504):
-                raise RetryableError("HTTP %s" % s, s)
+            if s is None or s in (429, 500, 502, 503, 504):
+                raise RetryableError("HTTP %s" % (s or "connection error"), s or 0)
             return h, s
 
         try:
