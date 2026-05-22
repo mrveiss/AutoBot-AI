@@ -6,6 +6,8 @@ Web Crawler Connector
 
 Issue #1254: Ingests content from web URLs using the web_fetch foundation package.
 Issue #7402: Wire dead ``max_depth`` parameter to Frontier + RobotsCache + WebFetcher.
+Issue #8144: Migrated HTTP fetches to use AbstractConnector.fetch_with_retry() so
+transient 429/5xx responses are retried with exponential backoff instead of failing.
 """
 
 import hashlib
@@ -16,7 +18,7 @@ from urllib.parse import urlparse
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
-from knowledge.connectors.base import AbstractConnector
+from knowledge.connectors.base import AbstractConnector, RetryableError
 from knowledge.connectors.models import (
     ChangeInfo,
     ConnectorConfig,
@@ -117,12 +119,23 @@ class WebCrawlerConnector(AbstractConnector):
         """Check that at least one seed URL is reachable via web_fetch."""
         if not self._seed_urls:
             return False
-        result = await WebFetcher.fetch(self._seed_urls[0])
-        if result.success:
-            self.logger.info("web_fetch connectivity OK for %s", self._seed_urls[0])
-            return True
-        self.logger.warning("web_fetch connectivity check failed: %s", result.error_code)
-        return False
+        url = self._seed_urls[0]
+
+        async def _do_fetch():
+            r = await WebFetcher.fetch(url)
+            if not r.success and r.status_code in (429, 500, 502, 503, 504):
+                raise RetryableError("HTTP %s" % r.status_code, r.status_code)
+            return r
+
+        try:
+            result = await self.fetch_with_retry(_do_fetch)
+            if result.success:
+                self.logger.info("web_fetch connectivity OK for %s", url)
+                return True
+            self.logger.warning("web_fetch connectivity check failed: %s", result.error_code)
+            return False
+        except Exception:
+            return False
 
     async def discover_sources(self) -> List[SourceInfo]:
         """Return a SourceInfo entry for each seed URL (depth=1 only)."""
@@ -149,7 +162,17 @@ class WebCrawlerConnector(AbstractConnector):
         if url is None:
             self.logger.warning("No URL found for source_id: %s", source_id)
             return None
-        result = await WebFetcher.fetch(url)
+
+        async def _do_fetch():
+            r = await WebFetcher.fetch(url)
+            if not r.success and r.status_code in (429, 500, 502, 503, 504):
+                raise RetryableError("HTTP %s" % r.status_code, r.status_code)
+            return r
+
+        try:
+            result = await self.fetch_with_retry(_do_fetch)
+        except Exception:
+            return None
         return _fetch_result_to_content(result, self.config.connector_id)
 
     async def detect_changes(self, since: datetime | None = None) -> List[ChangeInfo]:
@@ -318,7 +341,8 @@ class WebCrawlerConnector(AbstractConnector):
 
         Using bs4 directly yields the raw HTML needed for extract_links and
         avoids a second HTTP request.  The robots check uses the fetcher's
-        embedded RobotsCache so respect_robots is still honoured.
+        embedded RobotsCache so respect_robots is still honoured.  Transient
+        HTTP errors (429/5xx) are retried via fetch_with_retry() (Issue #8144).
 
         Returns (FetchResult(success=False, ...), "") on any error.
         """
@@ -326,7 +350,19 @@ class WebCrawlerConnector(AbstractConnector):
             if not await fetcher._robots.is_allowed(url):
                 return FetchResult(url=url, success=False, error_code="robots_blocked"), ""
 
-        html, status = await WebFetcher.fetch_raw_html(url, timeout=30.0)
+        async def _do_fetch():
+            h, s = await WebFetcher.fetch_raw_html(url, timeout=30.0)
+            if s is not None and s in (429, 500, 502, 503, 504):
+                raise RetryableError("HTTP %s" % s, s)
+            return h, s
+
+        try:
+            html, status = await self.fetch_with_retry(_do_fetch)
+        except RetryableError as exc:
+            return FetchResult(url=url, success=False, error_code=ERR_CONNECTION, status_code=exc.status_code), ""
+        except Exception:
+            return FetchResult(url=url, success=False, error_code=ERR_CONNECTION), ""
+
         if html is None or status is None or status >= 400:
             return (
                 FetchResult(url=url, success=False, error_code=ERR_CONNECTION, status_code=status),

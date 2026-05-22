@@ -35,6 +35,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from constants.error_constants import ERR_CONNECTOR_NOT_FOUND
+from knowledge.connectors.auth import validate_config_against_schema
 from knowledge.connectors.models import ConnectorConfig
 from knowledge.connectors.registry import ConnectorRegistry
 from knowledge.connectors.scheduler import get_connector_scheduler
@@ -95,6 +96,7 @@ async def _save_connector(cfg: ConnectorConfig) -> None:
         "include_patterns": cfg.include_patterns,
         "exclude_patterns": cfg.exclude_patterns,
         "tier": int(getattr(cfg, "tier", 0)),
+        "auth_type": getattr(cfg, "auth_type", None),
     }
     await asyncio.to_thread(
         redis.set,
@@ -130,6 +132,7 @@ def _deserialize_connector(raw: Any) -> ConnectorConfig:
         include_patterns=data.get("include_patterns", []),
         exclude_patterns=data.get("exclude_patterns", []),
         tier=int(data.get("tier", 0)),
+        auth_type=data.get("auth_type"),
     )
 
 
@@ -227,6 +230,8 @@ async def _run_sync_background(connector_id: str, incremental: bool) -> None:
             "updated": sync_result.updated,
             "deleted": sync_result.deleted,
             "errors": sync_result.errors,
+            # Issue #8146: expose whether this run resumed from a checkpoint.
+            "resumed_from_checkpoint": getattr(sync_result, "resumed_from_checkpoint", False),
         }
         await _append_history(connector_id, history_entry)
 
@@ -304,6 +309,18 @@ async def create_connector(request: CreateConnectorRequest):
             status_code=422,
             detail="connector_type '%s' is not registered" % request.connector_type,
         )
+    # Issue #8145: validate config against the connector's declared auth schema.
+    auth_cls = klass.auth_schema()
+    auth_type: str | None = None
+    if auth_cls is not None:
+        auth_type = auth_cls.__name__
+        errors = validate_config_against_schema(auth_cls, request.config)
+        if errors:
+            raise HTTPException(
+                status_code=422,
+                detail="Auth config invalid for %s: %s" % (auth_type, "; ".join(errors)),
+            )
+
     cfg = ConnectorConfig(
         connector_id=connector_id,
         connector_type=request.connector_type,
@@ -315,6 +332,7 @@ async def create_connector(request: CreateConnectorRequest):
         include_patterns=request.include_patterns,
         exclude_patterns=request.exclude_patterns,
         tier=int(getattr(klass, "tier", 0)),
+        auth_type=auth_type,
     )
     instance = _load_or_create_instance(cfg)
     healthy = await instance.test_connection()
@@ -568,6 +586,7 @@ def _cfg_to_dict(cfg: ConnectorConfig) -> Dict[str, Any]:
         "include_patterns": cfg.include_patterns,
         "exclude_patterns": cfg.exclude_patterns,
         "tier": _resolve_tier(cfg),
+        "auth_type": getattr(cfg, "auth_type", None),
     }
 
 

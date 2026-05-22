@@ -7,11 +7,17 @@ Abstract Connector Base Class
 Issue #1254: Defines the interface every source connector must implement.
 Concrete connectors subclass AbstractConnector and register via
 @ConnectorRegistry.register("<type>").
+Issue #8144: Added fetch_with_retry(), should_retry(), backoff_time() for
+built-in exponential-backoff retry on transient HTTP errors.
+Issue #8145: Added auth_schema() classmethod for typed credential declarations.
+Issue #8146: Added _write_checkpoint(), _read_checkpoint(), _clear_checkpoint()
+and updated sync() to skip already-processed sources on restart.
 """
 
+import asyncio
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import List
+from typing import Awaitable, Callable, List, Set, TypeVar
 
 from autobot_shared.datetime_utils import datetime_now
 from autobot_shared.logging_manager import get_logger
@@ -23,6 +29,22 @@ from knowledge.connectors.models import (
     SourceInfo,
     SyncResult,
 )
+
+T = TypeVar("T")
+
+# Issue #8144: Default retryable HTTP status codes for fetch_with_retry().
+_DEFAULT_RETRYABLE_STATUS: tuple = (429, 500, 502, 503, 504)
+
+# Issue #8146: Checkpoint TTL — 24h prevents stale state on repeated crash loops.
+_CHECKPOINT_TTL_SECONDS = 86400
+
+
+class RetryableError(Exception):
+    """Signals a transient failure that fetch_with_retry should retry (Issue #8144)."""
+
+    def __init__(self, message: str, status_code: int = 0) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class AbstractConnector(ABC):
@@ -74,6 +96,120 @@ class AbstractConnector(ABC):
         """Return sources that changed since *since* (or all if since is None)."""
 
     # ------------------------------------------------------------------
+    # Issue #8144 — HTTP retry with exponential backoff
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def auth_schema(cls) -> type | None:
+        """Return the auth dataclass this connector expects, or None (Issue #8145).
+
+        Override in subclasses to declare the expected credential type:
+            return BearerAuth  # from knowledge.connectors.auth
+        """
+        return None
+
+    async def fetch_with_retry(
+        self,
+        fetch_fn: Callable[[], Awaitable[T]],
+        max_attempts: int = 5,
+        backoff_base: float = 2.0,
+        retryable_status: tuple = _DEFAULT_RETRYABLE_STATUS,
+    ) -> T:
+        """Call *fetch_fn* with exponential backoff on transient failures.
+
+        Raises RetryableError (or the original exception) on exhausted attempts.
+        Non-retryable exceptions propagate immediately without retrying.
+
+        Args:
+            fetch_fn: Zero-argument async callable to retry.
+            max_attempts: Total attempts before re-raising the last exception.
+            backoff_base: Base for the exponential delay; passed to backoff_time().
+            retryable_status: HTTP status codes to treat as transient (informational
+                only — actual retry decisions delegate to should_retry()).
+        """
+        last_exc: Exception = RetryableError("No attempts made")
+        for attempt in range(1, max_attempts + 1):
+            try:
+                return await fetch_fn()
+            except Exception as exc:
+                if not self.should_retry(exc):
+                    raise
+                last_exc = exc
+                if attempt < max_attempts:
+                    delay = self.backoff_time(attempt)
+                    self.logger.warning(
+                        "Connector %s retry %d/%d after %.1fs: %s",
+                        self.config.connector_id,
+                        attempt,
+                        max_attempts,
+                        delay,
+                        exc,
+                    )
+                    await asyncio.sleep(delay)
+        raise last_exc
+
+    def should_retry(self, exception: Exception) -> bool:
+        """Return True when *exception* represents a transient failure (Issue #8144).
+
+        Override to customise retry decisions.  The default retries on any
+        RetryableError; subclasses can widen or narrow the set.
+        """
+        return isinstance(exception, RetryableError)
+
+    def backoff_time(self, attempt: int) -> float:
+        """Return seconds to wait before the *attempt*-th retry (1-indexed, Issue #8144).
+
+        Default: exponential — 1s, 2s, 4s, 8s, … Override for jitter or custom curves.
+        """
+        return 2.0 ** (attempt - 1)
+
+    # ------------------------------------------------------------------
+    # Issue #8146 — Mid-sync checkpoint state
+    # ------------------------------------------------------------------
+
+    async def _write_checkpoint(self, source_id: str) -> None:
+        """Record *source_id* as processed in the Redis checkpoint set."""
+        try:
+            from autobot_shared.redis_client import get_async_redis_client
+
+            redis = await get_async_redis_client()
+            if redis is None:
+                return
+            key = "connector:%s:checkpoint" % self.config.connector_id
+            await redis.sadd(key, source_id)
+            await redis.expire(key, _CHECKPOINT_TTL_SECONDS)
+        except Exception as exc:
+            self.logger.warning("checkpoint write failed for %s: %s", source_id, exc)
+
+    async def _read_checkpoint(self) -> Set[str]:
+        """Return the set of already-processed source IDs from Redis."""
+        try:
+            from autobot_shared.redis_client import get_async_redis_client
+
+            redis = await get_async_redis_client()
+            if redis is None:
+                return set()
+            key = "connector:%s:checkpoint" % self.config.connector_id
+            members = await redis.smembers(key)
+            return {m.decode("utf-8") if isinstance(m, bytes) else m for m in members}
+        except Exception as exc:
+            self.logger.warning("checkpoint read failed: %s", exc)
+            return set()
+
+    async def _clear_checkpoint(self) -> None:
+        """Delete the Redis checkpoint for this connector."""
+        try:
+            from autobot_shared.redis_client import get_async_redis_client
+
+            redis = await get_async_redis_client()
+            if redis is None:
+                return
+            key = "connector:%s:checkpoint" % self.config.connector_id
+            await redis.delete(key)
+        except Exception as exc:
+            self.logger.warning("checkpoint clear failed: %s", exc)
+
+    # ------------------------------------------------------------------
     # Default implementations — connectors may override
     # ------------------------------------------------------------------
 
@@ -101,11 +237,14 @@ class AbstractConnector(ABC):
         """Run a full sync: detect changes, fetch content, ingest into KB.
 
         Each source is processed independently so a single failure does not
-        abort the rest of the sync.
+        abort the rest of the sync.  On restart after a crash, sources that
+        were already successfully processed are skipped via a Redis checkpoint
+        (Issue #8146).
 
         Args:
             incremental: When True, only process sources that changed since
-                         ``config.last_sync_at``.  When False, re-process all.
+                         ``config.last_sync_at``.  When False, re-process all
+                         sources and ignore/clear any existing checkpoint.
 
         Returns:
             SyncResult with counts and any per-source errors.
@@ -118,9 +257,22 @@ class AbstractConnector(ABC):
             status="failed",
         )
 
+        if not incremental:
+            # Full-refresh always ignores and clears any stale checkpoint.
+            await self._clear_checkpoint()
+
         since = self.config.last_sync_at if incremental else None
 
         try:
+            already_processed = await self._read_checkpoint()
+            if already_processed:
+                self.logger.info(
+                    "Connector %s resuming from checkpoint (%d sources already processed)",
+                    self.config.connector_id,
+                    len(already_processed),
+                )
+                result.resumed_from_checkpoint = True
+
             changes = await self.detect_changes(since=since)
             self.logger.info(
                 "Connector %s detected %d changes (incremental=%s)",
@@ -130,9 +282,13 @@ class AbstractConnector(ABC):
             )
 
             for change in changes:
+                if change.source_id in already_processed:
+                    continue
                 await self._process_change(change, result)
+                await self._write_checkpoint(change.source_id)
 
             result.status = "success" if not result.errors else "partial"
+            await self._clear_checkpoint()
         except Exception as exc:
             self.logger.error("Sync failed for connector %s: %s", self.config.connector_id, exc)
             result.errors.append(str(exc))

@@ -7,6 +7,8 @@ Notion Knowledge Connector (Issue #4099)
 Ingests Notion database rows and page content into the AutoBot knowledge base.
 Supports incremental sync via last-edited-time comparison and Redis-backed
 content-hash caching to avoid re-ingesting unchanged pages.
+Issue #8145: Declares auth_schema() -> BearerAuth so the API layer can validate
+the required ``token`` field before persisting the config.
 
 Config keys (under ``ConnectorConfig.config``):
     token (str): Notion integration secret.
@@ -23,6 +25,7 @@ import aiohttp
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso
+from knowledge.connectors.auth import BearerAuth
 from knowledge.connectors.base import AbstractConnector
 from knowledge.connectors.models import (
     ChangeInfo,
@@ -53,6 +56,11 @@ class NotionConnector(AbstractConnector):
     connector_type = "notion"
     # Issue #4421: needs a free Notion integration token (config.token).
     tier = 1
+
+    @classmethod
+    def auth_schema(cls) -> type:
+        """Notion requires a bearer token (integration secret) — Issue #8145."""
+        return BearerAuth
 
     def __init__(self, config: ConnectorConfig) -> None:
         super().__init__(config)
