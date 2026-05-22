@@ -48,14 +48,24 @@ from enhanced_orchestration.workflow_runner import WorkflowRunner
 from memory import LongTermMemoryManager
 
 # Issue #381: shared orchestration types
+# GH #6820: wire-in AgentRegistry, WorkflowMemory, WorkflowPlanner (previously orphaned)
+# GH #6816: wire-in CausalExecutor, CausalErrorRecovery (previously orphaned)
 from orchestration import (
     AgentCapability,
     AgentInteraction,
     AgentProfile,
+    AgentRegistry,
+    CausalErrorRecovery,
+    CausalExecutor,
     DocumentationType,
     WorkflowDocumentation,
     WorkflowDocumenter,
+    WorkflowMemory,
+    WorkflowPlanner,
+    get_recovery_recommender,
 )
+from orchestration.causal_error_analyzer import CausalErrorAnalyzer  # noqa: F401 (GH #6816)
+from orchestration.causal_validator import CausalValidator  # noqa: F401 (GH #6816)
 from orchestration.performance_tracker import PerformanceTracker
 from services.llm_service import get_llm_service
 from task_execution_tracker import Priority, TaskType, get_task_tracker
@@ -196,6 +206,9 @@ class Orchestrator:
 
     def _init_enhanced_components(self) -> None:
         self.agent_registry: Dict[str, AgentProfile] = {}
+        # GH #6820: AgentRegistry — structured profile store with capability-based lookup.
+        # Runs alongside the plain-dict self.agent_registry for structured queries.
+        self._profile_registry = AgentRegistry(initialize_defaults=True)
         self.workflow_documentation: Dict[str, WorkflowDocumentation] = {}
         self.agent_interactions: List[AgentInteraction] = []
         self.knowledge_base = KnowledgeBase() if KNOWLEDGE_BASE_AVAILABLE else None
@@ -250,6 +263,17 @@ class Orchestrator:
             performance_tracker=self._perf,
             agent_registry=_AgentClientRegistry(),
         )
+
+        # Step planner — capability-to-agent mapping for single-workflow steps (GH #6820).
+        # Populated after _initialize_default_agents so agent_registry is non-empty.
+        self._step_planner = WorkflowPlanner(
+            base_orchestrator=self,
+            agent_registry=self.agent_registry,
+            find_best_agent_callback=self.find_best_agent_for_task,
+        )
+
+        # Causal error recovery — opt-in analysis on workflow ABORT (GH #6816).
+        self._causal_recovery: CausalErrorRecovery = get_recovery_recommender()
 
         # Collaboration coordinator — Redis pub/sub between agents (#6393)
         self._collab = CollaborationCoordinator()
@@ -312,6 +336,7 @@ class Orchestrator:
         ]
         for profile in profiles:
             self.agent_registry[profile.agent_id] = profile
+            self._profile_registry.register(profile)
         logger.info("Initialized %d default agent profiles", len(profiles))
 
     async def register_agent(self, agent_profile: AgentProfile) -> bool:
@@ -566,6 +591,14 @@ class Orchestrator:
         context = context or {}
         workflow_id = str(uuid.uuid4())
         logger.info("Starting enhanced workflow %s: %s", workflow_id, user_request[:80])
+
+        # GH #6820: WorkflowMemory — shared KV store for cross-step coordination.
+        shared_memory = WorkflowMemory(workflow_id=workflow_id)
+        try:
+            shared_memory.set("request", user_request[:500])
+            shared_memory.set("context_keys", list(context.keys()))
+        except Exception as _mem_exc:
+            logger.debug("WorkflowMemory init store skipped: %s", _mem_exc)
 
         if auto_document:
             documenter = self._get_enhanced_documenter()

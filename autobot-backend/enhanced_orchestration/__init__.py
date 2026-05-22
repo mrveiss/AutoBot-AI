@@ -34,7 +34,7 @@ Sub-modules:
 
 from orchestration.types import AgentCapability  # canonical definition (#6192)
 
-from .agent_router import AgentRouter
+from .agent_router import AgentRouter, TaskAgentScorer
 from .collaboration_coordinator import CollaborationCoordinator
 from .execution_strategies import ExecutionStrategyHandler
 from .subagent_dispatcher import SubagentDispatcher
@@ -79,6 +79,8 @@ __all__ = [
     # Execution engine (#5058)
     "WorkflowRunner",
     # Collaborators extracted from WorkflowRunner (#6393/#6392)
+    # GH #6819: AgentRouter renamed → TaskAgentScorer; AgentRouter kept as compat alias.
+    "TaskAgentScorer",
     "AgentRouter",
     "CollaborationCoordinator",
     # Subagent dispatcher relocated from services/orchestration (#6822)

@@ -26,7 +26,10 @@ import asyncio
 import json
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Any, Dict
+from typing import TYPE_CHECKING, Any, Dict
+
+if TYPE_CHECKING:
+    from orchestration.causal_error_recovery import CausalErrorRecovery as _CausalErrorRecovery
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
@@ -314,8 +317,16 @@ class StepErrorHandler:
             # caller marks step skipped and continues
         ...
 
+    Pass ``causal_recovery=True`` to enable causal-chain analysis on ABORT
+    decisions (GH #6816).  When enabled, ``CausalErrorRecovery`` generates
+    recovery recommendations logged at INFO level; the ABORT decision itself
+    is not changed.
+
     Issue #2154.
     """
+
+    def __init__(self, causal_recovery: bool = False) -> None:
+        self._causal_recovery = causal_recovery
 
     def _parse_config(self, step: Dict[str, Any]) -> StepErrorConfig:
         """Extract StepErrorConfig from step dict, defaulting to ABORT."""
@@ -448,14 +459,49 @@ class StepErrorHandler:
                 "reason": "workflow paused by step error_config",
             }
 
-        # Default / ABORT
+        # Default / ABORT — optionally run causal analysis (GH #6816)
         logger.error("Step %s: ABORT (error_config action=%s)", step_id, config.action)
+        if self._causal_recovery:
+            await self._run_causal_analysis(step_id, error, execution_context)
         return {
             "action": StepErrorAction.ABORT,
             "delay": 0.0,
             "fallback_id": None,
             "reason": f"step failed with action={config.action}",
         }
+
+    async def _run_causal_analysis(
+        self,
+        step_id: str,
+        error: Exception,
+        execution_context: Dict[str, Any],
+    ) -> None:
+        """Run CausalErrorAnalyzer + CausalErrorRecovery and log recommendations (GH #6816).
+
+        Never raises — analysis failure must not shadow the original error.
+        """
+        try:
+            from orchestration.causal_error_analyzer import CausalErrorAnalyzer
+            from orchestration.causal_error_recovery import get_recovery_recommender
+
+            analyzer = CausalErrorAnalyzer()
+            ctx = {"step_id": step_id, **execution_context}
+            analysis = await analyzer.analyze_error_causally(error=error, context=ctx)
+            plan = await get_recovery_recommender().recommend_recovery(
+                error=error,
+                causal_analysis=analysis,
+                execution_context=ctx,
+            )
+            top = plan.recommended_actions[0] if plan.recommended_actions else None
+            if top:
+                logger.info(
+                    "Causal recovery for step %s: action=%s confidence=%.2f",
+                    step_id,
+                    top.action.value,
+                    plan.confidence,
+                )
+        except Exception as exc:
+            logger.debug("Causal analysis skipped for step %s: %s", step_id, exc)
 
 
 # ---------------------------------------------------------------------------
