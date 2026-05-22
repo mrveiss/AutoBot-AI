@@ -153,19 +153,27 @@ class VectorWriteBuffer:
         return len(batch)
 
 
-def make_chromadb_flush_fn(collection: Any) -> Callable[[List[BufferedWrite]], Coroutine[Any, Any, None]]:
+def make_chromadb_flush_fn(vector_store: Any) -> Callable[[List[BufferedWrite]], Coroutine[Any, Any, None]]:
     """
-    Build a flush function that upserts buffered writes into a ChromaDB collection.
+    Build a flush function that adds buffered writes via a LlamaIndex ChromaVectorStore.
 
-    The collection argument must expose an async-compatible upsert interface or be
-    wrapped with asyncio.to_thread() — this factory handles the wrapping.
+    Uses vector_store.add(nodes) to preserve LlamaIndex internal metadata fields
+    (_node_content, _node_type, ref_doc_id) needed for NodeWithScore reconstruction.
+    Direct collection.upsert() bypasses these fields — Issue #8401.
     """
 
     async def _flush(batch: List[BufferedWrite]) -> None:
-        ids = [e.id for e in batch]
-        embeddings = [e.embedding for e in batch]
-        documents = [e.document for e in batch]
-        metadatas = [e.metadata for e in batch]
-        await asyncio.to_thread(collection.upsert, ids=ids, embeddings=embeddings, documents=documents, metadatas=metadatas)
+        from llama_index.core.schema import TextNode
+
+        nodes = [
+            TextNode(
+                id_=e.id,
+                text=e.document,
+                embedding=e.embedding,
+                metadata=e.metadata,
+            )
+            for e in batch
+        ]
+        await asyncio.to_thread(vector_store.add, nodes)
 
     return _flush

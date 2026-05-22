@@ -37,9 +37,9 @@ logger = get_logger(__name__)
 # Tunable via AUTOBOT_CLASSIFICATION_CACHE_TTL; default 5 minutes.
 try:
     _CLASSIFICATION_CACHE_TTL = int(os.environ.get("AUTOBOT_CLASSIFICATION_CACHE_TTL", "300"))
-    if _CLASSIFICATION_CACHE_TTL <= 0:
+    if _CLASSIFICATION_CACHE_TTL < 0:
         _CLASSIFICATION_CACHE_TTL = 300
-        logger.warning("AUTOBOT_CLASSIFICATION_CACHE_TTL <= 0, using default 300s")
+        logger.warning("AUTOBOT_CLASSIFICATION_CACHE_TTL < 0, using default 300s (set to 0 to disable)")
 except (ValueError, TypeError):
     _CLASSIFICATION_CACHE_TTL = 300
     logger.warning("Invalid AUTOBOT_CLASSIFICATION_CACHE_TTL=%r, using default 300s",

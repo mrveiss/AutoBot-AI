@@ -116,7 +116,7 @@ class LRUCacheManager:
         stats["enabled"] = True
         return stats
 
-    def clear(self) -> None:
+    async def clear(self) -> None:
         """Clear all items from cache."""
         with self._lock:
             self._cache.clear()

@@ -154,6 +154,9 @@ class CollectionTierManager:
         self._entries: Dict[str, TierEntry] = {}
         self._lock = asyncio.Lock()
         self._reaper: Optional[asyncio.Task] = None
+        # O(1) tier counters — updated on every promote/demote (Issue #8402)
+        self._hot_count: int = 0
+        self._warm_count: int = 0
         # Pluggable index loaders — set by the caller for each tier
         self._hot_loader: Optional[Any] = None   # callable(collection_id) → index
         self._warm_loader: Optional[Any] = None
@@ -243,13 +246,9 @@ class CollectionTierManager:
     # ------------------------------------------------------------------
 
     def _desired_tier(self, entry: TierEntry) -> Tier:
-        if entry.access_count >= PROMOTE_TO_HOT_ACCESSES and len(
-            [e for e in self._entries.values() if e.tier == Tier.HOT]
-        ) < self._hot_max:
+        if entry.access_count >= PROMOTE_TO_HOT_ACCESSES and self._hot_count < self._hot_max:
             return Tier.HOT
-        if entry.access_count >= PROMOTE_TO_WARM_ACCESSES and len(
-            [e for e in self._entries.values() if e.tier == Tier.WARM]
-        ) < self._warm_max:
+        if entry.access_count >= PROMOTE_TO_WARM_ACCESSES and self._warm_count < self._warm_max:
             return Tier.WARM
         return Tier.COLD
 
@@ -265,14 +264,25 @@ class CollectionTierManager:
             except Exception:
                 logger.exception("Failed to load %s-tier index for %s", new_tier, entry.collection_id)
                 return
+        if old_tier == Tier.HOT:
+            self._hot_count -= 1
+        elif old_tier == Tier.WARM:
+            self._warm_count -= 1
+        if new_tier == Tier.HOT:
+            self._hot_count += 1
+        elif new_tier == Tier.WARM:
+            self._warm_count += 1
         entry.tier = new_tier
         logger.info("Collection %s promoted %s→%s", entry.collection_id, old_tier, new_tier)
 
     async def _demote(self, entry: TierEntry) -> None:
         if entry.tier == Tier.HOT:
             new_tier = Tier.WARM
+            self._hot_count -= 1
+            self._warm_count += 1
         elif entry.tier == Tier.WARM:
             new_tier = Tier.COLD
+            self._warm_count -= 1
         else:
             return
         old_tier = entry.tier
