@@ -390,6 +390,17 @@ class StatsMixin:
             await self._get_chromadb_stats(stats)
             stats["embedding_cache"] = get_embedding_cache().get_stats()
 
+            # Issue #8391: VectorWriteBuffer pending count.
+            write_buffer = getattr(self, "_write_buffer", None)
+            stats["vector_write_buffer_pending"] = write_buffer.pending_count if write_buffer is not None else 0
+
+            # Issue #8392: CollectionTierManager tier distribution.
+            try:
+                from knowledge.tiering import get_tier_manager
+                stats["collection_tiers"] = get_tier_manager().stats()
+            except Exception:
+                pass
+
             return stats
 
         except Exception as e:

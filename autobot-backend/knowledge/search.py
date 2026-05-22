@@ -266,8 +266,18 @@ class SearchMixin:
         """Query ChromaDB directly with embedding. Issue #281: Extracted helper.
 
         Issue #934: Accepts optional where filter for permission-based pre-filtering.
+        Issue #8392: Records access for CollectionTierManager hot/warm/cold promotion.
         """
         chroma_collection = self.vector_store._collection
+
+        # Issue #8392: Record collection access for tiering promotions (non-critical).
+        try:
+            from knowledge.tiering import get_tier_manager
+            collection_id = getattr(chroma_collection, "name", None) or getattr(self, "chromadb_collection", "default")
+            await get_tier_manager().record_access(collection_id)
+        except Exception as _tier_err:
+            logger.debug("CollectionTierManager record_access failed: %s", _tier_err)
+
         kwargs: Dict[str, Any] = {
             "query_embeddings": [query_embedding],
             "n_results": similarity_top_k,

@@ -109,6 +109,8 @@ class KnowledgeBaseCore:
         self._stats_key = "kb:stats"
         # Issue #688: Initialize ownership manager (lazy loaded)
         self.ownership_manager = None
+        # Issue #8391: VectorWriteBuffer (started in lifespan after ChromaDB init)
+        self._write_buffer = None
 
     def __init__(self):
         """Initialize instance variables only (Issue #398: refactored)."""
@@ -375,6 +377,11 @@ class KnowledgeBaseCore:
         # ChromaDBCollection._raw holds the underlying chromadb object.
         raw_collection = getattr(abc_collection, "_raw", abc_collection)
         self.vector_store = ChromaVectorStore(chroma_collection=raw_collection)
+
+        # Issue #8391: Instantiate VectorWriteBuffer backed by this collection.
+        # buffer.start() is called in lifespan after KB init succeeds.
+        from knowledge.write_buffer import VectorWriteBuffer, make_chromadb_flush_fn
+        self._write_buffer = VectorWriteBuffer(flush_fn=make_chromadb_flush_fn(raw_collection))
 
         logger.info(
             "ChromaDB vector store initialized: collection='%s'",
