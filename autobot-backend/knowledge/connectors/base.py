@@ -12,6 +12,7 @@ built-in exponential-backoff retry on transient HTTP errors.
 Issue #8145: Added auth_schema() classmethod for typed credential declarations.
 Issue #8146: Added _write_checkpoint(), _read_checkpoint(), _clear_checkpoint()
 and updated sync() to skip already-processed sources on restart.
+Issue #8152: Added config_version and migrate_config() hook.
 """
 
 import asyncio
@@ -75,6 +76,16 @@ class AbstractConnector(ABC):
 
     connector_type: str = ""
     tier: int = 0
+    config_version: int = 1
+
+    @classmethod
+    def migrate_config(cls, stored_version: int, config: dict) -> dict:
+        """Migrate config dict from stored_version to current config_version.
+
+        No-op by default — subclasses override and apply sequential migrations.
+        Issue #8152.
+        """
+        return config
 
     def __init__(self, config: ConnectorConfig) -> None:
         self.config = config
