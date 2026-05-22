@@ -492,3 +492,47 @@ class CompareRequest(BaseModel):
         description="List of 'provider/model' strings, e.g. ['ollama/llama3', 'openai/gpt-4o']",
     )
     context: str | None = Field(None, max_length=50000)
+
+
+# ---------------------------------------------------------------------------
+# conversation_files.py response schemas (#6509c)
+# ---------------------------------------------------------------------------
+
+
+class ConvFileInfoData(BaseModel):
+    """data payload for create/copy/agent-generate conversation file endpoints."""
+
+    model_config = {"extra": "allow"}
+
+    success: bool
+
+
+class ConvFileOpData(BaseModel):
+    """data payload for rename/get-content/update-content conversation file endpoints."""
+
+    model_config = {"extra": "allow"}
+
+    success: bool
+
+
+class ConvFileSearchData(BaseModel):
+    """data payload for GET /sessions/{session_id}/files/search."""
+
+    success: bool
+    files: List[Any]
+    total: int
+
+
+class SessionMcpToolsData(BaseModel):
+    """data payload for GET /sessions/{session_id}/mcp/tools."""
+
+    tools: List[Dict[str, Any]]
+    session_id: str
+
+
+class SessionMcpCallData(BaseModel):
+    """data payload for POST /sessions/{session_id}/mcp/call."""
+
+    model_config = {"extra": "allow"}
+
+    success: bool

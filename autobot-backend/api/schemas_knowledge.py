@@ -1952,6 +1952,186 @@ class AssignFactToCategoryRequest(BaseModel):
         return v
 
 
+# ---------------------------------------------------------------------------
+# chat_knowledge.py response schemas (#6509c)
+# ---------------------------------------------------------------------------
+
+
+class ChatKnowledgeContextData(BaseModel):
+    """data payload for create_chat_context / get_chat_context."""
+
+    model_config = {"extra": "allow"}
+
+    success: bool
+
+
+class ChatKnowledgeFileAssocData(BaseModel):
+    """data payload for associate_file_with_chat."""
+
+    model_config = {"extra": "allow"}
+
+    success: bool
+
+
+class ChatKnowledgeUploadData(BaseModel):
+    """data payload for upload_file_to_chat."""
+
+    model_config = {"extra": "allow"}
+
+    success: bool
+
+
+class ChatKnowledgeTempData(BaseModel):
+    """data payload for add_temporary_knowledge."""
+
+    model_config = {"extra": "allow"}
+
+    success: bool
+
+
+class ChatKnowledgePendingData(BaseModel):
+    """data payload for get_pending_knowledge_decisions."""
+
+    model_config = {"extra": "allow"}
+
+    success: bool
+
+
+class ChatKnowledgeDecisionData(BaseModel):
+    """data payload for apply_knowledge_decision."""
+
+    model_config = {"extra": "allow"}
+
+    success: bool
+
+
+class ChatKnowledgeCompileData(BaseModel):
+    """data payload for compile_chat_to_knowledge."""
+
+    model_config = {"extra": "allow"}
+
+    success: bool
+
+
+class ChatKnowledgeSearchResultData(BaseModel):
+    """data payload for search_chat_knowledge."""
+
+    model_config = {"extra": "allow"}
+
+    success: bool
+
+
+# ---------------------------------------------------------------------------
+# knowledge_ai_stack.py response schemas (#6509c)
+# ---------------------------------------------------------------------------
+
+
+class AIStackEnhancedSearchData(BaseModel):
+    """data payload for POST /search/enhanced."""
+
+    model_config = {"extra": "allow"}
+
+
+class AIStackRagSearchData(BaseModel):
+    """data payload for POST /search/rag."""
+
+    model_config = {"extra": "allow"}
+
+
+class AIStackKnowledgeExtractData(BaseModel):
+    """data payload for POST /knowledge/extract."""
+
+    model_config = {"extra": "allow"}
+
+
+class AIStackDocumentAnalysisData(BaseModel):
+    """data payload for POST /documents/analyze."""
+
+    model_config = {"extra": "allow"}
+
+
+class AIStackQueryReformulateData(BaseModel):
+    """data payload for POST /search/reformulate."""
+
+    model_config = {"extra": "allow"}
+
+
+class AIStackSystemInsightsData(BaseModel):
+    """data payload for GET /knowledge/system-insights."""
+
+    model_config = {"extra": "allow"}
+
+
+class AIStackEnhancedStatsData(BaseModel):
+    """data payload for GET /stats/enhanced."""
+
+    model_config = {"extra": "allow"}
+
+
+class AIStackEnhancedHealthData(BaseModel):
+    """data payload for GET /health/enhanced."""
+
+    model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# memory.py bare DataResponse response schemas (#6509c)
+# ---------------------------------------------------------------------------
+
+
+class MemoryEntityData(BaseModel):
+    """data payload for create_entity / get_entity_by_name / add_observations."""
+
+    model_config = {"extra": "allow"}
+
+
+class MemoryRelationData(BaseModel):
+    """data payload for create_relation."""
+
+    model_config = {"extra": "allow"}
+
+
+class MemoryEntityGraphData(BaseModel):
+    """data payload for get_entity_graph."""
+
+    model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# embeddings.py response schemas (#6509c)
+# ---------------------------------------------------------------------------
+
+
+class EmbeddingSettingsData(BaseModel):
+    """data payload for GET /settings."""
+
+    model_config = {"extra": "allow"}
+
+
+class EmbeddingUpdateData(BaseModel):
+    """data payload for PUT /settings."""
+
+    model_config = {"extra": "allow"}
+
+
+class EmbeddingModelsData(BaseModel):
+    """data payload for GET /models."""
+
+    model_config = {"extra": "allow"}
+
+
+class EmbeddingRefreshData(BaseModel):
+    """data payload for POST /providers/{provider_name}/refresh-models."""
+
+    model_config = {"extra": "allow"}
+
+
+class EmbeddingStatusData(BaseModel):
+    """data payload for GET /status."""
+
+    model_config = {"extra": "allow"}
+
+
 class SearchCategoriesByPathRequest(BaseModel):
     """
     Request model for searching categories by path pattern (Issue #411).

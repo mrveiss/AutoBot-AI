@@ -39,12 +39,15 @@ from api.schemas_knowledge import (
     InvalidateRelationRequest,
     MemoryDeleteEntityResponse,
     MemoryDeleteRelationResponse,
+    MemoryEntityData,
     MemoryEntityDetailResponse,
+    MemoryEntityGraphData,
     MemoryEntityInvalidateResponse,
     MemoryEntityListResponse,
     MemoryOrphanCleanupResponse,
     MemoryOrphanScanResponse,
     MemoryRelatedEntitiesResponse,
+    MemoryRelationData,
     MemoryRelationInvalidateResponse,
     MemorySearchResponse,
     ObservationAddRequest,
@@ -338,7 +341,7 @@ def _build_list_entities_response(
 # ====================================================================
 
 
-@router.post("/entities", status_code=201, response_model=DataResponse)
+@router.post("/entities", status_code=201, response_model=DataResponse[MemoryEntityData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_entity",
@@ -834,7 +837,7 @@ async def get_entity_by_id(
         raise HTTPException(status_code=500, detail="Failed to retrieve entity")
 
 
-@router.get("/entities", response_model=DataResponse)
+@router.get("/entities", response_model=DataResponse[MemoryEntityData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_entity_by_name",
@@ -888,7 +891,7 @@ async def get_entity_by_name(
         raise HTTPException(status_code=500, detail="Failed to search entity")
 
 
-@router.patch("/entities/{entity_id}/observations", response_model=DataResponse)
+@router.patch("/entities/{entity_id}/observations", response_model=DataResponse[MemoryEntityData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_observations",
@@ -1004,7 +1007,7 @@ async def delete_entity(
 # ====================================================================
 
 
-@router.post("/relations", status_code=201, response_model=DataResponse)
+@router.post("/relations", status_code=201, response_model=DataResponse[MemoryRelationData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_relation",
@@ -1263,7 +1266,7 @@ async def search_entities(
         raise HTTPException(status_code=500, detail="Search failed")
 
 
-@router.get("/graph", response_model=DataResponse)
+@router.get("/graph", response_model=DataResponse[MemoryEntityGraphData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_entity_graph",
