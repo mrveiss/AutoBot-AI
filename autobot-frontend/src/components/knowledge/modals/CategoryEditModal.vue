@@ -258,7 +258,7 @@ function selectIcon(icon: string): void {
   <BaseModal
     v-model="isOpen"
     :title="t('knowledge.modals.categoryEdit.editTitle', { name: categoryTitle })"
-    size="medium"
+    size="md"
     @close="closeModal"
   >
     <div class="category-edit-modal">
@@ -297,7 +297,7 @@ function selectIcon(icon: string): void {
             {{ $t('knowledge.modals.categoryEdit.cancel') }}
           </BaseButton>
           <BaseButton
-            variant="danger"
+            variant="error"
             @click="deleteCategory"
             :disabled="isLoading"
           >
@@ -396,7 +396,7 @@ function selectIcon(icon: string): void {
           <div class="left-actions">
             <BaseButton
               v-if="canDelete"
-              variant="danger"
+              variant="error"
               @click="confirmDelete"
               :disabled="isLoading"
             >

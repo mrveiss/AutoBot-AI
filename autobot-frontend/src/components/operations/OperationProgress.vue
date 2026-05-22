@@ -44,7 +44,7 @@ interface Props {
   processedItems?: number
   estimatedItems?: number
   currentStep?: string
-  size?: 'small' | 'medium' | 'large'
+  size?: 'sm' | 'md' | 'lg'
   showInfo?: boolean
   showItems?: boolean
   showStep?: boolean
@@ -54,7 +54,7 @@ const props = withDefaults(defineProps<Props>(), {
   processedItems: 0,
   estimatedItems: 0,
   currentStep: '',
-  size: 'medium',
+  size: 'md',
   showInfo: true,
   showItems: true,
   showStep: true
@@ -99,15 +99,15 @@ const progressBarClasses = computed(() => {
   overflow: hidden;
 }
 
-.progress-small .progress-bar-container {
+.progress-sm .progress-bar-container {
   height: 4px;
 }
 
-.progress-medium .progress-bar-container {
+.progress-md .progress-bar-container {
   height: 8px;
 }
 
-.progress-large .progress-bar-container {
+.progress-lg .progress-bar-container {
   height: 12px;
 }
 

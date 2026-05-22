@@ -73,7 +73,7 @@
                   :show-info="false"
                   :show-items="false"
                   :show-step="false"
-                  size="small"
+                  size="sm"
                 />
                 <span class="progress-text">{{ operation.progress }}%</span>
               </div>

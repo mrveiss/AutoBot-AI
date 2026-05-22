@@ -414,7 +414,7 @@ onBeforeUnmount(() => {
     <BaseModal
       v-model="showHistoryModal"
       :title="$t('knowledge.promptEditor.versionHistory')"
-      size="large"
+      size="lg"
       @close="showHistoryModal = false"
     >
       <div class="history-modal">

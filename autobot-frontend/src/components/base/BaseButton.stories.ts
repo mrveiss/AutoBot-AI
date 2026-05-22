@@ -7,7 +7,7 @@ const meta = {
   argTypes: {
     variant: {
       control: 'select',
-      options: ['primary', 'secondary', 'success', 'danger', 'warning', 'info', 'light', 'dark', 'outline-solid', 'ghost', 'link'],
+      options: ['primary', 'secondary', 'success', 'error', 'warning', 'info', 'light', 'dark', 'outline-solid', 'ghost', 'link'],
       description: 'Button style variant',
     },
     size: {
@@ -70,7 +70,7 @@ export const Success: Story = {
 
 export const Danger: Story = {
   args: {
-    variant: 'danger',
+    variant: 'error',
     label: 'Danger Button',
   },
 };
@@ -160,7 +160,7 @@ export const AllVariants: Story = {
         <BaseButton variant="primary" label="Primary" />
         <BaseButton variant="secondary" label="Secondary" />
         <BaseButton variant="success" label="Success" />
-        <BaseButton variant="danger" label="Danger" />
+        <BaseButton variant="error" label="Danger" />
         <BaseButton variant="warning" label="Warning" />
         <BaseButton variant="info" label="Info" />
         <BaseButton variant="light" label="Light" />

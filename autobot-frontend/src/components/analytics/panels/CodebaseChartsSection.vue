@@ -29,19 +29,19 @@
         </div>
       </h3>
       <div v-if="codebaseStats" class="stats-grid">
-        <BasePanel variant="elevated" size="small">
+        <BasePanel variant="elevated" size="sm">
           <div class="stat-value">{{ codebaseStats.total_files || 0 }}</div>
           <div class="stat-label">{{ $t('analytics.codebase.stats.totalFiles') }}</div>
         </BasePanel>
-        <BasePanel variant="elevated" size="small">
+        <BasePanel variant="elevated" size="sm">
           <div class="stat-value">{{ codebaseStats.total_lines || 0 }}</div>
           <div class="stat-label">{{ $t('analytics.codebase.stats.linesOfCode') }}</div>
         </BasePanel>
-        <BasePanel variant="elevated" size="small">
+        <BasePanel variant="elevated" size="sm">
           <div class="stat-value">{{ codebaseStats.total_functions || 0 }}</div>
           <div class="stat-label">{{ $t('analytics.codebase.stats.functions') }}</div>
         </BasePanel>
-        <BasePanel variant="elevated" size="small">
+        <BasePanel variant="elevated" size="sm">
           <div class="stat-value">{{ codebaseStats.total_classes || 0 }}</div>
           <div class="stat-label">{{ $t('analytics.codebase.stats.classes') }}</div>
         </BasePanel>

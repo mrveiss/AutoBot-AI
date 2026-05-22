@@ -3,7 +3,7 @@
     :modelValue="modelValue"
     @update:modelValue="$emit('update:modelValue', $event)"
     :title="t('settings.apiKeys.wizardTitle')"
-    size="large"
+    size="lg"
   >
     <!-- Step Indicators -->
     <div class="wizard-steps">

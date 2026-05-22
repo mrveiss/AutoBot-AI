@@ -186,7 +186,7 @@
             <StatusBadge
               v-if="file.file_type === 'generated'"
               variant="primary"
-              size="small"
+              size="sm"
               class="mt-1"
             >
               {{ $t('chat.filePanel.aiGenerated') }}

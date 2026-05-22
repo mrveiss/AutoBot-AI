@@ -102,7 +102,7 @@
               <small class="action-meta">{{ $t('knowledge.advanced.clearAllMeta') }}</small>
             </div>
             <BaseButton
-              variant="danger"
+              variant="error"
               @click="clearAllKnowledge"
               :disabled="isClearing || isPopulating"
               :loading="isClearing"

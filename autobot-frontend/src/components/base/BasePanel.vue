@@ -25,7 +25,7 @@ import { computed } from 'vue'
 interface Props {
   title?: string
   variant?: 'default' | 'bordered' | 'elevated' | 'flat' | 'dark'
-  size?: 'small' | 'medium' | 'large'
+  size?: 'sm' | 'md' | 'lg'
   loading?: boolean
   collapsible?: boolean
   collapsed?: boolean
@@ -35,7 +35,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   variant: 'default',
-  size: 'medium',
+  size: 'md',
   loading: false,
   collapsible: false,
   collapsed: false,
@@ -116,15 +116,15 @@ const toggleCollapse = () => {
   background-color: var(--bg-tertiary);
 }
 
-.panel-small {
+.panel-sm {
   font-size: var(--text-sm);
 }
 
-.panel-medium {
+.panel-md {
   font-size: var(--text-base);
 }
 
-.panel-large {
+.panel-lg {
   font-size: var(--text-lg);
 }
 

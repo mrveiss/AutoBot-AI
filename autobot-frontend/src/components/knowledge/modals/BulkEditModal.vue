@@ -232,7 +232,7 @@ watch(() => props.modelValue, (newValue) => {
   <BaseModal
     v-model="isOpen"
     :title="modalTitle"
-    size="medium"
+    size="md"
     @close="closeModal"
   >
     <div class="bulk-edit-content">

@@ -89,7 +89,7 @@
     <BaseModal
       v-model="showCategoryDocuments"
       :title="`${formatCategoryName(selectedCategoryPath)} - Documents`"
-      size="large"
+      size="lg"
       @close="closeCategoryDocuments"
     >
       <div v-if="isLoadingCategoryDocs" class="loading-state">
@@ -129,7 +129,7 @@
     <BaseModal
       v-model="showDocumentModal"
       :title="currentDocument?.title || currentDocument?.filename || $t('knowledge.categories.documentDetails')"
-      size="large"
+      size="lg"
       @close="closeDocumentModal"
     >
       <div v-if="currentDocument">

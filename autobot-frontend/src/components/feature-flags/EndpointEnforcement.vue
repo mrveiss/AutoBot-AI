@@ -73,7 +73,7 @@
     <BaseModal
       v-model="showAddModal"
       :title="editingEndpoint ? $t('featureFlags.enforcement.editOverride') : $t('featureFlags.enforcement.addEndpointOverride')"
-      size="medium"
+      size="md"
     >
       <form @submit.prevent="saveOverride" class="override-form">
         <div class="form-group">
@@ -129,7 +129,7 @@
     <BaseModal
       v-model="showRemoveModal"
       :title="$t('featureFlags.enforcement.removeOverride')"
-      size="small"
+      size="sm"
     >
       <div class="remove-content">
         <div class="remove-icon">

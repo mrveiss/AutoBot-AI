@@ -2,7 +2,7 @@
   <div class="man-page-manager">
 
     <!-- Machine Profile Section -->
-    <BasePanel variant="bordered" size="medium">
+    <BasePanel variant="bordered" size="md">
       <template #header>
         <h3><Icon name="desktop" /> {{ $t('manpage.manager.title') }}</h3>
         <BaseButton
@@ -59,7 +59,7 @@
     </BasePanel>
 
     <!-- Integration Status Section -->
-    <BasePanel variant="bordered" size="medium">
+    <BasePanel variant="bordered" size="md">
       <template #header>
         <h3><Icon name="chart-bar" /> {{ $t('manpage.manager.integrationStatus') }}</h3>
         <BaseButton
@@ -175,7 +175,7 @@
       </div>
 
       <!-- Real-time Progress Tracking -->
-      <BasePanel v-if="showProgressTracking" variant="bordered" size="medium">
+      <BasePanel v-if="showProgressTracking" variant="bordered" size="md">
         <template #header>
           <h3><Icon name="tasks" /> {{ $t('manpage.manager.progressTitle') }}</h3>
           <BaseButton
@@ -259,7 +259,7 @@
     </div>
 
     <!-- Search Section -->
-    <BasePanel v-if="showSearch" variant="bordered" size="medium">
+    <BasePanel v-if="showSearch" variant="bordered" size="md">
       <template #header>
         <h3><Icon name="search" /> {{ $t('manpage.manager.searchTitle') }}</h3>
       </template>

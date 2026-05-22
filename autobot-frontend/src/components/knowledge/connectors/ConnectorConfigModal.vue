@@ -354,7 +354,7 @@ function closeModal() {
   <BaseModal
     :model-value="modelValue"
     :title="modalTitle"
-    size="medium"
+    size="md"
     @update:model-value="$emit('update:modelValue', $event)"
     @close="closeModal"
   >

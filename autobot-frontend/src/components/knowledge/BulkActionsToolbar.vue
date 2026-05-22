@@ -223,7 +223,7 @@ function handleClickOutside(event: MouseEvent): void {
 
         <!-- Delete Button -->
         <BaseButton
-          variant="danger"
+          variant="error"
           size="sm"
           @click="emit('delete')"
           class="action-btn danger"

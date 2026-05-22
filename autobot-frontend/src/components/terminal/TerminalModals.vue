@@ -5,7 +5,7 @@
       :modelValue="showReconnectModal"
       @update:modelValue="val => !val && $emit('hide-reconnect-modal')"
       :title="$t('terminal.modals.connectionLost')"
-      size="small"
+      size="sm"
       :closeOnOverlay="!isReconnecting"
     >
       <p>{{ $t('terminal.modals.connectionLostMsg') }}</p>
@@ -45,7 +45,7 @@
       :modelValue="showCommandConfirmation"
       @update:modelValue="val => !val && cancelCommand()"
       :title="$t('terminal.modals.destructiveCommand')"
-      size="medium"
+      size="md"
       :closeOnOverlay="!isExecutingCommand"
       class="command-confirmation-modal"
     >
@@ -90,7 +90,7 @@
 
       <template #actions>
         <BaseButton
-          variant="danger"
+          variant="error"
           @click="handleExecuteCommand"
           :loading="isExecutingCommand"
         >
@@ -111,7 +111,7 @@
       :modelValue="showKillConfirmation"
       @update:modelValue="val => !val && cancelKill()"
       :title="$t('terminal.modals.emergencyKillTitle')"
-      size="medium"
+      size="md"
       :closeOnOverlay="!isKillingProcesses"
       class="emergency-kill-modal"
     >
@@ -140,7 +140,7 @@
 
       <template #actions>
         <BaseButton
-          variant="danger"
+          variant="error"
           @click="handleEmergencyKill"
           :loading="isKillingProcesses"
         >
@@ -161,7 +161,7 @@
       :modelValue="showLegacyModal"
       @update:modelValue="val => !val && handleTakeManualControl()"
       :title="$t('terminal.modals.workflowTitle')"
-      size="large"
+      size="lg"
       :closeOnOverlay="!isProcessingWorkflow"
       class="workflow-step-modal"
     >

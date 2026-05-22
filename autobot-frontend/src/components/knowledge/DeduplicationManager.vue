@@ -156,7 +156,7 @@
 
           <div class="action-buttons">
             <BaseButton
-              variant="danger"
+              variant="error"
               @click="cleanupOrphans"
               :disabled="cleaning"
               :loading="cleaning"

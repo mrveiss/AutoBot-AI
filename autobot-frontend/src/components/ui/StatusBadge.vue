@@ -19,23 +19,23 @@ import type { IconName } from '@/components/ui/Icon.vue'
  * Usage:
  * ```vue
  * <StatusBadge variant="success" icon="check-circle">Active</StatusBadge>
- * <StatusBadge variant="danger" size="large">Failed</StatusBadge>
+ * <StatusBadge variant="error" size="lg">Failed</StatusBadge>
  * <StatusBadge variant="warning">Pending</StatusBadge>
  * ```
  */
 
 interface Props {
-  /** Badge variant: success, danger, warning, info, secondary */
-  variant?: 'success' | 'danger' | 'warning' | 'info' | 'secondary' | 'primary'
-  /** Badge size: small, medium, large */
-  size?: 'small' | 'medium' | 'large'
+  /** Badge variant: success, error, warning, info, secondary */
+  variant?: 'success' | 'error' | 'warning' | 'info' | 'secondary' | 'primary'
+  /** Badge size: sm, md, lg */
+  size?: 'sm' | 'md' | 'lg'
   /** Optional icon name (IconName) */
   icon?: IconName
 }
 
 const props = withDefaults(defineProps<Props>(), {
   variant: 'secondary',
-  size: 'medium'
+  size: 'md'
 })
 
 const sizeClass = computed(() => `status-${props.size}`)
@@ -55,19 +55,19 @@ const sizeClass = computed(() => `status-${props.size}`)
 }
 
 /* Sizes */
-.status-small {
+.status-sm {
   padding: var(--spacing-0-5) var(--spacing-2);
   font-size: var(--text-xs);
   gap: var(--spacing-1);
 }
 
-.status-medium {
+.status-md {
   padding: var(--spacing-1) var(--spacing-3);
   font-size: var(--text-sm);
   gap: var(--spacing-1-5);
 }
 
-.status-large {
+.status-lg {
   padding: var(--spacing-1-5) var(--spacing-4);
   font-size: var(--text-base);
   gap: var(--spacing-2);
@@ -79,7 +79,7 @@ const sizeClass = computed(() => `status-${props.size}`)
   color: var(--color-success);
 }
 
-.status-danger {
+.status-error {
   background: var(--color-error-bg);
   color: var(--color-error);
 }

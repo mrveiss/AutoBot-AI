@@ -19,7 +19,7 @@
         </BaseButton>
         <BaseButton
           v-if="failedJobs.length > 0"
-          variant="danger"
+          variant="error"
           size="sm"
           @click="clearAllFailed"
           :disabled="loading"

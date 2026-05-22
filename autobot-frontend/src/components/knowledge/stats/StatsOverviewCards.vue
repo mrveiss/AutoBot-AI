@@ -1,6 +1,6 @@
 <template>
   <div class="stats-overview" role="region" :aria-label="$t('knowledge.stats.overview.ariaLabel')">
-    <BasePanel variant="elevated" size="small" role="article" aria-labelledby="facts-title">
+    <BasePanel variant="elevated" size="sm" role="article" aria-labelledby="facts-title">
       <div class="stat-icon facts" aria-hidden="true">
         <Icon name="lightbulb" />
       </div>
@@ -13,7 +13,7 @@
       </div>
     </BasePanel>
 
-    <BasePanel variant="elevated" size="small" role="article" aria-labelledby="documents-title">
+    <BasePanel variant="elevated" size="sm" role="article" aria-labelledby="documents-title">
       <div class="stat-icon documents" aria-hidden="true">
         <Icon name="file-alt" />
       </div>
@@ -28,7 +28,7 @@
       </div>
     </BasePanel>
 
-    <BasePanel variant="elevated" size="small" role="article" aria-labelledby="categories-title">
+    <BasePanel variant="elevated" size="sm" role="article" aria-labelledby="categories-title">
       <div class="stat-icon categories" aria-hidden="true">
         <Icon name="folder" />
       </div>
@@ -41,7 +41,7 @@
       </div>
     </BasePanel>
 
-    <BasePanel variant="elevated" size="small">
+    <BasePanel variant="elevated" size="sm">
       <div class="stat-icon tags">
         <Icon name="tags" />
       </div>
@@ -54,7 +54,7 @@
       </div>
     </BasePanel>
 
-    <BasePanel variant="elevated" size="small">
+    <BasePanel variant="elevated" size="sm">
       <div class="stat-icon storage">
         <Icon name="database" />
       </div>

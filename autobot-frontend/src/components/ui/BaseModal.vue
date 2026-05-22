@@ -79,7 +79,7 @@ import Icon from './Icon.vue'
  * <BaseModal
  *   v-model="showModal"
  *   title="Delete Item"
- *   size="small"
+ *   size="sm"
  *   @close="handleClose"
  * >
  *   <p>Are you sure you want to delete this item?</p>
@@ -96,8 +96,8 @@ interface Props {
   modelValue: boolean
   /** Modal title */
   title: string
-  /** Modal size: small (500px), medium (900px), large (1200px) */
-  size?: 'small' | 'medium' | 'large'
+  /** Modal size: sm (500px), md (900px), lg (1200px) */
+  size?: 'sm' | 'md' | 'lg'
   /** Show close button */
   showClose?: boolean
   /** Close on overlay click */
@@ -107,7 +107,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  size: 'medium',
+  size: 'md',
   showClose: true,
   closeOnOverlay: true,
   scrollable: true
@@ -140,12 +140,12 @@ const descriptionId = computed(() => `modal-desc-${_uid}`)
 
 const sizeClass = computed(() => {
   switch (props.size) {
-    case 'small':
-      return 'dialog-small'
-    case 'large':
-      return 'dialog-large'
+    case 'sm':
+      return 'dialog-sm'
+    case 'lg':
+      return 'dialog-lg'
     default:
-      return 'dialog-medium'
+      return 'dialog-md'
   }
 })
 
@@ -195,15 +195,15 @@ const onAfterEnter = () => focusFirst()
   contain: layout style;
 }
 
-.dialog-small {
+.dialog-sm {
   max-width: 500px;
 }
 
-.dialog-medium {
+.dialog-md {
   max-width: 900px;
 }
 
-.dialog-large {
+.dialog-lg {
   max-width: 1200px;
 }
 

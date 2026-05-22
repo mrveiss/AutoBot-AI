@@ -12,7 +12,7 @@
     </div>
 
     <div class="vector-overview-grid">
-      <BasePanel variant="elevated" size="medium">
+      <BasePanel variant="elevated" size="md">
         <div class="vector-stat-icon facts">
           <Icon name="lightbulb" />
         </div>
@@ -23,7 +23,7 @@
         </div>
       </BasePanel>
 
-      <BasePanel variant="elevated" size="medium" :class="{ 'needs-attention': needsVectorization }">
+      <BasePanel variant="elevated" size="md" :class="{ 'needs-attention': needsVectorization }">
         <div class="vector-stat-icon vectors">
           <Icon name="cubes" />
         </div>
@@ -37,7 +37,7 @@
         </div>
       </BasePanel>
 
-      <BasePanel variant="elevated" size="medium">
+      <BasePanel variant="elevated" size="md">
         <div class="vector-stat-icon database">
           <Icon name="database" />
         </div>
@@ -48,13 +48,13 @@
         </div>
       </BasePanel>
 
-      <BasePanel variant="elevated" size="medium">
+      <BasePanel variant="elevated" size="md">
         <div class="vector-stat-icon status">
           <Icon name="check-circle" />
         </div>
         <div class="vector-stat-content">
           <h4>{{ $t('knowledge.stats.vector.status') }}</h4>
-          <StatusBadge :variant="getStatusVariant(stats.status)" size="small" class="vector-stat-value">
+          <StatusBadge :variant="getStatusVariant(stats.status)" size="sm" class="vector-stat-value">
             {{ stats.status || $t('knowledge.stats.vector.unknown') }}
           </StatusBadge>
           <p class="vector-stat-label">{{ $t('knowledge.stats.vector.rag') }}: {{ stats.rag_available ? $t('knowledge.stats.vector.available') : $t('knowledge.stats.vector.unavailable') }}</p>
@@ -237,10 +237,10 @@ const embeddingModelDisplay = computed(() => {
   return t('knowledge.stats.vector.notConfigured')
 })
 
-const getStatusVariant = (status: string): 'success' | 'danger' | 'secondary' => {
-  const variantMap: Record<string, 'success' | 'danger' | 'secondary'> = {
+const getStatusVariant = (status: string): 'success' | 'error' | 'secondary' => {
+  const variantMap: Record<string, 'success' | 'error' | 'secondary'> = {
     'online': 'success',
-    'offline': 'danger',
+    'offline': 'error',
     'unknown': 'secondary'
   }
   return variantMap[status] || 'secondary'

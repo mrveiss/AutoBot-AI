@@ -105,7 +105,7 @@
           ⌨️ {{ $t('desktop.interface.typeText') }}
         </TouchFriendlyButton>
         <TouchFriendlyButton
-          variant="danger"
+          variant="error"
           size="sm"
           @click="sendCtrlAltDel"
           :title="$t('desktop.interface.ctrlAltDel')"

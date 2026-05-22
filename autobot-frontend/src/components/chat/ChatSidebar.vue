@@ -174,7 +174,7 @@
             {{ $t('common.reset') }}
           </BaseButton>
           <BaseButton
-            variant="danger"
+            variant="error"
             size="xs"
             class="py-1.5 px-2"
             @click="deleteCurrentSession()"
@@ -199,7 +199,7 @@
         <!-- Selection Mode Actions -->
         <div v-else class="pt-2 border-t border-autobot-border shrink-0">
           <BaseButton
-            variant="danger"
+            variant="error"
             size="xs"
             class="w-full py-2"
             @click="deleteSelectedSessions()"
@@ -278,7 +278,7 @@
   <BaseModal
     v-model="showEditModal"
     :title="$t('chat.sidebar.editChatName')"
-    size="medium"
+    size="md"
   >
     <input
       v-model="editingName"

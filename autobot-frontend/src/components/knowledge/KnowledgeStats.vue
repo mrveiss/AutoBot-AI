@@ -23,7 +23,7 @@
       </div>
 
       <div class="vector-overview-grid">
-        <BasePanel variant="elevated" size="medium">
+        <BasePanel variant="elevated" size="md">
           <div class="vector-stat-icon facts">
             <Icon name="lightbulb" />
           </div>
@@ -34,7 +34,7 @@
           </div>
         </BasePanel>
 
-        <BasePanel variant="elevated" size="medium" :class="{ 'needs-attention': needsVectorization }">
+        <BasePanel variant="elevated" size="md" :class="{ 'needs-attention': needsVectorization }">
           <div class="vector-stat-icon vectors">
             <Icon name="cubes" />
           </div>
@@ -48,7 +48,7 @@
           </div>
         </BasePanel>
 
-        <BasePanel variant="elevated" size="medium">
+        <BasePanel variant="elevated" size="md">
           <div class="vector-stat-icon database">
             <Icon name="database" />
           </div>
@@ -59,13 +59,13 @@
           </div>
         </BasePanel>
 
-        <BasePanel variant="elevated" size="medium">
+        <BasePanel variant="elevated" size="md">
           <div class="vector-stat-icon status">
             <Icon name="check-circle" />
           </div>
           <div class="vector-stat-content">
             <h4>{{ $t('knowledge.stats.status') }}</h4>
-            <StatusBadge :variant="getStatusVariant(vectorStats.status)" size="small" class="vector-stat-value">
+            <StatusBadge :variant="getStatusVariant(vectorStats.status)" size="sm" class="vector-stat-value">
               {{ vectorStats.status || 'unknown' }}
             </StatusBadge>
             <p class="vector-stat-label">{{ $t('knowledge.stats.rag') }}: {{ vectorStats.rag_available ? $t('knowledge.stats.available') : $t('knowledge.stats.unavailable') }}</p>
@@ -185,7 +185,7 @@
 
     <!-- Overview Cards -->
     <div class="stats-overview" role="region" :aria-label="$t('knowledge.stats.overviewAriaLabel')">
-      <BasePanel variant="elevated" size="small" role="article" aria-labelledby="facts-title">
+      <BasePanel variant="elevated" size="sm" role="article" aria-labelledby="facts-title">
         <div class="stat-icon facts" aria-hidden="true">
           <Icon name="lightbulb" />
         </div>
@@ -198,7 +198,7 @@
         </div>
       </BasePanel>
 
-      <BasePanel variant="elevated" size="small" role="article" aria-labelledby="documents-title">
+      <BasePanel variant="elevated" size="sm" role="article" aria-labelledby="documents-title">
         <div class="stat-icon documents" aria-hidden="true">
           <Icon name="file-alt" />
         </div>
@@ -213,7 +213,7 @@
         </div>
       </BasePanel>
 
-      <BasePanel variant="elevated" size="small" role="article" aria-labelledby="categories-title">
+      <BasePanel variant="elevated" size="sm" role="article" aria-labelledby="categories-title">
         <div class="stat-icon categories" aria-hidden="true">
           <Icon name="folder" />
         </div>
@@ -226,7 +226,7 @@
         </div>
       </BasePanel>
 
-      <BasePanel variant="elevated" size="small">
+      <BasePanel variant="elevated" size="sm">
         <div class="stat-icon tags">
           <Icon name="tags" />
         </div>
@@ -239,7 +239,7 @@
         </div>
       </BasePanel>
 
-      <BasePanel variant="elevated" size="small">
+      <BasePanel variant="elevated" size="sm">
         <div class="stat-icon storage">
           <Icon name="database" />
         </div>
@@ -256,7 +256,7 @@
     <!-- Charts Section -->
     <div class="charts-section">
       <!-- Documents by Category -->
-      <BasePanel variant="bordered" size="medium">
+      <BasePanel variant="bordered" size="md">
         <h4>{{ $t('knowledge.stats.docsByCategory') }}</h4>
         <div class="bar-chart">
           <div
@@ -280,7 +280,7 @@
       </BasePanel>
 
       <!-- Documents by Type -->
-      <BasePanel variant="bordered" size="medium">
+      <BasePanel variant="bordered" size="md">
         <h4>{{ $t('knowledge.stats.docsByType') }}</h4>
         <div class="pie-chart">
           <div class="type-stats">
@@ -296,7 +296,7 @@
     </div>
 
     <!-- Recent Activity -->
-    <BasePanel variant="bordered" size="medium">
+    <BasePanel variant="bordered" size="md">
       <h4>{{ $t('knowledge.stats.recentActivity') }}</h4>
       <div class="activity-timeline">
         <div v-for="activity in recentActivities" :key="activity.id" class="activity-item">
@@ -317,7 +317,7 @@
     </BasePanel>
 
     <!-- Tag Cloud -->
-    <BasePanel variant="bordered" size="medium">
+    <BasePanel variant="bordered" size="md">
       <h4>{{ $t('knowledge.stats.popularTags') }}</h4>
       <div class="tag-cloud" role="list" :aria-label="$t('knowledge.stats.popularTagsAriaLabel')">
         <span
@@ -338,7 +338,7 @@
     </BasePanel>
 
     <!-- System Knowledge Navigation Card (Issue #678: Consolidated ManPageManager to Manage → Advanced) -->
-    <BasePanel variant="bordered" size="medium" class="system-knowledge-nav">
+    <BasePanel variant="bordered" size="md" class="system-knowledge-nav">
       <div class="nav-card-content">
         <div class="nav-card-icon">
           <Icon name="terminal" />
@@ -727,10 +727,10 @@ const getActivityIcon = (type: string): string => {
 }
 
 // StatusBadge variant mapping function
-const getStatusVariant = (status: string): 'success' | 'danger' | 'secondary' => {
-  const variantMap: Record<string, 'success' | 'danger' | 'secondary'> = {
+const getStatusVariant = (status: string): 'success' | 'error' | 'secondary' => {
+  const variantMap: Record<string, 'success' | 'error' | 'secondary'> = {
     'online': 'success',
-    'offline': 'danger',
+    'offline': 'error',
     'unknown': 'secondary'
   }
   return variantMap[status] || 'secondary'

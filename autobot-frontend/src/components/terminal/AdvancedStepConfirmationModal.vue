@@ -183,7 +183,7 @@ function resetEdit(): void {
   <BaseModal
     v-model="isOpen"
     :title="t('terminal.window.workflowStepConfirmation')"
-    size="medium"
+    size="md"
     :close-on-overlay="false"
     @close="handleClose"
   >

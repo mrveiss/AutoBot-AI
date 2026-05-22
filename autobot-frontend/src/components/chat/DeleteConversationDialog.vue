@@ -2,7 +2,7 @@
   <BaseModal
     :model-value="visible"
     :title="$t('chat.deleteDialog.title')"
-    size="medium"
+    size="md"
     @update:model-value="$emit('update:visible', $event)"
     @close="handleCancel"
   >

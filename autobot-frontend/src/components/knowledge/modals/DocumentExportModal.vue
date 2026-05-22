@@ -206,7 +206,7 @@ watch(() => props.modelValue, (isOpen) => {
   <BaseModal
     v-model="isOpen"
     :title="modalTitle"
-    size="small"
+    size="sm"
     @close="closeModal"
   >
     <div class="export-modal">
