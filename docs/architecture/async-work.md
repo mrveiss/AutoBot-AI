@@ -2,7 +2,7 @@
 
 > Tracks the consolidation effort under umbrella issue [#6495](https://github.com/mrveiss/AutoBot-AI/issues/6495). This document is updated as each phase lands.
 >
-> - **Phase 1 — Task queues** ([#6505](https://github.com/mrveiss/AutoBot-AI/issues/6505)): _pending_ — background_task_manager migration to Celery; task_queue.py retained as [#6468](https://github.com/mrveiss/AutoBot-AI/issues/6468) carve-out
+> - **Phase 1 — Task queues** ([#6505](https://github.com/mrveiss/AutoBot-AI/issues/6505)): _facade landed_ — `async_work/` facade created (#6495); background_task_manager migration to Celery pending; task_queue.py retained as [#6468](https://github.com/mrveiss/AutoBot-AI/issues/6468) carve-out
 > - **Phase 2 — Progress trackers** ([#6506](https://github.com/mrveiss/AutoBot-AI/issues/6506)): **landed**
 > - **Phase 3 — Periodic schedulers** ([#6507](https://github.com/mrveiss/AutoBot-AI/issues/6507)): **landed**
 >   - Beat deployment ([#6555](https://github.com/mrveiss/AutoBot-AI/issues/6555)): landed
@@ -85,14 +85,45 @@ long-running-operations framework).
   stability but always returns `None`. Use `get_progress()` (async, reads
   from Redis) instead.
 
-## Task queues (Phase 1 — pending)
+## Unified facade — `async_work/` ([#6495](https://github.com/mrveiss/AutoBot-AI/issues/6495))
 
-See [#6505](https://github.com/mrveiss/AutoBot-AI/issues/6505). Until that
-phase lands, three task-queue implementations coexist:
+`autobot-backend/async_work/__init__.py` is the single public entry point for
+all async-work operations.  New code should use this facade instead of the
+legacy implementations directly.
+
+```python
+from async_work import get_task_queue, get_progress_tracker, get_periodic_scheduler
+
+# Enqueue a Celery task
+handle = await get_task_queue().enqueue("knowledge_tasks.rebuild_index", priority=5)
+
+# Report progress inside a task
+await get_progress_tracker().report(task_id, percent=50, current_step="Embedding")
+
+# Schedule a periodic job
+get_periodic_scheduler().schedule("nightly_cleanup", "0 2 * * *", cleanup_callback)
+```
+
+### Decision tree
+
+```
+Need async work?
+├── One-off background task     → get_task_queue().enqueue()
+├── Track progress of a task    → get_progress_tracker().report()
+├── Run on a schedule (cron)    → get_periodic_scheduler().schedule()
+│   └── Static schedule?        → prefer celery_app.conf.beat_schedule entry
+├── Atomic-claim across workers → utils/task_queue.py  [carve-out, doc why]
+└── Event-driven wakeup         → services/heartbeat_scheduler.py
+```
+
+## Task queues (Phase 1 — facade landed, full migration pending)
+
+See [#6505](https://github.com/mrveiss/AutoBot-AI/issues/6505). Three
+task-queue implementations coexist; new code uses the facade:
 
 - `celery_app.py` — canonical going forward
-- `utils/task_queue.py` — Redis Streams + Sorted Sets, may stay as a #6468
-  carve-out for atomic claim semantics
+- `utils/task_queue.py` — Redis Streams + Sorted Sets; retained as a #6468
+  carve-out for atomic-claim semantics
 - `utils/background_task_manager.py` — to be deleted in Phase 1
 
 ## Periodic schedulers
