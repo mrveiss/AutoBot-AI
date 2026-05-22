@@ -14,7 +14,7 @@ import os
 import re
 import shutil
 from pathlib import Path
-from typing import Dict, List
+from typing import Callable, Dict, List
 
 from services.ansible_secrets import fetch_deploy_secrets
 from services.provision_progress import TaskProgressTracker
@@ -243,7 +243,7 @@ class PlaybookExecutor:
     async def _stream_playbook_output(
         self,
         process: asyncio.subprocess.Process,
-        progress_callback: callable | None,
+        progress_callback: Callable | None,
     ) -> List[str]:
         """
         Stream and parse playbook output for progress (Issue #880, #3033).
@@ -407,7 +407,7 @@ class PlaybookExecutor:
         self,
         cmd: List[str],
         env: Dict[str, str],
-        progress_callback: callable | None,
+        progress_callback: Callable | None,
     ) -> Dict[str, any]:
         """
         Launch ansible-playbook subprocess and collect output. Ref: #1088.
@@ -432,7 +432,7 @@ class PlaybookExecutor:
         tags: List[str] | None = None,
         extra_vars: Dict[str, str] | None = None,
         check_mode: bool = False,
-        progress_callback: callable | None = None,
+        progress_callback: Callable | None = None,
         inventory_path: Path | None = None,
     ) -> Dict[str, any]:
         """
