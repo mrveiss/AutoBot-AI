@@ -57,3 +57,50 @@ class AIStackAgentPayload(BaseModel):
     """
 
     model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# multimodal.py response schemas (#6509c)
+# ---------------------------------------------------------------------------
+
+
+class MultimodalEmbeddingData(BaseModel):
+    """data payload for POST /embeddings/generate."""
+
+    model_config = {"extra": "allow"}
+
+
+class MultimodalStatsData(BaseModel):
+    """data payload for GET /stats."""
+
+    model_config = {"extra": "allow"}
+
+
+class MultimodalFusionData(BaseModel):
+    """data payload for POST /combine."""
+
+    model_config = {"extra": "allow"}
+
+
+class MultimodalPerfStatsData(BaseModel):
+    """data payload for GET /performance/stats."""
+
+    model_config = {"extra": "allow"}
+
+
+class MultimodalOptimizeData(BaseModel):
+    """data payload for POST /performance/optimize."""
+
+    model_config = {"extra": "allow"}
+
+
+class MultimodalPerfSummaryData(BaseModel):
+    """data payload for GET /performance/summary."""
+
+    model_config = {"extra": "allow"}
+
+
+class MultimodalBatchSizeData(BaseModel):
+    """data payload for PUT /performance/batch-size."""
+
+    model_config = {"extra": "allow"}

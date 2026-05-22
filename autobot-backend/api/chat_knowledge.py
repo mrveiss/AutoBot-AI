@@ -48,6 +48,14 @@ from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     AddKnowledgeRequest,
     AssociateFileRequest,
+    ChatKnowledgeCompileData,
+    ChatKnowledgeContextData,
+    ChatKnowledgeDecisionData,
+    ChatKnowledgeFileAssocData,
+    ChatKnowledgePendingData,
+    ChatKnowledgeSearchResultData,
+    ChatKnowledgeTempData,
+    ChatKnowledgeUploadData,
     ChatKnowledgeSearchRequest,
     CompileChatRequest,
     CreateContextRequest,
@@ -490,7 +498,7 @@ chat_knowledge_manager = None
 # API Endpoints
 
 
-@router.post("/context/create", response_model=DataResponse)
+@router.post("/context/create", response_model=DataResponse[ChatKnowledgeContextData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_chat_context",
@@ -524,7 +532,7 @@ async def create_chat_context(request_data: CreateContextRequest, request: Reque
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/files/associate", response_model=DataResponse)
+@router.post("/files/associate", response_model=DataResponse[ChatKnowledgeFileAssocData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="associate_file_with_chat",
@@ -556,7 +564,7 @@ async def associate_file_with_chat(request_data: AssociateFileRequest, request: 
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/files/upload/{chat_id}", response_model=DataResponse)
+@router.post("/files/upload/{chat_id}", response_model=DataResponse[ChatKnowledgeUploadData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="upload_file_to_chat",
@@ -603,7 +611,7 @@ async def upload_file_to_chat(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/knowledge/add_temporary", response_model=DataResponse)
+@router.post("/knowledge/add_temporary", response_model=DataResponse[ChatKnowledgeTempData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_temporary_knowledge",
@@ -623,7 +631,7 @@ async def add_temporary_knowledge(request: AddKnowledgeRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/knowledge/pending/{chat_id}", response_model=DataResponse)
+@router.get("/knowledge/pending/{chat_id}", response_model=DataResponse[ChatKnowledgePendingData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pending_knowledge_decisions",
@@ -645,7 +653,7 @@ async def get_pending_knowledge_decisions(chat_id: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/knowledge/decide", response_model=DataResponse)
+@router.post("/knowledge/decide", response_model=DataResponse[ChatKnowledgeDecisionData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="apply_knowledge_decision",
@@ -670,7 +678,7 @@ async def apply_knowledge_decision(request: KnowledgeDecisionRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/compile", response_model=DataResponse)
+@router.post("/compile", response_model=DataResponse[ChatKnowledgeCompileData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="compile_chat_to_knowledge",
@@ -693,7 +701,7 @@ async def compile_chat_to_knowledge(request_data: CompileChatRequest, request: R
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/search", response_model=DataResponse)
+@router.post("/search", response_model=DataResponse[ChatKnowledgeSearchResultData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_chat_knowledge",
@@ -715,7 +723,7 @@ async def search_chat_knowledge(request: ChatKnowledgeSearchRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/context/{chat_id}", response_model=DataResponse)
+@router.get("/context/{chat_id}", response_model=DataResponse[ChatKnowledgeContextData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_chat_context",

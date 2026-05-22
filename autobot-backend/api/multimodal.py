@@ -14,6 +14,15 @@ from typing import List
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
 from ai_hardware_accelerator import HardwareDevice, accelerated_embedding_generation
+from api.schemas_ai_stack import (
+    MultimodalBatchSizeData,
+    MultimodalEmbeddingData,
+    MultimodalFusionData,
+    MultimodalOptimizeData,
+    MultimodalPerfStatsData,
+    MultimodalPerfSummaryData,
+    MultimodalStatsData,
+)
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     CrossModalSearchRequest,
@@ -280,7 +289,7 @@ async def process_text(
         )
 
 
-@router.post("/embeddings/generate", response_model=DataResponse)
+@router.post("/embeddings/generate", response_model=DataResponse[MultimodalEmbeddingData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="generate_embedding",
@@ -409,7 +418,7 @@ async def cross_modal_search(
         )
 
 
-@router.get("/stats", response_model=DataResponse)
+@router.get("/stats", response_model=DataResponse[MultimodalStatsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_multimodal_stats",
@@ -572,7 +581,7 @@ def _create_combined_input(
     )
 
 
-@router.post("/fusion/combine", response_model=DataResponse)
+@router.post("/fusion/combine", response_model=DataResponse[MultimodalFusionData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="combine_multimodal_inputs",
@@ -637,7 +646,7 @@ async def combine_multimodal_inputs(
 
 
 # Performance monitoring endpoints
-@router.get("/performance/stats", response_model=DataResponse)
+@router.get("/performance/stats", response_model=DataResponse[MultimodalPerfStatsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_stats",
@@ -681,7 +690,7 @@ async def get_performance_stats(
         }
 
 
-@router.post("/performance/optimize", response_model=DataResponse)
+@router.post("/performance/optimize", response_model=DataResponse[MultimodalOptimizeData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="optimize_performance",
@@ -714,7 +723,7 @@ async def optimize_performance(
         }
 
 
-@router.get("/performance/summary", response_model=DataResponse)
+@router.get("/performance/summary", response_model=DataResponse[MultimodalPerfSummaryData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_summary",
@@ -742,7 +751,7 @@ async def get_performance_summary(
         }
 
 
-@router.post("/performance/batch-size", response_model=DataResponse)
+@router.post("/performance/batch-size", response_model=DataResponse[MultimodalBatchSizeData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_batch_size",

@@ -17,9 +17,17 @@ from fastapi.responses import JSONResponse
 
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
+    AIStackDocumentAnalysisData,
+    AIStackEnhancedHealthData,
+    AIStackEnhancedSearchData,
     AIStackEnhancedSearchRequest,
+    AIStackEnhancedStatsData,
+    AIStackKnowledgeExtractData,
     AIStackKnowledgeExtractionRequest,
+    AIStackQueryReformulateData,
     AIStackRAGQueryRequest,
+    AIStackRagSearchData,
+    AIStackSystemInsightsData,
     DocumentAnalysisRequest,
 )
 from auth_middleware import get_current_user
@@ -251,7 +259,7 @@ async def _run_all_search_sources(
     return results
 
 
-@router.post("/search/enhanced", response_model=DataResponse)
+@router.post("/search/enhanced", response_model=DataResponse[AIStackEnhancedSearchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_search",
@@ -302,7 +310,7 @@ async def enhanced_search(
         )
 
 
-@router.post("/search/rag", response_model=DataResponse)
+@router.post("/search/rag", response_model=DataResponse[AIStackRagSearchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="rag_search",
@@ -429,7 +437,7 @@ async def _store_extracted_facts(
     return stored_facts
 
 
-@router.post("/extract", response_model=DataResponse)
+@router.post("/extract", response_model=DataResponse[AIStackKnowledgeExtractData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="extract_knowledge",
@@ -479,7 +487,7 @@ async def extract_knowledge(
         await handle_ai_stack_error(e, "Knowledge extraction")
 
 
-@router.post("/analyze/documents", response_model=DataResponse)
+@router.post("/analyze/documents", response_model=DataResponse[AIStackDocumentAnalysisData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_documents",
@@ -522,7 +530,7 @@ async def analyze_documents(
 # ====================================================================
 
 
-@router.post("/query/reformulate", response_model=DataResponse)
+@router.post("/query/reformulate", response_model=DataResponse[AIStackQueryReformulateData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reformulate_query",
@@ -563,7 +571,7 @@ async def reformulate_query(
 # ====================================================================
 
 
-@router.get("/system/insights", response_model=DataResponse)
+@router.get("/system/insights", response_model=DataResponse[AIStackSystemInsightsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_knowledge_insights",
@@ -597,7 +605,7 @@ async def get_system_knowledge_insights(
 # ====================================================================
 
 
-@router.get("/stats/enhanced", response_model=DataResponse)
+@router.get("/stats/enhanced", response_model=DataResponse[AIStackEnhancedStatsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_enhanced_stats",
@@ -651,7 +659,7 @@ async def get_enhanced_stats(
         )
 
 
-@router.get("/health/enhanced", response_model=DataResponse)
+@router.get("/health/enhanced", response_model=DataResponse[AIStackEnhancedHealthData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_knowledge_health",
