@@ -10,6 +10,7 @@ Issue #551: Added proper async cancellation handling and timeout fixes.
 
 import asyncio
 import time
+import uuid
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -105,7 +106,8 @@ class OllamaProvider:
             "messages": request.messages,
             "stream": use_streaming,
             "temperature": request.temperature,
-            "format": "json" if request.structured_output else "",
+            # Ollama rejects format=json when tools are present (#7911)
+            "format": "json" if (request.structured_output and not request.tools) else "",
             "options": {
                 "seed": 42,
                 "top_k": self.settings.top_k,
@@ -126,6 +128,8 @@ class OllamaProvider:
                 }
                 for t in request.tools
             ]
+            if request.tool_choice:
+                data["tool_choice"] = request.tool_choice
         return data
 
     def extract_content(self, response: dict) -> str:
@@ -165,7 +169,7 @@ class OllamaProvider:
             fn = tc.get("function", {}) if isinstance(tc, dict) else {}
             result.append(
                 ToolCall(
-                    id=tc.get("id", ""),
+                    id=tc.get("id") or str(uuid.uuid4()),
                     name=fn.get("name", ""),
                     arguments=fn.get("arguments", {}),
                 )
@@ -206,7 +210,7 @@ class OllamaProvider:
             metadata=response.get("stats", {}),
             usage=response.get("usage", {}),
             fallback_used=fallback_used,
-            tool_calls=tool_calls or None,
+            tool_calls=tool_calls,
         )
 
     def build_error_response(self, model: str, error: Exception) -> dict:
@@ -366,6 +370,9 @@ class OllamaProvider:
 
         logger.info(f"[{request_id}] Stream processing completed: " f"{len(accumulated_content)} chars")
 
+        # NOTE: Streaming mode accumulates only text content. tool_calls chunks
+        # from Ollama's streaming protocol are not captured here — use non-streaming
+        # mode when tool_calls extraction is required. Tracked in GH#7911.
         return {
             "message": {"role": "assistant", "content": accumulated_content},
             "done": True,
@@ -501,7 +508,7 @@ class OllamaProvider:
             response = await self._execute_request(url, headers, data, request.request_id, model, use_streaming)
             processing_time = time.time() - start_time
             content = self.extract_content(response)
-            tool_calls = self.extract_tool_calls(response) or None
+            tool_calls = self.extract_tool_calls(response)
             llm_response = self.build_response(
                 content, response, model, processing_time, request.request_id, tool_calls=tool_calls
             )
@@ -525,6 +532,4 @@ class OllamaProvider:
 
 __all__ = [
     "OllamaProvider",
-    "_model_supports_tools",
-    "_OLLAMA_TOOL_CAPABLE_MODELS",
 ]
