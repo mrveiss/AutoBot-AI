@@ -1600,6 +1600,486 @@ class CachedSecurityScoreResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# code_intelligence.py route response schemas (GH #6509 Batch A)
+# ---------------------------------------------------------------------------
+
+
+class CodeIntelAnalysisResultResponse(BaseModel):
+    """Response for POST /analyze (directory or inline code)."""
+
+    model_config = {"extra": "allow"}
+    status: str | None = None
+
+
+class CodeIntelScanFileResultResponse(BaseModel):
+    """Response for POST /scan-file."""
+
+    status: str
+    timestamp: str
+    file_path: str
+    patterns: List[Any]
+    statistics: Dict[str, Any]
+
+
+class CodeIntelHealthScoreResultResponse(BaseModel):
+    """Response for GET /health-score."""
+
+    status: str
+    timestamp: str
+    path: str
+    health_score: float
+    grade: str
+    total_issues: int
+    files_analyzed: int
+    severity_breakdown: Dict[str, Any]
+
+
+class CodeIntelPatternTypesResultResponse(BaseModel):
+    """Response for GET /pattern-types."""
+
+    status: str
+    pattern_types: Dict[str, Any]
+    total_types: int
+
+
+class RedisAnalyzeResultResponse(BaseModel):
+    """Response for POST /redis/analyze."""
+
+    status: str
+    timestamp: str
+    path: str
+    optimizations: List[Any]
+    summary: Dict[str, Any]
+
+
+class RedisScanFileResultResponse(BaseModel):
+    """Response for POST /redis/scan-file."""
+
+    status: str
+    timestamp: str
+    file_path: str
+    optimizations: List[Any]
+    total_findings: int
+    severity_breakdown: Dict[str, Any]
+
+
+class RedisOptimizationTypesResultResponse(BaseModel):
+    """Response for GET /redis/optimization-types."""
+
+    status: str
+    optimization_types: Dict[str, Any]
+    total_types: int
+    categories: List[str]
+
+
+class RedisHealthScoreResultResponse(BaseModel):
+    """Response for GET /redis/health-score."""
+
+    status: str
+    timestamp: str
+    path: str
+    health_score: float
+    grade: str
+    status_message: str
+    total_optimizations: int
+    files_with_issues: int
+    severity_breakdown: Dict[str, Any]
+    category_breakdown: Dict[str, Any]
+
+
+class SecurityAnalyzeResultResponse(BaseModel):
+    """Response for POST /security/analyze."""
+
+    status: str
+    timestamp: str
+    path: str
+    summary: Dict[str, Any]
+    findings: List[Any]
+    total_findings: int
+
+
+class SecurityScanFileResultResponse(BaseModel):
+    """Response for POST /security/scan-file."""
+
+    status: str
+    timestamp: str
+    file: str
+    findings: List[Any]
+    total_findings: int
+    by_type: Dict[str, Any]
+    severity_counts: Dict[str, Any]
+
+
+class SecurityVulnTypesResultResponse(BaseModel):
+    """Response for GET /security/vulnerability-types."""
+
+    status: str
+    timestamp: str
+    vulnerability_types: List[Any]
+    total_types: int
+    by_owasp_category: Dict[str, Any]
+
+
+class SecurityScoreResultResponse(BaseModel):
+    """Response for GET /security/score."""
+
+    status: str
+    timestamp: str
+    path: str
+    security_score: float
+    grade: str
+    risk_level: str
+    status_message: str
+    total_findings: int
+    critical_issues: int
+    high_issues: int
+    files_analyzed: int
+    severity_breakdown: Dict[str, Any]
+    owasp_breakdown: Dict[str, Any]
+
+
+class PerformanceAnalyzeResultResponse(BaseModel):
+    """Response for POST /performance/analyze."""
+
+    status: str
+    timestamp: str
+    path: str
+    summary: Dict[str, Any]
+    findings: List[Any]
+    total_findings: int
+
+
+class PerformanceScanFileResultResponse(BaseModel):
+    """Response for POST /performance/scan-file."""
+
+    status: str
+    timestamp: str
+    file: str
+    findings: List[Any]
+    total_findings: int
+    by_type: Dict[str, Any]
+    severity_counts: Dict[str, Any]
+
+
+class PerformanceIssueTypesResultResponse(BaseModel):
+    """Response for GET /performance/issue-types."""
+
+    status: str
+    timestamp: str
+    issue_types: List[Any]
+    total_types: int
+    by_category: Dict[str, Any]
+
+
+class PerformanceScoreResultResponse(BaseModel):
+    """Response for GET /performance/score (success or no_data)."""
+
+    model_config = {"extra": "allow"}
+    status: str
+
+
+class EvolutionAnalyzeResultResponse(BaseModel):
+    """Response for POST /evolution/analyze."""
+
+    status: str
+    timestamp: str
+    report: Dict[str, Any]
+
+
+class EvolutionPatternsResultResponse(BaseModel):
+    """Response for GET /evolution/patterns."""
+
+    status: str
+    timestamp: str
+    path: str
+    pattern_metrics: Dict[str, Any]
+
+
+class EvolutionRefactoringsResultResponse(BaseModel):
+    """Response for GET /evolution/refactorings."""
+
+    status: str
+    timestamp: str
+    path: str
+    refactorings: List[Any]
+    total: int
+
+
+class EvolutionTimelineResultResponse(BaseModel):
+    """Response for GET /evolution/timeline."""
+
+    status: str
+    timestamp: str
+    path: str
+    timeline: List[Any]
+
+
+class EvolutionReportResultResponse(BaseModel):
+    """Response for GET /evolution/report."""
+
+    status: str
+    timestamp: str
+    path: str
+    evolution: Dict[str, Any]
+    pattern_metrics: Dict[str, Any]
+    timeline: List[Any]
+    summary: Dict[str, Any]
+
+
+# ---------------------------------------------------------------------------
+# anti_pattern.py route response schemas (GH #6509 Batch A)
+# ---------------------------------------------------------------------------
+
+
+class AntiPatternCachedResultResponse(BaseModel):
+    """Response for GET /cached (cached data or 404-style message)."""
+
+    model_config = {"extra": "allow"}
+    success: bool
+
+
+class AntiPatternGodClassesResultResponse(BaseModel):
+    """Response for POST /god-classes."""
+
+    success: bool
+    count: int
+    god_classes: List[Any]
+    recommendation: str
+
+
+class AntiPatternCircularDepsResultResponse(BaseModel):
+    """Response for POST /circular-dependencies."""
+
+    success: bool
+    count: int
+    circular_dependencies: List[Any]
+    recommendation: str
+
+
+class AntiPatternFeatureEnvyResultResponse(BaseModel):
+    """Response for POST /feature-envy."""
+
+    success: bool
+    count: int
+    feature_envy: List[Any]
+    recommendation: str
+
+
+class AntiPatternCodeSmellsResultResponse(BaseModel):
+    """Response for POST /code-smells."""
+
+    success: bool
+    total_count: int
+    by_type: Dict[str, Any]
+    recommendations: List[str]
+
+
+class AntiPatternDeadCodeResultResponse(BaseModel):
+    """Response for POST /dead-code."""
+
+    success: bool
+    count: int
+    dead_code: List[Any]
+    recommendation: str
+
+
+class AntiPatternHealthScoreResultResponse(BaseModel):
+    """Response for POST /health-score."""
+
+    success: bool
+    health_score: float
+    grade: str
+    status: str
+    issue_counts: Dict[str, Any]
+    top_recommendations: List[str]
+    analysis_time_seconds: float
+
+
+class AntiPatternTypesResultResponse(BaseModel):
+    """Response for GET /types."""
+
+    anti_pattern_types: List[Any]
+
+
+# ---------------------------------------------------------------------------
+# development_speedup.py route response schemas (GH #6509 Batch A)
+# ---------------------------------------------------------------------------
+
+
+class DevSpeedupAnalysisResultResponse(BaseModel):
+    """Response for POST|GET /analyze."""
+
+    analysis_type: str
+    root_path: str
+    results: Any
+    status: str
+
+
+class DevSpeedupDuplicatesResultResponse(BaseModel):
+    """Response for GET /duplicates."""
+
+    analysis_type: str
+    root_path: str
+    min_lines_threshold: int
+    results: Any
+    status: str
+
+
+class DevSpeedupPatternsResultResponse(BaseModel):
+    """Response for GET /patterns."""
+
+    analysis_type: str
+    root_path: str
+    pattern_filter: str | None
+    results: Any
+    status: str
+
+
+class DevSpeedupImportsResultResponse(BaseModel):
+    """Response for GET /imports."""
+
+    analysis_type: str
+    root_path: str
+    show_unused: bool
+    results: Any
+    status: str
+
+
+class DevSpeedupDeadCodeResultResponse(BaseModel):
+    """Response for GET /dead-code."""
+
+    analysis_type: str
+    root_path: str
+    results: Any
+    status: str
+
+
+class DevSpeedupRefactoringResultResponse(BaseModel):
+    """Response for GET /refactoring."""
+
+    analysis_type: str
+    root_path: str
+    min_complexity: float
+    results: Any
+    status: str
+
+
+class DevSpeedupQualityResultResponse(BaseModel):
+    """Response for GET /quality."""
+
+    analysis_type: str
+    root_path: str
+    severity_filter: str | None
+    results: Any
+    status: str
+
+
+class DevSpeedupRecommendationsResultResponse(BaseModel):
+    """Response for GET /recommendations."""
+
+    analysis_type: str
+    root_path: str
+    health_score: int
+    recommendations: List[Any]
+    metrics: Dict[str, Any]
+    priority_actions: List[Any]
+    status: str
+
+
+class DevSpeedupStatusResultResponse(BaseModel):
+    """Response for GET /status."""
+
+    status: str
+    capabilities: Dict[str, Any]
+    search_index: Dict[str, Any]
+    thresholds: Dict[str, Any]
+
+
+class DevSpeedupExamplesResultResponse(BaseModel):
+    """Response for GET /examples."""
+
+    examples: Dict[str, Any]
+    typical_workflow: List[str]
+    performance_tips: List[str]
+
+
+# ---------------------------------------------------------------------------
+# code_search.py route response schemas (GH #6509 Batch A)
+# ---------------------------------------------------------------------------
+
+
+class CodeSearchIndexResultResponse(BaseModel):
+    """Response for POST /index (success, already_indexed, or error)."""
+
+    model_config = {"extra": "allow"}
+
+
+class CodeSearchSearchResultResponse(BaseModel):
+    """Response for POST /search."""
+
+    results: List[Any]
+    stats: Dict[str, Any]
+    query: str
+    search_type: str
+    language_filter: str | None = None
+
+
+class CodeSearchStatusResultResponse(BaseModel):
+    """Response for GET /status."""
+
+    status: str
+    index_status: Dict[str, Any]
+    capabilities: Dict[str, Any]
+
+
+class CodeSearchCacheClearResultResponse(BaseModel):
+    """Response for DELETE /cache (success or error)."""
+
+    model_config = {"extra": "allow"}
+
+
+class CodeSearchExamplesResultResponse(BaseModel):
+    """Response for GET /examples."""
+
+    examples: Dict[str, Any]
+    language_filters: Any
+    usage_tips: Any
+
+
+class CodeSearchDeclarationsResultResponse(BaseModel):
+    """Response for POST /analytics/declarations."""
+
+    summary: Dict[str, Any]
+    declarations_by_type: Dict[str, Any]
+    reusability_insights: Dict[str, Any]
+
+
+class CodeSearchDuplicatesResultResponse(BaseModel):
+    """Response for POST /analytics/duplicates."""
+
+    summary: Dict[str, Any]
+    duplicate_candidates: List[Any]
+    recommendations: List[str]
+
+
+class CodeSearchStatsResultResponse(BaseModel):
+    """Response for GET /analytics/stats."""
+
+    index_statistics: Dict[str, Any]
+    redis_keys: int
+    search_performance: Dict[str, Any]
+    recommendations: List[str]
+
+
+class CodeSearchRefactorSuggestionsResultResponse(BaseModel):
+    """Response for POST /analytics/refactor-suggestions."""
+
+    refactor_suggestions: List[Any]
+    analysis_summary: Dict[str, Any]
+    next_steps: List[str]
+
+
+# ---------------------------------------------------------------------------
 # playwright request schemas (#6042)
 # ---------------------------------------------------------------------------
 
