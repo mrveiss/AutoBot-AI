@@ -26,7 +26,7 @@ def _resolve_web_fetch_cache_ttl() -> int:
 
     Override via AUTOBOT_WEB_FETCH_CACHE_TTL.  Falls back to 24h (86400s).
     """
-    raw = config.web_fetch_cache_ttl
+    raw = config.misc.web_fetch_cache_ttl
     if raw is None:
         return TTL_24_HOURS
     try:

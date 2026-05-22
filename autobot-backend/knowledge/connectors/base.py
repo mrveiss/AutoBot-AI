@@ -321,8 +321,10 @@ class AbstractConnector(ABC):
             pending = [c for c in changes if c.source_id not in already_processed]
             if concurrency <= 1:
                 for change in pending:
+                    errors_before = len(result.errors)
                     await self._process_change(change, result)
-                    await self._write_checkpoint(change.source_id)
+                    if len(result.errors) == errors_before:
+                        await self._write_checkpoint(change.source_id)
                     await self._write_job_state(
                         job_id=job_id,
                         status="running",
@@ -336,8 +338,10 @@ class AbstractConnector(ABC):
 
                 async def bounded(change: ChangeInfo) -> None:
                     async with sem:
+                        errors_before = len(result.errors)
                         await self._process_change(change, result)
-                        await self._write_checkpoint(change.source_id)
+                        if len(result.errors) == errors_before:
+                            await self._write_checkpoint(change.source_id)
                         await self._write_job_state(
                             job_id=job_id,
                             status="running",
@@ -350,7 +354,8 @@ class AbstractConnector(ABC):
                 await asyncio.gather(*[bounded(c) for c in pending], return_exceptions=True)
 
             result.status = "success" if not result.errors else "partial"
-            await self._clear_checkpoint()
+            if result.status == "success":
+                await self._clear_checkpoint()
         except Exception as exc:
             self.logger.error("Sync failed for connector %s: %s", self.config.connector_id, exc)
             result.errors.append(str(exc))
