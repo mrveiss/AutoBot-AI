@@ -29,11 +29,13 @@ def _make_provider() -> OllamaProvider:
     return OllamaProvider(settings=settings, streaming_manager=streaming_manager)
 
 
-def _make_request(model: str = "llama3.1", tools=None) -> LLMRequest:
+def _make_request(model: str = "llama3.1", tools=None, tool_choice=None, structured_output=False) -> LLMRequest:
     return LLMRequest(
         messages=[{"role": "user", "content": "What is the weather in Paris?"}],
         model_name=model,
         tools=tools,
+        tool_choice=tool_choice,
+        structured_output=structured_output,
     )
 
 
@@ -91,6 +93,34 @@ class TestBuildRequestDataTools:
         data = provider.build_request_data(req, "llama3.1:8b", use_streaming=False)
 
         assert "tools" not in data
+
+    def test_tool_choice_forwarded_for_capable_model(self):
+        provider = _make_provider()
+        req = _make_request(model="llama3.1:8b", tools=[_TOOL], tool_choice="auto")
+        data = provider.build_request_data(req, "llama3.1:8b", use_streaming=False)
+
+        assert data.get("tool_choice") == "auto"
+
+    def test_tool_choice_not_forwarded_for_incapable_model(self):
+        provider = _make_provider()
+        req = _make_request(model="llama2", tools=[_TOOL], tool_choice="auto")
+        data = provider.build_request_data(req, "llama2", use_streaming=False)
+
+        assert "tool_choice" not in data
+
+    def test_format_json_suppressed_when_tools_present(self):
+        provider = _make_provider()
+        req = _make_request(model="llama3.1:8b", tools=[_TOOL], structured_output=True)
+        data = provider.build_request_data(req, "llama3.1:8b", use_streaming=False)
+
+        assert data["format"] == ""
+
+    def test_format_json_set_when_structured_output_no_tools(self):
+        provider = _make_provider()
+        req = _make_request(model="llama3.1:8b", tools=None, structured_output=True)
+        data = provider.build_request_data(req, "llama3.1:8b", use_streaming=False)
+
+        assert data["format"] == "json"
 
 
 # ---------------------------------------------------------------------------
@@ -152,6 +182,21 @@ class TestExtractToolCalls:
         assert calls[0].name == "tool_a"
         assert calls[1].name == "tool_b"
 
+    def test_missing_id_gets_uuid_fallback(self):
+        provider = _make_provider()
+        response = {
+            "message": {
+                "tool_calls": [
+                    {"function": {"name": "tool_a", "arguments": {}}},
+                ]
+            }
+        }
+        calls = provider.extract_tool_calls(response)
+
+        assert len(calls) == 1
+        assert calls[0].id != ""
+        assert len(calls[0].id) == 36  # uuid4 format
+
 
 # ---------------------------------------------------------------------------
 # build_response — tool_calls field
@@ -186,3 +231,46 @@ class TestBuildResponseToolCalls:
         )
 
         assert llm_resp.tool_calls is None
+
+
+# ---------------------------------------------------------------------------
+# _prepare_chat_request — streaming override and format gate
+# ---------------------------------------------------------------------------
+
+
+class TestPrepareCharRequestToolAwareness:
+    def test_streaming_forced_off_for_capable_model_with_tools(self):
+        """StreamingManager always returns True; must be overridden when tools active."""
+        provider = _make_provider()
+        provider.streaming_manager.should_use_streaming.return_value = True
+        provider.ollama_host = "http://localhost:11434"
+
+        req = _make_request(model="llama3.1:8b", tools=[_TOOL])
+        _, _, _, use_streaming, data, _ = provider._prepare_chat_request(req)
+
+        assert use_streaming is False
+        assert data["stream"] is False
+
+    def test_streaming_preserved_for_incapable_model(self):
+        """Non-capable model with tools: streaming unchanged, tools not injected."""
+        provider = _make_provider()
+        provider.streaming_manager.should_use_streaming.return_value = True
+        provider.ollama_host = "http://localhost:11434"
+
+        req = _make_request(model="llama2", tools=[_TOOL])
+        _, _, _, use_streaming, data, _ = provider._prepare_chat_request(req)
+
+        assert use_streaming is True
+        assert "tools" not in data
+
+    def test_format_json_preserved_for_incapable_model_with_structured_output(self):
+        """Incapable model with structured_output=True, tools=[...]: format=json must survive."""
+        provider = _make_provider()
+        provider.streaming_manager.should_use_streaming.return_value = False
+        provider.ollama_host = "http://localhost:11434"
+
+        req = _make_request(model="llama2", tools=[_TOOL], structured_output=True)
+        _, _, _, _, data, _ = provider._prepare_chat_request(req)
+
+        assert data["format"] == "json"
+        assert "tools" not in data
