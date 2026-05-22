@@ -238,7 +238,7 @@ onMounted(() => {
         <button @click="navigate" :disabled="loading" class="go-btn" :aria-label="$t('chat.visualBrowser.go')">
 
           <Icon name="search" v-if="!loading" />
-          <i class="fas fa-spinner fa-spin" v-else></i>
+          <Icon name="spinner" :spin="true" v-else />
         </button>
 
         <!-- Screenshot button -->
@@ -428,7 +428,8 @@ onMounted(() => {
 
 .url-icon {
   color: var(--text-muted);
-  font-size: var(--text-sm);
+  width: var(--text-sm);
+  height: var(--text-sm);
   flex-shrink: 0;
 }
 
@@ -524,7 +525,8 @@ onMounted(() => {
 }
 
 .viewport-icon {
-  font-size: var(--text-5xl);
+  width: var(--text-5xl);
+  height: var(--text-5xl);
   color: var(--text-secondary);
 }
 

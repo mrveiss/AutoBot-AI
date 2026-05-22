@@ -6,7 +6,7 @@
         <Icon name="home" /> {{ $t('fileBrowser.pathNavigation.home') }}
       </button>
       <span v-for="(part, index) in pathParts" :key="index" class="breadcrumb-item">
-        <i class="fas fa-chevron-right breadcrumb-separator"></i>
+        <Icon name="chevron-right" class="breadcrumb-separator" />
         <button @click="$emit('navigate-to-path', getPathUpTo(index))" class="clickable" type="button">
           {{ part }}
         </button>
