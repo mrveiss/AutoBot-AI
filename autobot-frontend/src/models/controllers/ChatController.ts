@@ -715,7 +715,9 @@ export class ChatController {
           this.chatStore.switchToSession(sessionId)
         }
       } else {
-        logger.error(`Session ${sessionId} not found in store`)
+        // #6766: session list may not be loaded yet during startup race.
+        // Downgrade to warn — the caller will retry once sessions are populated.
+        logger.warn(`Session ${sessionId} not found in store (may still be loading)`)
       }
 
     } catch (error: unknown) {
