@@ -231,3 +231,46 @@ class TestBuildResponseToolCalls:
         )
 
         assert llm_resp.tool_calls is None
+
+
+# ---------------------------------------------------------------------------
+# _prepare_chat_request — streaming override and format gate
+# ---------------------------------------------------------------------------
+
+
+class TestPrepareCharRequestToolAwareness:
+    def test_streaming_forced_off_for_capable_model_with_tools(self):
+        """StreamingManager always returns True; must be overridden when tools active."""
+        provider = _make_provider()
+        provider.streaming_manager.should_use_streaming.return_value = True
+        provider.ollama_host = "http://localhost:11434"
+
+        req = _make_request(model="llama3.1:8b", tools=[_TOOL])
+        _, _, _, use_streaming, data, _ = provider._prepare_chat_request(req)
+
+        assert use_streaming is False
+        assert data["stream"] is False
+
+    def test_streaming_preserved_for_incapable_model(self):
+        """Non-capable model with tools: streaming unchanged, tools not injected."""
+        provider = _make_provider()
+        provider.streaming_manager.should_use_streaming.return_value = True
+        provider.ollama_host = "http://localhost:11434"
+
+        req = _make_request(model="llama2", tools=[_TOOL])
+        _, _, _, use_streaming, data, _ = provider._prepare_chat_request(req)
+
+        assert use_streaming is True
+        assert "tools" not in data
+
+    def test_format_json_preserved_for_incapable_model_with_structured_output(self):
+        """Incapable model with structured_output=True, tools=[...]: format=json must survive."""
+        provider = _make_provider()
+        provider.streaming_manager.should_use_streaming.return_value = False
+        provider.ollama_host = "http://localhost:11434"
+
+        req = _make_request(model="llama2", tools=[_TOOL], structured_output=True)
+        _, _, _, _, data, _ = provider._prepare_chat_request(req)
+
+        assert data["format"] == "json"
+        assert "tools" not in data

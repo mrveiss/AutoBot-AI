@@ -101,13 +101,14 @@ class OllamaProvider:
         Returns:
             Request data dictionary
         """
+        tools_will_be_sent = bool(request.tools) and _model_supports_tools(model)
         data: dict = {
             "model": model,
             "messages": request.messages,
             "stream": use_streaming,
             "temperature": request.temperature,
-            # Ollama rejects format=json when tools are present (#7911)
-            "format": "json" if (request.structured_output and not request.tools) else "",
+            # Ollama rejects format=json when tools are active (#7911)
+            "format": "json" if (request.structured_output and not tools_will_be_sent) else "",
             "options": {
                 "seed": 42,
                 "top_k": self.settings.top_k,
@@ -116,7 +117,7 @@ class OllamaProvider:
                 "num_ctx": self.settings.num_ctx,
             },
         }
-        if request.tools and _model_supports_tools(model):
+        if tools_will_be_sent:
             data["tools"] = [
                 {
                     "type": "function",
@@ -471,6 +472,9 @@ class OllamaProvider:
 
         model = request.model_name or self.settings.default_model
         use_streaming = self.streaming_manager.should_use_streaming(model)
+        # Streaming discards tool_call chunks; force non-streaming when tools active
+        if request.tools and _model_supports_tools(model):
+            use_streaming = False
         data = self.build_request_data(request, model, use_streaming)
         span_attrs = self._build_span_attributes(model, use_streaming, request)
 
