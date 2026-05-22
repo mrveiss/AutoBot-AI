@@ -35,7 +35,15 @@ logger = get_logger(__name__)
 
 # Redis-backed classification result cache TTL (seconds).
 # Tunable via AUTOBOT_CLASSIFICATION_CACHE_TTL; default 5 minutes.
-_CLASSIFICATION_CACHE_TTL = int(os.environ.get("AUTOBOT_CLASSIFICATION_CACHE_TTL", "300"))
+try:
+    _CLASSIFICATION_CACHE_TTL = int(os.environ.get("AUTOBOT_CLASSIFICATION_CACHE_TTL", "300"))
+    if _CLASSIFICATION_CACHE_TTL <= 0:
+        _CLASSIFICATION_CACHE_TTL = 300
+        logger.warning("AUTOBOT_CLASSIFICATION_CACHE_TTL <= 0, using default 300s")
+except (ValueError, TypeError):
+    _CLASSIFICATION_CACHE_TTL = 300
+    logger.warning("Invalid AUTOBOT_CLASSIFICATION_CACHE_TTL=%r, using default 300s",
+                   os.environ.get("AUTOBOT_CLASSIFICATION_CACHE_TTL"))
 _CLASSIFICATION_REDIS_KEY_PREFIX = "gemma_classify:"
 
 
@@ -164,7 +172,7 @@ Respond with valid JSON:
 
         result = await self._gemma_classify(user_message)
 
-        if result and redis:
+        if result and redis and _CLASSIFICATION_CACHE_TTL > 0:
             try:
                 await redis.set(cache_key, json.dumps(result), ex=_CLASSIFICATION_CACHE_TTL)
             except Exception as exc:
@@ -207,12 +215,16 @@ Respond with valid JSON:
             async with sem:
                 return await self.classify_request(msg)
 
-        unique_results: dict[str, ClassificationResult] = dict(
-            zip(
-                hash_to_msg.keys(),
-                await asyncio.gather(*[_one(m) for m in hash_to_msg.values()]),
-            )
+        raw_results = await asyncio.gather(
+            *[_one(m) for m in hash_to_msg.values()], return_exceptions=True
         )
+        unique_results: dict[str, ClassificationResult] = {}
+        for h, msg, result in zip(hash_to_msg.keys(), hash_to_msg.values(), raw_results):
+            if isinstance(result, BaseException):
+                logger.warning("classify_multiple: task failed for hash %s: %s", h, result)
+                unique_results[h] = self._create_fallback_result(msg, TaskComplexity.SIMPLE)
+            else:
+                unique_results[h] = result
 
         return [unique_results[h] for h in msg_hashes]
 

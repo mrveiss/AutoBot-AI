@@ -161,6 +161,19 @@ def test_eviction_when_index_full():
 
     assert len(sc._entries) == 3, "Index should evict oldest when full"
     assert sc._entries[0][0] == "key1", "key0 (oldest) should have been evicted"
+    assert "key0" not in sc._entry_keys, "Evicted key must be removed from _entry_keys"
+    assert "key1" in sc._entry_keys
+
+
+def test_add_entry_deduplicates_by_cache_key():
+    exact = MagicMock()
+    sc = SemanticLLMCache(exact)
+
+    sc._add_entry(_unit_vec(dim=4, seed=1), "dup_key", _resp("first"))
+    sc._add_entry(_unit_vec(dim=4, seed=2), "dup_key", _resp("second"))
+
+    assert sc._stats["entries"] == 1, "Duplicate cache_key must not add a second entry"
+    assert sc._entries[0][1].content == "first", "Original entry must be preserved"
 
 
 # ---------------------------------------------------------------------------
@@ -176,14 +189,16 @@ def test_evict_delegates_to_exact():
     exact.evict.assert_called_once_with(3)
 
 
-def test_clear_resets_index():
+@pytest.mark.asyncio
+async def test_clear_resets_index():
     exact = MagicMock()
     sc = SemanticLLMCache(exact)
     sc._add_entry(_unit_vec(4), "k", _resp())
     assert sc._stats["entries"] == 1
 
-    sc.clear()
+    await sc.clear()
     assert len(sc._entries) == 0
+    assert len(sc._entry_keys) == 0
     assert sc._stats["entries"] == 0
     exact.clear.assert_called_once()
 
