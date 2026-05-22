@@ -2583,3 +2583,74 @@ class HTTPDeleteRequest(HTTPRequestBase):
 
 class HTTPHeadRequest(HTTPRequestBase):
     """HEAD request model."""
+
+
+# ---------------------------------------------------------------------------
+# orchestration.py schemas (GH #6509 Batch D)
+# ---------------------------------------------------------------------------
+
+
+class OrchestrationWorkflowPlanResponse(BaseModel):
+    """Response for POST /workflow/plan."""
+
+    status: str
+    plan: Dict[str, Any] = Field(default_factory=dict)
+    task_count: int = 0
+    message: str = ""
+
+
+class OrchestrationAgentPerformanceResponse(BaseModel):
+    """Response for GET /agents/performance."""
+
+    status: str
+    performance_data: Dict[str, Any] = Field(default_factory=dict)
+
+
+class OrchestrationAgentRecommendResponse(BaseModel):
+    """Response for POST /agents/recommend."""
+
+    status: str
+    task_type: str = ""
+    capabilities_requested: List[str] = Field(default_factory=list)
+    recommended_agents: List[Any] = Field(default_factory=list)
+    agent_count: int = 0
+
+
+class OrchestrationActiveWorkflowsResponse(BaseModel):
+    """Response for GET /workflow/active."""
+
+    status: str
+    active_count: int = 0
+    workflows: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class OrchestrationStrategiesResponse(BaseModel):
+    """Response for GET /strategies."""
+
+    strategies: Dict[str, Any] = Field(default_factory=dict)
+    default: str = "adaptive"
+
+
+class OrchestrationCapabilitiesResponse(BaseModel):
+    """Response for GET /capabilities."""
+
+    capability_coverage: Dict[str, Any] = Field(default_factory=dict)
+    agents: Dict[str, Any] = Field(default_factory=dict)
+    total_agents: int = 0
+
+
+class OrchestrationStatusResponse(BaseModel):
+    """Response for GET /status."""
+
+    status: str
+    active_workflows: int = 0
+    max_parallel_tasks: int = 0
+    total_agents: int = 0
+    capabilities: Dict[str, Any] = Field(default_factory=dict)
+
+
+class OrchestrationExamplesResponse(BaseModel):
+    """Response for GET /examples."""
+
+    examples: Dict[str, Any] = Field(default_factory=dict)
+    usage_tips: List[str] = Field(default_factory=list)

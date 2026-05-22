@@ -15,11 +15,16 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_agent import (
+    AgentConfigAllAgentsResponse,
     AgentConfigDetailResponse,
     AgentConfigEnableDisableResponse,
     AgentConfigHealthResponse,
+    AgentConfigListAgentsResponse,
     AgentConfigOverviewResponse,
+    AgentConfigSpecializedDetailResponse,
+    AgentConfigSpecializedListResponse,
     AgentConfigUpdateModelResponse,
+    AgentConfigUsageResponse,
     AgentModelUpdate,
 )
 from api.schemas_common import DataResponse
@@ -559,7 +564,7 @@ async def _resolve_agent_effective_config(agent_id: str, config: dict, unified_c
     return current_model, current_provider, enabled, "local"
 
 
-@router.get("/agents", response_model=DataResponse)
+@router.get("/agents", response_model=DataResponse[AgentConfigListAgentsResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_agents",
@@ -669,7 +674,7 @@ async def _resolve_agent_entry(agent_id: str, config: dict, unified_config_manag
     }
 
 
-@router.get("/agents/all", response_model=DataResponse)
+@router.get("/agents/all", response_model=DataResponse[AgentConfigAllAgentsResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_all_agents",
@@ -713,7 +718,7 @@ async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
     )
 
 
-@router.get("/agents/specialized", response_model=DataResponse)
+@router.get("/agents/specialized", response_model=DataResponse[AgentConfigSpecializedListResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_specialized_agents",
@@ -746,7 +751,7 @@ async def list_specialized_agents(
     )
 
 
-@router.get("/agents/specialized/{agent_id}", response_model=DataResponse)
+@router.get("/agents/specialized/{agent_id}", response_model=DataResponse[AgentConfigSpecializedDetailResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_specialized_agent",
@@ -776,7 +781,7 @@ async def get_specialized_agent(
     return JSONResponse(status_code=200, content=agent)
 
 
-@router.get("/agents/usage", response_model=DataResponse)
+@router.get("/agents/usage", response_model=DataResponse[AgentConfigUsageResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agents_usage",

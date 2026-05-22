@@ -11,6 +11,13 @@ status endpoints for the formal adapter registry.
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from api.schemas_agent import (
+    AdapterListResponse,
+    AdapterModelsResponse,
+    AdapterOverrideClearResponse,
+    AdapterOverrideSetResponse,
+    AdapterTestResponse,
+)
 from api.schemas_common import DataResponse
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import get_current_user
@@ -23,7 +30,7 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
-@router.get("/", response_model=DataResponse)
+@router.get("/", response_model=DataResponse[AdapterListResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_adapters",
@@ -41,7 +48,7 @@ async def list_adapters(
     )
 
 
-@router.get("/{adapter_type}/test", response_model=DataResponse)
+@router.get("/{adapter_type}/test", response_model=DataResponse[AdapterTestResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_adapter_environment",
@@ -65,7 +72,7 @@ async def test_adapter_environment(
     return JSONResponse(status_code=200, content=result.to_dict())
 
 
-@router.get("/{adapter_type}/models", response_model=DataResponse)
+@router.get("/{adapter_type}/models", response_model=DataResponse[AdapterModelsResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_adapter_models",
@@ -119,7 +126,7 @@ async def probe_adapters(
         )
 
 
-@router.post("/agent/{agent_id}/override", response_model=DataResponse)
+@router.post("/agent/{agent_id}/override", response_model=DataResponse[AdapterOverrideSetResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="set_agent_adapter_override",
@@ -152,7 +159,7 @@ async def set_agent_adapter_override(
     )
 
 
-@router.delete("/agent/{agent_id}/override", response_model=DataResponse)
+@router.delete("/agent/{agent_id}/override", response_model=DataResponse[AdapterOverrideClearResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_agent_adapter_override",
