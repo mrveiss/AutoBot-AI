@@ -10,6 +10,18 @@ Extracted from llm_interface.py as part of Issue #381 god class refactoring.
 from enum import Enum
 
 
+class ArchitectureFamily(str, Enum):
+    """Model architecture family — governs attention backend and context window policy.
+
+    Issue #7347: positive family signal replacing substring-match heuristics.
+    """
+
+    TRANSFORMER = "transformer"
+    STATE_SPACE = "state_space"        # Mamba / S4 family
+    LINEAR_ATTENTION = "linear_attention"
+    HYBRID = "hybrid"                  # Jamba-style mixed architectures
+
+
 class ProviderType(Enum):
     """Supported LLM providers."""
 
@@ -41,6 +53,7 @@ class LLMType(Enum):
 
 
 __all__ = [
+    "ArchitectureFamily",
     "ProviderType",
     "LLMType",
 ]

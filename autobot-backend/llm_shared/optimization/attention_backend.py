@@ -28,6 +28,7 @@ from enum import Enum
 from typing import Any, List
 
 from autobot_shared.logging_manager import get_logger
+from llm_shared.types import ArchitectureFamily
 
 logger = get_logger(__name__)
 
@@ -70,11 +71,16 @@ class AttentionBackend(str, Enum):
     Values reflect capability tiers from highest (fastest) to lowest (most
     compatible).  The string values are stable identifiers safe for logging
     and serialisation.
+
+    NOT_APPLICABLE is returned for non-transformer architectures (state-space,
+    linear-attention, hybrid) where attention-backend selection is meaningless.
+    Issue #7350.
     """
 
     BETTER_TRANSFORMER = "better_transformer"
     SDPA = "sdpa"
     VANILLA = "vanilla"
+    NOT_APPLICABLE = "not_applicable"
 
 
 # ---------------------------------------------------------------------------
@@ -92,11 +98,15 @@ class ModelConfig:
             (e.g. ``mixtral``, ``mistral``, ``llama``).
         torch_dtype: Torch dtype string (e.g. ``float16``, ``bfloat16``).
             None means the model default will be used.
+        architecture_family: High-level architecture family from ``ArchitectureFamily``.
+            Defaults to ``TRANSFORMER`` for backwards compatibility.
+            Issue #7347/#7350: positive family signal for non-attention routing.
     """
 
     model_name: str = ""
     model_type: str = ""
     torch_dtype: str | None = None
+    architecture_family: ArchitectureFamily = ArchitectureFamily.TRANSFORMER
     extra: dict = field(default_factory=dict)
 
 
@@ -138,7 +148,13 @@ class AttentionBackendSelector:
     def select_backend(self, model_config: ModelConfig) -> AttentionBackend:
         """Determine the highest available backend tier for *model_config*.
 
-        Tries each tier in order.  A tier is skipped when:
+        Non-transformer architectures (state-space, linear-attention, hybrid)
+        have no scaled-dot-product attention to optimise.  For those families
+        this method returns ``NOT_APPLICABLE`` immediately so callers can skip
+        the optimisation step without emitting spurious warnings.
+        Issue #7350.
+
+        For transformer models, tries each tier in order.  A tier is skipped when:
         - The required library is absent, or
         - The model appears in the BetterTransformer blocklist (Tier 1 only).
 
@@ -146,8 +162,17 @@ class AttentionBackendSelector:
             model_config: Description of the model to be optimised.
 
         Returns:
-            The highest tier that is both available and compatible.
+            The highest tier that is both available and compatible, or
+            ``NOT_APPLICABLE`` for non-transformer architectures.
         """
+        if model_config.architecture_family != ArchitectureFamily.TRANSFORMER:
+            logger.debug(
+                "AttentionBackend: NOT_APPLICABLE for %s (architecture_family=%s)",
+                model_config.model_name or model_config.model_type,
+                model_config.architecture_family.value,
+            )
+            return AttentionBackend.NOT_APPLICABLE
+
         if self._can_use_better_transformer(model_config):
             logger.info(
                 "AttentionBackend: selected BetterTransformer for %s",
@@ -171,8 +196,11 @@ class AttentionBackendSelector:
     def apply_backend(self, model: Any, backend: AttentionBackend) -> Any:
         """Apply *backend* to *model*, falling through on any failure.
 
-        Each tier is attempted.  If it raises, GPU memory is freed and the
-        next tier is tried.  This mirrors the tier priority from
+        For ``NOT_APPLICABLE`` (non-transformer architectures) the model is
+        returned unchanged without any warning.  Issue #7350.
+
+        Each transformer tier is attempted.  If it raises, GPU memory is freed
+        and the next tier is tried.  This mirrors the tier priority from
         :meth:`select_backend` so callers receive a consistently optimised
         model regardless of environment specifics.
 
@@ -184,6 +212,9 @@ class AttentionBackendSelector:
             The model, potentially transformed in-place or replaced by a
             BetterTransformer-wrapped copy.
         """
+        if backend == AttentionBackend.NOT_APPLICABLE:
+            return model
+
         if backend == AttentionBackend.BETTER_TRANSFORMER:
             result = self._try_apply_better_transformer(model)
             if result is not None:

@@ -17,6 +17,7 @@ from llm_shared.optimization.attention_backend import (
     _free_memory,
     get_attention_backend_selector,
 )
+from llm_shared.types import ArchitectureFamily
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -49,15 +50,16 @@ class TestAttentionBackendEnum:
             assert isinstance(backend.value, str)
 
     def test_expected_members(self):
-        """Enum must expose the three required tiers."""
+        """Enum must expose the three transformer tiers plus NOT_APPLICABLE."""
         names = {b.name for b in AttentionBackend}
-        assert names == {"BETTER_TRANSFORMER", "SDPA", "VANILLA"}
+        assert names == {"BETTER_TRANSFORMER", "SDPA", "VANILLA", "NOT_APPLICABLE"}
 
     def test_string_coercion(self):
         """AttentionBackend should be usable as a str subclass."""
         assert AttentionBackend.BETTER_TRANSFORMER == "better_transformer"
         assert AttentionBackend.SDPA == "sdpa"
         assert AttentionBackend.VANILLA == "vanilla"
+        assert AttentionBackend.NOT_APPLICABLE == "not_applicable"
 
 
 # ---------------------------------------------------------------------------
@@ -446,6 +448,11 @@ class TestModelConfig:
         assert cfg.torch_dtype is None
         assert cfg.extra == {}
 
+    def test_default_architecture_family_is_transformer(self):
+        """Default architecture_family must be TRANSFORMER for backwards compat."""
+        cfg = ModelConfig()
+        assert cfg.architecture_family == ArchitectureFamily.TRANSFORMER
+
     def test_custom_values(self):
         """ModelConfig should accept custom field values."""
         cfg = ModelConfig(
@@ -458,3 +465,76 @@ class TestModelConfig:
         assert cfg.model_type == "llama"
         assert cfg.torch_dtype == "float16"
         assert cfg.extra == {"revision": "main"}
+
+    def test_architecture_family_field(self):
+        """ModelConfig should accept and store architecture_family."""
+        cfg = ModelConfig(architecture_family=ArchitectureFamily.STATE_SPACE)
+        assert cfg.architecture_family == ArchitectureFamily.STATE_SPACE
+
+
+# ---------------------------------------------------------------------------
+# Architecture-family dispatch — Issue #7350
+# ---------------------------------------------------------------------------
+
+
+class TestArchitectureFamilyDispatch:
+    """Tests for architecture-family based NOT_APPLICABLE dispatch."""
+
+    def test_transformer_family_enters_normal_selection(self):
+        """TRANSFORMER family must fall through to normal tier selection."""
+        sel = _make_selector()
+        with patch(
+            "llm_shared.optimization.attention_backend._import_better_transformer",
+            return_value=None,
+        ), patch(
+            "llm_shared.optimization.attention_backend.AttentionBackendSelector._can_use_sdpa",
+            return_value=False,
+        ):
+            result = sel.select_backend(ModelConfig(architecture_family=ArchitectureFamily.TRANSFORMER))
+        assert result == AttentionBackend.VANILLA
+
+    def test_state_space_returns_not_applicable(self):
+        """STATE_SPACE architecture must return NOT_APPLICABLE immediately."""
+        sel = _make_selector()
+        result = sel.select_backend(ModelConfig(architecture_family=ArchitectureFamily.STATE_SPACE))
+        assert result == AttentionBackend.NOT_APPLICABLE
+
+    def test_linear_attention_returns_not_applicable(self):
+        """LINEAR_ATTENTION architecture must return NOT_APPLICABLE."""
+        sel = _make_selector()
+        result = sel.select_backend(ModelConfig(architecture_family=ArchitectureFamily.LINEAR_ATTENTION))
+        assert result == AttentionBackend.NOT_APPLICABLE
+
+    def test_hybrid_returns_not_applicable(self):
+        """HYBRID architecture must return NOT_APPLICABLE."""
+        sel = _make_selector()
+        result = sel.select_backend(ModelConfig(architecture_family=ArchitectureFamily.HYBRID))
+        assert result == AttentionBackend.NOT_APPLICABLE
+
+    def test_state_space_large_context_not_capped(self):
+        """State-space with 131072 context must not be routed through BT/SDPA."""
+        sel = _make_selector()
+        cfg = ModelConfig(
+            model_name="state-spaces/mamba-3b-131k",
+            architecture_family=ArchitectureFamily.STATE_SPACE,
+        )
+        result = sel.select_backend(cfg)
+        assert result == AttentionBackend.NOT_APPLICABLE
+
+    def test_apply_backend_not_applicable_is_noop(self):
+        """apply_backend with NOT_APPLICABLE must return model unchanged without warning."""
+        sel = _make_selector()
+        model = _make_model()
+        result = sel.apply_backend(model, AttentionBackend.NOT_APPLICABLE)
+        assert result is model
+
+    def test_not_applicable_blocklist_not_consulted(self):
+        """Non-transformer families must bypass the blocklist entirely."""
+        sel = _make_selector()
+        # Mamba model whose name might accidentally match "mamba" blocklist entries
+        cfg = ModelConfig(
+            model_type="mamba",
+            architecture_family=ArchitectureFamily.STATE_SPACE,
+        )
+        result = sel.select_backend(cfg)
+        assert result == AttentionBackend.NOT_APPLICABLE
