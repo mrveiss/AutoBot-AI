@@ -19,7 +19,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Tuple
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from api.schemas_code import (
@@ -80,17 +80,18 @@ from code_intelligence.security_analyzer import (
     SecuritySeverity,
     get_vulnerability_types,
 )
+from celery.result import AsyncResult
 from constants.ttl_constants import TTL_5_MINUTES
-from utils.background_task_manager import BackgroundTaskManager
+from tasks.analytics_tasks import run_security_analysis
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
+from utils.celery_task_status import celery_result_to_status, get_latest_task_result, store_latest_task_id
 
 logger = get_logger(__name__)
 
 
 router = APIRouter()
 
-# Background task manager for security score analysis (#1304)
-_sec_manager = BackgroundTaskManager(redis_prefix="sec_task:")
+_REDIS_PREFIX = "sec_task:"
 
 # Issue #380: Module-level tuple for severity ordering (used in 4 endpoints)
 _SEVERITY_ORDER = ("info", "low", "medium", "high", "critical")
@@ -1976,40 +1977,6 @@ async def get_full_evolution_report(
 # ------------------------------------------------------------------
 
 
-async def _run_security_analysis(task_id: str, path: str) -> None:
-    """Background worker for security score analysis (#1304)."""
-    try:
-        await _sec_manager.update_progress(task_id, "Initializing security analyzer", 10.0)
-        analyzer = SecurityAnalyzer(project_root=path)
-
-        await _sec_manager.update_progress(task_id, "Scanning for vulnerabilities", 30.0)
-        await asyncio.to_thread(analyzer.analyze_directory)
-
-        await _sec_manager.update_progress(task_id, "Calculating security score", 80.0)
-        summary = analyzer.get_summary()
-        score = summary["security_score"]
-
-        result = {
-            "status": "success",
-            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            "path": path,
-            "security_score": score,
-            "grade": _calculate_grade_from_score(score),
-            "risk_level": summary["risk_level"],
-            "status_message": _get_security_status_message(score),
-            "total_findings": summary["total_findings"],
-            "critical_issues": summary["critical_issues"],
-            "high_issues": summary["high_issues"],
-            "files_analyzed": summary["files_analyzed"],
-            "severity_breakdown": summary["by_severity"],
-            "owasp_breakdown": summary["by_owasp_category"],
-        }
-        await _sec_manager.complete_task(task_id, result)
-    except Exception as e:
-        logger.error("Security analysis failed: %s", e)
-        await _sec_manager.fail_task(task_id, str(e))
-
-
 @router.get("/security/score/cached", response_model=CachedSecurityScoreResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -2018,7 +1985,7 @@ async def _run_security_analysis(task_id: str, path: str) -> None:
 )
 async def get_cached_security_score():
     """Return the latest completed security score result (#1540)."""
-    cached = await _sec_manager.get_latest_result()
+    cached = await get_latest_task_result(_REDIS_PREFIX)
     if cached and cached.get("result"):
         return {
             "status": "success",
@@ -2036,32 +2003,24 @@ async def get_cached_security_score():
     error_code_prefix="CODE_INTELLIGENCE",
 )
 async def start_security_analysis(
-    background_tasks: BackgroundTasks,
     path: str = Query(..., description="Directory path to analyze"),
     admin_check: bool = Depends(check_admin_permission),
 ):
-    """Start background security score analysis (#1304).
+    """Enqueue security score analysis as a Celery task (GH#6505).
 
-    Issue #2655: Return a completed no_data task instead of 400 when the path
-    does not exist. This allows the frontend to display an informative message
-    rather than treating a missing path as a hard error.
+    Issue #2655: Return a completed no_data task when the path does not exist.
     """
     path_exists = await asyncio.to_thread(os.path.exists, path)
     if not path_exists:
         logger.warning("Security score analysis: path does not exist: %s", path)
-        task_id = await _sec_manager.create_task(params={"path": path})
-        await _sec_manager.complete_task(
-            task_id,
-            {
-                "status": "no_data",
-                "message": f"Path does not exist: {path}",
-                "security_score": 0,
-            },
-        )
-        return {"task_id": task_id, "status": "completed"}
-    task_id = await _sec_manager.create_task(params={"path": path})
-    background_tasks.add_task(_run_security_analysis, task_id, path)
-    return {"task_id": task_id, "status": "pending"}
+        return {
+            "task_id": "no_path",
+            "status": "completed",
+            "result": {"status": "no_data", "message": f"Path does not exist: {path}", "security_score": 0},
+        }
+    result = run_security_analysis.delay(path)
+    await store_latest_task_id(_REDIS_PREFIX, result.id)
+    return {"task_id": result.id, "status": "pending"}
 
 
 @router.get("/security/score/status/{task_id}", response_model=CodeIntelligenceTaskStatusResponse)
@@ -2071,11 +2030,11 @@ async def start_security_analysis(
     error_code_prefix="CODE_INTELLIGENCE",
 )
 async def get_security_score_status(task_id: str):
-    """Get security score analysis task status (#1304)."""
-    task = await _sec_manager.get_status(task_id)
-    if task is None:
+    """Get security score analysis task status."""
+    status = celery_result_to_status(AsyncResult(task_id))
+    if status is None or status["status"] == "pending":
         raise_not_found("Task", task_id)
-    return task
+    return status
 
 
 @router.post("/security/score/tasks/clear-stuck", response_model=ClearStuckResponse)
@@ -2085,17 +2044,10 @@ async def get_security_score_status(task_id: str):
     error_code_prefix="CODE_INTELLIGENCE",
 )
 async def clear_stuck_sec_tasks(
-    force: bool = Query(
-        default=False,
-        description="Force clear ALL running tasks",
-    ),
+    force: bool = Query(default=False, description="Force clear ALL running tasks"),
 ):
-    """Clear stuck security score tasks (#1304)."""
-    cleaned = await _sec_manager.clear_stuck(force=force)
-    return {
-        "cleared_count": cleaned,
-        "message": f"Cleared {cleaned} task(s)" + (" (forced)" if force else ""),
-    }
+    """No-op: Celery handles stuck-task recovery automatically (GH#6505)."""
+    return {"cleared_count": 0, "message": "Celery handles task recovery automatically"}
 
 
 # Issue #2068: Stub GET endpoints for security/performance/redis findings.

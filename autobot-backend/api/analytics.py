@@ -58,8 +58,10 @@ from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
 
 # Import root cause analyzer for causal failure analysis
+from celery.result import AsyncResult
 from services.root_cause_analyzer import RootCauseAnalyzer
-from utils.background_task_manager import BackgroundTaskManager
+from tasks.analytics_tasks import run_dashboard_analysis
+from utils.celery_task_status import celery_result_to_status, store_latest_task_id
 
 # Import existing monitoring infrastructure (extracted to monitoring_hardware.py - Issue #213)
 from .monitoring_hardware import hardware_monitor
@@ -70,8 +72,7 @@ router = APIRouter(tags=["analytics"])
 # Module-level root cause analyzer instance (lazy initialized)
 _root_cause_analyzer = RootCauseAnalyzer()
 
-# Background task manager for dashboard overview (#1304)
-_dash_manager = BackgroundTaskManager(redis_prefix="dash_task:")
+_REDIS_PREFIX = "dash_task:"
 
 # Module-level constants for O(1) lookups (Issue #326)
 ANALYTICS_REDIS_DATABASES = {
