@@ -601,6 +601,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["collaboration", "websocket", "presence"],
         "presence_ws",
     ),
+    # GH#8251: LLC (Lean Lifecycle Controller) module skeleton
+    ("llc.api", "", ["llc"], "llc"),
 ]
 
 

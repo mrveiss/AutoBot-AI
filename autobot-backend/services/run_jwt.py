@@ -67,7 +67,7 @@ from autobot_shared.auth.jwt_core import (
 from autobot_shared.fire_and_forget import run_redis_write
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from services.audit.audit_log import AuditAction, audit_record
+from services.audit.unified_audit import AuditAction, audit_record  # GH#8290 Phase 2
 
 
 class JWTRefreshConflictError(Exception):

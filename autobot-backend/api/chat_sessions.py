@@ -51,7 +51,7 @@ from exceptions import get_exceptions_lazy
 from security.session_ownership import validate_session_ownership
 
 # Issue #6559: Wire audit_record into session create/delete/export endpoints
-from services.audit import AuditAction, audit_record
+from services.audit.unified_audit import AuditAction, audit_record  # GH#8290 Phase 2
 from type_defs.common import Metadata
 
 # Import reusable chat utilities
