@@ -19,7 +19,7 @@ import yaml
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.threshold_constants import TimingConstants
-from event_manager import get_event_manager
+from events.bus import publish_event, PersistStrategy
 from models.npu_models import (
     LoadBalancingConfig,
     NPUWorkerConfig,
@@ -397,7 +397,7 @@ class NPUWorkerManager(AsyncInitializable):
             if event_type in _WORKER_FULL_DATA_EVENTS:
                 event_data["worker"] = worker_details.to_event_dict()
 
-            await get_event_manager().publish(f"npu.{event_type}", event_data)
+            await publish_event("global", f"npu.{event_type}", event_data, persist=PersistStrategy.NONE)
             logger.debug(f"Emitted event {event_type} for worker {worker_details.config.id}")
 
         except Exception as e:
@@ -576,13 +576,13 @@ class NPUWorkerManager(AsyncInitializable):
         await self._save_workers_to_config()
 
         # Emit worker removed event
-        await get_event_manager().publish(
+        await publish_event("global", 
             "npu.worker.removed",
             {
                 "event": "worker.removed",
                 "worker_id": worker_id,
                 "data": {"timestamp": utc_timestamp()},
-            },
+            }, persist=PersistStrategy.NONE
         )
 
     async def test_worker_connection(self, worker_config: NPUWorkerConfig) -> WorkerTestResult:

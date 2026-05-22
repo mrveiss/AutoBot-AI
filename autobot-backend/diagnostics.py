@@ -28,7 +28,7 @@ try:
         RetryConfig,
         TimingConstants,
     )
-    from event_manager import get_event_manager
+    from events.bus import publish_event, PersistStrategy
 except ImportError as e:
     logging.warning(f"Import error in diagnostics: {e}")
 
@@ -133,7 +133,7 @@ class PerformanceOptimizedDiagnostics:
     async def _publish_permission_request(self, task_id: str, report: Dict[str, Any], attempt: int) -> asyncio.Future:
         """Publish permission request and return future (Issue #315 - extracted helper)."""
         permission_future = asyncio.Future()
-        await get_event_manager().publish(
+        await publish_event("global", 
             "log_message",
             {
                 "task_id": task_id,
@@ -145,7 +145,7 @@ class PerformanceOptimizedDiagnostics:
                 "attempt": attempt + 1,
                 "max_attempts": self.permission_retry_attempts,
                 "timeout_seconds": self.max_user_permission_timeout,
-            },
+            }, persist=PersistStrategy.NONE
         )
         logger.info(
             "Permission request sent for task %s (attempt %d/%d)",
@@ -166,7 +166,7 @@ class PerformanceOptimizedDiagnostics:
         )
 
         if attempt < self.permission_retry_attempts - 1:
-            await get_event_manager().publish(
+            await publish_event("global", 
                 "log_message",
                 {
                     "level": "WARNING",
@@ -174,7 +174,7 @@ class PerformanceOptimizedDiagnostics:
                         f"Permission request timeout (attempt {attempt + 1}). Retrying... "
                         f"({self.permission_retry_attempts - attempt - 1} attempts remaining)"
                     ),
-                },
+                }, persist=PersistStrategy.NONE
             )
             await asyncio.sleep(RetryConfig.BACKOFF_BASE)
             return True  # Should retry
@@ -224,7 +224,7 @@ class PerformanceOptimizedDiagnostics:
 
     async def _handle_permission_timeout_fallback(self, task_id: str, elapsed_time: float):
         """Handle user permission timeout with intelligent fallback"""
-        await get_event_manager().publish(
+        await publish_event("global", 
             "log_message",
             {
                 "level": "WARNING",
@@ -233,7 +233,7 @@ class PerformanceOptimizedDiagnostics:
                     f"timed out after {elapsed_time:.2f}s. Using safe fallback (no fixes applied). "
                     f"This prevents system hangs. Previous timeout was 600s (10 minutes)."
                 ),
-            },
+            }, persist=PersistStrategy.NONE
         )
 
         # Log performance improvement

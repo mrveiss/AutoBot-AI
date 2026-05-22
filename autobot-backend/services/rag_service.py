@@ -22,7 +22,7 @@ from constants.ttl_constants import TTL_30_DAYS
 from events.event_types import RAG_RETRIEVAL
 from knowledge.search_components.query_classifier import get_query_classifier
 from knowledge.search_components.retrieval_learner import GLOBAL_USER, get_retrieval_learner
-from live_event_manager import publish_live_event
+from events.bus import publish_event
 from services.context_sufficiency import (
     SufficiencyVerdict,
     get_context_sufficiency_evaluator,
@@ -521,7 +521,7 @@ class RAGService:
             "timestamp": time.time(),
         }
         try:
-            await publish_live_event("global", RAG_RETRIEVAL, payload)
+            await publish_event("global", RAG_RETRIEVAL, payload)
         except Exception as exc:
             logger.debug("Live event publish failed (non-fatal): %s", exc)
 

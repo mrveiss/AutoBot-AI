@@ -15,7 +15,7 @@ from agents.interactive_terminal_agent import InteractiveTerminalAgent
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants
-from event_manager import get_event_manager
+from events.bus import publish_event, PersistStrategy
 from security.command_patterns import (
     SENSITIVE_REDIRECT_PATHS,
     UNRESTRICTED_ROOT_COMMANDS,
@@ -370,7 +370,7 @@ class SystemCommandAgent(StandardizedAgent):
         elif result:
             event_data["exit_code"] = result["exit_code"]
             event_data["duration"] = result["duration"]
-        await get_event_manager().publish("command_execution", event_data)
+        await publish_event("global", "command_execution", event_data, persist=PersistStrategy.NONE)
 
     def _build_execution_result(self, result: dict) -> Dict[str, Any]:
         """Build execution result dict (Issue #398: extracted)."""
@@ -458,14 +458,14 @@ class SystemCommandAgent(StandardizedAgent):
 
     async def _request_user_confirmation(self, command: str, chat_id: str) -> bool:
         """Request user confirmation for dangerous commands"""
-        await get_event_manager().publish(
+        await publish_event("global", 
             "command_confirmation",
             {
                 "chat_id": chat_id,
                 "command": command,
                 "warning": "⚠️ This command may be dangerous. Please confirm execution.",
                 "requires_confirmation": True,
-            },
+            }, persist=PersistStrategy.NONE
         )
 
         # Wait for user response (this would be handled by the frontend)

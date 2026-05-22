@@ -185,18 +185,20 @@ def _try_publish(event_type: str, payload: dict) -> None:
     """Fire-and-forget publish to the global EventManager.
 
     Wraps the publish call in create_task so it never blocks the caller.
-    Silently skips if the event manager is unavailable (e.g. in unit tests).
+    Silently skips if the event bus is unavailable (e.g. in unit tests).
 
     Args:
         event_type: Dot-namespaced event type string (e.g. "agent.tool.call").
         payload:    Dict payload that will be broadcast to WebSocket clients.
     """
     try:
-        from event_manager import get_event_manager
+        from events.bus import PersistStrategy, get_event_bus
 
         try:
             loop = asyncio.get_running_loop()
-            task = loop.create_task(get_event_manager().publish(event_type, payload))
+            task = loop.create_task(
+                get_event_bus().publish("global", event_type, payload, persist=PersistStrategy.NONE)
+            )
             task.add_done_callback(
                 lambda t: (
                     logger.debug("cot_events: publish error: %s", t.exception())
@@ -207,8 +209,6 @@ def _try_publish(event_type: str, payload: dict) -> None:
         except RuntimeError:
             # No running loop — caller is in a sync context; skip silently.
             logger.debug("cot_events: no running event loop, skipping %s", event_type)
-    except ImportError:
-        logger.debug("cot_events: event_manager not available, skipping %s", event_type)
     except Exception as exc:
         logger.debug("cot_events: publish failed for %s: %s", event_type, exc)
 
