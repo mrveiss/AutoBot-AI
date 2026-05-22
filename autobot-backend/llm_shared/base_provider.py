@@ -18,6 +18,7 @@ from typing import Any, AsyncIterator, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
+from .cross_worker_rate_limiter import get_llm_rate_limiter
 from .models import LLMRequest, LLMResponse
 from .observability import registry as obs_registry
 
@@ -59,29 +60,36 @@ class BaseProvider(ABC):
         """
         Execute a chat completion and return a fully populated LLMResponse.
 
-        Wraps ``_chat_completion_impl`` with observer fan-out (GH#6593).
+        Wraps ``_chat_completion_impl`` with:
+        - Issue #8170: cross-worker Redis rate limiter (proactive token acquire)
+        - Observer fan-out (GH#6593)
+
         Errors are returned via ``LLMResponse.error`` so the registry can
         perform fallback — implementations must not raise.
         """
-        start = time.monotonic()
-        try:
-            response = await self._chat_completion_impl(request)
-            latency_ms = (time.monotonic() - start) * 1000
+        # Issue #8170: acquire a rate-limit token shared across all uvicorn
+        # workers via Redis.  Falls back to allow-all when Redis unavailable.
+        provider_key = self.provider_name or "default"
+        async with get_llm_rate_limiter().acquire(provider_key):
+            start = time.monotonic()
             try:
-                asyncio.get_running_loop().create_task(
-                    obs_registry.notify_response(response, latency_ms, 0.0)
-                )
-            except RuntimeError:
-                pass
-            return response
-        except Exception as exc:
-            try:
-                asyncio.get_running_loop().create_task(
-                    obs_registry.notify_error(exc, request)
-                )
-            except RuntimeError:
-                pass
-            raise
+                response = await self._chat_completion_impl(request)
+                latency_ms = (time.monotonic() - start) * 1000
+                try:
+                    asyncio.get_running_loop().create_task(
+                        obs_registry.notify_response(response, latency_ms, 0.0)
+                    )
+                except RuntimeError:
+                    pass
+                return response
+            except Exception as exc:
+                try:
+                    asyncio.get_running_loop().create_task(
+                        obs_registry.notify_error(exc, request)
+                    )
+                except RuntimeError:
+                    pass
+                raise
 
     @abstractmethod
     async def _chat_completion_impl(self, request: LLMRequest) -> LLMResponse:
