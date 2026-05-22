@@ -14,6 +14,7 @@ Packages:
 - file_server — FileServerConnector (NFS/SMB/local mounts)
 - web_crawler — WebCrawlerConnector (Playwright-based)
 - database   — DatabaseConnector (SQLAlchemy)
+- external_adapter — ExternalConnectorAdapter (subprocess/stdout JSON protocol)
 - scheduler  — ConnectorScheduler (asyncio task-based)
 
 Example usage::
@@ -37,6 +38,7 @@ Example usage::
 
 # Trigger registration of built-in connector types
 import knowledge.connectors.database  # noqa: F401
+import knowledge.connectors.external_adapter  # noqa: F401
 import knowledge.connectors.file_server  # noqa: F401
 import knowledge.connectors.notion  # noqa: F401
 import knowledge.connectors.web_crawler  # noqa: F401
