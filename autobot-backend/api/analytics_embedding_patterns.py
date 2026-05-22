@@ -26,7 +26,13 @@ from typing import Any, Dict
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
-from api.schemas_analytics import EmbeddingStatsResponse, EmbeddingUsageRequest
+from api.schemas_analytics import (
+    AnalyticsEmbeddingModelComparisonResponse,
+    AnalyticsEmbeddingOptimizationResponse,
+    AnalyticsEmbeddingRecordResponse,
+    EmbeddingStatsResponse,
+    EmbeddingUsageRequest,
+)
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.logging_manager import get_logger
@@ -454,7 +460,7 @@ def get_embedding_analyzer() -> EmbeddingPatternAnalyzer:
 # =============================================================================
 
 
-@router.post("/record", response_model=DataResponse)
+@router.post("/record", response_model=DataResponse[AnalyticsEmbeddingRecordResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="record_embedding_usage",
@@ -507,7 +513,7 @@ async def get_embedding_stats(
     )
 
 
-@router.get("/model-comparison", response_model=DataResponse)
+@router.get("/model-comparison", response_model=DataResponse[AnalyticsEmbeddingModelComparisonResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_model_comparison",
@@ -532,7 +538,7 @@ async def get_model_comparison(
     )
 
 
-@router.get("/optimization-recommendations", response_model=DataResponse)
+@router.get("/optimization-recommendations", response_model=DataResponse[AnalyticsEmbeddingOptimizationResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_optimization_recommendations",

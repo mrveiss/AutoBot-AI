@@ -3303,3 +3303,255 @@ class PredictionResult(BaseModel):
     risk_distribution: Dict[str, int] = Field(default_factory=dict)
     files: List[FileRisk] = Field(default_factory=list)
     top_risk_factors: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# analytics_evolution.py schemas (GH #6509 Batch D)
+# ---------------------------------------------------------------------------
+
+
+class AnalyticsEvolutionTimelineResponse(BaseModel):
+    """Response for GET /timeline."""
+
+    timeline: List[Dict[str, Any]] = Field(default_factory=list)
+    total_snapshots: int = 0
+    date_range: Dict[str, Any] = Field(default_factory=dict)
+    granularity: str = "daily"
+    metrics_available: List[str] = Field(default_factory=list)
+
+
+class AnalyticsEvolutionPatternsResponse(BaseModel):
+    """Response for GET /patterns."""
+
+    status: str
+    patterns: Dict[str, Any] = Field(default_factory=dict)
+    pattern_types: List[str] = Field(default_factory=list)
+    date_range: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AnalyticsEvolutionTrendsResponse(BaseModel):
+    """Response for GET /trends."""
+
+    status: str
+    trends: Dict[str, Any] = Field(default_factory=dict)
+    period_days: int = 30
+    snapshot_count: int = 0
+    analysis_timestamp: str = ""
+
+
+class AnalyticsEvolutionSnapshotResponse(BaseModel):
+    """Response for POST /snapshot."""
+
+    status: str
+    message: str = ""
+    snapshot: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AnalyticsEvolutionPatternSnapshotResponse(BaseModel):
+    """Response for POST /pattern-snapshot."""
+
+    status: str
+    message: str = ""
+    snapshot: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AnalyticsEvolutionExportResponse(BaseModel):
+    """Response for GET /export (JSON format path)."""
+
+    status: str
+    export_format: str = "json"
+    data: List[Dict[str, Any]] = Field(default_factory=list)
+    record_count: int = 0
+    exported_at: str = ""
+
+
+class AnalyticsEvolutionSummaryResponse(BaseModel):
+    """Response for GET /summary."""
+
+    total_snapshots: int = 0
+    date_range: Dict[str, Any] = Field(default_factory=dict)
+    latest_scores: Dict[str, Any] = Field(default_factory=dict)
+    trend_direction: str = "unknown"
+    pattern_counts: Dict[str, Any] = Field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# analytics_debt.py schemas (GH #6509 Batch D)
+# ---------------------------------------------------------------------------
+
+
+class AnalyticsDebtCalculateResponse(BaseModel):
+    """Response for POST /calculate."""
+
+    status: str
+    data: Dict[str, Any] = Field(default_factory=dict)
+    target_path: str | None = None
+
+
+class AnalyticsDebtSummaryResponse(BaseModel):
+    """Response for GET /summary."""
+
+    status: str
+    summary: Dict[str, Any] = Field(default_factory=dict)
+    top_files: List[Dict[str, Any]] = Field(default_factory=list)
+    roi_ranking: List[Dict[str, Any]] = Field(default_factory=list)
+    timestamp: str | None = None
+
+
+class AnalyticsDebtByCategoryResponse(BaseModel):
+    """Response for GET /by-category/{category}."""
+
+    status: str
+    category: str = ""
+    items: List[Dict[str, Any]] = Field(default_factory=list)
+    count: int = 0
+
+
+class AnalyticsDebtTrendsResponse(BaseModel):
+    """Response for GET /trends."""
+
+    status: str
+    trends: List[Dict[str, Any]] = Field(default_factory=list)
+    data_points: int = 0
+    change: Dict[str, Any] = Field(default_factory=dict)
+    direction: str = "unknown"
+
+
+class AnalyticsDebtROIPrioritiesResponse(BaseModel):
+    """Response for GET /roi-priorities."""
+
+    status: str
+    priorities: List[Dict[str, Any]] = Field(default_factory=list)
+    total_available: int = 0
+
+
+class AnalyticsDebtReportResponse(BaseModel):
+    """Response for GET /report."""
+
+    status: str
+    format: str = "json"
+    data: Dict[str, Any] | None = None
+    report: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# bi_export_endpoints.py schemas (GH #6509 Batch D)
+# ---------------------------------------------------------------------------
+
+
+class SavedReportDeleteResponse(BaseModel):
+    """Response for DELETE /reports/saved/{report_id}."""
+
+    report_id: str
+    deleted: bool
+
+
+class SavedReportRunResponse(BaseModel):
+    """Response for POST /reports/saved/{report_id}/run."""
+
+    status: str = ""
+    report_id: str = ""
+    data: Dict[str, Any] = Field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# analytics_cfg.py schemas (GH #6509 Batch D)
+# ---------------------------------------------------------------------------
+
+
+class AnalyticsCFGAnalyzeResponse(BaseModel):
+    """Response for POST /analyze."""
+
+    success: bool
+    graphs: List[Dict[str, Any]] = Field(default_factory=list)
+    summary: Dict[str, Any] = Field(default_factory=dict)
+    issues: List[Dict[str, Any]] = Field(default_factory=list)
+    analysis_time_ms: float = 0.0
+
+
+class AnalyticsCFGComplexityResponse(BaseModel):
+    """Response for POST /complexity."""
+
+    success: bool
+    metrics: List[Dict[str, Any]] = Field(default_factory=list)
+    summary: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AnalyticsCFGUnreachableResponse(BaseModel):
+    """Response for POST /unreachable."""
+
+    success: bool
+    unreachable_code: List[Dict[str, Any]] = Field(default_factory=list)
+    count: int = 0
+
+
+class AnalyticsCFGInfiniteLoopsResponse(BaseModel):
+    """Response for POST /infinite-loops."""
+
+    success: bool
+    loop_issues: List[Dict[str, Any]] = Field(default_factory=list)
+    definite_infinite: int = 0
+    potential_infinite: int = 0
+
+
+# ---------------------------------------------------------------------------
+# analytics_reporting.py schemas (GH #6509 Batch D)
+# ---------------------------------------------------------------------------
+
+
+class AnalyticsReportingReportResponse(BaseModel):
+    """Response for GET /report."""
+
+    status: str
+    generated_at: str = ""
+    summary: Dict[str, Any] = Field(default_factory=dict)
+    quality: Dict[str, Any] = Field(default_factory=dict)
+    categories: Dict[str, Any] = Field(default_factory=dict)
+    top_files: List[Any] = Field(default_factory=list)
+    technical_debt: Dict[str, Any] = Field(default_factory=dict)
+    performance: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AnalyticsReportingSummaryResponse(BaseModel):
+    """Response for GET /summary."""
+
+    health_score: float = 0.0
+    grade: str = "N/A"
+    total_issues: int = 0
+    high_priority: int = 0
+    timestamp: str = ""
+
+
+class AnalyticsReportingTrendsResponse(BaseModel):
+    """Response for GET /trends."""
+
+    status: str
+    message: str = ""
+    data: List[Any] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# analytics_embedding_patterns.py schemas (GH #6509 Batch D)
+# ---------------------------------------------------------------------------
+
+
+class AnalyticsEmbeddingRecordResponse(BaseModel):
+    """Response for POST /record."""
+
+    status: str = ""
+    message: str | None = None
+    data: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AnalyticsEmbeddingModelComparisonResponse(BaseModel):
+    """Response for GET /model-comparison."""
+
+    status: str = ""
+    data: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AnalyticsEmbeddingOptimizationResponse(BaseModel):
+    """Response for GET /optimization-recommendations."""
+
+    status: str = ""
+    data: Dict[str, Any] = Field(default_factory=dict)

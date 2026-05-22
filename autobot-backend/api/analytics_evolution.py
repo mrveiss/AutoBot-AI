@@ -23,6 +23,13 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
 from api.schemas_analytics import (
+    AnalyticsEvolutionExportResponse,
+    AnalyticsEvolutionPatternSnapshotResponse,
+    AnalyticsEvolutionPatternsResponse,
+    AnalyticsEvolutionSnapshotResponse,
+    AnalyticsEvolutionSummaryResponse,
+    AnalyticsEvolutionTimelineResponse,
+    AnalyticsEvolutionTrendsResponse,
     DateRangeParams,
     EvolutionAnalysisRequest,
     EvolutionAnalysisResponse,
@@ -315,7 +322,7 @@ def _build_timeline_response(timeline: list, start_date: str, end_date: str, gra
     }
 
 
-@router.get("/timeline", response_model=DataResponse)
+@router.get("/timeline", response_model=DataResponse[AnalyticsEvolutionTimelineResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_evolution_timeline",
@@ -388,7 +395,7 @@ async def get_evolution_timeline(
         )
 
 
-@router.get("/patterns", response_model=DataResponse)
+@router.get("/patterns", response_model=DataResponse[AnalyticsEvolutionPatternsResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pattern_evolution",
@@ -544,7 +551,7 @@ def _build_trends_success_response(trends: dict, days: int, snapshot_count: int)
     }
 
 
-@router.get("/trends", response_model=DataResponse)
+@router.get("/trends", response_model=DataResponse[AnalyticsEvolutionTrendsResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_quality_trends",
@@ -611,7 +618,7 @@ async def get_quality_trends(
         )
 
 
-@router.post("/snapshot", response_model=DataResponse)
+@router.post("/snapshot", response_model=DataResponse[AnalyticsEvolutionSnapshotResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="record_quality_snapshot",
@@ -648,7 +655,7 @@ async def record_quality_snapshot(
         )
 
 
-@router.post("/pattern-snapshot", response_model=DataResponse)
+@router.post("/pattern-snapshot", response_model=DataResponse[AnalyticsEvolutionPatternSnapshotResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="record_pattern_snapshot",
@@ -752,7 +759,7 @@ def _generate_json_export_response(timeline_data: list) -> JSONResponse:
     )
 
 
-@router.get("/export", response_model=DataResponse)
+@router.get("/export", response_model=DataResponse[AnalyticsEvolutionExportResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_evolution_data",
@@ -809,7 +816,7 @@ async def export_evolution_data(
         )
 
 
-@router.get("/summary", response_model=DataResponse)
+@router.get("/summary", response_model=DataResponse[AnalyticsEvolutionSummaryResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_evolution_summary",

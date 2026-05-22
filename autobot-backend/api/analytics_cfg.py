@@ -30,6 +30,10 @@ from api.schemas_analytics import (
     IssueSeverity,
     IssueType,
     NodeType,
+    AnalyticsCFGAnalyzeResponse,
+    AnalyticsCFGComplexityResponse,
+    AnalyticsCFGInfiniteLoopsResponse,
+    AnalyticsCFGUnreachableResponse,
 )
 from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
@@ -1039,7 +1043,7 @@ def _calculate_cfg_summary(graphs: List[ControlFlowGraph], all_issues: List[Dict
     }
 
 
-@router.post("/analyze", response_model=DataResponse)
+@router.post("/analyze", response_model=DataResponse[AnalyticsCFGAnalyzeResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_control_flow",
@@ -1199,7 +1203,7 @@ async def export_cfg_dot(
     )
 
 
-@router.post("/complexity", response_model=DataResponse)
+@router.post("/complexity", response_model=DataResponse[AnalyticsCFGComplexityResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_complexity_metrics",
@@ -1250,7 +1254,7 @@ async def get_complexity_metrics(
     )
 
 
-@router.post("/unreachable", response_model=DataResponse)
+@router.post("/unreachable", response_model=DataResponse[AnalyticsCFGUnreachableResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_unreachable_code",
@@ -1286,7 +1290,7 @@ async def detect_unreachable_code(
     )
 
 
-@router.post("/infinite-loops", response_model=DataResponse)
+@router.post("/infinite-loops", response_model=DataResponse[AnalyticsCFGInfiniteLoopsResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_infinite_loops",

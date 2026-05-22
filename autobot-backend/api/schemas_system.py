@@ -3512,3 +3512,88 @@ class OnboardingStatus(BaseModel):
 
     preset_applied: bool
     preset_name: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# project_state.py schemas (GH #6509 Batch D)
+# ---------------------------------------------------------------------------
+
+
+class ProjectStateValidateResponse(BaseModel):
+    """Response for POST /validate."""
+
+    success: bool
+    message: str = ""
+    results: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ProjectStateReportResponse(BaseModel):
+    """Response for GET /report."""
+
+    success: bool
+    report: str = ""
+    generated_at: str | None = None
+
+
+class ProjectStatePhasesResponse(BaseModel):
+    """Response for GET /phases."""
+
+    success: bool
+    current_phase: str = ""
+    phases: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ProjectStateActivatePhaseResponse(BaseModel):
+    """Response for POST /phase/{phase_id}/activate."""
+
+    success: bool
+    message: str = ""
+    current_phase: str = ""
+
+
+class ProjectStateAutoProgressResponse(BaseModel):
+    """Response for POST /auto-progress."""
+
+    success: bool
+    message: str = ""
+    progression_result: Any = None
+
+
+# ---------------------------------------------------------------------------
+# gpu_monitoring.py schemas (GH #6509 Batch D)
+# ---------------------------------------------------------------------------
+
+
+class GPUEfficiencyResponse(BaseModel):
+    """Response for GET /efficiency."""
+
+    success: bool
+    efficiency: Dict[str, Any] = Field(default_factory=dict)
+
+
+class GPUCapabilitiesResponse(BaseModel):
+    """Response for GET /capabilities."""
+
+    success: bool
+    capabilities: Dict[str, Any] = Field(default_factory=dict)
+
+
+class GPUBenchmarkResponse(BaseModel):
+    """Response for POST /benchmark."""
+
+    success: bool
+    benchmark: Dict[str, Any] = Field(default_factory=dict)
+
+
+class GPUOptimizeResponse(BaseModel):
+    """Response for POST /optimize."""
+
+    success: bool
+    optimization: Dict[str, Any] = Field(default_factory=dict)
+
+
+class GPUConfigUpdateResponse(BaseModel):
+    """Response for PATCH /config."""
+
+    success: bool
+    updated_keys: List[str] = Field(default_factory=list)

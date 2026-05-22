@@ -23,7 +23,15 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 
-from api.schemas_analytics import DebtCalculationRequest
+from api.schemas_analytics import (
+    AnalyticsDebtByCategoryResponse,
+    AnalyticsDebtCalculateResponse,
+    AnalyticsDebtReportResponse,
+    AnalyticsDebtROIPrioritiesResponse,
+    AnalyticsDebtSummaryResponse,
+    AnalyticsDebtTrendsResponse,
+    DebtCalculationRequest,
+)
 from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -463,7 +471,7 @@ def _get_latest_debt_data() -> Dict[str, Any] | None:
         return None
 
 
-@router.post("/calculate", response_model=DataResponse)
+@router.post("/calculate", response_model=DataResponse[AnalyticsDebtCalculateResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="calculate_technical_debt",
@@ -510,7 +518,7 @@ async def calculate_technical_debt(
         )
 
 
-@router.get("/summary", response_model=DataResponse)
+@router.get("/summary", response_model=DataResponse[AnalyticsDebtSummaryResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_debt_summary",
@@ -540,7 +548,7 @@ async def get_debt_summary(admin_check: bool = Depends(check_admin_permission)):
     return JSONResponse(_no_data_response("No debt analysis found. Run POST /calculate first."))
 
 
-@router.get("/by-category/{category}", response_model=DataResponse)
+@router.get("/by-category/{category}", response_model=DataResponse[AnalyticsDebtByCategoryResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_debt_by_category",
@@ -630,7 +638,7 @@ def _calculate_trend_change(trend_data: List[Dict[str, Any]]) -> tuple:
     return change, direction
 
 
-@router.get("/trends", response_model=DataResponse)
+@router.get("/trends", response_model=DataResponse[AnalyticsDebtTrendsResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_debt_trends",
@@ -662,7 +670,7 @@ async def get_debt_trends(
     )
 
 
-@router.get("/roi-priorities", response_model=DataResponse)
+@router.get("/roi-priorities", response_model=DataResponse[AnalyticsDebtROIPrioritiesResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_roi_priorities",
@@ -768,7 +776,7 @@ def _generate_markdown_report(debt_data: dict) -> str:
     return _build_debt_executive_summary(debt_data) + _build_debt_tables(debt_data) + _build_debt_recommendations()
 
 
-@router.get("/report", response_model=DataResponse)
+@router.get("/report", response_model=DataResponse[AnalyticsDebtReportResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_debt_report",

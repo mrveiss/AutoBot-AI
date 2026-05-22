@@ -2542,3 +2542,70 @@ class TemplateValidationRequest(BaseModel):
 
     template_id: str
     variables: Dict[str, str]
+
+
+# ---------------------------------------------------------------------------
+# merge_conflict_resolution.py schemas (GH #6509 Batch D)
+# ---------------------------------------------------------------------------
+
+
+class MergeConflictAnalyzeResponse(BaseModel):
+    """Response for POST /analyze."""
+
+    status: str
+    file_path: str = ""
+    conflict_count: int = 0
+    conflicts: List[Dict[str, Any]] = Field(default_factory=list)
+    severity_distribution: Dict[str, int] = Field(default_factory=dict)
+    timestamp: str = ""
+
+
+class MergeConflictResolveResponse(BaseModel):
+    """Response for POST /resolve."""
+
+    status: str
+    message: str = ""
+    file_path: str = ""
+    resolved_count: int = 0
+    results: List[Dict[str, Any]] = Field(default_factory=list)
+    timestamp: str = ""
+
+
+class MergeConflictRepositoryAnalyzeResponse(BaseModel):
+    """Response for POST /analyze-repository."""
+
+    status: str
+    repository: str = ""
+    total_files_with_conflicts: int = 0
+    total_conflicts: int = 0
+    files: List[Dict[str, Any]] = Field(default_factory=list)
+    timestamp: str = ""
+
+
+class MergeConflictApplyResponse(BaseModel):
+    """Response for POST /apply."""
+
+    status: str
+    message: str = ""
+    file_path: str = ""
+    backup_path: str | None = None
+    timestamp: str = ""
+
+
+class MergeConflictStrategiesResponse(BaseModel):
+    """Response for GET /strategies."""
+
+    status: str
+    strategies: Dict[str, Any] = Field(default_factory=dict)
+    default_strategy: str = "semantic_merge"
+    timestamp: str = ""
+
+
+class MergeConflictCheckResponse(BaseModel):
+    """Response for GET /check."""
+
+    status: str
+    file_path: str = ""
+    has_conflicts: bool = False
+    conflict_count: int = 0
+    timestamp: str = ""

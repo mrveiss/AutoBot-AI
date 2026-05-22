@@ -1926,3 +1926,180 @@ class ConversationImportRequest(BaseModel):
         default="skip",
         description=("Conflict resolution strategy when session_id already exists. " "One of: skip, replace, rename."),
     )
+
+
+# ---------------------------------------------------------------------------
+# enterprise_features.py schemas (GH #6509 Batch D)
+# ---------------------------------------------------------------------------
+
+
+class EnterpriseStatusResponse(BaseModel):
+    """Response for GET /status."""
+
+    status: str
+    enterprise_status: Dict[str, Any] = Field(default_factory=dict)
+    message: str = ""
+
+
+class EnterpriseFeatureEnableResponse(BaseModel):
+    """Response for POST /features/enable."""
+
+    status: str
+    feature: str = ""
+    result: Dict[str, Any] = Field(default_factory=dict)
+    message: str = ""
+
+
+class EnterpriseFeatureEnableAllResponse(BaseModel):
+    """Response for POST /features/enable-all."""
+
+    status: str
+    enabled_features: List[str] = Field(default_factory=list)
+    failed_features: List[Any] = Field(default_factory=list)
+    total_features: int = 0
+    success_rate: float = 0.0
+    message: str = ""
+
+
+class EnterpriseFeatureListResponse(BaseModel):
+    """Response for GET /features."""
+
+    status: str
+    features: List[Dict[str, Any]] = Field(default_factory=list)
+    total_features: int = 0
+    categories: List[str] = Field(default_factory=list)
+    statuses: List[str] = Field(default_factory=list)
+
+
+class EnterpriseBulkEnableResponse(BaseModel):
+    """Response for POST /features/bulk-enable."""
+
+    status: str
+    results: Dict[str, Any] = Field(default_factory=dict)
+    summary: str = ""
+
+
+class EnterprisePerformanceOptimizeResponse(BaseModel):
+    """Response for POST /performance/optimize."""
+
+    status: str
+    optimization: Dict[str, Any] = Field(default_factory=dict)
+    message: str = ""
+
+
+class EnterpriseInfrastructureResponse(BaseModel):
+    """Response for GET /infrastructure."""
+
+    status: str
+    infrastructure: Dict[str, Any] = Field(default_factory=dict)
+    message: str = ""
+
+
+class EnterpriseDeploymentResponse(BaseModel):
+    """Response for POST /deployment/zero-downtime."""
+
+    status: str
+    deployment: Dict[str, Any] = Field(default_factory=dict)
+    message: str = ""
+
+
+class EnterprisePhase4ValidationResponse(BaseModel):
+    """Response for GET /phase4/validation."""
+
+    status: str
+    validation: Dict[str, Any] = Field(default_factory=dict)
+    message: str = ""
+
+
+# ---------------------------------------------------------------------------
+# agent_config.py schemas (GH #6509 Batch D)
+# ---------------------------------------------------------------------------
+
+
+class AgentConfigListAgentsResponse(BaseModel):
+    """Response for GET /agents."""
+
+    agents: List[Dict[str, Any]] = Field(default_factory=list)
+    total_count: int = 0
+    global_provider_type: str = ""
+    timestamp: str = ""
+
+
+class AgentConfigAllAgentsResponse(BaseModel):
+    """Response for GET /agents/all."""
+
+    agents: List[Dict[str, Any]] = Field(default_factory=list)
+    specialized_agents: List[Dict[str, Any]] = Field(default_factory=list)
+    summary: Dict[str, Any] = Field(default_factory=dict)
+    timestamp: str = ""
+
+
+class AgentConfigSpecializedListResponse(BaseModel):
+    """Response for GET /agents/specialized."""
+
+    agents: List[Dict[str, Any]] = Field(default_factory=list)
+    total_count: int = 0
+    categories: Dict[str, Any] = Field(default_factory=dict)
+    timestamp: str = ""
+
+
+class AgentConfigSpecializedDetailResponse(BaseModel):
+    """Response for GET /agents/specialized/{agent_id}."""
+
+    id: str = ""
+    name: str = ""
+    description: str = ""
+    tools: List[str] = Field(default_factory=list)
+    model: str | None = None
+    category: str | None = None
+
+
+class AgentConfigUsageResponse(BaseModel):
+    """Response for GET /agents/usage."""
+
+    agents: List[Dict[str, Any]] = Field(default_factory=list)
+    daily_trend: List[Dict[str, Any]] = Field(default_factory=list)
+    total_tasks: int = 0
+    timestamp: str = ""
+
+
+# ---------------------------------------------------------------------------
+# adapters.py schemas (GH #6509 Batch D)
+# ---------------------------------------------------------------------------
+
+
+class AdapterListResponse(BaseModel):
+    """Response for GET /."""
+
+    adapters: List[Any] = Field(default_factory=list)
+    total: int = 0
+
+
+class AdapterTestResponse(BaseModel):
+    """Response for GET /{adapter_type}/test."""
+
+    adapter_type: str = ""
+    status: str = ""
+    details: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AdapterModelsResponse(BaseModel):
+    """Response for GET /{adapter_type}/models."""
+
+    adapter_type: str
+    models: List[Any] = Field(default_factory=list)
+    total: int = 0
+
+
+class AdapterOverrideSetResponse(BaseModel):
+    """Response for POST /agent/{agent_id}/override."""
+
+    agent_id: str
+    adapter_type: str
+
+
+class AdapterOverrideClearResponse(BaseModel):
+    """Response for DELETE /agent/{agent_id}/override."""
+
+    agent_id: str
+    cleared: bool

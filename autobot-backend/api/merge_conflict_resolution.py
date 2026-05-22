@@ -26,6 +26,14 @@ from api.schemas_code import (
     ConflictResolutionRequest,
     RepositoryAnalysisRequest,
 )
+from api.schemas_code import (
+    MergeConflictAnalyzeResponse,
+    MergeConflictApplyResponse,
+    MergeConflictCheckResponse,
+    MergeConflictRepositoryAnalyzeResponse,
+    MergeConflictResolveResponse,
+    MergeConflictStrategiesResponse,
+)
 from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -189,7 +197,7 @@ def _build_no_conflicts_response(file_path: str) -> JSONResponse:
 # =============================================================================
 
 
-@router.post("/analyze", response_model=DataResponse)
+@router.post("/analyze", response_model=DataResponse[MergeConflictAnalyzeResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_conflicts",
@@ -244,7 +252,7 @@ async def analyze_conflicts(
         )
 
 
-@router.post("/resolve", response_model=DataResponse)
+@router.post("/resolve", response_model=DataResponse[MergeConflictResolveResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="resolve_conflicts",
@@ -312,7 +320,7 @@ async def resolve_conflicts(
         )
 
 
-@router.post("/analyze-repository", response_model=DataResponse)
+@router.post("/analyze-repository", response_model=DataResponse[MergeConflictRepositoryAnalyzeResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_repository_conflicts",
@@ -374,7 +382,7 @@ async def analyze_repository_conflicts(
         )
 
 
-@router.post("/apply", response_model=DataResponse)
+@router.post("/apply", response_model=DataResponse[MergeConflictApplyResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="apply_resolution",
@@ -436,7 +444,7 @@ async def apply_resolution(
         )
 
 
-@router.get("/strategies", response_model=DataResponse)
+@router.get("/strategies", response_model=DataResponse[MergeConflictStrategiesResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_resolution_strategies",
@@ -503,7 +511,7 @@ async def get_resolution_strategies(
     )
 
 
-@router.get("/check", response_model=DataResponse)
+@router.get("/check", response_model=DataResponse[MergeConflictCheckResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="check_file_conflicts",
