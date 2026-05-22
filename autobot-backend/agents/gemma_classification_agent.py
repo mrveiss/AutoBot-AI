@@ -6,7 +6,10 @@ Gemma-powered Lightweight Classification Agent
 Uses Google's Gemma 2B/3 models for ultra-fast classification tasks
 """
 
+import asyncio
+import hashlib
 import json
+import os
 from typing import Any, Dict, List
 
 import aiohttp
@@ -15,6 +18,7 @@ from agents.classification_agent import ClassificationResult
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
@@ -29,8 +33,10 @@ from .standardized_agent import StandardizedAgent
 
 logger = get_logger(__name__)
 
-
-# Using ClassificationResult from classification_agent instead of custom result type
+# Redis-backed classification result cache TTL (seconds).
+# Tunable via AUTOBOT_CLASSIFICATION_CACHE_TTL; default 5 minutes.
+_CLASSIFICATION_CACHE_TTL = int(os.environ.get("AUTOBOT_CLASSIFICATION_CACHE_TTL", "300"))
+_CLASSIFICATION_REDIS_KEY_PREFIX = "gemma_classify:"
 
 
 class GemmaClassificationAgent(StandardizedAgent):
@@ -128,6 +134,90 @@ Respond with valid JSON:
 }}"""
         )
 
+    # ------------------------------------------------------------------
+    # Deduplication cache helpers (Issue #8164)
+    # ------------------------------------------------------------------
+
+    def _classify_cache_key(self, user_message: str) -> str:
+        """Return the Redis key for a classification result cache entry."""
+        digest = hashlib.sha256(user_message.encode("utf-8")).hexdigest()[:24]
+        return f"{_CLASSIFICATION_REDIS_KEY_PREFIX}{digest}"
+
+    async def _cached_classify(self, user_message: str) -> Dict[str, Any] | None:
+        """
+        Wrapper around _gemma_classify() with Redis dedup cache.
+
+        All 4 uvicorn workers share the same Redis key, so a result computed
+        by any worker is reused by the others within the TTL window.
+        """
+        cache_key = self._classify_cache_key(user_message)
+        redis = await get_async_redis_client()
+
+        if redis:
+            try:
+                cached = await redis.get(cache_key)
+                if cached:
+                    logger.debug("Classification cache hit: key=%s...", cache_key[len(_CLASSIFICATION_REDIS_KEY_PREFIX):16])
+                    return json.loads(cached)
+            except Exception as exc:
+                logger.debug("Classification cache read failed (non-critical): %s", exc)
+
+        result = await self._gemma_classify(user_message)
+
+        if result and redis:
+            try:
+                await redis.set(cache_key, json.dumps(result), ex=_CLASSIFICATION_CACHE_TTL)
+            except Exception as exc:
+                logger.debug("Classification cache write failed (non-critical): %s", exc)
+
+        return result
+
+    async def classify_multiple(
+        self, messages: List[str], max_concurrent: int = 10
+    ) -> List[ClassificationResult]:
+        """
+        Classify a batch of messages in parallel with deduplication.
+
+        Deduplicates by content hash before fanning out so that N identical
+        messages cost only 1 LLM call.  A semaphore caps concurrent Ollama
+        requests to *max_concurrent*.
+
+        Args:
+            messages:        List of user messages to classify.
+            max_concurrent:  Maximum simultaneous LLM requests.
+
+        Returns:
+            List of ClassificationResult in the same order as *messages*.
+        """
+        if not messages:
+            return []
+
+        # Deduplicate: unique hash → first occurrence message text
+        hash_to_msg: dict[str, str] = {}
+        msg_hashes: list[str] = []
+        for msg in messages:
+            h = hashlib.sha256(msg.encode("utf-8")).hexdigest()[:24]
+            msg_hashes.append(h)
+            if h not in hash_to_msg:
+                hash_to_msg[h] = msg
+
+        sem = asyncio.Semaphore(max_concurrent)
+
+        async def _one(msg: str) -> ClassificationResult:
+            async with sem:
+                return await self.classify_request(msg)
+
+        unique_results: dict[str, ClassificationResult] = dict(
+            zip(
+                hash_to_msg.keys(),
+                await asyncio.gather(*[_one(m) for m in hash_to_msg.values()]),
+            )
+        )
+
+        return [unique_results[h] for h in msg_hashes]
+
+    # ------------------------------------------------------------------
+
     async def classify_request(self, user_message: str) -> ClassificationResult:
         """Classify user request using Gemma models with fallback."""
         import time
@@ -138,8 +228,8 @@ Respond with valid JSON:
         keyword_result = self.keyword_classifier.classify_request(user_message)
 
         try:
-            # Try Gemma classification
-            gemma_result = await self._gemma_classify(user_message)
+            # Try Gemma classification (via dedup cache — Issue #8164)
+            gemma_result = await self._cached_classify(user_message)
 
             if gemma_result:
                 # Use Gemma result

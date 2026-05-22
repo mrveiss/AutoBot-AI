@@ -245,6 +245,17 @@ if "llm_shared" not in sys.modules:
         _models_stub.LLMSettings = MagicMock()  # type: ignore[attr-defined]
         sys.modules["llm_shared.models"] = _models_stub
 
+    # Load llm_shared.semantic_cache (Issue #8168) — pure Python + numpy,
+    # no heavy deps at import time.
+    try:
+        _load_llm_sub("llm_shared.semantic_cache", "semantic_cache.py")
+        _sc_mod = sys.modules.get("llm_shared.semantic_cache")
+        if _sc_mod and hasattr(_sc_mod, "SemanticLLMCache"):
+            _llm_stub.SemanticLLMCache = _sc_mod.SemanticLLMCache  # type: ignore[attr-defined]
+    except Exception:
+        _llm_stub.SemanticLLMCache = MagicMock()  # type: ignore[attr-defined]
+        sys.modules["llm_shared.semantic_cache"] = _make_pkg_stub("llm_shared.semantic_cache")
+
 # auth_middleware stub — the real module pulls in the full config/Redis chain
 # at import time (config.manager, error_catalog, etc.) which fails in the dev
 # venv.  Tests that exercise openai_compat patch _get_user directly and never
