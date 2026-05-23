@@ -524,7 +524,7 @@ async def test_budget_exhausted_propagates_to_failed_status():
 
         status = await adapter.status({}, run_id)
         assert status.status == LLCRunStatus.FAILED
-        assert "budget limit reached" in (status.error or "")
+        assert "budget exhausted" in (status.error or "")
 
 
 @pytest.mark.asyncio
