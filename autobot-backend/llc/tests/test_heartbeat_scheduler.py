@@ -30,10 +30,13 @@ from llc.scheduler.heartbeat_scheduler import (
 # ---------------------------------------------------------------------------
 
 
+_COMPANY_UUID = uuid.UUID("11111111-1111-1111-1111-111111111111")
+
+
 def _make_agent(**kwargs):
     defaults = {
         "agent_id": "agent-abc",
-        "company_id": "company-xyz",
+        "company_id": _COMPANY_UUID,
         "name": "Test Agent",
         "heartbeat_cron": "*/5 * * * *",
         "heartbeat_enabled": True,

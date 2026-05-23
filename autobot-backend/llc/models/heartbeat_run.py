@@ -21,7 +21,12 @@ from .enums import HeartbeatInvocationSource, HeartbeatRunStatus
 
 
 class LLCHeartbeatRun(Base):
-    """Persisted record of a single heartbeat invocation."""
+    """Persisted record of a single heartbeat invocation.
+
+    company_id matches the UUID PK of the organizations table (GH#8225 note:
+    PR #8481 creates this column as UUID NOT NULL — callers must resolve a
+    valid org UUID before inserting).
+    """
 
     __tablename__ = "llc_heartbeat_runs"
 

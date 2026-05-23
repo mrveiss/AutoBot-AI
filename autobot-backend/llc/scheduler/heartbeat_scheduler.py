@@ -110,17 +110,24 @@ class HeartbeatScheduler:
             logger.info("Scheduled %d agents in sorted set", len(mapping))
 
     async def _load_enabled_agents(self) -> list[Dict[str, Any]]:
-        """SELECT heartbeat-enabled agents from agent_org_nodes."""
+        """SELECT heartbeat-enabled agents from agent_org_nodes.
+
+        Joins agents → organizations to resolve company_id as a UUID,
+        matching the UUID PK on llc_heartbeat_runs.company_id (GH#8225).
+        Falls back to NULL when the agent has no org membership.
+        """
         factory = get_async_session_factory()
         async with factory() as session:
             result = await session.execute(
                 text(
                     """
-                    SELECT agent_id, name, heartbeat_cron,
-                           adapter_type, adapter_config, context_mode
-                    FROM agent_org_nodes
-                    WHERE heartbeat_enabled = true
-                      AND heartbeat_cron IS NOT NULL
+                    SELECT aon.agent_id, aon.name, aon.heartbeat_cron,
+                           aon.adapter_type, aon.adapter_config, aon.context_mode,
+                           a.organization_id AS company_id
+                    FROM agent_org_nodes aon
+                    LEFT JOIN agents a ON a.id::text = aon.agent_id
+                    WHERE aon.heartbeat_enabled = true
+                      AND aon.heartbeat_cron IS NOT NULL
                     """
                 )
             )
@@ -244,9 +251,13 @@ class HeartbeatScheduler:
         agent: Dict[str, Any],
         source: HeartbeatInvocationSource,
     ) -> LLCHeartbeatRun:
+        company_id_raw = agent.get("company_id")
+        if company_id_raw is None:
+            raise ValueError(f"Agent {agent['agent_id']!r} has no organization — cannot create heartbeat run")
+        company_id = company_id_raw if isinstance(company_id_raw, uuid.UUID) else uuid.UUID(str(company_id_raw))
         run = LLCHeartbeatRun(
             id=uuid.uuid4(),
-            company_id=agent.get("company_id", ""),
+            company_id=company_id,
             agent_id=agent["agent_id"],
             invocation_source=source.value,
             status=HeartbeatRunStatus.QUEUED.value,
