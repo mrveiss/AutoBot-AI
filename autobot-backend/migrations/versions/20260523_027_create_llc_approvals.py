@@ -1,7 +1,7 @@
 """Create llc_approvals table and approval enum types.
 
 Revision ID: 20260523_027
-Revises: 20260523_025
+Revises: 20260523_026
 Create Date: 2026-05-23 00:00:00.000000
 
 GH#8214: Board approval gates — hire, strategy, budget_override, sprint_close.
@@ -17,7 +17,7 @@ from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 revision: str = "20260523_027"
-down_revision: Union[str, None] = "20260523_025"
+down_revision: Union[str, None] = "20260523_026"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
