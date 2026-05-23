@@ -22,11 +22,19 @@ logger = get_logger(__name__)
 
 
 def _run_async(coro):
-    """Run *coro* in a fresh event loop (Celery workers are sync)."""
+    """Run *coro* in a fresh event loop (Celery workers are sync).
+
+    GH#8434: drain any fire-and-forget tasks (asyncio.create_task) spawned
+    inside *coro* before closing the loop so they are not orphaned.
+    """
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        return loop.run_until_complete(coro)
+        result = loop.run_until_complete(coro)
+        pending = asyncio.all_tasks(loop)
+        if pending:
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+        return result
     finally:
         loop.close()
 

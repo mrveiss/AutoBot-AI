@@ -2032,7 +2032,7 @@ async def start_security_analysis(
 async def get_security_score_status(task_id: str):
     """Get security score analysis task status."""
     status = celery_result_to_status(AsyncResult(task_id))
-    if status is None or status["status"] == "pending":
+    if status is None:
         raise_not_found("Task", task_id)
     return status
 
