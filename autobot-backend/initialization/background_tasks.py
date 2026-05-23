@@ -317,7 +317,6 @@ async def enhanced_background_init(app: FastAPI, update_status_fn, append_error_
             _init_distributed_tracing(app, update_status_fn),
             _init_retrieval_learner_consolidation(update_status_fn, append_error_fn),
             _init_llc_monitors(app, update_status_fn),
-            _init_heartbeat_scheduler(app, update_status_fn, append_error_fn),
         ]
 
         await asyncio.gather(*tasks, return_exceptions=True)

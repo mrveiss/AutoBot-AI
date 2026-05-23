@@ -688,7 +688,7 @@ async def _init_llc_routine_scheduler(app: FastAPI) -> None:
     """Start the LLC RoutineScheduler that fires cron-based routines (GH#8229)."""
     logger.info("LLC Routine Scheduler: Starting...")
     try:
-        from llc.scheduler import RoutineScheduler
+        from llc.scheduler.routine_scheduler import RoutineScheduler
 
         scheduler = RoutineScheduler()
         await scheduler.startup()

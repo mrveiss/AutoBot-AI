@@ -69,8 +69,6 @@ __all__ = [
     "LLCProject",
     "LLCRunStatus",
     "LLCSprint",
-    "LLCRoutine",
-    "LLCRoutineRun",
     "RoutineProduces",
     "LLCSecret",
     "MembershipRole",

@@ -198,7 +198,8 @@ class HeartbeatScheduler:
                 logger.warning(
                     "Skipping heartbeat for agent %s (no organization): %s", agent_id, exc
                 )
-                await redis.zrem(_SCHEDULE_KEY, agent_id)
+                retry_ts = datetime.now(tz=timezone.utc).timestamp() + _POLL_INTERVAL * 6
+                await redis.zadd(_SCHEDULE_KEY, {agent_id: retry_ts})
                 return
             await session.commit()
 
@@ -349,26 +350,29 @@ class HeartbeatScheduler:
             error_msg = str(exc)
             final_status = HeartbeatRunStatus.FAILED.value
 
-        async with factory() as session:
-            await session.execute(
-                update(LLCHeartbeatRun)
-                .where(LLCHeartbeatRun.id == run_id)
-                .values(
-                    status=final_status,
-                    finished_at=datetime.now(tz=timezone.utc),
-                    error=error_msg,
-                )
-            )
-            # Only bump last_heartbeat_at on success — failures must not mask stale agents
-            if final_status == HeartbeatRunStatus.SUCCEEDED.value:
+        try:
+            async with factory() as session:
                 await session.execute(
-                    text(
-                        "UPDATE agent_org_nodes SET last_heartbeat_at = now() "
-                        "WHERE agent_id = :aid"
-                    ),
-                    {"aid": agent["agent_id"]},
+                    update(LLCHeartbeatRun)
+                    .where(LLCHeartbeatRun.id == run_id)
+                    .values(
+                        status=final_status,
+                        finished_at=datetime.now(tz=timezone.utc),
+                        error=error_msg,
+                    )
                 )
-            await session.commit()
+                # Only bump last_heartbeat_at on success — failures must not mask stale agents
+                if final_status == HeartbeatRunStatus.SUCCEEDED.value:
+                    await session.execute(
+                        text(
+                            "UPDATE agent_org_nodes SET last_heartbeat_at = now() "
+                            "WHERE agent_id = :aid"
+                        ),
+                        {"aid": agent["agent_id"]},
+                    )
+                await session.commit()
+        except Exception:
+            logger.exception("Could not write final status for run %s", run_id)
 
 
 # ------------------------------------------------------------------
