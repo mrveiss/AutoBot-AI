@@ -493,8 +493,10 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "llm_keys",
     ),
     # Issue #4203: External tool integrations consolidated into integration_routers.py
-    # Skills repo management and governance MUST be registered before the base skills
-    # router so their static path prefixes take precedence over skills' /{name} param.
+    # Skills repo management, governance, and hub MUST be registered before the base
+    # skills router so their static path prefixes take precedence over /{name} param.
+    # Issue #4412: community skill hub
+    ("api.skills_hub", "/skills/hub", ["skills-hub"], "skills-hub"),
     ("api.skills_repos", "/skills/repos", ["skills"], "skills-repos"),
     (
         "api.skills_governance",
