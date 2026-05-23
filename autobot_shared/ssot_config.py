@@ -1380,6 +1380,7 @@ class MiscConfig(BaseSettings):
     slack_notifications_channel: str = Field(default="", alias="SLACK_NOTIFICATIONS_CHANNEL")
     slm_auth_token: str = Field(default="", alias="SLM_AUTH_TOKEN")
     slm_url: str = Field(default="", alias="SLM_URL")
+    skill_hub_url: str = Field(default="", alias="AUTOBOT_SKILL_HUB_URL")
     testing: str = Field(default="", alias="TESTING")
     tf_use_legacy_keras: str = Field(default="", alias="TF_USE_LEGACY_KERAS")
     tiered_context_enabled: bool = Field(default=False, alias="TIERED_CONTEXT_ENABLED")

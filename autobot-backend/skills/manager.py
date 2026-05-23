@@ -252,6 +252,30 @@ class SkillManager:
         )
         return imported
 
+    async def install_from_hub(self, skill_id: str) -> Dict[str, Any]:
+        """Install a skill from the community hub registry.
+
+        Delegates to :class:`~skills.hub.SkillHub`, which handles registry
+        lookup, governance, Redis persistence, and MCP process startup.
+
+        Args:
+            skill_id: Registry id or name of the skill to install.
+
+        Returns:
+            Dict with ``id``, ``name``, ``mcp_url``, ``version``, and ``installed_at``.
+        """
+        from skills.hub import SkillHub
+
+        hub = SkillHub()
+        installed = await hub.install(skill_id)
+        return {
+            "id": installed.id,
+            "name": installed.name,
+            "mcp_url": installed.mcp_url,
+            "version": installed.version,
+            "installed_at": installed.installed_at,
+        }
+
     def search_skills(self, query: str) -> List[Dict[str, Any]]:
         """Search skills by name, description, or tags."""
         query_lower = query.lower()
