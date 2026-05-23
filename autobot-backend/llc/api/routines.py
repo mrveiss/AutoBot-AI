@@ -24,8 +24,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
 
-from ..models.enums import RoutineStatus
-from ..services.routine_service import RoutineNotFoundError, RoutineService
+from ..models.enums import RoutineProduces, RoutineStatus
+from ..services.routine_service import RoutineService
 
 router = APIRouter(tags=["llc-routines"])
 _get_service = lazy_singleton(RoutineService)
@@ -47,11 +47,13 @@ async def get_session() -> AsyncSession:
 
 
 class RoutineCreate(BaseModel):
-    agent_id: uuid.UUID
     name: str = Field(..., min_length=1, max_length=255)
     cron_schedule: str = Field(..., description="Standard 5-field cron expression")
+    produces: RoutineProduces = RoutineProduces.NEW_WORK_ITEM
+    work_item_template: Dict[str, Any] = {}
+    assignee_agent_id: Optional[uuid.UUID] = None
     description: Optional[str] = None
-    env: Dict[str, Any] = {}
+    env: Optional[Dict[str, Any]] = None
 
 
 class RoutineUpdate(BaseModel):
@@ -65,11 +67,11 @@ class RoutineUpdate(BaseModel):
 class RoutineResponse(BaseModel):
     id: str
     company_id: str
-    agent_id: str
     name: str
     cron_schedule: str
+    produces: str
     description: Optional[str]
-    env: Dict[str, Any]
+    env: Optional[Dict[str, Any]]
     status: str
     created_at: datetime
     updated_at: datetime
@@ -81,9 +83,9 @@ class RoutineResponse(BaseModel):
         return cls(
             id=str(obj.id),
             company_id=str(obj.company_id),
-            agent_id=str(obj.agent_id),
             name=obj.name,
             cron_schedule=obj.cron_schedule,
+            produces=obj.produces if isinstance(obj.produces, str) else obj.produces.value,
             description=obj.description,
             env=obj.env,
             status=obj.status if isinstance(obj.status, str) else obj.status.value,
@@ -96,9 +98,9 @@ class RoutineRunResponse(BaseModel):
     id: str
     routine_id: str
     status: str
-    triggered_at: datetime
-    completed_at: Optional[datetime]
-    error: Optional[str]
+    created_at: datetime
+    heartbeat_run_id: Optional[str]
+    work_item_id: Optional[str]
 
     model_config = {"from_attributes": True}
 
@@ -108,9 +110,9 @@ class RoutineRunResponse(BaseModel):
             id=str(obj.id),
             routine_id=str(obj.routine_id),
             status=obj.status,
-            triggered_at=obj.triggered_at,
-            completed_at=obj.completed_at,
-            error=obj.error,
+            created_at=obj.created_at,
+            heartbeat_run_id=str(obj.heartbeat_run_id) if obj.heartbeat_run_id else None,
+            work_item_id=str(obj.work_item_id) if obj.work_item_id else None,
         )
 
 
@@ -132,10 +134,12 @@ async def create_routine(
     svc = _service()
     routine = await svc.create(
         session,
-        company_id=company_id,
-        agent_id=body.agent_id,
-        name=body.name,
-        cron_schedule=body.cron_schedule,
+        company_id,
+        body.name,
+        body.cron_schedule,
+        body.produces,
+        body.work_item_template,
+        assignee_agent_id=body.assignee_agent_id,
         description=body.description,
         env=body.env,
     )
@@ -150,7 +154,7 @@ async def list_routines(
     session: AsyncSession = Depends(get_session),
 ) -> List[RoutineResponse]:
     svc = _service()
-    routines = await svc.list(session, company_id=company_id, status=status_filter)
+    routines = await svc.list(session, company_id, status=status_filter)
     return [RoutineResponse.from_orm_obj(r) for r in routines]
 
 
@@ -160,9 +164,8 @@ async def get_routine(
     session: AsyncSession = Depends(get_session),
 ) -> RoutineResponse:
     svc = _service()
-    try:
-        routine = await svc.get(session, routine_id)
-    except RoutineNotFoundError:
+    routine = await svc.get(session, routine_id)
+    if routine is None:
         raise HTTPException(status_code=404, detail="Routine not found")
     return RoutineResponse.from_orm_obj(routine)
 
@@ -174,17 +177,10 @@ async def update_routine(
     session: AsyncSession = Depends(get_session),
 ) -> RoutineResponse:
     svc = _service()
+    updates = {k: v for k, v in body.model_dump().items() if v is not None}
     try:
-        routine = await svc.update(
-            session,
-            routine_id,
-            cron_schedule=body.cron_schedule,
-            name=body.name,
-            description=body.description,
-            env=body.env,
-            status=body.status,
-        )
-    except RoutineNotFoundError:
+        routine = await svc.update(session, routine_id, **updates)
+    except ValueError:
         raise HTTPException(status_code=404, detail="Routine not found")
     await session.commit()
     return RoutineResponse.from_orm_obj(routine)
@@ -196,10 +192,7 @@ async def delete_routine(
     session: AsyncSession = Depends(get_session),
 ) -> None:
     svc = _service()
-    try:
-        await svc.delete(session, routine_id)
-    except RoutineNotFoundError:
-        raise HTTPException(status_code=404, detail="Routine not found")
+    await svc.delete(session, routine_id)
     await session.commit()
 
 
@@ -213,11 +206,10 @@ async def trigger_routine(
     session: AsyncSession = Depends(get_session),
 ) -> RoutineRunResponse:
     svc = _service()
-    try:
-        await svc.get(session, routine_id)
-    except RoutineNotFoundError:
+    routine = await svc.get(session, routine_id)
+    if routine is None:
         raise HTTPException(status_code=404, detail="Routine not found")
-    run = await svc.record_run(session, routine_id, status="queued")
+    run = await svc.record_run(session, routine_id, "queued")
     await session.commit()
     return RoutineRunResponse.from_orm_obj(run)
 

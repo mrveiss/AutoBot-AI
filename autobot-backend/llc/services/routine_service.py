@@ -9,10 +9,12 @@ Secret resolution: env values matching "secret:<NAME>" resolved via SecretServic
 Soft-delete: delete() sets status=archived; the row is never removed.
 """
 
+from __future__ import annotations
+
 import logging
 import re
 import uuid
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

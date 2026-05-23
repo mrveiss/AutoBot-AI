@@ -26,9 +26,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from llc.models.enums import RoutineStatus
+from llc.models.enums import RoutineProduces, RoutineStatus
 from llc.models.routine import LLCRoutine, LLCRoutineRun
-from llc.services.routine_service import RoutineNotFoundError, RoutineService
+from llc.services.routine_service import RoutineService
 
 
 # ---------------------------------------------------------------------------
@@ -49,12 +49,13 @@ def _routine(
     row = MagicMock(spec=LLCRoutine)
     row.id = routine_id or uuid.uuid4()
     row.company_id = _COMPANY_ID
-    row.agent_id = _AGENT_ID
     row.name = "nightly-sync"
     row.cron_schedule = cron
     row.description = None
     row.env = env or {}
     row.status = status
+    row.produces = RoutineProduces.NEW_WORK_ITEM
+    row.work_item_template = {}
     row.created_at = datetime.now(tz=timezone.utc)
     row.updated_at = datetime.now(tz=timezone.utc)
     return row
@@ -65,9 +66,9 @@ def _run(routine_id: Optional[uuid.UUID] = None) -> MagicMock:
     row.id = uuid.uuid4()
     row.routine_id = routine_id or uuid.uuid4()
     row.status = "queued"
-    row.triggered_at = datetime.now(tz=timezone.utc)
-    row.completed_at = None
-    row.error = None
+    row.created_at = datetime.now(tz=timezone.utc)
+    row.heartbeat_run_id = None
+    row.work_item_id = None
     return row
 
 
@@ -95,10 +96,11 @@ async def test_routine_create() -> None:
     svc = RoutineService()
     routine = await svc.create(
         session,
-        company_id=_COMPANY_ID,
-        agent_id=_AGENT_ID,
-        name="nightly-sync",
-        cron_schedule=_CRON,
+        _COMPANY_ID,
+        "nightly-sync",
+        _CRON,
+        RoutineProduces.NEW_WORK_ITEM,
+        {"title": "Nightly sync task"},
     )
     session.add.assert_called_once()
     session.flush.assert_awaited_once()
@@ -156,9 +158,9 @@ async def test_routine_soft_delete() -> None:
     session = _session(scalar=row)
 
     svc = RoutineService()
-    result = await svc.delete(session, routine_id)
+    await svc.delete(session, routine_id)
 
-    assert result.status == RoutineStatus.ARCHIVED
+    assert row.status == RoutineStatus.ARCHIVED
     session.flush.assert_awaited_once()
 
 
@@ -169,28 +171,29 @@ async def test_routine_soft_delete() -> None:
 
 @pytest.mark.asyncio
 async def test_env_overlay_order() -> None:
-    """routine_env must override project_env which overrides agent_env."""
+    """routine_env must override project_env which overrides agent_env.
+
+    System keys (ROUTINE_ID, COMPANY_ID, ROUTINE_NAME) are always injected last.
+    """
     routine = _routine(env={"KEY": "routine_val", "ONLY_ROUTINE": "r"})
     session = _session()
 
     svc = RoutineService()
-    with patch.dict(
-        "os.environ",
-        {"SYSTEM_OVERRIDE": "sys"},
-        clear=False,
-    ):
-        merged = await svc.resolve_env(
-            session,
-            routine,
-            agent_env={"KEY": "agent_val", "ONLY_AGENT": "a"},
-            project_env={"KEY": "project_val", "ONLY_PROJECT": "p"},
-        )
+    merged = await svc.resolve_env(
+        session,
+        routine,
+        agent_env={"KEY": "agent_val", "ONLY_AGENT": "a"},
+        project_env={"KEY": "project_val", "ONLY_PROJECT": "p"},
+    )
 
     assert merged["KEY"] == "routine_val"
     assert merged["ONLY_AGENT"] == "a"
     assert merged["ONLY_PROJECT"] == "p"
     assert merged["ONLY_ROUTINE"] == "r"
-    assert merged["SYSTEM_OVERRIDE"] == "sys"
+    # System keys always injected
+    assert merged["ROUTINE_ID"] == str(routine.id)
+    assert merged["COMPANY_ID"] == str(routine.company_id)
+    assert merged["ROUTINE_NAME"] == routine.name
 
 
 # ---------------------------------------------------------------------------
@@ -296,10 +299,10 @@ async def test_api_create_routine() -> None:
         resp = client.post(
             f"/api/llc/companies/{_COMPANY_ID}/routines",
             json={
-                "agent_id": str(_AGENT_ID),
                 "name": "nightly-sync",
                 "cron_schedule": _CRON,
-                "env": {},
+                "produces": "new_work_item",
+                "work_item_template": {},
             },
         )
 
