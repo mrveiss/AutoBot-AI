@@ -707,11 +707,13 @@ async def _init_heartbeat_scheduler(app: FastAPI) -> None:
     GH#8225: Prefers the LLC HeartbeatScheduler; falls back to legacy when
     the LLC package is unavailable, preventing duplicate sorted-set writes.
     """
-    # GH#8225: Try LLC scheduler first; it owns llc:heartbeat:schedule
+    # GH#8225: Try LLC scheduler first; it owns llc:heartbeat:schedule.
+    # Use get_heartbeat_scheduler() — same lazy_singleton instance used by API routes —
+    # so cleanup_services.stop() drains tasks from both startup-fired and API-triggered runs.
     try:
-        from llc.scheduler.heartbeat_scheduler import HeartbeatScheduler as LLCScheduler
+        from llc.scheduler.heartbeat_scheduler import get_heartbeat_scheduler
 
-        llc_scheduler = LLCScheduler()
+        llc_scheduler = get_heartbeat_scheduler()
         await llc_scheduler.start()
         app.state.heartbeat_scheduler = llc_scheduler
         logger.info("Heartbeat: LLC HeartbeatScheduler started")

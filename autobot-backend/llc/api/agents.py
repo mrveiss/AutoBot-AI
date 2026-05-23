@@ -17,19 +17,12 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
-from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session
 from user_management.services import TenantContext
 
-from ..scheduler.heartbeat_scheduler import HeartbeatScheduler
+from ..scheduler.heartbeat_scheduler import get_heartbeat_scheduler
 
 router = APIRouter(prefix="/agents", tags=["llc-agents"])
-
-_get_scheduler = lazy_singleton(HeartbeatScheduler)
-
-
-def _scheduler() -> HeartbeatScheduler:
-    return _get_scheduler()
 
 
 class TriggerResponse(BaseModel):
@@ -47,9 +40,10 @@ async def trigger_heartbeat(
     """Manually trigger a heartbeat run for *agent_id* immediately.
 
     Requires an authenticated user with org context. The agent must belong to
-    the caller's organization — cross-tenant triggers are rejected with 403.
+    the caller's organization — cross-tenant triggers are rejected with 404
+    (same response as "not found" to prevent agent-ID enumeration).
     """
-    sched = _scheduler()
+    sched = get_heartbeat_scheduler()
     try:
         run, agent_cfg = await sched.trigger_manual(session, agent_id)
     except ValueError as exc:
@@ -57,7 +51,8 @@ async def trigger_heartbeat(
 
     agent_company = agent_cfg.get("company_id")
     if agent_company is not None and agent_company != ctx.org_id:
-        raise HTTPException(status_code=403, detail="Agent belongs to a different organization")
+        # Return 404 (not 403) to prevent cross-tenant agent-ID enumeration oracle
+        raise HTTPException(status_code=404, detail=f"Agent {agent_id!r} not found or not configured")
 
     await session.commit()
     sched.dispatch_run(agent_cfg, run.id)

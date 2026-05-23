@@ -24,6 +24,7 @@ from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
 
 from ..models.enums import HeartbeatInvocationSource, HeartbeatRunStatus
@@ -373,6 +374,21 @@ class HeartbeatScheduler:
                 await session.commit()
         except Exception:
             logger.exception("Could not write final status for run %s", run_id)
+
+
+# ------------------------------------------------------------------
+# Module-level singleton (shared between lifespan startup and API routes)
+# ------------------------------------------------------------------
+
+# One lazy_singleton call at module level so every import site gets the same instance.
+# Do NOT call lazy_singleton(HeartbeatScheduler) at individual call sites — each call
+# produces an independent closure with its own instance variable.
+_get_scheduler = lazy_singleton(HeartbeatScheduler)
+
+
+def get_heartbeat_scheduler() -> HeartbeatScheduler:
+    """Return the process-wide HeartbeatScheduler singleton."""
+    return _get_scheduler()
 
 
 # ------------------------------------------------------------------
