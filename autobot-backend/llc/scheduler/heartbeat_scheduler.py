@@ -61,7 +61,7 @@ class HeartbeatScheduler:
         logger.info("HeartbeatScheduler started")
 
     async def stop(self) -> None:
-        """Cancel polling loop and wait for clean exit."""
+        """Cancel polling loop, drain in-flight adapter tasks, and exit cleanly."""
         self._running = False
         if self._task and not self._task.done():
             self._task.cancel()
@@ -69,6 +69,8 @@ class HeartbeatScheduler:
                 await self._task
             except asyncio.CancelledError:
                 pass
+        if self._tasks:
+            await asyncio.gather(*list(self._tasks), return_exceptions=True)
         logger.info("HeartbeatScheduler stopped")
 
     # ------------------------------------------------------------------
@@ -113,9 +115,7 @@ class HeartbeatScheduler:
     async def _load_enabled_agents(self) -> list[Dict[str, Any]]:
         """SELECT heartbeat-enabled agents from agent_org_nodes.
 
-        Joins agents → organizations to resolve company_id as a UUID,
-        matching the UUID PK on llc_heartbeat_runs.company_id (GH#8225).
-        Falls back to NULL when the agent has no org membership.
+        company_id is stored directly on agent_org_nodes (migration 037, GH#8225).
         """
         factory = get_async_session_factory()
         async with factory() as session:
@@ -124,9 +124,8 @@ class HeartbeatScheduler:
                     """
                     SELECT aon.agent_id, aon.name, aon.heartbeat_cron,
                            aon.adapter_type, aon.adapter_config, aon.context_mode,
-                           a.organization_id AS company_id
+                           aon.company_id
                     FROM agent_org_nodes aon
-                    LEFT JOIN agents a ON a.id::text = aon.agent_id
                     WHERE aon.heartbeat_enabled = true
                       AND aon.heartbeat_cron IS NOT NULL
                     """
@@ -278,9 +277,8 @@ class HeartbeatScheduler:
                 """
                 SELECT aon.agent_id, aon.name, aon.heartbeat_cron, aon.heartbeat_enabled,
                        aon.adapter_type, aon.adapter_config, aon.context_mode,
-                       a.organization_id AS company_id
+                       aon.company_id
                 FROM agent_org_nodes aon
-                LEFT JOIN agents a ON a.id::text = aon.agent_id
                 WHERE aon.agent_id = :agent_id
                   AND aon.heartbeat_enabled = true
                 """
