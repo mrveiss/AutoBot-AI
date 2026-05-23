@@ -1,5 +1,12 @@
 """LLC models package."""
 
+from .company import (
+    CompanyAncestor,
+    CompanyCreate,
+    CompanyRead,
+    CompanyTreeNode,
+    CompanyUpdate,
+)
 from .enums import (
     ApprovalStatus,
     AssignmentType,
@@ -17,6 +24,11 @@ from .work_item import LLCWorkItem, LLCWorkItemComment
 __all__ = [
     "ApprovalStatus",
     "AssignmentType",
+    "CompanyAncestor",
+    "CompanyCreate",
+    "CompanyRead",
+    "CompanyTreeNode",
+    "CompanyUpdate",
     "GoalLevel",
     "GoalStatus",
     "LLCAgentStatus",
