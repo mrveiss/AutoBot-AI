@@ -8,6 +8,7 @@ ancestry lookup, budget enforcement, and status lifecycle transitions
 (suspend / archive).
 """
 
+import asyncio
 import uuid
 from typing import List, Optional
 
@@ -158,9 +159,26 @@ class CompanyService(LLCServiceBase):
     # Status transitions
     # ------------------------------------------------------------------
 
+    # Valid states from which suspend() is allowed
+    _SUSPEND_FROM: frozenset[str] = frozenset(
+        {LLCCompanyStatus.ONBOARDING.value, LLCCompanyStatus.ACTIVE.value}
+    )
+    # Valid states from which archive() is allowed
+    _ARCHIVE_FROM: frozenset[str] = frozenset(
+        {LLCCompanyStatus.PAUSED.value, LLCCompanyStatus.OFFBOARDING.value}
+    )
+
     async def suspend(self, company_id: uuid.UUID, reason: Optional[str] = None) -> Organization:
-        """Transition company to PAUSED status."""
+        """Transition company to PAUSED status.
+
+        Only allowed from ONBOARDING or ACTIVE — raises ValueError otherwise.
+        """
         org = await self._get_or_404(company_id)
+        if org.llc_status not in self._SUSPEND_FROM:
+            raise ValueError(
+                f"Cannot suspend company in '{org.llc_status}' state "
+                f"(allowed from: {', '.join(sorted(self._SUSPEND_FROM))})"
+            )
         org.llc_status = LLCCompanyStatus.PAUSED.value
         org.pause_reason = reason
         org.paused_at = now_utc()
@@ -169,8 +187,16 @@ class CompanyService(LLCServiceBase):
         return org
 
     async def archive(self, company_id: uuid.UUID) -> Organization:
-        """Transition company to ARCHIVED status."""
+        """Transition company to ARCHIVED status.
+
+        Only allowed from PAUSED or OFFBOARDING — raises ValueError otherwise.
+        """
         org = await self._get_or_404(company_id)
+        if org.llc_status not in self._ARCHIVE_FROM:
+            raise ValueError(
+                f"Cannot archive company in '{org.llc_status}' state "
+                f"(allowed from: {', '.join(sorted(self._ARCHIVE_FROM))})"
+            )
         org.llc_status = LLCCompanyStatus.ARCHIVED.value
         await self.session.flush()
         logger.info("LLC company archived: %s (id=%s)", org.name, org.id)
@@ -196,10 +222,11 @@ class CompanyService(LLCServiceBase):
             if current_id in visited:
                 break
             parent = await self._get_or_404(current_id)
-            chain.insert(0, parent)
+            chain.append(parent)
             visited.add(parent.id)
             current_id = parent.parent_org_id
 
+        chain.reverse()
         return chain
 
     # ------------------------------------------------------------------
@@ -218,7 +245,11 @@ class CompanyService(LLCServiceBase):
     async def _assert_prefix_unique(self, prefix: Optional[str]) -> None:
         if prefix is None:
             return
-        result = await self.session.execute(select(Organization.id).where(Organization.issue_prefix == prefix))
+        result = await self.session.execute(
+            select(Organization.id)
+            .where(Organization.issue_prefix == prefix)
+            .where(Organization.deleted_at.is_(None))
+        )
         if result.scalar_one_or_none() is not None:
             raise CompanyIssuePrefixConflictError(f"issue_prefix '{prefix}' is already taken")
 
@@ -268,7 +299,9 @@ class CompanyService(LLCServiceBase):
             raise CompanyCycleError(f"Cycle detected in company tree at id={org.id}")
         current_visited = visited | {org.id}
         children_orgs = await self.list_children(org.id)
-        children_nodes = [await self._build_tree_node(c, current_visited) for c in children_orgs]
+        children_nodes = list(
+            await asyncio.gather(*[self._build_tree_node(c, current_visited) for c in children_orgs])
+        )
         return CompanyTreeNode(
             id=org.id,
             name=org.name,

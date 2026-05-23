@@ -33,6 +33,7 @@ from llc.models.enums import LLCCompanyStatus
 from llc.services.company import (
     CompanyBudgetError,
     CompanyCycleError,
+    CompanyHasChildrenError,
     CompanyIssuePrefixConflictError,
     CompanyNotFoundError,
     CompanyService,
@@ -85,13 +86,20 @@ async def create_company(
         await svc.session.commit()
         return _to_read(org)
     except CompanyIssuePrefixConflictError as exc:
+        await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     except CompanyBudgetError as exc:
+        await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     except CompanyCycleError as exc:
+        await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     except CompanyNotFoundError as exc:
+        await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except Exception:
+        await svc.session.rollback()
+        raise
 
 
 @router.get("/{company_id}", response_model=CompanyRead)
@@ -117,11 +125,17 @@ async def update_company(
         await svc.session.commit()
         return _to_read(org)
     except CompanyNotFoundError as exc:
+        await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     except CompanyIssuePrefixConflictError as exc:
+        await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     except CompanyBudgetError as exc:
+        await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    except Exception:
+        await svc.session.rollback()
+        raise
 
 
 @router.delete("/{company_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -133,7 +147,14 @@ async def delete_company(
         await svc.delete(company_id)
         await svc.session.commit()
     except CompanyNotFoundError as exc:
+        await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except CompanyHasChildrenError as exc:
+        await svc.session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    except Exception:
+        await svc.session.rollback()
+        raise
 
 
 @router.get("/{company_id}/tree", response_model=CompanyTreeNode)
