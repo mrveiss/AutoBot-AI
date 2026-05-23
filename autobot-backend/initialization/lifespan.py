@@ -704,7 +704,15 @@ async def _init_heartbeat_scheduler(app: FastAPI) -> None:
     Start heartbeat scheduler for scheduled agent wakeups (NON-CRITICAL).
 
     Issue #1407: Loads enabled agents from DB and spawns their asyncio loops.
+    GH#8225: Skipped when the LLC HeartbeatScheduler is already running to
+    prevent duplicate schedulers writing the same Redis sorted-set key.
     """
+    from llc.scheduler.heartbeat_scheduler import HeartbeatScheduler as LLCScheduler
+
+    if isinstance(getattr(app.state, "heartbeat_scheduler", None), LLCScheduler):
+        logger.info("Heartbeat: LLC scheduler already active — skipping legacy init")
+        return
+
     logger.info("Heartbeat: Starting heartbeat scheduler...")
     try:
         from api.heartbeat import configure_scheduler
@@ -1567,10 +1575,10 @@ async def cleanup_services(app: FastAPI):
         # SLM server manages its own reconciler lifecycle
         pass  # SLM reconciler now in slm-server
 
-        # GH#8229: Stop LLC routine scheduler
-        if hasattr(app.state, "llc_routine_scheduler") and app.state.llc_routine_scheduler:
-            await app.state.llc_routine_scheduler.shutdown()
-            logger.info("✅ LLC routine scheduler stopped")
+        # GH#8225: Stop LLC heartbeat scheduler before other schedulers
+        if hasattr(app.state, "heartbeat_scheduler") and app.state.heartbeat_scheduler:
+            await app.state.heartbeat_scheduler.stop()
+            logger.info("✅ LLC heartbeat scheduler stopped")
 
         # Issue #3294: Stop backup scheduler
         if hasattr(app.state, "backup_scheduler") and app.state.backup_scheduler:

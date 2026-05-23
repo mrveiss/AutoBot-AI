@@ -45,6 +45,7 @@ class HeartbeatScheduler:
     def __init__(self) -> None:
         self._task: Optional[asyncio.Task] = None
         self._running = False
+        self._tasks: set = set()
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -202,13 +203,20 @@ class HeartbeatScheduler:
                 return
             await session.commit()
 
-        asyncio.create_task(
+        t = asyncio.create_task(
             self._run_adapter(agent, run.id),
             name=f"heartbeat-adapter-{agent_id}",
         )
+        self._tasks.add(t)
+        t.add_done_callback(self._tasks.discard)
 
         now = datetime.now(tz=timezone.utc).timestamp()
-        next_ts = _next_fire(cron_expr, now)
+        try:
+            next_ts = _next_fire(cron_expr, now)
+        except Exception:
+            logger.exception("Invalid cron for agent %s — removing from schedule", agent_id)
+            await redis.zrem(_SCHEDULE_KEY, agent_id)
+            return
         await redis.zadd(_SCHEDULE_KEY, {agent_id: next_ts})
         logger.debug(
             "Dispatched heartbeat for agent=%s run=%s next=%.0f",
@@ -251,10 +259,12 @@ class HeartbeatScheduler:
         Must be called after the DB session containing the run INSERT has been
         committed — ensures _run_adapter's RUNNING status UPDATE is visible.
         """
-        asyncio.create_task(
+        t = asyncio.create_task(
             self._run_adapter(agent, run_id),
             name=f"heartbeat-manual-{agent['agent_id']}",
         )
+        self._tasks.add(t)
+        t.add_done_callback(self._tasks.discard)
 
     # ------------------------------------------------------------------
     # Shared helpers
@@ -303,16 +313,34 @@ class HeartbeatScheduler:
     async def _run_adapter(self, agent: Dict[str, Any], run_id: uuid.UUID) -> None:
         """Execute adapter, update run status on completion/failure."""
         factory = get_async_session_factory()
-        async with factory() as session:
-            await session.execute(
-                update(LLCHeartbeatRun)
-                .where(LLCHeartbeatRun.id == run_id)
-                .values(
-                    status=HeartbeatRunStatus.RUNNING.value,
-                    started_at=datetime.now(tz=timezone.utc),
+        try:
+            async with factory() as session:
+                await session.execute(
+                    update(LLCHeartbeatRun)
+                    .where(LLCHeartbeatRun.id == run_id)
+                    .values(
+                        status=HeartbeatRunStatus.RUNNING.value,
+                        started_at=datetime.now(tz=timezone.utc),
+                    )
                 )
-            )
-            await session.commit()
+                await session.commit()
+        except Exception as exc:
+            logger.exception("Failed to mark run %s as RUNNING — marking FAILED", run_id)
+            try:
+                async with factory() as session:
+                    await session.execute(
+                        update(LLCHeartbeatRun)
+                        .where(LLCHeartbeatRun.id == run_id)
+                        .values(
+                            status=HeartbeatRunStatus.FAILED.value,
+                            finished_at=datetime.now(tz=timezone.utc),
+                            error=str(exc),
+                        )
+                    )
+                    await session.commit()
+            except Exception:
+                logger.exception("Could not write FAILED status for run %s", run_id)
+            return
 
         error_msg: Optional[str] = None
         final_status = HeartbeatRunStatus.SUCCEEDED.value

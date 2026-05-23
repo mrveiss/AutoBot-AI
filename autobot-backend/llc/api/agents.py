@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, get_tenant_context
@@ -79,14 +79,21 @@ async def trigger_heartbeat(
     agent_id: str,
     session: AsyncSession = Depends(get_async_session),
     _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(get_tenant_context),
 ) -> TriggerResponse:
     """Manually trigger a heartbeat run for *agent_id* immediately."""
     sched = _scheduler()
     try:
         run, agent_cfg = await sched.trigger_manual(session, agent_id)
-        await session.commit()
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+
+    if ctx.org_id is not None:
+        agent_company = agent_cfg.get("company_id")
+        if agent_company is not None and agent_company != ctx.org_id:
+            raise HTTPException(status_code=403, detail="Agent belongs to a different organization")
+
+    await session.commit()
     sched.dispatch_run(agent_cfg, run.id)
     return TriggerResponse(run_id=run.id, status=run.status)
 
@@ -112,8 +119,10 @@ async def list_runs(
     if status is not None:
         stmt = stmt.where(LLCHeartbeatRun.status == status.value)
 
-    count_result = await session.execute(stmt.with_only_columns(LLCHeartbeatRun.id))
-    total = len(count_result.scalars().all())
+    count_stmt = select(func.count()).select_from(
+        stmt.with_only_columns(LLCHeartbeatRun.id).subquery()
+    )
+    total = (await session.execute(count_stmt)).scalar_one()
 
     offset = (page - 1) * page_size
     paginated = stmt.offset(offset).limit(page_size)
