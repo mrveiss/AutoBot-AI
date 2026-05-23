@@ -197,6 +197,25 @@ def configure_validation(app: FastAPI):
         logger.warning("Input validation middleware not available: %s", e)
 
 
+def configure_llc_agent_auth(app: FastAPI):
+    """Configure LLC agent authentication middleware (GH#8218).
+
+    Registers LLCAgentAuthMiddleware which validates bearer tokens for
+    /api/llc/agent/* routes using SHA-256 DB lookup. All other routes are
+    unaffected.
+
+    Args:
+        app: FastAPI application instance
+    """
+    try:
+        from llc.middleware.agent_auth import LLCAgentAuthMiddleware
+
+        app.add_middleware(LLCAgentAuthMiddleware)
+        logger.info("LLC agent auth middleware enabled")
+    except ImportError as e:
+        logger.warning("LLC agent auth middleware not available: %s", e)
+
+
 def configure_sunset_legacy_health(app: FastAPI):
     """Issue #6902: telegraph deprecation of legacy /api/<module>/health routes.
 
@@ -268,6 +287,9 @@ def configure_middleware(
     if enable_audit:
         configure_audit(app)
 
+    # Configure LLC agent auth (GH#8218) — scoped to /api/llc/agent/* only.
+    configure_llc_agent_auth(app)
+
     # Configure LLM Awareness context injection (optional)
     # Must be registered after service auth so awareness context is applied
     # only to authenticated requests that reach the route handlers.
@@ -290,4 +312,5 @@ __all__ = [
     "configure_audit",
     "configure_llm_awareness",
     "configure_validation",
+    "configure_llc_agent_auth",
 ]

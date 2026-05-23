@@ -14,3 +14,7 @@ class BudgetExhausted(Exception):
         super().__init__(
             f"Agent {agent_id} budget exhausted: spent={spent:.6f} limit={limit:.6f}"
         )
+
+
+class ApiKeyNotFound(Exception):
+    """Raised when an API key is not found or not owned by the requesting agent."""
