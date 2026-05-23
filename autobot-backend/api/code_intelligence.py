@@ -1983,9 +1983,12 @@ async def get_full_evolution_report(
     operation="get_cached_security_score",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-async def get_cached_security_score():
-    """Return the latest completed security score result (#1540)."""
-    cached = await get_latest_task_result(_REDIS_PREFIX)
+async def get_cached_security_score(
+    source_id: str | None = Query(default=None, description="GH#8436: scope result by project source_id"),
+):
+    """Return the latest completed security score result (#1540, GH#8436)."""
+    prefix = f"{_REDIS_PREFIX}{source_id}:" if source_id else _REDIS_PREFIX
+    cached = await get_latest_task_result(prefix)
     if cached and cached.get("result"):
         return {
             "status": "success",
@@ -1996,6 +1999,9 @@ async def get_cached_security_score():
     return {"status": "no_data"}
 
 
+_NO_PATH_RESULT = {"status": "no_data", "message": "Path does not exist", "security_score": 0}
+
+
 @router.post("/security/score/analyze", response_model=StartTaskResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -2004,11 +2010,13 @@ async def get_cached_security_score():
 )
 async def start_security_analysis(
     path: str = Query(..., description="Directory path to analyze"),
+    source_id: str | None = Query(default=None, description="GH#8436: scope cached result by project source_id"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Enqueue security score analysis as a Celery task (GH#6505).
 
     Issue #2655: Return a completed no_data task when the path does not exist.
+    GH#8436: scope latest-result cache by source_id.
     """
     path_exists = await asyncio.to_thread(os.path.exists, path)
     if not path_exists:
@@ -2016,10 +2024,11 @@ async def start_security_analysis(
         return {
             "task_id": "no_path",
             "status": "completed",
-            "result": {"status": "no_data", "message": f"Path does not exist: {path}", "security_score": 0},
+            "result": {**_NO_PATH_RESULT, "message": f"Path does not exist: {path}"},
         }
+    prefix = f"{_REDIS_PREFIX}{source_id}:" if source_id else _REDIS_PREFIX
     result = run_security_analysis.delay(path)
-    await store_latest_task_id(_REDIS_PREFIX, result.id)
+    await store_latest_task_id(prefix, result.id)
     return {"task_id": result.id, "status": "pending"}
 
 
@@ -2030,9 +2039,20 @@ async def start_security_analysis(
     error_code_prefix="CODE_INTELLIGENCE",
 )
 async def get_security_score_status(task_id: str):
-    """Get security score analysis task status."""
+    """Get security score analysis task status (GH#8437: handle no_path sentinel)."""
+    if task_id == "no_path":
+        return {
+            "task_id": "no_path",
+            "status": "completed",
+            "progress": 100.0,
+            "current_step": "Complete",
+            "started_at": None,
+            "completed_at": None,
+            "error": None,
+            "result": _NO_PATH_RESULT,
+        }
     status = celery_result_to_status(AsyncResult(task_id))
-    if status is None or status["status"] == "pending":
+    if status is None:
         raise_not_found("Task", task_id)
     return status
 

@@ -138,9 +138,10 @@ async def _clear_checkpoint(task_id: str) -> None:
 
 @router.post("/patterns/analyze", response_model=PatternAnalysisStatus)
 async def start_pattern_analysis(request: PatternAnalysisRequest) -> PatternAnalysisStatus:
-    """Enqueue code pattern analysis as a Celery task (GH#6505)."""
+    """Enqueue code pattern analysis as a Celery task (GH#6505, GH#8436)."""
     celery_result = run_pattern_analysis.delay(request.model_dump())
-    await store_latest_task_id(_REDIS_PREFIX, celery_result.id)
+    prefix = f"{_REDIS_PREFIX}{request.source_id}:" if request.source_id else _REDIS_PREFIX
+    await store_latest_task_id(prefix, celery_result.id)
     return PatternAnalysisStatus(task_id=celery_result.id, status="pending", progress=0.0)
 
 
