@@ -225,6 +225,7 @@ async def _init_heartbeat_scheduler(app: FastAPI, update_status_fn, append_error
     except Exception as exc:
         logger.warning("Heartbeat scheduler init failed (non-fatal): %s", exc)
         await update_status_fn("heartbeat_scheduler", "degraded")
+        await append_error_fn(f"Heartbeat scheduler: {exc}")
 
 
 async def _init_retrieval_learner_consolidation(update_status_fn, append_error_fn):

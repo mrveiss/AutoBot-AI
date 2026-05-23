@@ -18,9 +18,10 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.user_management.dependencies import get_current_user
+from api.user_management.dependencies import get_current_user, get_tenant_context
 from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session
+from user_management.services import TenantContext
 
 from ..models.enums import HeartbeatRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
@@ -98,6 +99,7 @@ async def list_runs(
     page_size: int = Query(50, ge=1, le=200),
     session: AsyncSession = Depends(get_async_session),
     _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(get_tenant_context),
 ) -> HeartbeatRunList:
     """List heartbeat runs for *agent_id*, paginated, optionally filtered by status."""
     stmt = (
@@ -105,6 +107,8 @@ async def list_runs(
         .where(LLCHeartbeatRun.agent_id == agent_id)
         .order_by(LLCHeartbeatRun.created_at.desc())
     )
+    if ctx.org_id is not None:
+        stmt = stmt.where(LLCHeartbeatRun.company_id == ctx.org_id)
     if status is not None:
         stmt = stmt.where(LLCHeartbeatRun.status == status.value)
 
@@ -130,13 +134,17 @@ async def get_run(
     run_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
     _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(get_tenant_context),
 ) -> HeartbeatRunRead:
     """Fetch a single heartbeat run with its context snapshot."""
+    filters = [
+        LLCHeartbeatRun.id == run_id,
+        LLCHeartbeatRun.agent_id == agent_id,
+    ]
+    if ctx.org_id is not None:
+        filters.append(LLCHeartbeatRun.company_id == ctx.org_id)
     result = await session.execute(
-        select(LLCHeartbeatRun).where(
-            LLCHeartbeatRun.id == run_id,
-            LLCHeartbeatRun.agent_id == agent_id,
-        )
+        select(LLCHeartbeatRun).where(*filters)
     )
     run = result.scalar_one_or_none()
     if run is None:
