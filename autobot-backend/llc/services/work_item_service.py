@@ -162,6 +162,7 @@ class WorkItemService(LLCServiceBase):
         assignee_agent_id: Optional[str] = None,
         sprint_id: Optional[str] = None,
         parent_id: Optional[str] = None,
+        top_level_only: bool = False,
         limit: int = 100,
         offset: int = 0,
     ) -> Sequence[LLCWorkItem]:
@@ -176,7 +177,9 @@ class WorkItemService(LLCServiceBase):
             q = q.where(LLCWorkItem.assignee_agent_id == uuid.UUID(assignee_agent_id))
         if sprint_id:
             q = q.where(LLCWorkItem.sprint_id == uuid.UUID(sprint_id))
-        if parent_id:
+        if top_level_only:
+            q = q.where(LLCWorkItem.parent_id.is_(None))
+        elif parent_id is not None:
             q = q.where(LLCWorkItem.parent_id == uuid.UUID(parent_id))
         q = q.order_by(LLCWorkItem.created_at.desc()).limit(limit).offset(offset)
         result = await session.execute(q)
@@ -351,9 +354,14 @@ class WorkItemService(LLCServiceBase):
             rec = row.fetchone()
             if rec:
                 return f"{rec.issue_prefix}-{rec.issue_counter}"
-        except Exception:
-            logger.debug(
-                "llc_companies table not available — falling back to UUID identifier",
-                exc_info=True,
-            )
+        except Exception as exc:
+            from sqlalchemy.exc import ProgrammingError, OperationalError
+            if isinstance(exc, (ProgrammingError, OperationalError)):
+                logger.debug("llc_companies table not available — using UUID identifier fallback")
+            else:
+                logger.warning(
+                    "Unexpected error generating identifier for company %s — using UUID fallback",
+                    company_id,
+                    exc_info=True,
+                )
         return f"WI-{uuid.uuid4().hex[:8].upper()}"
