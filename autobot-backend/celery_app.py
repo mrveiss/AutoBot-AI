@@ -189,4 +189,9 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.prune_sync_queue_done",
         "schedule": _crontab_from_string(ssot_config.knowledge_sync_queue_prune_schedule),
     },
+    # GH#8224: detect expired active sprints and queue SPRINT_CLOSE approvals daily
+    "llc-sprint-autoclose-daily": {
+        "task": "llc.scheduler.sprint_autoclose.run_daily_check",
+        "schedule": crontab(hour=0, minute=5),
+    },
 }

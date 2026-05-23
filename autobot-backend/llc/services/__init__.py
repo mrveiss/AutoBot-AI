@@ -11,6 +11,7 @@ from .base import LLCServiceBase
 from .board import BoardService
 from .budget import BudgetService
 from .goal import GoalService
+from .sprint_autoclose import SprintAutoCloseService
 
 __all__ = [
     "ApprovalService",
@@ -19,4 +20,5 @@ __all__ = [
     "GoalService",
     "LLCActivityLogService",
     "LLCServiceBase",
+    "SprintAutoCloseService",
 ]
