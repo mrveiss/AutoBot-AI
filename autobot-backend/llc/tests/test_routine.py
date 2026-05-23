@@ -56,6 +56,9 @@ def _routine(
     row.status = status
     row.produces = RoutineProduces.NEW_WORK_ITEM
     row.work_item_template = {}
+    row.assignee_agent_id = None
+    row.recurring_work_item_id = None
+    row.last_fired_at = None
     row.created_at = datetime.now(tz=timezone.utc)
     row.updated_at = datetime.now(tz=timezone.utc)
     return row
