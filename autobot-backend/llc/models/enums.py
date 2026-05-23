@@ -14,26 +14,40 @@ from enum import Enum
 
 
 class WorkItemType(str, Enum):
-    """Type of LLC work item (GH#8213)."""
+    """Type of LLC work item (GH#8213).
 
+    Hierarchy: epic → feature → pbi → task/bug/subtask/spike/risk.
+    """
+
+    EPIC = "epic"
+    FEATURE = "feature"
+    PBI = "pbi"
     TASK = "task"
     BUG = "bug"
-    STORY = "story"
-    EPIC = "epic"
-    SPIKE = "spike"
     SUBTASK = "subtask"
+    SPIKE = "spike"
+    RISK = "risk"
 
 
 class WorkItemStatus(str, Enum):
     """Status of an LLC work item (GH#8213)."""
 
     BACKLOG = "backlog"
-    TODO = "todo"
+    READY = "ready"
     IN_PROGRESS = "in_progress"
     IN_REVIEW = "in_review"
     DONE = "done"
     CANCELLED = "cancelled"
     BLOCKED = "blocked"
+
+
+class WorkItemPriority(str, Enum):
+    """Priority of an LLC work item (GH#8213)."""
+
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
 
 
 class LLCCompanyStatus(str, Enum):

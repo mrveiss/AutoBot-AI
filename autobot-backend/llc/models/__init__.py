@@ -7,10 +7,12 @@ from .enums import (
     LLCCompanyStatus,
     LLCRunStatus,
     SprintStatus,
+    WorkItemPriority,
     WorkItemStatus,
     WorkItemType,
 )
 from .goal import GoalLevel, GoalStatus, LLCGoal
+from .work_item import LLCWorkItem, LLCWorkItemComment
 
 __all__ = [
     "ApprovalStatus",
@@ -21,7 +23,10 @@ __all__ = [
     "LLCCompanyStatus",
     "LLCGoal",
     "LLCRunStatus",
+    "LLCWorkItem",
+    "LLCWorkItemComment",
     "SprintStatus",
+    "WorkItemPriority",
     "WorkItemStatus",
     "WorkItemType",
 ]
