@@ -53,9 +53,17 @@ def upgrade() -> None:
     op.create_index("ix_llc_goals_level", "llc_goals", ["level"])
     op.create_index("ix_llc_goals_status", "llc_goals", ["status"])
     op.create_index("ix_llc_goals_owner_agent_id", "llc_goals", ["owner_agent_id"])
+    # llc_goals must exist before this FK can be wired — deferred from migration 022.
+    op.create_foreign_key(
+        "fk_llc_work_items_goal_id",
+        "llc_work_items", "llc_goals",
+        ["goal_id"], ["id"],
+        ondelete="SET NULL",
+    )
 
 
 def downgrade() -> None:
+    op.drop_constraint("fk_llc_work_items_goal_id", "llc_work_items", type_="foreignkey")
     op.drop_index("ix_llc_goals_owner_agent_id", table_name="llc_goals")
     op.drop_index("ix_llc_goals_status", table_name="llc_goals")
     op.drop_index("ix_llc_goals_level", table_name="llc_goals")
