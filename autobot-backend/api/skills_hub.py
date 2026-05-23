@@ -13,20 +13,11 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from autobot_shared.logging_manager import get_logger
-from skills.hub import InstalledSkill, SkillHub, SkillListing, SkillUpdate
+from skills.hub import InstalledSkill, SkillHub, SkillListing, SkillUpdate, get_skill_hub
 
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["skills-hub"])
-
-_hub: SkillHub | None = None
-
-
-def _get_hub() -> SkillHub:
-    global _hub
-    if _hub is None:
-        _hub = SkillHub()
-    return _hub
 
 
 # ------------------------------------------------------------------
@@ -91,7 +82,7 @@ class InstallRequest(BaseModel):
 @router.get("/search", response_model=List[SkillListingOut], summary="Search hub registry")
 async def search_hub(q: str = "") -> List[SkillListingOut]:
     """Search the community skill registry by name or description."""
-    hub = _get_hub()
+    hub = await get_skill_hub()
     results = await hub.search(q)
     return [SkillListingOut.from_listing(s) for s in results]
 
@@ -99,7 +90,7 @@ async def search_hub(q: str = "") -> List[SkillListingOut]:
 @router.post("/install", response_model=InstalledSkillOut, summary="Install a hub skill")
 async def install_skill(body: InstallRequest) -> InstalledSkillOut:
     """Install a community skill from the hub registry."""
-    hub = _get_hub()
+    hub = await get_skill_hub()
     try:
         installed = await hub.install(body.skill_id)
     except ValueError as exc:
@@ -115,7 +106,7 @@ async def install_skill(body: InstallRequest) -> InstalledSkillOut:
 @router.delete("/install/{skill_id}", summary="Uninstall a hub skill")
 async def uninstall_skill(skill_id: str) -> dict:
     """Remove a previously installed hub skill."""
-    hub = _get_hub()
+    hub = await get_skill_hub()
     try:
         await hub.uninstall(skill_id)
     except ValueError as exc:
@@ -129,7 +120,7 @@ async def uninstall_skill(skill_id: str) -> dict:
 @router.get("/installed", response_model=List[InstalledSkillOut], summary="List installed hub skills")
 async def list_installed() -> List[InstalledSkillOut]:
     """List all community skills installed from the hub."""
-    hub = _get_hub()
+    hub = await get_skill_hub()
     skills = await hub.list_installed()
     return [InstalledSkillOut.from_installed(s) for s in skills]
 
@@ -137,7 +128,7 @@ async def list_installed() -> List[InstalledSkillOut]:
 @router.get("/updates", response_model=List[SkillUpdateOut], summary="Check for hub skill updates")
 async def check_updates() -> List[SkillUpdateOut]:
     """Return installed hub skills that have a newer version available."""
-    hub = _get_hub()
+    hub = await get_skill_hub()
     updates = await hub.check_updates()
     return [
         SkillUpdateOut(

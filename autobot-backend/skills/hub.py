@@ -6,21 +6,26 @@ Community Skill Hub (Issue #4412)
 
 Client for discovering and installing externally published MCP skills from
 a registry. Hub-installed skills pass through governance and persist to Redis
-like generated skills, and run as MCP subprocesses via MCPProcessManager.
+like generated skills, and run as MCP subprocesses via MCPProcessManager when
+inline skill_py content is available.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
-import uuid
+import time
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import urlparse
 
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
 REDIS_HUB_PREFIX = "skills:hub:"
+_INDEX_TTL_SECONDS = 300  # 5-minute registry cache
+_hub_lock = asyncio.Lock()
 
 
 @dataclass
@@ -71,8 +76,9 @@ class SkillHub:
                 hub_url = ssot.misc.skill_hub_url
             except Exception:
                 hub_url = ""
-        self._hub_url = hub_url
+        self._hub_url = _validate_hub_url(hub_url)
         self._index: list[dict[str, Any]] | None = None
+        self._index_fetched_at: float = 0.0
 
     # ------------------------------------------------------------------
     # Public interface
@@ -93,19 +99,19 @@ class SkillHub:
 
         Steps:
         1. Fetch skill manifest from registry index.
-        2. Validate signature (security gate via governance).
-        3. Register MCP endpoint with SkillManager + persist to Redis.
-        4. Start skill process via MCPProcessManager.
+        2. Governance gate — only FULL_AUTO passes without admin review.
+        3. Persist record to Redis under skills:hub:{skill_id}.
+        4. If the entry contains skill_py content, start MCP subprocess.
         """
         entry = await self._find_entry(skill_id)
         if entry is None:
             raise ValueError(f"Skill '{skill_id}' not found in hub registry")
 
         skill_name = entry["name"]
-        mcp_url = entry["mcp_url"]
+        mcp_url = entry.get("mcp_url", "")
         version = entry.get("version", "latest")
 
-        # Governance gate — treat hub skills as MONITORED by default
+        # Governance gate — raise for both SEMI_AUTO (queued) and LOCKED (denied)
         from skills.governance import GovernanceEngine
         from skills.models import GovernanceMode
 
@@ -115,19 +121,20 @@ class SkillHub:
             requested_by="hub",
             reason=f"Community hub install: {skill_id}",
         )
-        if not activation.approved and not activation.requires_human_review:
-            raise PermissionError(
-                f"Governance denied activation of hub skill '{skill_name}': {activation.reason}"
+        if not activation.approved:
+            msg = (
+                f"Hub skill '{skill_name}' queued for admin approval (approval_id={activation.approval_id})"
+                if activation.requires_human_review
+                else f"Governance denied activation of hub skill '{skill_name}': {activation.reason}"
             )
+            raise PermissionError(msg)
 
-        # Persist to Redis
-        record_id = str(uuid.uuid4())
         from autobot_shared.time_utils import now_utc
 
         installed_at = now_utc().isoformat()
+        # Use skill_id (registry id) as the persistent record key — not a generated UUID
         record: dict[str, Any] = {
-            "id": record_id,
-            "hub_id": skill_id,
+            "id": skill_id,
             "name": skill_name,
             "mcp_url": mcp_url,
             "version": version,
@@ -135,18 +142,20 @@ class SkillHub:
         }
         await self._persist_record(skill_id, record)
 
-        # Attempt to start the MCP process (best-effort)
-        try:
-            from skills.mcp_process import MCPProcessManager
+        # If the entry supplies inline Python, start it as a local MCP subprocess
+        skill_py: str | None = entry.get("skill_py")
+        if skill_py:
+            try:
+                from skills.mcp_process import get_mcp_manager
 
-            mgr = MCPProcessManager()
-            await mgr.start_skill(skill_name, mcp_url)
-            logger.info("Started hub skill MCP process: %s -> %s", skill_name, mcp_url)
-        except Exception as exc:
-            logger.warning("Could not start hub skill MCP process for '%s': %s", skill_name, exc)
+                mgr = await get_mcp_manager()
+                await mgr.start(skill_name, skill_py)
+                logger.info("Started hub skill MCP process: %s", skill_name)
+            except Exception as exc:
+                logger.warning("Could not start hub skill process for '%s': %s", skill_name, exc)
 
         return InstalledSkill(
-            id=record_id,
+            id=skill_id,
             name=skill_name,
             mcp_url=mcp_url,
             version=version,
@@ -160,15 +169,14 @@ class SkillHub:
             raise ValueError(f"Hub skill '{skill_id}' is not installed")
 
         skill_name = record.get("name", "")
-        mcp_url = record.get("mcp_url", "")
 
         try:
-            from skills.mcp_process import MCPProcessManager
+            from skills.mcp_process import get_mcp_manager
 
-            mgr = MCPProcessManager()
-            await mgr.stop_skill(skill_name, mcp_url)
+            mgr = await get_mcp_manager()
+            await mgr.stop(skill_name)
         except Exception as exc:
-            logger.debug("MCP process stop for '%s' returned: %s", skill_name, exc)
+            logger.debug("MCP process stop for '%s': %s", skill_name, exc)
 
         await self._delete_record(skill_id)
         logger.info("Uninstalled hub skill '%s' (%s)", skill_name, skill_id)
@@ -179,10 +187,10 @@ class SkillHub:
         if redis is None:
             return []
         try:
-            keys = redis.keys(f"{REDIS_HUB_PREFIX}*")
             result = []
-            for key in keys:
-                raw = redis.get(key)
+            async for key in redis.scan_iter(match=f"{REDIS_HUB_PREFIX}*"):
+                key_str = key.decode() if isinstance(key, bytes) else key
+                raw = await redis.get(key_str)
                 if raw:
                     rec = json.loads(raw)
                     result.append(
@@ -225,7 +233,8 @@ class SkillHub:
     # ------------------------------------------------------------------
 
     async def _fetch_index(self) -> list[dict[str, Any]]:
-        if self._index is not None:
+        now = time.monotonic()
+        if self._index is not None and (now - self._index_fetched_at) < _INDEX_TTL_SECONDS:
             return self._index
         if not self._hub_url:
             logger.debug("skill_hub_url not configured — returning empty index")
@@ -238,10 +247,11 @@ class SkillHub:
                 resp.raise_for_status()
                 data = resp.json()
                 self._index = data.get("skills", [])
+                self._index_fetched_at = now
                 return self._index
         except Exception as exc:
             logger.warning("Failed to fetch hub index from '%s': %s", self._hub_url, exc)
-            return []
+            return self._index or []
 
     async def _find_entry(self, skill_id: str) -> dict[str, Any] | None:
         index = await self._fetch_index()
@@ -255,7 +265,7 @@ class SkillHub:
         if redis is None:
             return
         try:
-            redis.set(f"{REDIS_HUB_PREFIX}{skill_id}", json.dumps(record))
+            await redis.set(f"{REDIS_HUB_PREFIX}{skill_id}", json.dumps(record))
         except Exception as exc:
             logger.warning("Failed to persist hub skill record: %s", exc)
 
@@ -264,7 +274,7 @@ class SkillHub:
         if redis is None:
             return None
         try:
-            raw = redis.get(f"{REDIS_HUB_PREFIX}{skill_id}")
+            raw = await redis.get(f"{REDIS_HUB_PREFIX}{skill_id}")
             return json.loads(raw) if raw else None
         except Exception as exc:
             logger.warning("Failed to load hub skill record '%s': %s", skill_id, exc)
@@ -275,14 +285,42 @@ class SkillHub:
         if redis is None:
             return
         try:
-            redis.delete(f"{REDIS_HUB_PREFIX}{skill_id}")
+            await redis.delete(f"{REDIS_HUB_PREFIX}{skill_id}")
         except Exception as exc:
             logger.warning("Failed to delete hub skill record '%s': %s", skill_id, exc)
 
 
 # ------------------------------------------------------------------
+# Module-level singleton (asyncio-safe factory)
+# ------------------------------------------------------------------
+
+_hub_singleton: SkillHub | None = None
+
+
+async def get_skill_hub() -> SkillHub:
+    """Return the module-level SkillHub singleton (asyncio-safe init)."""
+    global _hub_singleton
+    if _hub_singleton is None:
+        async with _hub_lock:
+            if _hub_singleton is None:
+                _hub_singleton = SkillHub()
+    return _hub_singleton
+
+
+# ------------------------------------------------------------------
 # Module-level helpers
 # ------------------------------------------------------------------
+
+
+def _validate_hub_url(url: str) -> str:
+    """Reject non-http(s) URLs to prevent SSRF."""
+    if not url:
+        return ""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        logger.warning("skill_hub_url rejected (non-http scheme '%s'): %s", parsed.scheme, url)
+        return ""
+    return url
 
 
 def _listing_from_entry(entry: dict[str, Any]) -> SkillListing:
