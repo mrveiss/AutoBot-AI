@@ -90,9 +90,7 @@ class TestCompanyCreate:
     @pytest.mark.asyncio
     async def test_create_rejects_duplicate_prefix(self):
         svc = _make_service()
-        svc._assert_prefix_unique = AsyncMock(
-            side_effect=CompanyIssuePrefixConflictError("prefix taken")
-        )
+        svc._assert_prefix_unique = AsyncMock(side_effect=CompanyIssuePrefixConflictError("prefix taken"))
         svc._get_or_404 = AsyncMock(return_value=_make_org())
 
         data = CompanyCreate(name="Dupe", slug="dupe", issue_prefix="DUP")

@@ -208,9 +208,7 @@ class CompanyService(LLCServiceBase):
 
     async def _get_or_404(self, company_id: uuid.UUID) -> Organization:
         result = await self.session.execute(
-            select(Organization)
-            .where(Organization.id == company_id)
-            .where(Organization.deleted_at.is_(None))
+            select(Organization).where(Organization.id == company_id).where(Organization.deleted_at.is_(None))
         )
         org = result.scalar_one_or_none()
         if org is None:
@@ -220,9 +218,7 @@ class CompanyService(LLCServiceBase):
     async def _assert_prefix_unique(self, prefix: Optional[str]) -> None:
         if prefix is None:
             return
-        result = await self.session.execute(
-            select(Organization.id).where(Organization.issue_prefix == prefix)
-        )
+        result = await self.session.execute(select(Organization.id).where(Organization.issue_prefix == prefix))
         if result.scalar_one_or_none() is not None:
             raise CompanyIssuePrefixConflictError(f"issue_prefix '{prefix}' is already taken")
 
@@ -243,8 +239,7 @@ class CompanyService(LLCServiceBase):
         remaining = parent.budget_monthly_cents - parent.spent_monthly_cents - existing_children_total
         if child_budget_cents > remaining:
             raise CompanyBudgetError(
-                f"Child budget {child_budget_cents} cents exceeds parent remaining "
-                f"budget {remaining} cents"
+                f"Child budget {child_budget_cents} cents exceeds parent remaining " f"budget {remaining} cents"
             )
 
     async def _sum_children_budget(
@@ -288,11 +283,7 @@ class CompanyService(LLCServiceBase):
         current_id: Optional[uuid.UUID] = new_parent_id
         while current_id is not None:
             if current_id in visited:
-                raise CompanyCycleError(
-                    f"Setting parent_org_id={new_parent_id} would create a hierarchy cycle"
-                )
+                raise CompanyCycleError(f"Setting parent_org_id={new_parent_id} would create a hierarchy cycle")
             visited.add(current_id)
-            result = await self.session.execute(
-                select(Organization.parent_org_id).where(Organization.id == current_id)
-            )
+            result = await self.session.execute(select(Organization.parent_org_id).where(Organization.id == current_id))
             current_id = result.scalar_one_or_none()
