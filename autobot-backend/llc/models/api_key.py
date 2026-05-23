@@ -22,9 +22,7 @@ class LLCApiKey(Base):
 
     __tablename__ = "llc_agent_api_keys"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     agent_id: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
     company_id: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)

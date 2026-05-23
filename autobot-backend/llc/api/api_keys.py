@@ -53,9 +53,7 @@ async def create_api_key(
     body: ApiKeyCreate,
     session: AsyncSession = Depends(get_async_session),
 ) -> ApiKeyCreated:
-    record, plaintext = await _svc.issue_key(
-        session, agent_id=agent_id, company_id=body.company_id, name=body.name
-    )
+    record, plaintext = await _svc.issue_key(session, agent_id=agent_id, company_id=body.company_id, name=body.name)
     return ApiKeyCreated(
         id=record.id,
         agent_id=record.agent_id,
@@ -85,7 +83,5 @@ async def list_api_keys(
     agent_id: str,
     session: AsyncSession = Depends(get_async_session),
 ) -> List[ApiKeyRead]:
-    result = await session.execute(
-        select(LLCApiKey).where(LLCApiKey.agent_id == agent_id)
-    )
+    result = await session.execute(select(LLCApiKey).where(LLCApiKey.agent_id == agent_id))
     return [ApiKeyRead.model_validate(r) for r in result.scalars().all()]

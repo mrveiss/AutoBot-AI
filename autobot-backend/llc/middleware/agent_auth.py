@@ -37,7 +37,7 @@ class LLCAgentAuthMiddleware(BaseHTTPMiddleware):
         if not auth.startswith("Bearer "):
             return JSONResponse({"detail": "Missing bearer token"}, status_code=401)
 
-        raw_key = auth[len("Bearer "):]
+        raw_key = auth[len("Bearer ") :]
         key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
 
         factory = get_async_session_factory()

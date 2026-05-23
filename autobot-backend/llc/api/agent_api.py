@@ -47,9 +47,7 @@ class StatusUpdate(BaseModel):
 
 
 @router.post("/work-items/{item_id}/status")
-async def update_work_item_status(
-    item_id: uuid.UUID, body: StatusUpdate, request: Request
-) -> Dict[str, Any]:
+async def update_work_item_status(item_id: uuid.UUID, body: StatusUpdate, request: Request) -> Dict[str, Any]:
     agent_id, company_id = _agent_context(request)
     # Phase 2+: delegate to WorkItemService.transition()
     return {"updated": True, "item_id": str(item_id), "status": body.status}
