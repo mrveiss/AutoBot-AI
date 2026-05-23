@@ -88,6 +88,15 @@ class SprintStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+class ApprovalType(str, Enum):
+    """Gate type for a board approval request (GH#8214)."""
+
+    HIRE = "hire"
+    STRATEGY = "strategy"
+    BUDGET_OVERRIDE = "budget_override"
+    SPRINT_CLOSE = "sprint_close"
+
+
 class ApprovalStatus(str, Enum):
     """Status of an LLC approval request (GH#8214)."""
 
