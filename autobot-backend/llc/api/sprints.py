@@ -1,7 +1,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""LLC sprint hierarchy API routes (GH#8219, GH#8224).
+"""LLC sprint hierarchy API routes (GH#8219, GH#8224, GH#8220).
 
 Routes:
   GET  /llc/companies/{company_id}/portfolios   — list portfolios
@@ -22,6 +22,11 @@ Routes:
   GET/PATCH/DELETE /llc/sprints/{id}
 
   POST /llc/sprints/{id}/close                  — manual close trigger (board only)
+
+  Sprint planning analytics (GH#8220):
+  GET /llc/sprints/{sprint_id}/capacity         — assigned story-point totals
+  GET /llc/projects/{project_id}/velocity       — velocity history for N closed sprints
+  GET /llc/sprints/{sprint_id}/burndown         — day-by-day burndown series
 """
 
 import uuid
@@ -36,6 +41,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from user_management.database import get_async_session
 
 from ..models.enums import ApprovalStatus, ApprovalType, SprintStatus
+from ..services.sprint_planning import SprintNotFound, SprintPlanningService
 from ..models.sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint
 from ..services.approval import ApprovalNotFoundError, ApprovalService, ApprovalStateError
 from ..services.sprint_autoclose import SprintAutoCloseService
@@ -523,3 +529,42 @@ async def close_sprint(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+# ------------------------------------------------------------------ Sprint planning analytics (GH#8220)
+
+_planning_svc = SprintPlanningService()
+
+
+@router.get("/sprints/{sprint_id}/capacity")
+async def get_sprint_capacity(
+    sprint_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+) -> dict:
+    """Return total and per-agent assigned story points for a sprint."""
+    try:
+        return await _planning_svc.get_capacity(session, sprint_id)
+    except SprintNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/projects/{project_id}/velocity")
+async def get_project_velocity(
+    project_id: uuid.UUID,
+    n_sprints: int = Query(default=5, ge=1, le=52, description="Number of closed sprints to include"),
+    session: AsyncSession = Depends(get_async_session),
+) -> dict:
+    """Return velocity history for the last N closed sprints in a project."""
+    return await _planning_svc.get_velocity_history(session, project_id, n_sprints)
+
+
+@router.get("/sprints/{sprint_id}/burndown")
+async def get_sprint_burndown(
+    sprint_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+) -> dict:
+    """Return day-by-day burndown series for a sprint."""
+    try:
+        return await _planning_svc.get_burndown(session, sprint_id)
+    except SprintNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

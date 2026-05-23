@@ -267,6 +267,139 @@ class WorkItemService(LLCServiceBase):
         return item
 
     # ------------------------------------------------------------------
+    # Human claim / unclaim
+    # ------------------------------------------------------------------
+
+    async def claim_human(
+        self,
+        session: AsyncSession,
+        work_item_id: str,
+        user_id: str,
+        company_id: str,
+    ) -> LLCWorkItem:
+        """Atomically claim a work item for a human user.
+
+        Redis key stores ``user:{user_id}`` (not bare UUID) so the NX check
+        is mutually exclusive with agent checkout which stores a bare UUID.
+
+        Raises CheckoutConflict if the item is already held by anyone else.
+        Raises ValueError if the item is not found.
+        """
+        redis_key = f"llc:checkout:{work_item_id}"
+        redis_value = f"user:{user_id}"
+        redis = await get_async_redis_client()
+
+        if redis is not None:
+            acquired = await redis.set(redis_key, redis_value, nx=True, ex=_CHECKOUT_TTL)
+            if not acquired:
+                existing = await redis.get(redis_key)
+                if existing and existing != redis_value:
+                    raise CheckoutConflict(
+                        f"Work item {work_item_id} is already claimed (held by {existing})"
+                    )
+
+        result = await session.execute(
+            select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
+        )
+        item = result.scalar_one_or_none()
+        if item is None:
+            if redis is not None:
+                await redis.delete(redis_key)
+            raise ValueError(f"Work item {work_item_id} not found")
+
+        # DB-level conflict guard — reject if already held by a different user
+        if item.assignee_user_id is not None and str(item.assignee_user_id) != user_id:
+            if redis is not None:
+                await redis.delete(redis_key)
+            raise CheckoutConflict(
+                f"Work item {work_item_id} is already claimed by user {item.assignee_user_id}"
+            )
+
+        item.assignee_user_id = uuid.UUID(user_id)
+        item.assignee_agent_id = None
+        item.assignee_type = "user"
+        item.checkout_run_id = None
+        item.checkout_locked_at = datetime.now(timezone.utc)
+        item.version += 1
+        if item.status in (WorkItemStatus.BACKLOG, WorkItemStatus.READY):
+            item.status = WorkItemStatus.IN_PROGRESS
+            item.started_at = item.started_at or datetime.now(timezone.utc)
+
+        await session.flush()
+
+        if self.activity_log:
+            try:
+                from .activity_log import ActivityEventType
+
+                await self.activity_log.record(
+                    session,
+                    company_id=company_id,
+                    actor_id=user_id,
+                    event_type=ActivityEventType.WORK_ITEM_ASSIGNED,
+                    entity_type="work_item",
+                    entity_id=work_item_id,
+                    after={"assignee_user_id": user_id, "assignee_type": "user"},
+                )
+            except Exception:
+                logger.warning("Activity log failed for claim_human %s", work_item_id)
+
+        return item
+
+    async def unclaim_human(
+        self,
+        session: AsyncSession,
+        work_item_id: str,
+        user_id: str,
+        company_id: str,
+    ) -> LLCWorkItem:
+        """Release a human claim on a work item, returning it to READY.
+
+        Bypasses the state machine (same privilege as checkout → IN_PROGRESS).
+        Raises ValueError if the item is not found or the caller does not hold the claim.
+        """
+        result = await session.execute(
+            select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
+        )
+        item = result.scalar_one_or_none()
+        if item is None:
+            raise ValueError(f"Work item {work_item_id} not found")
+        if item.assignee_user_id is None or str(item.assignee_user_id) != user_id:
+            raise ValueError(
+                f"User {user_id} does not hold claim for work item {work_item_id}"
+            )
+
+        item.assignee_user_id = None
+        item.assignee_type = None
+        item.checkout_run_id = None
+        item.checkout_locked_at = None
+        item.status = WorkItemStatus.READY
+        item.version += 1
+        await session.flush()
+
+        redis = await get_async_redis_client()
+        if redis is not None:
+            await redis.delete(f"llc:checkout:{work_item_id}")
+
+        if self.activity_log:
+            try:
+                from .activity_log import ActivityEventType
+
+                await self.activity_log.record(
+                    session,
+                    company_id=company_id,
+                    actor_id=user_id,
+                    event_type=ActivityEventType.WORK_ITEM_STATUS_CHANGED,
+                    entity_type="work_item",
+                    entity_id=work_item_id,
+                    before={"assignee_user_id": user_id},
+                    after={"assignee_user_id": None, "status": WorkItemStatus.READY.value},
+                )
+            except Exception:
+                logger.warning("Activity log failed for unclaim_human %s", work_item_id)
+
+        return item
+
+    # ------------------------------------------------------------------
     # Status transitions
     # ------------------------------------------------------------------
 

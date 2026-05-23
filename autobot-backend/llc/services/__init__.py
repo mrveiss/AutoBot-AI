@@ -12,6 +12,7 @@ from .board import BoardService
 from .budget import BudgetService
 from .goal import GoalService
 from .sprint_autoclose import SprintAutoCloseService
+from .sprint_planning import SprintNotFound, SprintPlanningService
 
 __all__ = [
     "ApprovalService",
@@ -21,4 +22,6 @@ __all__ = [
     "LLCActivityLogService",
     "LLCServiceBase",
     "SprintAutoCloseService",
+    "SprintNotFound",
+    "SprintPlanningService",
 ]

@@ -1,25 +1,29 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""LLC Company API routes (GH#8211).
+"""LLC Company API routes (GH#8211, GH#8223).
 
 Route group: /llc/companies
-  GET    /              — list root companies (no parent)
-  POST   /              — create a company
-  GET    /{id}          — get a single company
-  PATCH  /{id}          — update a company
-  DELETE /{id}          — soft-delete a company
-  GET    /{id}/tree     — recursive sub-company tree
-  GET    /{id}/ancestry — ancestors from root to this company
+  GET    /                       — list root companies (no parent)
+  POST   /                       — create a company
+  GET    /{id}                   — get a single company
+  PATCH  /{id}                   — update a company
+  DELETE /{id}                   — soft-delete a company
+  GET    /{id}/tree              — recursive sub-company tree
+  GET    /{id}/ancestry          — ancestors from root to this company
+  POST   /{id}/members           — add a member (GH#8223)
+  DELETE /{id}/members/{user_id} — remove a member (GH#8223)
+  GET    /{id}/members           — list members (GH#8223)
 
 All endpoints enforce company_id scoping via the org_id path or
 the authenticated session's organization context.
 """
 
 import uuid
-from typing import List
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from llc.models.company import (
@@ -29,7 +33,8 @@ from llc.models.company import (
     CompanyTreeNode,
     CompanyUpdate,
 )
-from llc.models.enums import LLCCompanyStatus
+from llc.models.enums import LLCCompanyStatus, MembershipRole
+from llc.models.membership import LLCCompanyMembership
 from llc.services.company import (
     CompanyBudgetError,
     CompanyCycleError,
@@ -38,10 +43,49 @@ from llc.services.company import (
     CompanyNotFoundError,
     CompanyService,
 )
+from llc.services.membership_service import (
+    MemberAlreadyExistsError,
+    MemberNotFoundError,
+    MembershipService,
+)
 from user_management.database import get_async_session
 from user_management.models.organization import Organization
 
 router = APIRouter(prefix="/companies", tags=["llc-companies"])
+
+
+# ------------------------------------------------------------------
+# Member management schemas (GH#8223)
+# ------------------------------------------------------------------
+
+
+class MemberAddRequest(BaseModel):
+    user_id: uuid.UUID
+    role: MembershipRole = MembershipRole.MEMBER
+
+
+class MemberRead(BaseModel):
+    id: uuid.UUID
+    company_id: uuid.UUID
+    user_id: uuid.UUID
+    role: MembershipRole
+    created_at: Any
+
+    model_config = {"from_attributes": True}
+
+
+def _to_member_read(m: LLCCompanyMembership) -> dict:
+    return {
+        "id": str(m.id),
+        "company_id": str(m.company_id),
+        "user_id": str(m.user_id),
+        "role": m.role,
+        "created_at": m.created_at.isoformat() if m.created_at else None,
+    }
+
+
+def _get_membership_service() -> MembershipService:
+    return MembershipService()
 
 
 def _to_read(org: Organization) -> CompanyRead:
@@ -185,4 +229,50 @@ async def get_company_ancestry(
             for a in ancestors
         ]
     except CompanyNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+# ------------------------------------------------------------------
+# Member management routes (GH#8223)
+# ------------------------------------------------------------------
+
+
+@router.get("/{company_id}/members")
+async def list_members(
+    company_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    svc: MembershipService = Depends(_get_membership_service),
+) -> List[Dict[str, Any]]:
+    members = await svc.list_members(session, str(company_id))
+    return [_to_member_read(m) for m in members]
+
+
+@router.post("/{company_id}/members", status_code=status.HTTP_201_CREATED)
+async def add_member(
+    company_id: uuid.UUID,
+    body: MemberAddRequest,
+    session: AsyncSession = Depends(get_async_session),
+    svc: MembershipService = Depends(_get_membership_service),
+) -> Dict[str, Any]:
+    try:
+        membership = await svc.add_member(session, str(company_id), str(body.user_id), body.role)
+        await session.commit()
+        return _to_member_read(membership)
+    except MemberAlreadyExistsError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+
+
+@router.delete("/{company_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_member(
+    company_id: uuid.UUID,
+    user_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    svc: MembershipService = Depends(_get_membership_service),
+) -> None:
+    try:
+        await svc.remove_member(session, str(company_id), str(user_id))
+        await session.commit()
+    except MemberNotFoundError as exc:
+        await session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
