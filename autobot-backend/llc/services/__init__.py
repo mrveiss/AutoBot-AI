@@ -10,5 +10,19 @@ from .approval import ApprovalService
 from .base import LLCServiceBase
 from .budget import BudgetService
 from .goal import GoalService
+from .portfolio import PortfolioService
+from .program import ProgramService
+from .project import ProjectService
+from .sprint import SprintService
 
-__all__ = ["ApprovalService", "BudgetService", "GoalService", "LLCActivityLogService", "LLCServiceBase"]
+__all__ = [
+    "ApprovalService",
+    "BudgetService",
+    "GoalService",
+    "LLCActivityLogService",
+    "LLCServiceBase",
+    "PortfolioService",
+    "ProgramService",
+    "ProjectService",
+    "SprintService",
+]
