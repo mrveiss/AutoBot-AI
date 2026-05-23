@@ -119,9 +119,7 @@ class TestCeleryTaskStatusHelper:
     def test_progress_state(self):
         from utils.celery_task_status import celery_result_to_status
 
-        status = celery_result_to_status(
-            self._mock_result("PROGRESS", {"step": "Scanning", "progress": 42.0})
-        )
+        status = celery_result_to_status(self._mock_result("PROGRESS", {"step": "Scanning", "progress": 42.0}))
         assert status["status"] == "running"
         assert status["progress"] == 42.0
         assert status["current_step"] == "Scanning"
