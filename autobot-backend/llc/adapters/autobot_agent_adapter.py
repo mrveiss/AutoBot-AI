@@ -164,6 +164,9 @@ class AutoBotAgentAdapter:
         self._tasks: Dict[str, asyncio.Task] = {}
         # run_id → captured log text (populated after task completion)
         self._logs: Dict[str, str] = {}
+        # run_ids for which cancel() was called; used to report CANCELLED even
+        # while a non-cooperative task is still running (no asyncio.shield).
+        self._cancel_requested: set = set()
 
     # ──────────────────────────────────────────────────────────────────────
     # LLCAdapter protocol implementation
@@ -196,6 +199,10 @@ class AutoBotAgentAdapter:
         """
         task = self._tasks.get(run_id)
         if task is not None:
+            # Cancelled-but-lingering: report CANCELLED immediately so the
+            # scheduler is not stuck waiting on a non-cooperative task.
+            if not task.done() and run_id in self._cancel_requested:
+                return AdapterRunStatus(status=LLCRunStatus.CANCELLED)
             return _task_to_status(task)
 
         # Cross-worker fallback: check Redis for a persisted terminal status.
@@ -223,15 +230,29 @@ class AutoBotAgentAdapter:
         )
 
     async def cancel(self, agent_config: Dict[str, Any], run_id: str) -> None:
-        """Cancel a dispatched run."""
+        """Cancel a dispatched run.
+
+        Marks the run as cancel-requested, sends the asyncio cancellation, and
+        waits up to 5 s for cooperative shutdown.  ``asyncio.wait`` (not
+        ``asyncio.shield`` + ``wait_for``) is used so the task is NOT shielded
+        from the original ``task.cancel()`` call and does NOT linger after
+        ``cancel()`` returns.  If the task ignores cancellation for 5 s,
+        ``status()`` still reports CANCELLED (via ``_cancel_requested``) so the
+        scheduler can move on; the task will be cleaned up when it eventually
+        finishes.
+        """
         task = self._tasks.get(run_id)
         if task is None or task.done():
             return
+        self._cancel_requested.add(run_id)
         task.cancel()
-        try:
-            await asyncio.wait_for(asyncio.shield(task), timeout=5.0)
-        except (asyncio.CancelledError, asyncio.TimeoutError, Exception):
-            pass
+        done, _ = await asyncio.wait({task}, timeout=5.0)
+        if task not in done:
+            logger.warning(
+                "AutoBotAgentAdapter: cancel() timed out after 5 s for run_id=%s"
+                " (task still running — will be discarded when it finishes)",
+                run_id,
+            )
 
     # ──────────────────────────────────────────────────────────────────────
     # Internal helpers
@@ -255,7 +276,24 @@ class AutoBotAgentAdapter:
         try:
             response = await agent.process_request(request)
             await self._forward_cost(run_id, response, context)
-            final_status = AdapterRunStatus(status=LLCRunStatus.COMPLETED, exit_code=0)
+            # Detect error responses that signal failure without raising so
+            # the Redis-persisted status matches what _task_to_status() returns.
+            _resp_status = (
+                response.get("status", "success")
+                if isinstance(response, dict)
+                else getattr(response, "status", "success")
+            )
+            if _resp_status == "error":
+                _err = (
+                    response.get("error")
+                    if isinstance(response, dict)
+                    else getattr(response, "error", None)
+                )
+                final_status = AdapterRunStatus(
+                    status=LLCRunStatus.FAILED, exit_code=1, error=_err
+                )
+            else:
+                final_status = AdapterRunStatus(status=LLCRunStatus.COMPLETED, exit_code=0)
             return response
         except asyncio.CancelledError:
             final_status = AdapterRunStatus(status=LLCRunStatus.CANCELLED)
@@ -356,6 +394,7 @@ class AutoBotAgentAdapter:
         for rid in done_ids:
             del self._tasks[rid]
             self._logs.pop(rid, None)
+            self._cancel_requested.discard(rid)
         return len(done_ids)
 
     def get_log(self, run_id: str) -> Optional[str]:

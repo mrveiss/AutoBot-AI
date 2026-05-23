@@ -154,6 +154,7 @@ def _make_slow_adapter() -> AutoBotAgentAdapter:
     adapter._run_log_store = None
     adapter._tasks = {}
     adapter._logs = {}
+    adapter._cancel_requested = set()
     return adapter
 
 
@@ -282,7 +283,7 @@ async def test_status_cross_worker_reads_redis():
 
     mock_redis = AsyncMock()
     mock_redis.get = AsyncMock(
-        return_value=_json.dumps({"status": "COMPLETED", "error": None, "exit_code": 0})
+        return_value=_json.dumps({"status": "completed", "error": None, "exit_code": 0})
     )
 
     with patch(
@@ -322,6 +323,49 @@ async def test_cancel_noop_on_completed_task():
     run_id = await adapter.invoke({}, {"title": "T"})
     await asyncio.sleep(0)
     await adapter.cancel({}, run_id)  # should not raise
+
+
+@pytest.mark.asyncio
+async def test_cancel_no_ghost_run():
+    """After cancel(), status() must return CANCELLED (not RUNNING) even if the
+    task is slow — no asyncio.shield ghost-run."""
+    adapter = _make_slow_adapter()
+    run_id = await adapter.invoke({}, {"title": "Ghost"})
+    # cancel() must NOT leave the task perpetually RUNNING via asyncio.shield
+    await adapter.cancel({}, run_id)
+    st = await adapter.status({}, run_id)
+    assert st.status == LLCRunStatus.CANCELLED
+
+
+@pytest.mark.asyncio
+async def test_error_response_redis_matches_local():
+    """When agent returns AgentResponse(status='error'), Redis-persisted status
+    must be FAILED — same as local _task_to_status() — to avoid divergence."""
+    mock_redis = AsyncMock()
+    mock_redis.setex = AsyncMock()
+
+    persisted: dict = {}
+
+    async def _capture_setex(key, ttl, value):
+        import json as _json
+        persisted.update(_json.loads(value))
+
+    mock_redis.setex.side_effect = _capture_setex
+
+    with patch(
+        "llc.adapters.autobot_agent_adapter.get_async_redis_client",
+        AsyncMock(return_value=mock_redis),
+    ):
+        adapter = AutoBotAgentAdapter({"agent_class": _FAILING_AGENT_PATH})
+        run_id = await adapter.invoke({}, {"title": "T"})
+        await asyncio.sleep(0.05)
+
+    # Local status
+    local_st = await adapter.status({}, run_id)
+    assert local_st.status == LLCRunStatus.FAILED
+
+    # Redis-persisted status must also be FAILED (not COMPLETED)
+    assert persisted.get("status") == LLCRunStatus.FAILED.value
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -468,7 +512,7 @@ async def test_budget_exhausted_propagates_to_failed_status():
 
     with patch("llc.services.budget.BudgetService") as MockBS:
         MockBS.return_value.ingest_cost_event = AsyncMock(
-            side_effect=BudgetExhausted("budget limit reached")
+            side_effect=BudgetExhausted("agent-xyz", 100.0, 50.0)
         )
 
         adapter = AutoBotAgentAdapter(
