@@ -129,3 +129,10 @@ class AssignmentType(str, Enum):
     AUTO = "auto"
     DELEGATED = "delegated"
     INHERITED = "inherited"
+
+
+class BoardType(str, Enum):
+    """Type of LLC board (GH#8221)."""
+
+    KANBAN = "kanban"
+    SPRINT = "sprint"

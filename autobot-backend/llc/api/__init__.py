@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from .activity import router as activity_router
 from .agent_api import router as agent_router
+from .boards import router as boards_router
 from .api_keys import router as api_keys_router
 from .approvals import router as approvals_router
 from .backlog import router as backlog_router
@@ -15,6 +16,7 @@ from .work_items import router as work_items_router
 
 router = APIRouter(prefix="/llc", tags=["llc"])
 router.include_router(activity_router)
+router.include_router(boards_router)
 router.include_router(approvals_router)
 router.include_router(backlog_router)
 router.include_router(budget_router)
