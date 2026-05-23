@@ -1,7 +1,7 @@
 """Create llc_boards and llc_board_columns tables.
 
-Revision ID: 20260523_034
-Revises: 20260523_033
+Revision ID: 20260523_032
+Revises: 20260523_031
 Create Date: 2026-05-23 00:00:00.000000
 
 GH#8221: Kanban and Sprint board infrastructure.
@@ -18,8 +18,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
-revision: str = "20260523_034"
-down_revision: Union[str, None] = "20260523_033"
+revision: str = "20260523_032"
+down_revision: Union[str, None] = "20260523_031"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
