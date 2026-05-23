@@ -100,6 +100,9 @@ class SprintPlanningService(LLCServiceBase):
 
         Uses a single GROUP BY query instead of per-sprint SELECTs to avoid N+1.
         """
+        if not 1 <= n_sprints <= 52:
+            raise ValueError(f"n_sprints must be between 1 and 52, got {n_sprints}")
+
         sprint_stmt = (
             select(LLCSprint)
             .where(

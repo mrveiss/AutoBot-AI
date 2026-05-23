@@ -179,18 +179,26 @@ class TestGetVelocityHistory:
             end_date=_NOW - timedelta(days=15),
         )
 
-        # First call returns sprints list; subsequent calls return scalar velocity
+        # First call returns sprint list; second call returns GROUP BY velocity rows
         call_count = 0
+
+        def _make_velocity_row(sprint_id, velocity):
+            row = MagicMock()
+            row.sprint_id = sprint_id
+            row.velocity = velocity
+            return row
 
         async def _execute(stmt):
             nonlocal call_count
             r = MagicMock()
             if call_count == 0:
                 r.scalars.return_value.all.return_value = [s1, s2]
-            elif call_count == 1:
-                r.scalar_one.return_value = 30
             else:
-                r.scalar_one.return_value = 20
+                # GROUP BY result — iterable rows with sprint_id + velocity
+                r.__iter__ = MagicMock(return_value=iter([
+                    _make_velocity_row(s1.id, 30),
+                    _make_velocity_row(s2.id, 20),
+                ]))
             call_count += 1
             return r
 
