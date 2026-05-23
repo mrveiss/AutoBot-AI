@@ -1,12 +1,11 @@
 """Create llc_routines table.
 
 Revision ID: 20260523_034
-Revises: 20260523_032
+Revises: 20260523_033
 Create Date: 2026-05-23 00:00:00.000000
 
 GH#8229: LLC Routines — recurring agent tasks defined by a cron schedule.
-Note: down_revision set to 20260523_032 (llc_boards) because 20260523_033
-(llc_heartbeat_runs, issue-8228) is not yet merged into this branch.
+Chains from 20260523_033 (llc_heartbeat_runs, merged via PR #8481).
 """
 
 from typing import Sequence, Union
@@ -16,7 +15,7 @@ from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 revision: str = "20260523_034"
-down_revision: Union[str, None] = "20260523_032"
+down_revision: Union[str, None] = "20260523_033"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
