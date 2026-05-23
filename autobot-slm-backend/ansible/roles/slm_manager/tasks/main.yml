@@ -424,6 +424,23 @@
 # ==========================================================
 # Frontend build
 # ==========================================================
+# Sync autobot-plugins so file: workspace symlinks resolve (MVA-893).
+# package.json declares "@autobot/vnc": "file:../autobot-plugins/vnc" and
+# "@autobot/terminal": "file:../autobot-plugins/terminal". npm install
+# creates symlinks from node_modules/@autobot/* → ../../../autobot-plugins/*
+# at install time; if the target directory is absent the symlinks dangle
+# and Vite's rolldown bundler fails to resolve the import at build time.
+- name: "SLM | Sync autobot-plugins from code_source (MVA-893)"
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-plugins/"
+    dest: "{{ slm_base_dir }}/autobot-plugins/"
+    rsync_opts:
+      - "--exclude=node_modules"
+      - "--exclude=dist"
+      - "--exclude=.git"
+    delete: true
+  tags: ['slm', 'frontend']
+
 - name: "SLM | Check if package.json exists"
   ansible.builtin.stat:
     path: "{{ slm_frontend_dir }}/package.json"
