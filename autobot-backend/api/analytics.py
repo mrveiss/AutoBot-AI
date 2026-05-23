@@ -17,7 +17,6 @@ from typing import Any, Dict, List, Tuple
 import httpx
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     HTTPException,
     Query,
@@ -1240,46 +1239,6 @@ async def analyze_root_cause(
 # ------------------------------------------------------------------
 
 
-async def _run_dashboard_analysis(task_id: str) -> None:
-    """Background worker for dashboard overview (#1304)."""
-    try:
-        await _dash_manager.update_progress(task_id, "Collecting system health", 10.0)
-        results = await asyncio.gather(
-            hardware_monitor.get_system_health(),
-            analytics_controller.collect_performance_metrics(),
-            analytics_controller.analyze_communication_patterns(),
-            analytics_controller.get_usage_statistics(),
-            analytics_controller.detect_trends(),
-            return_exceptions=True,
-        )
-
-        await _dash_manager.update_progress(task_id, "Processing metrics", 60.0)
-        system_health = _handle_task_exception(results[0], "system_health")
-        performance = _handle_task_exception(results[1], "performance")
-        communication = _handle_task_exception(results[2], "communication")
-        usage = _handle_task_exception(results[3], "usage")
-        trends = _handle_task_exception(results[4], "trends")
-
-        await _dash_manager.update_progress(task_id, "Building overview", 80.0)
-        code_status = await _get_code_analysis_status()
-        realtime = await _get_realtime_metrics()
-
-        result = {
-            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            "system_health": system_health,
-            "performance_metrics": performance,
-            "communication_patterns": communication,
-            "code_analysis_status": code_status,
-            "usage_statistics": usage,
-            "realtime_metrics": realtime,
-            "trends": trends,
-        }
-        await _dash_manager.complete_task(task_id, result)
-    except Exception as e:
-        logger.error("Dashboard analysis failed: %s", e)
-        await _dash_manager.fail_task(task_id, str(e))
-
-
 @router.post("/dashboard/overview/analyze", response_model=AnalyticsDashboardAnalyzeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1287,13 +1246,12 @@ async def _run_dashboard_analysis(task_id: str) -> None:
     error_code_prefix="ANALYTICS",
 )
 async def start_dashboard_analysis(
-    background_tasks: BackgroundTasks,
     current_user: Dict = Depends(get_current_user),
 ):
-    """Start background dashboard overview analysis (#1304)."""
-    task_id = await _dash_manager.create_task()
-    background_tasks.add_task(_run_dashboard_analysis, task_id)
-    return {"task_id": task_id, "status": "pending"}
+    """Start background dashboard overview analysis (#1304, GH#8433)."""
+    celery_result = run_dashboard_analysis.delay()
+    await store_latest_task_id(_REDIS_PREFIX, celery_result.id)
+    return {"task_id": celery_result.id, "status": "pending"}
 
 
 @router.get("/dashboard/overview/status/{task_id}", response_model=AnalyticsDashboardStatusResponse)
@@ -1303,8 +1261,8 @@ async def start_dashboard_analysis(
     error_code_prefix="ANALYTICS",
 )
 async def get_dashboard_status(task_id: str):
-    """Get dashboard overview task status (#1304)."""
-    task = await _dash_manager.get_status(task_id)
+    """Get dashboard overview task status (#1304, GH#8433)."""
+    task = celery_result_to_status(AsyncResult(task_id))
     if task is None:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
     return task
@@ -1322,9 +1280,8 @@ async def clear_stuck_dashboard_tasks(
         description="Force clear ALL running tasks",
     ),
 ):
-    """Clear stuck dashboard overview tasks (#1304)."""
-    cleaned = await _dash_manager.clear_stuck(force=force)
+    """Clear stuck dashboard overview tasks — no-op, Celery handles recovery (GH#8433)."""
     return {
-        "cleared_count": cleaned,
-        "message": f"Cleared {cleaned} task(s)" + (" (forced)" if force else ""),
+        "cleared_count": 0,
+        "message": "Celery handles task recovery automatically",
     }

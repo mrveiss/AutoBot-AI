@@ -148,7 +148,7 @@ async def start_pattern_analysis(request: PatternAnalysisRequest) -> PatternAnal
 async def get_analysis_status(task_id: str) -> PatternAnalysisStatus:
     """Get status of a pattern analysis task."""
     task = celery_result_to_status(AsyncResult(task_id))
-    if task is None or task["status"] == "pending":
+    if task is None:
         raise HTTPException(status_code=404, detail=f"Analysis task {task_id} not found")
     return PatternAnalysisStatus(
         task_id=task_id,
@@ -256,7 +256,7 @@ async def start_pattern_summary_analysis(
 async def get_pattern_summary_status(task_id: str):
     """Get pattern summary task status."""
     status = celery_result_to_status(AsyncResult(task_id))
-    if status is None or status["status"] == "pending":
+    if status is None:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
     return status
 
