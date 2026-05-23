@@ -1,6 +1,7 @@
 """LLC models package."""
 
 from .activity import ActorType, LLCActivityLog, LLCBase
+from .approval import LLCApproval
 from .budget import LLCAgentBudget
 from .company import (
     CompanyAncestor,
@@ -11,6 +12,7 @@ from .company import (
 )
 from .enums import (
     ApprovalStatus,
+    ApprovalType,
     AssignmentType,
     LLCAgentStatus,
     LLCCompanyStatus,
@@ -27,18 +29,20 @@ from .work_item import LLCWorkItem, LLCWorkItemComment
 __all__ = [
     "ActorType",
     "ApprovalStatus",
+    "ApprovalType",
     "AssignmentType",
     "CompanyAncestor",
-    "LLCActivityLog",
-    "LLCBase",
     "CompanyCreate",
     "CompanyRead",
     "CompanyTreeNode",
     "CompanyUpdate",
     "GoalLevel",
     "GoalStatus",
+    "LLCActivityLog",
     "LLCAgentBudget",
     "LLCAgentStatus",
+    "LLCApproval",
+    "LLCBase",
     "LLCCompanyStatus",
     "LLCGoal",
     "LLCRunStatus",
