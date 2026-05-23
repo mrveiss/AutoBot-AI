@@ -1,4 +1,4 @@
-"""LLC work items API routes (GH#8213).
+"""LLC work items API routes (GH#8213, GH#8223).
 
 Routes:
   POST   /api/llc/work-items
@@ -10,6 +10,8 @@ Routes:
   POST   /api/llc/work-items/{work_item_id}/release
   POST   /api/llc/work-items/{work_item_id}/transition
   POST   /api/llc/work-items/{work_item_id}/comments
+  POST   /api/llc/work-items/{work_item_id}/claim    (human claim — GH#8223)
+  POST   /api/llc/work-items/{work_item_id}/unclaim  (human unclaim — GH#8223)
 """
 
 import uuid
@@ -25,6 +27,16 @@ from user_management.database import get_async_session_factory
 
 from ..models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
 from ..services.work_item_service import CheckoutConflict, InvalidTransition, WorkItemService
+
+
+class HumanClaimRequest(BaseModel):
+    user_id: str
+    company_id: str
+
+
+class HumanUnclaimRequest(BaseModel):
+    user_id: str
+    company_id: str
 
 router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
 _get_service = lazy_singleton(WorkItemService)
@@ -98,6 +110,29 @@ class CommentCreate(BaseModel):
     author_user_id: Optional[str] = None
 
 
+def _assignee_display(item: Any) -> Optional[Dict[str, Any]]:
+    """Return structured assignee display info (GH#8223).
+
+    display_name and name are None until user_management JOIN is implemented
+    (see discovery issue filed in GH#8223 implementation).
+    """
+    if item.assignee_type == "user" and item.assignee_user_id:
+        return {
+            "type": "user",
+            "id": str(item.assignee_user_id),
+            "display_name": None,
+            "name": None,
+        }
+    if item.assignee_type == "agent" and item.assignee_agent_id:
+        return {
+            "type": "agent",
+            "id": str(item.assignee_agent_id),
+            "display_name": None,
+            "name": None,
+        }
+    return None
+
+
 def _item_to_dict(item: Any) -> Dict[str, Any]:
     return {
         "id": str(item.id),
@@ -118,6 +153,7 @@ def _item_to_dict(item: Any) -> Dict[str, Any]:
         "assignee_agent_id": str(item.assignee_agent_id) if item.assignee_agent_id else None,
         "assignee_user_id": str(item.assignee_user_id) if item.assignee_user_id else None,
         "assignee_type": item.assignee_type,
+        "assignee_display": _assignee_display(item),
         "checkout_run_id": item.checkout_run_id,
         "checkout_locked_at": item.checkout_locked_at.isoformat() if item.checkout_locked_at else None,
         "version": item.version,
@@ -283,6 +319,46 @@ async def transition_work_item(
         raise HTTPException(status_code=422, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.post("/{work_item_id}/claim")
+async def claim_work_item(
+    work_item_id: str,
+    body: HumanClaimRequest,
+    session: AsyncSession = Depends(get_session),
+) -> Dict[str, Any]:
+    try:
+        item = await _service().claim_human(
+            session,
+            work_item_id=work_item_id,
+            user_id=body.user_id,
+            company_id=body.company_id,
+        )
+        await session.commit()
+        return _item_to_dict(item)
+    except CheckoutConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.post("/{work_item_id}/unclaim")
+async def unclaim_work_item(
+    work_item_id: str,
+    body: HumanUnclaimRequest,
+    session: AsyncSession = Depends(get_session),
+) -> Dict[str, Any]:
+    try:
+        item = await _service().unclaim_human(
+            session,
+            work_item_id=work_item_id,
+            user_id=body.user_id,
+            company_id=body.company_id,
+        )
+        await session.commit()
+        return _item_to_dict(item)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.post("/{work_item_id}/comments", status_code=201)
