@@ -152,10 +152,14 @@ for _svc_mod in [
     "services.llm_api_key_service",
     "services.llm_cost_tracker",
     "services.tool_output_filter",
+    "services.personality_service",
 ]:
     if _svc_mod not in sys.modules:
         _svc_stub = _make_pkg_stub(_svc_mod)
         sys.modules[_svc_mod] = _svc_stub
+# Provide the SUPPORTED_LANGUAGES symbol consumed by api.schemas_agent
+if not hasattr(sys.modules.get("services.personality_service", object()), "SUPPORTED_LANGUAGES"):
+    sys.modules["services.personality_service"].SUPPORTED_LANGUAGES = {}  # type: ignore[attr-defined]
 # Make the specific symbols resolvable
 _svc_key_stub = sys.modules["services.llm_api_key_service"]
 _svc_key_stub.LLMApiKeyRecord = MagicMock()  # type: ignore[attr-defined]

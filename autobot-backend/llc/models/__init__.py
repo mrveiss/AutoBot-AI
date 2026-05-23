@@ -16,6 +16,9 @@ from .enums import (
     ApprovalType,
     AssignmentType,
     BoardType,
+    ContextMode,
+    HeartbeatInvocationSource,
+    HeartbeatRunStatus,
     LLCAgentStatus,
     LLCCompanyStatus,
     LLCRunStatus,
@@ -27,7 +30,7 @@ from .enums import (
     WorkItemStatus,
     WorkItemType,
 )
-from .routine import LLCRoutine, LLCRoutineRun
+from .heartbeat_run import LLCHeartbeatRun
 from .goal import GoalLevel, GoalStatus, LLCGoal
 from .heartbeat_run import LLCHeartbeatRun
 from .membership import LLCCompanyMembership
@@ -41,6 +44,7 @@ __all__ = [
     "ApprovalType",
     "AssignmentType",
     "BoardType",
+    "ContextMode",
     "CompanyAncestor",
     "CompanyCreate",
     "CompanyRead",
@@ -51,6 +55,9 @@ __all__ = [
     "LLCActivityLog",
     "LLCAgentBudget",
     "LLCAgentStatus",
+    "HeartbeatInvocationSource",
+    "HeartbeatRunStatus",
+    "LLCHeartbeatRun",
     "LLCApproval",
     "LLCBase",
     "LLCBoard",
