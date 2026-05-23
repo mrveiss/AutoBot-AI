@@ -8,7 +8,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select, text
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from user_management.database import get_async_session
@@ -101,8 +101,6 @@ async def update_limit(
     body: UpdateLimitRequest,
     session: AsyncSession = Depends(get_async_session),
 ) -> BudgetResponse:
-    from sqlalchemy import select, update
-
     result = await session.execute(
         select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id)
     )
