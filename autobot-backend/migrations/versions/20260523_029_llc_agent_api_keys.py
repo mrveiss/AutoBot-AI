@@ -1,15 +1,15 @@
 """LLC agent API keys table (GH#8218).
 
-Revision ID: 20260523_026
-Revises: 20260523_025
+Revision ID: 20260523_029
+Revises: 20260523_028
 Create Date: 2026-05-23
 """
 
 from alembic import op
 import sqlalchemy as sa
 
-revision = "20260523_026"
-down_revision = "20260523_025"
+revision = "20260523_029"
+down_revision = "20260523_028"
 branch_labels = None
 depends_on = None
 
