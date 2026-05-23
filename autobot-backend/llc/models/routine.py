@@ -83,7 +83,7 @@ class LLCRoutine(Base):
         "LLCRoutineRun",
         back_populates="routine",
         cascade="all, delete-orphan",
-        lazy="selectin",
+        lazy="raise",
     )
 
     def __repr__(self) -> str:

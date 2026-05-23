@@ -26,9 +26,8 @@ from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
 
-_SCHEDULE_KEY = "llc:heartbeat:schedule"
-
 from ..models.enums import RoutineProduces, RoutineStatus
+from ..scheduler.heartbeat_scheduler import _SCHEDULE_KEY
 from ..services.routine_service import RoutineService
 
 router = APIRouter(tags=["llc-routines"])
@@ -54,23 +53,23 @@ class RoutineCreate(BaseModel):
     name: str
     description: Optional[str] = None
     cron_schedule: str
-    assignee_agent_id: Optional[str] = None
+    assignee_agent_id: Optional[uuid.UUID] = None
     env: Optional[dict] = None
     produces: RoutineProduces = RoutineProduces.NEW_WORK_ITEM
     work_item_template: Optional[dict] = None
-    recurring_work_item_id: Optional[str] = None
+    recurring_work_item_id: Optional[uuid.UUID] = None
 
 
 class RoutineUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     cron_schedule: Optional[str] = None
-    assignee_agent_id: Optional[str] = None
+    assignee_agent_id: Optional[uuid.UUID] = None
     status: Optional[RoutineStatus] = None
     env: Optional[dict] = None
     produces: Optional[RoutineProduces] = None
     work_item_template: Optional[dict] = None
-    recurring_work_item_id: Optional[str] = None
+    recurring_work_item_id: Optional[uuid.UUID] = None
 
 
 class RoutineRead(BaseModel):
@@ -145,10 +144,10 @@ async def create_routine(
         body.cron_schedule,
         body.produces,
         body.work_item_template or {},
-        assignee_agent_id=uuid.UUID(body.assignee_agent_id) if body.assignee_agent_id else None,
+        assignee_agent_id=body.assignee_agent_id,
         description=body.description,
         env=body.env,
-        recurring_work_item_id=uuid.UUID(body.recurring_work_item_id) if body.recurring_work_item_id else None,
+        recurring_work_item_id=body.recurring_work_item_id,
     )
     await session.commit()
     await session.refresh(routine)
@@ -178,10 +177,6 @@ async def update_routine(
     session: AsyncSession = Depends(get_session),
 ) -> RoutineRead:
     updates = body.model_dump(exclude_unset=True)
-    if "assignee_agent_id" in updates and updates["assignee_agent_id"] is not None:
-        updates["assignee_agent_id"] = uuid.UUID(updates["assignee_agent_id"])
-    if "recurring_work_item_id" in updates and updates["recurring_work_item_id"] is not None:
-        updates["recurring_work_item_id"] = uuid.UUID(updates["recurring_work_item_id"])
     try:
         routine = await _service().update(session, routine_id, **updates)
     except ValueError:
@@ -205,6 +200,9 @@ async def delete_routine(
     routine_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
 ) -> None:
+    routine = await _service().get(session, routine_id)
+    if routine is None:
+        raise HTTPException(status_code=404, detail="Routine not found")
     await _service().delete(session, routine_id)
     await session.commit()
 

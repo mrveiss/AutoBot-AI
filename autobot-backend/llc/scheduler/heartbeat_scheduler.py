@@ -82,7 +82,7 @@ class HeartbeatScheduler:
             svc = RoutineService()
             factory = get_async_session_factory()
             async with factory() as session:
-                routines = await svc.list(session, status=RoutineStatus.ACTIVE)
+                routines = await svc.list(session, status=RoutineStatus.ACTIVE, limit=10000)
         except Exception as exc:
             logger.warning("Failed to load routines for scheduling: %s", exc)
             return
@@ -172,3 +172,14 @@ class HeartbeatScheduler:
 
         except Exception as exc:
             logger.error("Failed to dispatch routine %s: %s", routine_id_str, exc)
+            # Re-add with a short retry delay so the routine isn't permanently lost
+            try:
+                redis = await get_async_redis_client()
+                if redis is not None:
+                    await redis.zadd(
+                        _SCHEDULE_KEY,
+                        {f"routine:{routine_id_str}": time.time() + 60},
+                        nx=True,
+                    )
+            except Exception:
+                pass
