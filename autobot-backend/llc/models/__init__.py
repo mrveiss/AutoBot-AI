@@ -7,9 +7,11 @@ from .enums import (
     LLCCompanyStatus,
     LLCRunStatus,
     SprintStatus,
+    WorkItemPriority,
     WorkItemStatus,
     WorkItemType,
 )
+from .work_item import LLCWorkItem, LLCWorkItemComment
 
 __all__ = [
     "ApprovalStatus",
@@ -17,7 +19,10 @@ __all__ = [
     "LLCAgentStatus",
     "LLCCompanyStatus",
     "LLCRunStatus",
+    "LLCWorkItem",
+    "LLCWorkItemComment",
     "SprintStatus",
+    "WorkItemPriority",
     "WorkItemStatus",
     "WorkItemType",
 ]
