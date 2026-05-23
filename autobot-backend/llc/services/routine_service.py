@@ -1,19 +1,18 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""LLC RoutineService — CRUD and run recording for recurring agent tasks (GH#8229).
+"""LLC RoutineService — CRUD, env overlay, and secret resolution (GH#8229).
 
-Env overlay order enforced by resolve_env():
-  agent_env < project_env < routine_env < system_keys (SYSTEM_* prefixed keys)
-
-Secret resolution: env values matching "secret:<NAME>" are resolved via SecretService.
-Soft-delete: delete() sets status=ARCHIVED; the row is never removed.
+Env overlay order: agent_env < project_env < routine.env < system keys.
+System keys injected unconditionally: ROUTINE_ID, COMPANY_ID, ROUTINE_NAME.
+Secret resolution: env values matching "secret:<NAME>" resolved via SecretService.get().
+Soft-delete: delete() sets status=archived; the row is never removed.
 """
 
 import logging
+import re
 import uuid
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,18 +20,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..models.enums import RoutineStatus
 from ..models.routine import LLCRoutine, LLCRoutineRun
 from .base import LLCServiceBase
+from .secret import SecretNotFound, SecretService
 
 logger = logging.getLogger(__name__)
 
-_SYSTEM_KEY_PREFIXES = ("SYSTEM_",)
-
-
-class RoutineNotFoundError(Exception):
-    """Raised when a requested routine cannot be located."""
+_SECRET_RE = re.compile(r"^secret:(.+)$")
 
 
 class RoutineService(LLCServiceBase):
-    """CRUD + run-recording service for LLC routines."""
+    """CRUD + run-recording + env resolution for LLC routines."""
 
     # ------------------------------------------------------------------
     # CRUD
@@ -41,43 +37,54 @@ class RoutineService(LLCServiceBase):
     async def create(
         self,
         session: AsyncSession,
-        *,
         company_id: uuid.UUID,
-        agent_id: uuid.UUID,
         name: str,
         cron_schedule: str,
+        produces: str,
+        work_item_template: dict[str, Any],
+        *,
+        assignee_agent_id: Optional[uuid.UUID] = None,
         description: Optional[str] = None,
-        env: Optional[Dict[str, Any]] = None,
+        env: Optional[dict[str, Any]] = None,
+        recurring_work_item_id: Optional[uuid.UUID] = None,
     ) -> LLCRoutine:
         routine = LLCRoutine(
             company_id=company_id,
-            agent_id=agent_id,
             name=name,
             cron_schedule=cron_schedule,
+            produces=produces,
+            work_item_template=work_item_template,
+            assignee_agent_id=assignee_agent_id,
             description=description,
             env=env or {},
+            recurring_work_item_id=recurring_work_item_id,
             status=RoutineStatus.ACTIVE,
         )
         session.add(routine)
         await session.flush()
         return routine
 
-    async def get(self, session: AsyncSession, routine_id: uuid.UUID) -> LLCRoutine:
-        row = await session.get(LLCRoutine, routine_id)
-        if row is None:
-            raise RoutineNotFoundError(str(routine_id))
-        return row
+    async def get(
+        self,
+        session: AsyncSession,
+        routine_id: uuid.UUID,
+    ) -> Optional[LLCRoutine]:
+        return await session.get(LLCRoutine, routine_id)
 
     async def list(
         self,
         session: AsyncSession,
-        *,
-        company_id: Optional[uuid.UUID] = None,
+        company_id: uuid.UUID,
         status: Optional[RoutineStatus] = None,
-    ) -> List[LLCRoutine]:
-        stmt = select(LLCRoutine)
-        if company_id is not None:
-            stmt = stmt.where(LLCRoutine.company_id == company_id)
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[LLCRoutine]:
+        stmt = (
+            select(LLCRoutine)
+            .where(LLCRoutine.company_id == company_id)
+            .limit(limit)
+            .offset(offset)
+        )
         if status is not None:
             stmt = stmt.where(LLCRoutine.status == status)
         result = await session.execute(stmt)
@@ -87,68 +94,26 @@ class RoutineService(LLCServiceBase):
         self,
         session: AsyncSession,
         routine_id: uuid.UUID,
-        *,
-        cron_schedule: Optional[str] = None,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        env: Optional[Dict[str, Any]] = None,
-        status: Optional[RoutineStatus] = None,
+        **kwargs: Any,
     ) -> LLCRoutine:
         routine = await self.get(session, routine_id)
-        if cron_schedule is not None:
-            routine.cron_schedule = cron_schedule
-        if name is not None:
-            routine.name = name
-        if description is not None:
-            routine.description = description
-        if env is not None:
-            routine.env = env
-        if status is not None:
-            routine.status = status
+        if routine is None:
+            raise ValueError(f"Routine {routine_id} not found")
+        for key, value in kwargs.items():
+            setattr(routine, key, value)
         await session.flush()
         return routine
 
-    async def delete(self, session: AsyncSession, routine_id: uuid.UUID) -> LLCRoutine:
-        """Soft-delete: set status=ARCHIVED, never remove the row."""
-        return await self.update(session, routine_id, status=RoutineStatus.ARCHIVED)
-
-    # ------------------------------------------------------------------
-    # Env resolution
-    # ------------------------------------------------------------------
-
-    async def resolve_env(
+    async def delete(
         self,
         session: AsyncSession,
-        routine: LLCRoutine,
-        *,
-        agent_env: Optional[Dict[str, Any]] = None,
-        project_env: Optional[Dict[str, Any]] = None,
-        secret_service: Any = None,
-    ) -> Dict[str, Any]:
-        """Merge env layers (agent < project < routine < system) and resolve secrets."""
-        merged: Dict[str, Any] = {}
-        for layer in (agent_env or {}, project_env or {}, routine.env):
-            merged.update(layer)
-
-        # system keys always win
-        import os
-        for key, val in os.environ.items():
-            if any(key.startswith(pfx) for pfx in _SYSTEM_KEY_PREFIXES):
-                merged[key] = val
-
-        # resolve "secret:<NAME>" references
-        if secret_service is not None:
-            for key, val in list(merged.items()):
-                if isinstance(val, str) and val.startswith("secret:"):
-                    secret_name = val[len("secret:"):]
-                    try:
-                        merged[key] = await secret_service.get(
-                            session, str(routine.company_id), secret_name
-                        )
-                    except Exception as exc:
-                        logger.warning("Secret resolution failed for %s: %s", key, exc)
-
-        return merged
+        routine_id: uuid.UUID,
+    ) -> None:
+        routine = await self.get(session, routine_id)
+        if routine is None:
+            return
+        routine.status = RoutineStatus.ARCHIVED
+        await session.flush()
 
     # ------------------------------------------------------------------
     # Run recording
@@ -158,13 +123,16 @@ class RoutineService(LLCServiceBase):
         self,
         session: AsyncSession,
         routine_id: uuid.UUID,
+        status: str,
         *,
-        status: str = "queued",
+        heartbeat_run_id: Optional[uuid.UUID] = None,
+        work_item_id: Optional[uuid.UUID] = None,
     ) -> LLCRoutineRun:
         run = LLCRoutineRun(
             routine_id=routine_id,
             status=status,
-            triggered_at=datetime.now(tz=timezone.utc),
+            heartbeat_run_id=heartbeat_run_id,
+            work_item_id=work_item_id,
         )
         session.add(run)
         await session.flush()
@@ -174,16 +142,81 @@ class RoutineService(LLCServiceBase):
         self,
         session: AsyncSession,
         routine_id: uuid.UUID,
-        *,
-        limit: int = 20,
+        limit: int = 50,
         offset: int = 0,
-    ) -> List[LLCRoutineRun]:
+    ) -> list[LLCRoutineRun]:
         stmt = (
             select(LLCRoutineRun)
             .where(LLCRoutineRun.routine_id == routine_id)
-            .order_by(LLCRoutineRun.triggered_at.desc())
+            .order_by(LLCRoutineRun.created_at.desc())
             .limit(limit)
             .offset(offset)
         )
         result = await session.execute(stmt)
         return list(result.scalars().all())
+
+    # ------------------------------------------------------------------
+    # Env overlay + secret resolution
+    # ------------------------------------------------------------------
+
+    async def resolve_env(
+        self,
+        session: AsyncSession,
+        routine: LLCRoutine,
+        *,
+        agent_env: Optional[dict[str, Any]] = None,
+        project_env: Optional[dict[str, Any]] = None,
+        secret_service: Optional[SecretService] = None,
+    ) -> dict[str, str]:
+        """Merge env layers and resolve secret references.
+
+        Layer order (later wins): agent_env → project_env → routine.env
+        System keys always overwrite: ROUTINE_ID, COMPANY_ID, ROUTINE_NAME.
+        Values matching "secret:<NAME>" are resolved via SecretService.get();
+        if resolution fails, a WARNING is logged and the key is skipped.
+        """
+        merged: dict[str, Any] = {}
+        for layer in (agent_env or {}, project_env or {}, routine.env or {}):
+            merged.update(layer)
+
+        # Inject system keys unconditionally
+        merged["ROUTINE_ID"] = str(routine.id)
+        merged["COMPANY_ID"] = str(routine.company_id)
+        merged["ROUTINE_NAME"] = routine.name
+
+        # Resolve secret references
+        company_id_str = str(routine.company_id)
+        resolved: dict[str, str] = {}
+        for key, val in merged.items():
+            if isinstance(val, str):
+                m = _SECRET_RE.match(val)
+                if m:
+                    secret_name = m.group(1)
+                    if secret_service is None:
+                        logger.warning(
+                            "Secret ref '%s' in env key '%s' skipped — no SecretService",
+                            secret_name,
+                            key,
+                        )
+                        continue
+                    try:
+                        resolved[key] = await secret_service.get(
+                            session, company_id_str, secret_name
+                        )
+                    except SecretNotFound:
+                        logger.warning(
+                            "Secret '%s' not found for company %s (env key '%s') — skipping",
+                            secret_name,
+                            company_id_str,
+                            key,
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning(
+                            "Secret resolution error for key '%s': %s — skipping",
+                            key,
+                            exc,
+                        )
+                    continue
+            resolved[key] = str(val)
+
+        return resolved
