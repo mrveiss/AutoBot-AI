@@ -55,9 +55,7 @@ if _redis_tls_enabled:
         _client_cert = str(_project_root / _cert_dir / "main-host" / "server-cert.pem")
         _client_key = str(_project_root / _cert_dir / "main-host" / "server-key.pem")
 
-    _ssl_context = get_internal_tls_context(
-        ca_path=_ca_cert, client_cert=_client_cert, client_key=_client_key
-    )
+    _ssl_context = get_internal_tls_context(ca_path=_ca_cert, client_cert=_client_cert, client_key=_client_key)
     _broker_ssl_options = {"ssl": _ssl_context}
     _backend_ssl_options = {"ssl": _ssl_context}
 
@@ -111,6 +109,14 @@ celery_app.conf.update(
         "memory.extract_facts": {"queue": "memory"},
         "memory.update_graph": {"queue": "memory"},
         "memory.compact_snapshot": {"queue": "memory"},
+        # GH#6505: Analytics background tasks (consolidated from BackgroundTaskManager)
+        "analytics.run_import_tree_analysis": {"queue": "analytics"},
+        "analytics.run_duplicate_analysis": {"queue": "analytics"},
+        "analytics.run_dependency_analysis": {"queue": "analytics"},
+        "analytics.run_pattern_analysis": {"queue": "analytics"},
+        "analytics.run_bug_prediction_analysis": {"queue": "analytics"},
+        "analytics.run_security_analysis": {"queue": "analytics"},
+        "analytics.run_dashboard_analysis": {"queue": "analytics"},
     },
     # Worker configuration for long-running Ansible playbooks
     # Uses centralized config from unified_config_manager

@@ -25,6 +25,15 @@ from .memory_tasks import (
     update_graph_task,
     write_verbatim_task,
 )
+from .analytics_tasks import (
+    run_bug_prediction_analysis,
+    run_dashboard_analysis,
+    run_dependency_analysis,
+    run_duplicate_analysis,
+    run_import_tree_analysis,
+    run_pattern_analysis,
+    run_security_analysis,
+)
 from .system_tasks import check_available_updates, initialize_rbac, run_system_update
 
 __all__ = [
@@ -40,6 +49,14 @@ __all__ = [
     "cleanup_orphan_documents",
     "cleanup_generated_files",
     "prune_sync_queue_done",
+    # analytics tasks (GH#6505)
+    "run_import_tree_analysis",
+    "run_duplicate_analysis",
+    "run_dependency_analysis",
+    "run_pattern_analysis",
+    "run_bug_prediction_analysis",
+    "run_security_analysis",
+    "run_dashboard_analysis",
     # memory tasks
     "write_verbatim_task",
     "extract_facts_task",
