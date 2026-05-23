@@ -47,15 +47,15 @@ async def get_session() -> AsyncSession:
 
 
 class ApprovalRequest(BaseModel):
-    company_id: str
+    company_id: uuid.UUID
     type: ApprovalType
-    requested_by_agent_id: str
+    requested_by_agent_id: uuid.UUID
     payload: Dict[str, Any] = {}
 
 
 class ApprovalDecision(BaseModel):
     decision: ApprovalStatus
-    decided_by_agent_id: str
+    decided_by_agent_id: uuid.UUID
 
 
 class ApprovalResponse(BaseModel):
@@ -88,11 +88,12 @@ async def request_approval(
     async with session.begin():
         approval = await svc.request_approval(
             session,
-            company_id=uuid.UUID(body.company_id),
+            company_id=body.company_id,
             gate_type=body.type,
             payload=body.payload,
-            requested_by=uuid.UUID(body.requested_by_agent_id),
+            requested_by=body.requested_by_agent_id,
         )
+    await svc.publish_requested(approval)
     return _to_response(approval)
 
 
@@ -132,13 +133,14 @@ async def decide_approval(
                 session,
                 approval_id=aid,
                 decision=body.decision,
-                decided_by=uuid.UUID(body.decided_by_agent_id),
+                decided_by=body.decided_by_agent_id,
             )
     except ApprovalNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except (ApprovalStateError, ApprovalRequiredError) as exc:
         raise HTTPException(status_code=409, detail=str(exc))
 
+    await svc.publish_decided(approval, body.decision)
     return _to_response(approval)
 
 

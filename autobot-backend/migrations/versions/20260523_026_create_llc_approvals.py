@@ -1,18 +1,13 @@
 """Create llc_approvals table and approval enum types.
 
-Revision ID: 20260523_023
-Revises: 20260523_022
+Revision ID: 20260523_026
+Revises: 20260523_025
 Create Date: 2026-05-23 00:00:00.000000
 
 GH#8214: Board approval gates — hire, strategy, budget_override, sprint_close.
 Creates the ``approvaltype`` and ``approvalstatus`` PostgreSQL enums plus the
 ``llc_approvals`` table.  Both enums are created with ``checkfirst=True`` to
 handle re-runs and pre-existing partial migrations gracefully.
-
-Note: two migration files share revision ``20260523_022`` (from GH#8211 and
-GH#8213 landing simultaneously).  This file's ``down_revision`` points to that
-shared revision ID; in practice Alembic will resolve to whichever of the two
-files it loads first.  A follow-up merge migration can consolidate if needed.
 """
 
 from typing import Sequence, Union
@@ -21,8 +16,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
-revision: str = "20260523_023"
-down_revision: Union[str, None] = "20260523_022"
+revision: str = "20260523_026"
+down_revision: Union[str, None] = "20260523_025"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

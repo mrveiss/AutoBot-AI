@@ -81,17 +81,6 @@ class ApprovalService(LLCServiceBase):
         )
         session.add(approval)
         await session.flush()
-
-        await self._publish(
-            _EVENT_REQUESTED,
-            {
-                "approval_id": str(approval.id),
-                "company_id": str(company_id),
-                "type": gate_type.value,
-                "requested_by_agent_id": str(requested_by),
-            },
-        )
-
         logger.info(
             "Approval requested: id=%s type=%s company=%s requested_by=%s",
             approval.id,
@@ -100,6 +89,18 @@ class ApprovalService(LLCServiceBase):
             requested_by,
         )
         return approval
+
+    async def publish_requested(self, approval: "LLCApproval") -> None:
+        """Publish approval_requested event — call AFTER the DB transaction commits."""
+        await self._publish(
+            _EVENT_REQUESTED,
+            {
+                "approval_id": str(approval.id),
+                "company_id": str(approval.company_id),
+                "type": approval.type,
+                "requested_by_agent_id": str(approval.requested_by_agent_id),
+            },
+        )
 
     async def decide(
         self,
@@ -130,7 +131,9 @@ class ApprovalService(LLCServiceBase):
                 f"Decision must be APPROVED or REJECTED, got {decision.value!r}"
             )
 
-        result = await session.execute(select(LLCApproval).where(LLCApproval.id == approval_id))
+        result = await session.execute(
+            select(LLCApproval).where(LLCApproval.id == approval_id).with_for_update()
+        )
         approval = result.scalar_one_or_none()
         if approval is None:
             raise ApprovalNotFoundError(f"Approval {approval_id} not found")
@@ -144,18 +147,6 @@ class ApprovalService(LLCServiceBase):
         approval.decided_by_agent_id = decided_by
         approval.decided_at = datetime.now(timezone.utc)
         await session.flush()
-
-        await self._publish(
-            _EVENT_DECIDED,
-            {
-                "approval_id": str(approval_id),
-                "company_id": str(approval.company_id),
-                "type": approval.type,
-                "decision": decision.value,
-                "decided_by_agent_id": str(decided_by),
-            },
-        )
-
         logger.info(
             "Approval decided: id=%s decision=%s decided_by=%s",
             approval_id,
@@ -163,6 +154,19 @@ class ApprovalService(LLCServiceBase):
             decided_by,
         )
         return approval
+
+    async def publish_decided(self, approval: "LLCApproval", decision: ApprovalStatus) -> None:
+        """Publish approval_decided event — call AFTER the DB transaction commits."""
+        await self._publish(
+            _EVENT_DECIDED,
+            {
+                "approval_id": str(approval.id),
+                "company_id": str(approval.company_id),
+                "type": approval.type,
+                "decision": decision.value,
+                "decided_by_agent_id": str(approval.decided_by_agent_id),
+            },
+        )
 
     async def get_pending(
         self,
@@ -255,6 +259,12 @@ def requires_approval(gate_type: ApprovalType) -> Callable:
                 raise ApprovalStateError(
                     f"Approval {approval_id} has status {approval.status!r}, must be APPROVED"
                 )
+            target_company_id: Optional[uuid.UUID] = kwargs.get("company_id")
+            if target_company_id is not None and approval.company_id != target_company_id:
+                raise ApprovalStateError(
+                    f"Approval {approval_id} belongs to company {approval.company_id!r}, "
+                    f"not {target_company_id!r}"
+                )
 
             return await fn(self, session, *args, **kwargs)
 
@@ -271,4 +281,6 @@ __all__ = [
     "ApprovalNotFoundError",
     "ApprovalStateError",
     "requires_approval",
+    "_EVENT_REQUESTED",
+    "_EVENT_DECIDED",
 ]
