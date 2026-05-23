@@ -132,6 +132,7 @@ async def test_request_approval_publishes_redis_event() -> None:
             payload={},
             requested_by=uuid.uuid4(),
         )
+        await svc.publish_requested(approval)
 
     mock_redis.publish.assert_awaited_once()
     channel, raw_payload = mock_redis.publish.call_args[0]
@@ -223,12 +224,13 @@ async def test_decide_publishes_decided_event() -> None:
         mock_redis = AsyncMock()
         mock_redis_fn.return_value = mock_redis
 
-        await svc.decide(
+        updated = await svc.decide(
             session,
             approval_id=existing.id,
             decision=ApprovalStatus.APPROVED,
             decided_by=uuid.uuid4(),
         )
+        await svc.publish_decided(updated, ApprovalStatus.APPROVED)
 
     mock_redis.publish.assert_awaited_once()
     channel, raw_payload = mock_redis.publish.call_args[0]
