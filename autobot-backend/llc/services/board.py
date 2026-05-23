@@ -19,7 +19,7 @@ import logging
 import uuid
 from typing import Any, Dict, List, Optional, Sequence
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
@@ -268,13 +268,13 @@ class BoardService(LLCServiceBase):
                 scope_filter.append(LLCWorkItem.sprint_id == board.sprint_id)
 
             count_result = await session.execute(
-                select(LLCWorkItem).where(
+                select(func.count(LLCWorkItem.id)).where(
                     LLCWorkItem.company_id == board.company_id,
                     LLCWorkItem.status.in_(column.status_filter),
                     *scope_filter,
                 )
             )
-            current_count = len(count_result.scalars().all())
+            current_count = count_result.scalar_one()
             if current_count >= column.wip_limit:
                 raise WipLimitExceeded(column.name, column.wip_limit, current_count)
 

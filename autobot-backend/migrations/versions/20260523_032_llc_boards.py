@@ -60,6 +60,14 @@ def upgrade() -> None:
     op.create_index("ix_llc_boards_project_id", "llc_boards", ["project_id"])
     op.create_index("ix_llc_boards_sprint_id", "llc_boards", ["sprint_id"])
     op.create_index("ix_llc_boards_type", "llc_boards", ["type"])
+    op.create_unique_constraint(
+        "uq_llc_boards_company_project_type",
+        "llc_boards", ["company_id", "project_id", "type"],
+    )
+    op.create_unique_constraint(
+        "uq_llc_boards_company_sprint_type",
+        "llc_boards", ["company_id", "sprint_id", "type"],
+    )
 
     op.create_table(
         "llc_board_columns",
@@ -98,6 +106,8 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_index("ix_llc_board_columns_board_id", table_name="llc_board_columns")
     op.drop_table("llc_board_columns")
+    op.drop_constraint("uq_llc_boards_company_sprint_type", "llc_boards", type_="unique")
+    op.drop_constraint("uq_llc_boards_company_project_type", "llc_boards", type_="unique")
     op.drop_index("ix_llc_boards_type", table_name="llc_boards")
     op.drop_index("ix_llc_boards_sprint_id", table_name="llc_boards")
     op.drop_index("ix_llc_boards_project_id", table_name="llc_boards")
