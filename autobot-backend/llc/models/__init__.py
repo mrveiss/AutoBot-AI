@@ -52,6 +52,7 @@ __all__ = [
     "LLCRunStatus",
     "LLCSprint",
     "LLCSecret",
+    "LLCSprint",
     "LLCWorkItem",
     "LLCWorkItemComment",
     "SprintStatus",

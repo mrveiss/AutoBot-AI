@@ -26,6 +26,7 @@ router.include_router(sprints_router)
 router.include_router(work_items_router)
 router.include_router(api_keys_router)
 router.include_router(agent_router)
+router.include_router(sprints_router)
 
 
 @router.get("/health")
