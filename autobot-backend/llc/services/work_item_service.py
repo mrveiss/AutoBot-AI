@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Sequence
 
 from sqlalchemy import select, text, update
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
@@ -179,7 +180,7 @@ class WorkItemService(LLCServiceBase):
             q = q.where(LLCWorkItem.sprint_id == uuid.UUID(sprint_id))
         if top_level_only:
             q = q.where(LLCWorkItem.parent_id.is_(None))
-        elif parent_id is not None:
+        elif parent_id:
             q = q.where(LLCWorkItem.parent_id == uuid.UUID(parent_id))
         q = q.order_by(LLCWorkItem.created_at.desc()).limit(limit).offset(offset)
         result = await session.execute(q)
@@ -355,7 +356,6 @@ class WorkItemService(LLCServiceBase):
             if rec:
                 return f"{rec.issue_prefix}-{rec.issue_counter}"
         except Exception as exc:
-            from sqlalchemy.exc import ProgrammingError, OperationalError
             if isinstance(exc, (ProgrammingError, OperationalError)):
                 logger.debug("llc_companies table not available — using UUID identifier fallback")
             else:
