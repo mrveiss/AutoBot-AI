@@ -9,28 +9,86 @@ any existing AutoBot agent without modifying that agent.  The adapter:
 1. Validates the agent class at construction time (fail-fast import check).
 2. On ``invoke``, instantiates the agent, builds an ``AgentRequest`` from the
    LLC context, and runs ``agent.process_request()`` in an asyncio Task.
-3. Captures stdout/stderr via ``contextlib.redirect_stdout/stderr`` and
-   writes the combined log to ``run_log_store`` when provided.
-4. After the task completes, forwards any token-usage metadata to
-   ``BudgetService.ingest_cost_event`` (best-effort; never raises on failure).
+3. Captures log output via a per-task ``logging.Handler`` routed through a
+   ``contextvars.ContextVar`` (async-safe; does not touch ``sys.stdout``).
+   Writes the combined log to ``run_log_store`` when provided.
+4. Persists final run status to Redis so cross-worker ``status()`` calls return
+   the correct result in multi-worker (4-uvicorn) production deployments.
+5. After the task completes, forwards any token-usage metadata to
+   ``BudgetService.ingest_cost_event``.  ``BudgetExhausted`` is re-raised so
+   the GH#8215 hard-stop propagates; all other cost errors are best-effort.
 """
 
 from __future__ import annotations
 
 import asyncio
-import contextlib
+import contextvars
 import importlib
 import io
+import json
 import logging
 import uuid
 from typing import Any, Callable, Dict, Optional
 
 from agents.base_agent import AgentRequest
+from autobot_shared.redis_client import get_async_redis_client
+from llc.exceptions import BudgetExhausted
 from llc.models.enums import LLCRunStatus
 
 from .base import AdapterRunStatus
 
 logger = logging.getLogger(__name__)
+
+# ── Per-task log capture (async-safe) ─────────────────────────────────────────
+# asyncio.create_task() copies the current Context, so each task gets its own
+# ContextVar value.  _run_agent sets this to a fresh StringIO for its task;
+# _TaskCapturingHandler routes log records there without touching sys.stdout.
+
+_task_log_buf: contextvars.ContextVar[Optional[io.StringIO]] = contextvars.ContextVar(
+    "_task_log_buf", default=None
+)
+
+
+class _TaskCapturingHandler(logging.Handler):
+    """Routes log records to the current asyncio task's capture buffer.
+
+    Installed once on the root logger at first adapter use.  Between tasks,
+    ``_task_log_buf.get()`` returns ``None`` so the handler is a no-op.
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        buf = _task_log_buf.get()
+        if buf is None:
+            return
+        try:
+            msg = self.format(record)
+            buf.write(msg)
+            buf.write("\n")
+        except Exception:  # noqa: BLE001
+            self.handleError(record)
+
+
+_capturing_handler: Optional[_TaskCapturingHandler] = None
+
+
+def _get_capturing_handler() -> _TaskCapturingHandler:
+    """Return the singleton capturing handler, installing it on first call."""
+    global _capturing_handler
+    if _capturing_handler is None:
+        _capturing_handler = _TaskCapturingHandler()
+        _capturing_handler.setFormatter(
+            logging.Formatter("%(levelname)s %(name)s: %(message)s")
+        )
+        logging.root.addHandler(_capturing_handler)
+    return _capturing_handler
+
+
+# ── Redis-backed cross-worker status ─────────────────────────────────────────
+# In 4-uvicorn prod, invoke() may land on worker A while status() lands on
+# worker B.  We persist terminal statuses to Redis so any worker can answer.
+
+_REDIS_KEY_PREFIX = "llc:adapter:run:"
+_REDIS_STATUS_TTL = 86400  # 24 h — enough for any scheduler polling window
 
 # Sentinel for "no session provided" so budget ingestion is skipped cleanly.
 _NO_SESSION = object()
@@ -66,10 +124,10 @@ class AutoBotAgentAdapter:
         }
 
     The adapter is **stateful**: it stores in-flight asyncio Tasks keyed by
-    ``run_id`` so ``status()`` and ``cancel()`` can look them up.  Each
-    adapter instance is intended to be long-lived (e.g. per-scheduler) so
-    completed tasks accumulate; call ``cleanup_completed()`` periodically or
-    after each status poll to release memory.
+    ``run_id`` so ``status()`` and ``cancel()`` can look them up.  Terminal
+    statuses are also written to Redis so cross-worker ``status()`` calls
+    succeed in multi-worker deployments.  Call ``cleanup_completed()``
+    periodically to release memory for both the task map and log cache.
     """
 
     def __init__(
@@ -131,45 +189,38 @@ class AutoBotAgentAdapter:
         return run_id
 
     async def status(self, agent_config: Dict[str, Any], run_id: str) -> AdapterRunStatus:
-        """Return the current status of a dispatched run."""
+        """Return the current status of a dispatched run.
+
+        Checks the local task map first (same worker), then falls back to
+        Redis for cross-worker visibility in multi-worker deployments.
+        """
         task = self._tasks.get(run_id)
-        if task is None:
-            return AdapterRunStatus(
-                status=LLCRunStatus.FAILED,
-                error=f"Unknown run_id {run_id!r}",
+        if task is not None:
+            return _task_to_status(task)
+
+        # Cross-worker fallback: check Redis for a persisted terminal status.
+        try:
+            redis = await get_async_redis_client()
+            if redis is not None:
+                raw = await redis.get(f"{_REDIS_KEY_PREFIX}{run_id}")
+                if raw:
+                    data = json.loads(raw)
+                    return AdapterRunStatus(
+                        status=LLCRunStatus(data["status"]),
+                        error=data.get("error"),
+                        exit_code=data.get("exit_code"),
+                    )
+        except Exception:
+            logger.warning(
+                "AutoBotAgentAdapter: Redis status lookup failed for run_id=%s",
+                run_id,
+                exc_info=True,
             )
 
-        if not task.done():
-            return AdapterRunStatus(status=LLCRunStatus.RUNNING)
-
-        if task.cancelled():
-            return AdapterRunStatus(status=LLCRunStatus.CANCELLED)
-
-        exc = task.exception()
-        if exc is not None:
-            return AdapterRunStatus(
-                status=LLCRunStatus.FAILED,
-                error=str(exc),
-            )
-
-        result = task.result()
-        # AgentResponse.status is "success" or "error"
-        if isinstance(result, dict):
-            status_val = result.get("status", "success")
-        else:
-            status_val = getattr(result, "status", "success")
-
-        if status_val == "error":
-            error_msg = (
-                result.get("error") if isinstance(result, dict) else getattr(result, "error", None)
-            )
-            return AdapterRunStatus(
-                status=LLCRunStatus.FAILED,
-                exit_code=1,
-                error=error_msg,
-            )
-
-        return AdapterRunStatus(status=LLCRunStatus.COMPLETED, exit_code=0)
+        return AdapterRunStatus(
+            status=LLCRunStatus.FAILED,
+            error=f"Unknown run_id {run_id!r}",
+        )
 
     async def cancel(self, agent_config: Dict[str, Any], run_id: str) -> None:
         """Cancel a dispatched run."""
@@ -177,47 +228,68 @@ class AutoBotAgentAdapter:
         if task is None or task.done():
             return
         task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
+        try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=5.0)
+        except (asyncio.CancelledError, asyncio.TimeoutError, Exception):
+            pass
 
     # ──────────────────────────────────────────────────────────────────────
     # Internal helpers
     # ──────────────────────────────────────────────────────────────────────
 
     async def _run_agent(self, run_id: str, context: Dict[str, Any]) -> Any:
-        """Instantiate the agent, run it, capture output, forward costs."""
+        """Instantiate the agent, run it, capture log output, forward costs."""
         agent = self._agent_cls(**self._agent_kwargs)
         request = _build_agent_request(run_id, context)
 
-        stdout_buf = io.StringIO()
-        stderr_buf = io.StringIO()
+        # Per-task log capture: set the contextvar in this task's context copy.
+        # asyncio.create_task() already copied the context, so this assignment
+        # is isolated to this task — other concurrent tasks are unaffected.
+        _get_capturing_handler()
+        log_buf = io.StringIO()
+        token = _task_log_buf.set(log_buf)
 
-        with contextlib.redirect_stdout(stdout_buf), contextlib.redirect_stderr(stderr_buf):
+        final_status: AdapterRunStatus = AdapterRunStatus(
+            status=LLCRunStatus.FAILED, error="unexpected exit"
+        )
+        try:
             response = await agent.process_request(request)
+            await self._forward_cost(run_id, response, context)
+            final_status = AdapterRunStatus(status=LLCRunStatus.COMPLETED, exit_code=0)
+            return response
+        except asyncio.CancelledError:
+            final_status = AdapterRunStatus(status=LLCRunStatus.CANCELLED)
+            raise
+        except Exception as exc:
+            final_status = AdapterRunStatus(
+                status=LLCRunStatus.FAILED, error=str(exc)
+            )
+            raise
+        finally:
+            _task_log_buf.reset(token)
+            combined_log = log_buf.getvalue()
+            self._logs[run_id] = combined_log
 
-        combined_log = stdout_buf.getvalue() + stderr_buf.getvalue()
-        self._logs[run_id] = combined_log
+            if combined_log and self._run_log_store is not None:
+                try:
+                    await self._run_log_store.write(run_id, combined_log)
+                except Exception:
+                    logger.warning(
+                        "AutoBotAgentAdapter: run_log_store.write failed for run_id=%s",
+                        run_id,
+                        exc_info=True,
+                    )
 
-        if combined_log and self._run_log_store is not None:
-            try:
-                await self._run_log_store.write(run_id, combined_log)
-            except Exception:
-                logger.warning(
-                    "AutoBotAgentAdapter: run_log_store.write failed for run_id=%s",
-                    run_id,
-                    exc_info=True,
-                )
-
-        await self._forward_cost(run_id, response, context)
-        return response
+            await self._persist_run_status(run_id, final_status)
 
     async def _forward_cost(
         self, run_id: str, response: Any, context: Dict[str, Any]
     ) -> None:
         """Forward token-usage from *response.metadata* to BudgetService.
 
-        This is best-effort: any failure is logged but never re-raised so the
-        caller always sees the agent result rather than a billing error.
+        ``BudgetExhausted`` is re-raised so the GH#8215 hard-stop propagates
+        to ``_run_agent`` and the run is recorded as FAILED.  All other errors
+        are best-effort: logged as warnings and never re-raised.
         """
         if self._budget_session_factory is None:
             return
@@ -241,6 +313,8 @@ class AutoBotAgentAdapter:
                 await BudgetService().ingest_cost_event(
                     session, agent_id, tokens_in, tokens_out, model
                 )
+        except BudgetExhausted:
+            raise  # Hard-stop from GH#8215: propagate so run is marked FAILED
         except Exception:
             logger.warning(
                 "AutoBotAgentAdapter: cost forwarding failed for run_id=%s agent=%s",
@@ -249,8 +323,31 @@ class AutoBotAgentAdapter:
                 exc_info=True,
             )
 
+    async def _persist_run_status(
+        self, run_id: str, final_status: AdapterRunStatus
+    ) -> None:
+        """Write terminal run status to Redis for cross-worker visibility."""
+        try:
+            redis = await get_async_redis_client()
+            if redis is None:
+                return
+            payload = json.dumps({
+                "status": final_status.status.value,
+                "error": final_status.error,
+                "exit_code": final_status.exit_code,
+            })
+            await redis.setex(
+                f"{_REDIS_KEY_PREFIX}{run_id}", _REDIS_STATUS_TTL, payload
+            )
+        except Exception:
+            logger.warning(
+                "AutoBotAgentAdapter: Redis status persist failed for run_id=%s",
+                run_id,
+                exc_info=True,
+            )
+
     def cleanup_completed(self) -> int:
-        """Remove completed tasks from the in-memory map.
+        """Remove completed tasks and their log entries from the in-memory maps.
 
         Returns the number of entries removed.  Call periodically to prevent
         unbounded memory growth in long-lived scheduler processes.
@@ -258,16 +355,52 @@ class AutoBotAgentAdapter:
         done_ids = [rid for rid, t in self._tasks.items() if t.done()]
         for rid in done_ids:
             del self._tasks[rid]
+            self._logs.pop(rid, None)
         return len(done_ids)
 
     def get_log(self, run_id: str) -> Optional[str]:
-        """Return captured stdout/stderr for a completed run, or ``None``."""
+        """Return captured log output for a completed run, or ``None``."""
         return self._logs.get(run_id)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Context → AgentRequest conversion
+# Helpers
 # ──────────────────────────────────────────────────────────────────────────────
+
+
+def _task_to_status(task: asyncio.Task) -> AdapterRunStatus:
+    """Convert a local asyncio.Task to an AdapterRunStatus."""
+    if not task.done():
+        return AdapterRunStatus(status=LLCRunStatus.RUNNING)
+
+    if task.cancelled():
+        return AdapterRunStatus(status=LLCRunStatus.CANCELLED)
+
+    exc = task.exception()
+    if exc is not None:
+        return AdapterRunStatus(
+            status=LLCRunStatus.FAILED,
+            error=str(exc),
+        )
+
+    result = task.result()
+    if isinstance(result, dict):
+        status_val = result.get("status", "success")
+    else:
+        status_val = getattr(result, "status", "success")
+
+    if status_val == "error":
+        error_msg = (
+            result.get("error") if isinstance(result, dict) else getattr(result, "error", None)
+        )
+        return AdapterRunStatus(
+            status=LLCRunStatus.FAILED,
+            exit_code=1,
+            error=error_msg,
+        )
+
+    return AdapterRunStatus(status=LLCRunStatus.COMPLETED, exit_code=0)
+
 
 def _build_agent_request(run_id: str, context: Dict[str, Any]) -> AgentRequest:
     """Build an ``AgentRequest`` from an LLC dispatch context.

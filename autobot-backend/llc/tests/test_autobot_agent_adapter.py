@@ -12,6 +12,7 @@ The integration test dispatches the real SummarizationAgent; it is marked
 from __future__ import annotations
 
 import asyncio
+import logging
 import sys
 import types
 from typing import Any
@@ -125,6 +126,36 @@ _FAILING_AGENT_PATH = f"{_THIS_MODULE}._FailingAgent"
 # Ensure the current test module is discoverable via importlib.
 sys.modules.setdefault(_THIS_MODULE, sys.modules[__name__])
 
+@pytest.fixture(autouse=True)
+def _no_redis(monkeypatch):
+    """Ensure no real Redis calls are made in unit tests."""
+    monkeypatch.setattr(
+        "llc.adapters.autobot_agent_adapter.get_async_redis_client",
+        AsyncMock(return_value=None),
+        raising=False,
+    )
+
+
+def _make_slow_adapter() -> AutoBotAgentAdapter:
+    """Return an adapter wired with a slow (9999s sleep) agent."""
+
+    class _SlowAgent:
+        def __init__(self, **_):
+            self.agent_type = "slow"
+
+        async def process_request(self, req):
+            await asyncio.sleep(9999)
+            return _AgentResponse(req.request_id, "slow", "success", {})
+
+    adapter = AutoBotAgentAdapter.__new__(AutoBotAgentAdapter)
+    adapter._agent_cls = _SlowAgent
+    adapter._agent_kwargs = {}
+    adapter._budget_session_factory = None
+    adapter._run_log_store = None
+    adapter._tasks = {}
+    adapter._logs = {}
+    return adapter
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # _import_agent_class
@@ -226,27 +257,10 @@ async def test_invoke_returns_run_id_then_completed():
 @pytest.mark.asyncio
 async def test_status_running_before_completion():
     """Status is RUNNING immediately after invoke (before event loop yields)."""
-
-    class _SlowAgent:
-        def __init__(self, **_):
-            self.agent_type = "slow"
-
-        async def process_request(self, req):
-            await asyncio.sleep(9999)
-            return _AgentResponse(req.request_id, "slow", "success", {})
-
-    adapter = AutoBotAgentAdapter.__new__(AutoBotAgentAdapter)
-    adapter._agent_cls = _SlowAgent
-    adapter._agent_kwargs = {}
-    adapter._budget_session_factory = None
-    adapter._run_log_store = None
-    adapter._tasks = {}
-    adapter._logs = {}
-
+    adapter = _make_slow_adapter()
     run_id = await adapter.invoke({}, {"title": "T"})
     status = await adapter.status({}, run_id)
     assert status.status == LLCRunStatus.RUNNING
-
     await adapter.cancel({}, run_id)
 
 
@@ -256,6 +270,30 @@ async def test_status_unknown_run_id_returns_failed():
     status = await adapter.status({}, "nonexistent-run-id")
     assert status.status == LLCRunStatus.FAILED
     assert "Unknown run_id" in (status.error or "")
+
+
+@pytest.mark.asyncio
+async def test_status_cross_worker_reads_redis():
+    """status() falls back to Redis when run_id is not in local _tasks."""
+    import json as _json
+
+    adapter = AutoBotAgentAdapter({"agent_class": _FAKE_AGENT_PATH})
+    run_id = "cross-worker-run-id"
+
+    mock_redis = AsyncMock()
+    mock_redis.get = AsyncMock(
+        return_value=_json.dumps({"status": "COMPLETED", "error": None, "exit_code": 0})
+    )
+
+    with patch(
+        "llc.adapters.autobot_agent_adapter.get_async_redis_client",
+        AsyncMock(return_value=mock_redis),
+    ):
+        status = await adapter.status({}, run_id)
+
+    assert status.status == LLCRunStatus.COMPLETED
+    assert status.exit_code == 0
+    mock_redis.get.assert_called_once_with(f"llc:adapter:run:{run_id}")
 
 
 @pytest.mark.asyncio
@@ -271,22 +309,7 @@ async def test_failing_agent_maps_to_failed_status():
 @pytest.mark.asyncio
 async def test_cancel_cancels_task():
     """Cancel a slow agent; status must become CANCELLED."""
-
-    class _SlowAgent:
-        def __init__(self, **_):
-            self.agent_type = "slow"
-
-        async def process_request(self, req):
-            await asyncio.sleep(9999)
-
-    adapter = AutoBotAgentAdapter.__new__(AutoBotAgentAdapter)
-    adapter._agent_cls = _SlowAgent
-    adapter._agent_kwargs = {}
-    adapter._budget_session_factory = None
-    adapter._run_log_store = None
-    adapter._tasks = {}
-    adapter._logs = {}
-
+    adapter = _make_slow_adapter()
     run_id = await adapter.invoke({}, {"title": "Slow"})
     await adapter.cancel({}, run_id)
     status = await adapter.status({}, run_id)
@@ -302,38 +325,91 @@ async def test_cancel_noop_on_completed_task():
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Log capture
+# Log capture (via logging handler, not redirect_stdout)
 # ──────────────────────────────────────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_log_store_write_called_when_agent_prints():
-    class _PrintingAgent:
+async def test_log_store_write_called_when_agent_logs():
+    """Log output from agent's logger is captured and forwarded to run_log_store."""
+
+    class _LoggingAgent:
+        _logger = logging.getLogger("test.llc.adapter.logging_agent")
+
         def __init__(self, **_):
-            self.agent_type = "printer"
+            self.agent_type = "logging_agent"
 
         async def process_request(self, req):
-            print("hello from agent")  # noqa: T201
+            self._logger.info("hello from agent")
             return _AgentResponse(req.request_id, self.agent_type, "success", {})
 
     store = MagicMock()
     store.write = AsyncMock()
 
     adapter = AutoBotAgentAdapter.__new__(AutoBotAgentAdapter)
-    adapter._agent_cls = _PrintingAgent
+    adapter._agent_cls = _LoggingAgent
     adapter._agent_kwargs = {}
     adapter._budget_session_factory = None
     adapter._run_log_store = store
     adapter._tasks = {}
     adapter._logs = {}
 
-    run_id = await adapter.invoke({}, {"title": "Printer test"})
+    run_id = await adapter.invoke({}, {"title": "Logging test"})
     await asyncio.sleep(0.05)
 
     store.write.assert_called_once()
     call_run_id, log_text = store.write.call_args.args
     assert call_run_id == run_id
     assert "hello from agent" in log_text
+
+
+@pytest.mark.asyncio
+async def test_concurrent_log_capture_is_isolated():
+    """Concurrent tasks must not mix each other's log output."""
+    barrier = asyncio.Event()
+    results: dict[str, str] = {}
+
+    class _BarrierAgent:
+        def __init__(self, label: str, **_):
+            self._label = label
+            self._logger = logging.getLogger(f"test.llc.adapter.barrier.{label}")
+
+        async def process_request(self, req):
+            self._logger.info("msg-from-%s", self._label)
+            await barrier.wait()
+            return _AgentResponse(req.request_id, "barrier", "success", {})
+
+    async def _run(label: str) -> tuple[str, str]:
+        store = MagicMock()
+        store.write = AsyncMock()
+
+        adapter = AutoBotAgentAdapter.__new__(AutoBotAgentAdapter)
+        adapter._agent_cls = lambda **kw: _BarrierAgent(label=label)
+        adapter._agent_kwargs = {}
+        adapter._budget_session_factory = None
+        adapter._run_log_store = store
+        adapter._tasks = {}
+        adapter._logs = {}
+
+        run_id = await adapter.invoke({}, {"title": label})
+        return run_id, adapter, store
+
+    run_a, adapter_a, store_a = await _run("agent-A")
+    run_b, adapter_b, store_b = await _run("agent-B")
+
+    # Let both tasks progress past their log call and reach the barrier
+    await asyncio.sleep(0.02)
+    barrier.set()
+    await asyncio.sleep(0.05)
+
+    log_a = adapter_a.get_log(run_a) or ""
+    log_b = adapter_b.get_log(run_b) or ""
+
+    # Each log must contain only its own message
+    assert "msg-from-agent-A" in log_a
+    assert "msg-from-agent-B" not in log_a
+    assert "msg-from-agent-B" in log_b
+    assert "msg-from-agent-A" not in log_b
 
 
 @pytest.mark.asyncio
@@ -379,6 +455,35 @@ async def test_cost_forwarded_to_budget_service():
 
 
 @pytest.mark.asyncio
+async def test_budget_exhausted_propagates_to_failed_status():
+    """BudgetExhausted must NOT be swallowed — run must reach FAILED status."""
+    from llc.exceptions import BudgetExhausted
+
+    mock_session = AsyncMock()
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=False)
+
+    def session_factory():
+        return mock_session
+
+    with patch("llc.services.budget.BudgetService") as MockBS:
+        MockBS.return_value.ingest_cost_event = AsyncMock(
+            side_effect=BudgetExhausted("budget limit reached")
+        )
+
+        adapter = AutoBotAgentAdapter(
+            {"agent_class": _FAKE_AGENT_PATH},
+            budget_session_factory=session_factory,
+        )
+        run_id = await adapter.invoke({}, {"title": "T", "agent_id": "agent-xyz"})
+        await asyncio.sleep(0.05)
+
+        status = await adapter.status({}, run_id)
+        assert status.status == LLCRunStatus.FAILED
+        assert "budget limit reached" in (status.error or "")
+
+
+@pytest.mark.asyncio
 async def test_cost_not_forwarded_when_no_factory():
     adapter = AutoBotAgentAdapter({"agent_class": _FAKE_AGENT_PATH})
     run_id = await adapter.invoke({}, {"title": "T", "agent_id": "agent-xyz"})
@@ -402,6 +507,18 @@ async def test_cleanup_completed_removes_done_tasks():
     removed = adapter.cleanup_completed()
     assert removed == 1
     assert run_id not in adapter._tasks
+
+
+@pytest.mark.asyncio
+async def test_cleanup_completed_also_removes_logs():
+    """cleanup_completed must evict _logs entries to prevent memory leak."""
+    adapter = AutoBotAgentAdapter({"agent_class": _FAKE_AGENT_PATH})
+    run_id = await adapter.invoke({}, {"title": "T"})
+    await asyncio.sleep(0.05)
+
+    assert run_id in adapter._logs
+    adapter.cleanup_completed()
+    assert run_id not in adapter._logs
 
 
 # ──────────────────────────────────────────────────────────────────────────────
