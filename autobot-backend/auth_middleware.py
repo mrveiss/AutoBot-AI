@@ -755,12 +755,15 @@ async def authenticate_websocket(websocket) -> dict | None:
             auth = AuthenticationMiddleware()
             token_data = auth.verify_jwt_token(token)
             if token_data:
-                return {
+                result = {
                     "username": token_data["username"],
                     "role": token_data["role"],
                     "email": token_data.get("email", ""),
                     "auth_method": "jwt_websocket",
                 }
+                if token_data.get("user_id"):
+                    result["user_id"] = token_data["user_id"]
+                return result
         except Exception:
             logger.warning("WebSocket JWT authentication failed")
             return None
