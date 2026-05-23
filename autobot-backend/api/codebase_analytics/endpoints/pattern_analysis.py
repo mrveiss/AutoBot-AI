@@ -188,9 +188,7 @@ async def list_analysis_tasks() -> Dict[str, Any]:
     from celery_app import celery_app
 
     active = celery_app.control.inspect().active() or {}
-    analytics_tasks = [
-        t for worker_tasks in active.values() for t in worker_tasks if "pattern" in t.get("name", "")
-    ]
+    analytics_tasks = [t for worker_tasks in active.values() for t in worker_tasks if "pattern" in t.get("name", "")]
     return {"tasks": analytics_tasks, "count": len(analytics_tasks)}
 
 

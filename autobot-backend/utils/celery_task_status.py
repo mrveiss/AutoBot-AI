@@ -16,7 +16,6 @@ from typing import Any, Dict
 
 from celery.result import AsyncResult
 
-
 # ---------------------------------------------------------------------------
 # Helpers for latest-task-id tracking (replaces BackgroundTaskManager
 # ``latest_result`` cache; stores only the Celery task ID in Redis)
