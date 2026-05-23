@@ -3,16 +3,16 @@
 # Author: mrveiss
 """LLC company-scoped secrets table (GH#8217).
 
-Revision ID: 20260523_027
-Revises: 20260523_026
+Revision ID: 20260523_028
+Revises: 20260523_027
 Create Date: 2026-05-23
 """
 
 from alembic import op
 import sqlalchemy as sa
 
-revision = "20260523_027"
-down_revision = "20260523_026"
+revision = "20260523_028"
+down_revision = "20260523_027"
 branch_labels = None
 depends_on = None
 
