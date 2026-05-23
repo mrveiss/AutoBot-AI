@@ -18,6 +18,7 @@ from llc.models.enums import LLCCompanyStatus
 from llc.services.company import (
     CompanyBudgetError,
     CompanyCycleError,
+    CompanyHasChildrenError,
     CompanyIssuePrefixConflictError,
     CompanyNotFoundError,
     CompanyService,
@@ -238,3 +239,90 @@ class TestSchemas:
             llc_status=LLCCompanyStatus.ACTIVE,
         )
         assert node.children == []
+
+
+class TestCycleGuardOnUpdate:
+    @pytest.mark.asyncio
+    async def test_update_calls_assert_no_cycle_when_parent_changes(self):
+        org = _make_org(llc_status="active")
+        svc = _make_service()
+        svc._get_or_404 = AsyncMock(return_value=org)
+        svc._assert_prefix_unique = AsyncMock()
+        svc._assert_no_cycle = AsyncMock()
+
+        data = CompanyUpdate(parent_org_id=uuid.uuid4())
+        await svc.update(org.id, data)
+
+        svc._assert_no_cycle.assert_awaited_once_with(org.id, data.parent_org_id)
+
+    @pytest.mark.asyncio
+    async def test_update_raises_when_cycle_detected(self):
+        org = _make_org(llc_status="active")
+        svc = _make_service()
+        svc._get_or_404 = AsyncMock(return_value=org)
+        svc._assert_no_cycle = AsyncMock(side_effect=CompanyCycleError("cycle"))
+
+        data = CompanyUpdate(parent_org_id=uuid.uuid4())
+        with pytest.raises(CompanyCycleError):
+            await svc.update(org.id, data)
+
+
+class TestTreeCycleGuard:
+    @pytest.mark.asyncio
+    async def test_build_tree_raises_on_cycle(self):
+        root = _make_org(name="Root", llc_status="active")
+        child = _make_org(name="Child", llc_status="active", parent_org_id=root.id)
+
+        svc = _make_service()
+        svc._get_or_404 = AsyncMock(return_value=root)
+        # Simulate cycle: child's children returns root again
+        svc.list_children = AsyncMock(side_effect=[[child], [root]])
+
+        with pytest.raises(CompanyCycleError):
+            await svc.get_sub_company_tree(root.id)
+
+
+class TestBudgetDoubleCountFix:
+    @pytest.mark.asyncio
+    async def test_update_budget_excludes_self_from_children_sum(self):
+        parent = _make_org(budget_monthly_cents=1000, spent_monthly_cents=0)
+        org = _make_org(parent_org_id=parent.id, budget_monthly_cents=500)
+
+        svc = _make_service()
+        svc._get_or_404 = AsyncMock(side_effect=[org, parent])
+        svc._assert_prefix_unique = AsyncMock()
+        svc._assert_no_cycle = AsyncMock()
+        # With self excluded from sum, the 500 fits (only 0 other children)
+        svc._sum_children_budget = AsyncMock(return_value=0)
+
+        data = CompanyUpdate(budget_monthly_cents=500)
+        result = await svc.update(org.id, data)
+
+        # Verify exclude_id was passed
+        svc._sum_children_budget.assert_awaited_once_with(parent.id, exclude_id=org.id)
+        assert result.budget_monthly_cents == 500
+
+
+class TestDeleteOrphanFix:
+    @pytest.mark.asyncio
+    async def test_delete_raises_when_children_exist(self):
+        parent = _make_org(name="Parent", llc_status="active")
+        child = _make_org(name="Child", llc_status="active", parent_org_id=parent.id)
+        svc = _make_service()
+        svc._get_or_404 = AsyncMock(return_value=parent)
+        svc.list_children = AsyncMock(return_value=[child])
+
+        with pytest.raises(CompanyHasChildrenError):
+            await svc.delete(parent.id)
+
+    @pytest.mark.asyncio
+    async def test_delete_succeeds_when_no_children(self):
+        org = _make_org(name="Leaf", llc_status="active")
+        org.soft_delete = MagicMock()
+        svc = _make_service()
+        svc._get_or_404 = AsyncMock(return_value=org)
+        svc.list_children = AsyncMock(return_value=[])
+
+        await svc.delete(org.id)
+
+        org.soft_delete.assert_called_once()

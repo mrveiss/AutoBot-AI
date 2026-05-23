@@ -40,6 +40,10 @@ class CompanyIssuePrefixConflictError(Exception):
     """Raised when the requested issue_prefix is already taken."""
 
 
+class CompanyHasChildrenError(Exception):
+    """Raised when attempting to delete a company that still has active child companies."""
+
+
 class CompanyService(LLCServiceBase):
     """LLC service for company CRUD + lifecycle operations.
 
@@ -77,6 +81,10 @@ class CompanyService(LLCServiceBase):
         )
         self.session.add(org)
         await self.session.flush()
+
+        if data.parent_org_id is not None:
+            await self._assert_no_cycle(org.id, data.parent_org_id)
+
         logger.info("LLC company created: %s (id=%s)", org.name, org.id)
         return org
 
@@ -91,9 +99,12 @@ class CompanyService(LLCServiceBase):
         if data.issue_prefix is not None and data.issue_prefix != org.issue_prefix:
             await self._assert_prefix_unique(data.issue_prefix)
 
+        if data.parent_org_id is not None:
+            await self._assert_no_cycle(company_id, data.parent_org_id)
+
         if data.budget_monthly_cents is not None and org.parent_org_id is not None:
             parent = await self._get_or_404(org.parent_org_id)
-            await self._assert_budget_fits(parent, data.budget_monthly_cents)
+            await self._assert_budget_fits(parent, data.budget_monthly_cents, exclude_id=company_id)
 
         update_fields = data.model_dump(exclude_none=True)
         for field, value in update_fields.items():
@@ -127,8 +138,18 @@ class CompanyService(LLCServiceBase):
         return list(result.scalars().all())
 
     async def delete(self, company_id: uuid.UUID) -> None:
-        """Soft-delete a company."""
+        """Soft-delete a company.
+
+        Raises CompanyHasChildrenError when active child companies exist, preventing
+        orphaned children that ON DELETE SET NULL cannot handle for soft-deletes.
+        """
         org = await self._get_or_404(company_id)
+        children = await self.list_children(company_id)
+        if children:
+            raise CompanyHasChildrenError(
+                f"Company {company_id} has {len(children)} active child company(s); "
+                "re-parent or delete children before deleting the parent"
+            )
         org.soft_delete()
         await self.session.flush()
         logger.info("LLC company soft-deleted: %s (id=%s)", org.name, org.id)
@@ -205,11 +226,20 @@ class CompanyService(LLCServiceBase):
         if result.scalar_one_or_none() is not None:
             raise CompanyIssuePrefixConflictError(f"issue_prefix '{prefix}' is already taken")
 
-    async def _assert_budget_fits(self, parent: Organization, child_budget_cents: int) -> None:
-        """Ensure child budget does not exceed parent remaining budget."""
+    async def _assert_budget_fits(
+        self,
+        parent: Organization,
+        child_budget_cents: int,
+        exclude_id: Optional[uuid.UUID] = None,
+    ) -> None:
+        """Ensure child budget does not exceed parent remaining budget.
+
+        Pass exclude_id=company_id when updating an existing child to avoid
+        double-counting that child's current allocation.
+        """
         if parent.budget_monthly_cents == 0:
             return
-        existing_children_total = await self._sum_children_budget(parent.id)
+        existing_children_total = await self._sum_children_budget(parent.id, exclude_id=exclude_id)
         remaining = parent.budget_monthly_cents - parent.spent_monthly_cents - existing_children_total
         if child_budget_cents > remaining:
             raise CompanyBudgetError(
@@ -217,17 +247,33 @@ class CompanyService(LLCServiceBase):
                 f"budget {remaining} cents"
             )
 
-    async def _sum_children_budget(self, parent_id: uuid.UUID) -> int:
-        result = await self.session.execute(
+    async def _sum_children_budget(
+        self,
+        parent_id: uuid.UUID,
+        exclude_id: Optional[uuid.UUID] = None,
+    ) -> int:
+        stmt = (
             select(Organization.budget_monthly_cents)
             .where(Organization.parent_org_id == parent_id)
             .where(Organization.deleted_at.is_(None))
         )
+        if exclude_id is not None:
+            stmt = stmt.where(Organization.id != exclude_id)
+        result = await self.session.execute(stmt)
         return sum(row for row in result.scalars().all())
 
-    async def _build_tree_node(self, org: Organization) -> CompanyTreeNode:
+    async def _build_tree_node(
+        self,
+        org: Organization,
+        visited: Optional[set[uuid.UUID]] = None,
+    ) -> CompanyTreeNode:
+        if visited is None:
+            visited = set()
+        if org.id in visited:
+            raise CompanyCycleError(f"Cycle detected in company tree at id={org.id}")
+        current_visited = visited | {org.id}
         children_orgs = await self.list_children(org.id)
-        children_nodes = [await self._build_tree_node(c) for c in children_orgs]
+        children_nodes = [await self._build_tree_node(c, current_visited) for c in children_orgs]
         return CompanyTreeNode(
             id=org.id,
             name=org.name,
