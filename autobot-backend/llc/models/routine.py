@@ -1,30 +1,31 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""LLC Routine SQLAlchemy model (GH#8229).
+"""LLC Routine SQLAlchemy models (GH#8229).
 
 A Routine is a recurring agent task defined by a cron schedule. Each time the
 scheduler fires a routine it creates an LLCRoutineRun record and dispatches
 the agent via the existing heartbeat pipeline.
 
 Design decisions:
-- env is JSONB: overlay order (agent_env < project_env < routine_env < system_keys)
+- env is JSONB nullable: overlay order (agent_env < project_env < routine_env)
   is enforced by RoutineService.resolve_env(), not stored as a computed column.
 - status uses RoutineStatus enum; only ACTIVE routines are loaded by the scheduler.
 - soft-delete: DELETE sets status=ARCHIVED, never removes the row.
+- produces controls whether a run creates a new work item or updates a recurring one.
 """
 
 import uuid
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from user_management.models.base import Base
 
-from .enums import RoutineStatus
+from .enums import RoutineProduces, RoutineStatus
 
 
 class LLCRoutine(Base):
@@ -40,25 +41,33 @@ class LLCRoutine(Base):
     company_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), nullable=False, index=True
     )
-    agent_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False, index=True
-    )
     name: Mapped[str] = mapped_column(sa.String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
-    cron_schedule: Mapped[str] = mapped_column(
-        sa.String(100), nullable=False, comment="Standard 5-field cron expression"
-    )
-    env: Mapped[Dict[str, Any]] = mapped_column(
-        JSONB,
-        nullable=False,
-        server_default=sa.text("'{}'::jsonb"),
-        comment="Routine-level env overlay; merged over agent_env by RoutineService",
+    cron_schedule: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    assignee_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
     )
     status: Mapped[str] = mapped_column(
-        sa.Enum(RoutineStatus, name="routinestatus", create_type=False),
+        sa.String(32),
         nullable=False,
         server_default=RoutineStatus.ACTIVE.value,
-        index=True,
+    )
+    env: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    produces: Mapped[str] = mapped_column(
+        sa.String(32),
+        nullable=False,
+        server_default=RoutineProduces.NEW_WORK_ITEM.value,
+    )
+    work_item_template: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True
+    )
+    recurring_work_item_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        sa.ForeignKey("llc_work_items.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    last_fired_at: Mapped[Optional[datetime]] = mapped_column(
+        sa.DateTime(timezone=True), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
@@ -68,6 +77,13 @@ class LLCRoutine(Base):
         nullable=False,
         server_default=sa.func.now(),
         onupdate=sa.func.now(),
+    )
+
+    runs: Mapped[List["LLCRoutineRun"]] = relationship(
+        "LLCRoutineRun",
+        back_populates="routine",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
     def __repr__(self) -> str:
@@ -90,18 +106,30 @@ class LLCRoutineRun(Base):
         nullable=False,
         index=True,
     )
+    heartbeat_run_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        sa.ForeignKey("llc_heartbeat_runs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    work_item_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        sa.ForeignKey("llc_work_items.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     status: Mapped[str] = mapped_column(
-        sa.Enum("queued", "running", "completed", "failed", name="routinerunstatus", create_type=False),
-        nullable=False,
-        server_default="queued",
+        sa.String(32), nullable=False, server_default="queued"
     )
-    triggered_at: Mapped[datetime] = mapped_column(
-        sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
-    )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
+    started_at: Mapped[Optional[datetime]] = mapped_column(
         sa.DateTime(timezone=True), nullable=True
     )
-    error: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(
+        sa.DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+    )
+
+    routine: Mapped["LLCRoutine"] = relationship("LLCRoutine", back_populates="runs")
 
     def __repr__(self) -> str:
         return f"<LLCRoutineRun(id={self.id}, routine_id={self.routine_id}, status={self.status})>"
