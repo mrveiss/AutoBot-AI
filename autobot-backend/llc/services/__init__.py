@@ -10,5 +10,13 @@ from .approval import ApprovalService
 from .base import LLCServiceBase
 from .budget import BudgetService
 from .goal import GoalService
+from .sprint_autoclose import SprintAutoCloseService
 
-__all__ = ["ApprovalService", "BudgetService", "GoalService", "LLCActivityLogService", "LLCServiceBase"]
+__all__ = [
+    "ApprovalService",
+    "BudgetService",
+    "GoalService",
+    "LLCActivityLogService",
+    "LLCServiceBase",
+    "SprintAutoCloseService",
+]

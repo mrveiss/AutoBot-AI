@@ -76,6 +76,8 @@ class LLCWorkItem(Base):
         index=True,
     )
     story_points: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    backlog_position: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    needs_triage: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, server_default="false")
 
     # Assignment
     assignee_type: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
