@@ -207,10 +207,7 @@ async def clear_all_tasks() -> Dict[str, str]:
 
     active = await asyncio.to_thread(lambda: celery_app.control.inspect().active() or {})
     analytics_task_ids = [
-        t["id"]
-        for worker_tasks in active.values()
-        for t in worker_tasks
-        if t.get("name", "").startswith("analytics.")
+        t["id"] for worker_tasks in active.values() for t in worker_tasks if t.get("name", "").startswith("analytics.")
     ]
     for task_id in analytics_task_ids:
         await asyncio.to_thread(celery_app.control.revoke, task_id, terminate=True)
