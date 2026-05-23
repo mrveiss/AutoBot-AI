@@ -3,10 +3,12 @@
 # Author: mrveiss
 """LLC GoalService — CRUD, ancestry traversal, KB indexing (GH#8212)."""
 
+import asyncio
 import uuid
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import delete, select
+from fastapi import HTTPException
+from sqlalchemy import delete, event, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
@@ -30,6 +32,33 @@ def _goal_collection_name(company_id: str) -> str:
     return f"{company_id}_{_GOAL_COLLECTION_SUFFIX}"
 
 
+def _as_goal_level(value: Any) -> GoalLevel:
+    """Coerce a string or GoalLevel to GoalLevel enum."""
+    if isinstance(value, GoalLevel):
+        return value
+    return GoalLevel(value)
+
+
+def _validate_level_order(child_level: GoalLevel, parent_level: GoalLevel) -> None:
+    """Raise 422 if child_level is not exactly one step below parent_level."""
+    parent_idx = _GOAL_LEVEL_ORDER.index(parent_level)
+    expected_idx = parent_idx + 1
+    if expected_idx >= len(_GOAL_LEVEL_ORDER):
+        raise HTTPException(
+            status_code=422,
+            detail=f"A '{parent_level.value}' goal cannot have children (it is the deepest level)",
+        )
+    expected = _GOAL_LEVEL_ORDER[expected_idx]
+    if child_level != expected:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Invalid level hierarchy: a child of '{parent_level.value}' must be "
+                f"'{expected.value}', not '{child_level.value}'"
+            ),
+        )
+
+
 class GoalService(LLCServiceBase):
     """CRUD + traversal + KB indexing for LLCGoal rows (GH#8212)."""
 
@@ -48,6 +77,13 @@ class GoalService(LLCServiceBase):
         due_date: Optional[Any] = None,
         status: GoalStatus = GoalStatus.DRAFT,
     ) -> LLCGoal:
+        # Fix #3: Validate level hierarchy when parent is set
+        if parent_goal_id is not None:
+            parent = await self.get(session, parent_goal_id)
+            if parent is None:
+                raise HTTPException(status_code=404, detail="Parent goal not found")
+            _validate_level_order(level, _as_goal_level(parent.level))
+
         goal = LLCGoal(
             company_id=company_id,
             parent_goal_id=parent_goal_id,
@@ -60,7 +96,8 @@ class GoalService(LLCServiceBase):
         )
         session.add(goal)
         await session.flush()
-        await self._index_goal(goal)
+        # Fix #2: Index after commit, not after flush, to avoid phantom entries on rollback
+        self._schedule_post_commit_index(session, goal)
         if self.activity_log:
             await self.activity_log.record(
                 session,
@@ -104,6 +141,30 @@ class GoalService(LLCServiceBase):
         goal = await self.get(session, goal_id)
         if goal is None:
             return None
+
+        # Resolve effective parent (may be new or unchanged)
+        parent: Optional[LLCGoal] = None
+        if "parent_goal_id" in fields:
+            new_parent_id = fields["parent_goal_id"]
+            if new_parent_id is not None:
+                parent = await self.get(session, new_parent_id)
+                if parent is None:
+                    raise HTTPException(status_code=404, detail="Parent goal not found")
+                # Fix #1: Reject cross-tenant parent assignment
+                if parent.company_id != goal.company_id:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Parent goal belongs to a different company",
+                    )
+        elif goal.parent_goal_id is not None:
+            parent = await self.get(session, goal.parent_goal_id)
+
+        # Fix #3: Validate level hierarchy when parent or level is changing
+        if "parent_goal_id" in fields or "level" in fields:
+            new_level = _as_goal_level(fields.get("level", goal.level))
+            if parent is not None:
+                _validate_level_order(new_level, _as_goal_level(parent.level))
+
         allowed = {
             "title", "description", "level", "status",
             "owner_agent_id", "due_date", "parent_goal_id",
@@ -115,16 +176,30 @@ class GoalService(LLCServiceBase):
                 else:
                     setattr(goal, key, value)
         await session.flush()
-        await self._index_goal(goal)
+        # Fix #2: Index after commit, not after flush
+        self._schedule_post_commit_index(session, goal)
         return goal
 
     async def delete(
         self, session: AsyncSession, goal_id: uuid.UUID
     ) -> bool:
+        # Fix #4: Collect subtree IDs before deletion so ChromaDB can be cleaned up
+        subtree = await self.get_subtree(session, goal_id)
+        if not subtree:
+            return False
+
+        company_id = subtree[0].company_id
+        subtree_ids = [str(g.id) for g in subtree]
+
         result = await session.execute(
             delete(LLCGoal).where(LLCGoal.id == goal_id)
         )
-        return result.rowcount > 0
+        if result.rowcount == 0:
+            return False
+
+        # Fix #4: Remove ChromaDB entries for goal and entire subtree after commit
+        self._schedule_post_commit_chromadb_delete(session, company_id, subtree_ids)
+        return True
 
     # ----------------------------------------------------------- Traversal
 
@@ -198,3 +273,63 @@ class GoalService(LLCServiceBase):
             logger.exception(
                 "Failed to index goal %s into KB — non-fatal", goal.id
             )
+
+    async def _delete_from_chromadb(
+        self, company_id: str, ids: List[str]
+    ) -> None:
+        """Remove goal entries from the company-scoped KB collection."""
+        try:
+            from utils.async_chromadb_client import get_async_chromadb_client
+
+            client = await get_async_chromadb_client()
+            collection = await client.get_or_create_collection(
+                _goal_collection_name(company_id)
+            )
+            await collection.delete(ids=ids)
+        except Exception:
+            logger.exception(
+                "Failed to remove goals %s from KB — non-fatal", ids
+            )
+
+    def _schedule_post_commit_index(
+        self, session: AsyncSession, goal: LLCGoal
+    ) -> None:
+        """Register ChromaDB indexing to fire after DB commit (not after flush)."""
+        goal_ref = goal
+        svc_ref = self
+
+        try:
+            sync_sess = session.sync_session
+        except AttributeError:
+            return  # Not a real AsyncSession (e.g. test mock); skip registration
+
+        @event.listens_for(sync_sess, "after_commit", once=True)
+        def _after_commit(ss: Any) -> None:
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(svc_ref._index_goal(goal_ref))
+            except Exception:
+                logger.exception(
+                    "Could not schedule goal indexing post-commit for %s", goal_ref.id
+                )
+
+    def _schedule_post_commit_chromadb_delete(
+        self, session: AsyncSession, company_id: str, ids: List[str]
+    ) -> None:
+        """Register ChromaDB bulk delete to fire after DB commit."""
+        svc_ref = self
+
+        try:
+            sync_sess = session.sync_session
+        except AttributeError:
+            return
+
+        @event.listens_for(sync_sess, "after_commit", once=True)
+        def _after_commit(ss: Any) -> None:
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(svc_ref._delete_from_chromadb(company_id, ids))
+            except Exception:
+                logger.exception(
+                    "Could not schedule ChromaDB cleanup post-commit for goals %s", ids
+                )

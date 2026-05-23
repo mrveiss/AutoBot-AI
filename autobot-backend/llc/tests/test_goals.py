@@ -7,6 +7,7 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 from httpx import AsyncClient
 
 from llc.models.goal import GoalLevel, GoalStatus, LLCGoal
@@ -46,7 +47,7 @@ async def test_create_goal(svc: GoalService) -> None:
     session = AsyncMock()
     session.flush = AsyncMock()
 
-    with patch.object(svc, "_index_goal", new=AsyncMock()):
+    with patch.object(svc, "_schedule_post_commit_index"):
         goal = await svc.create(
             session,
             company_id="co1",
@@ -66,20 +67,44 @@ async def test_create_goal(svc: GoalService) -> None:
 @pytest.mark.asyncio
 async def test_create_goal_with_parent(svc: GoalService) -> None:
     parent_id = uuid.uuid4()
+    parent = _make_goal(level=GoalLevel.VISION.value)
+    parent.id = parent_id
     session = AsyncMock()
     session.flush = AsyncMock()
 
-    with patch.object(svc, "_index_goal", new=AsyncMock()):
+    with patch.object(svc, "get", new=AsyncMock(return_value=parent)), \
+         patch.object(svc, "_schedule_post_commit_index"):
         goal = await svc.create(
             session,
             company_id="co1",
-            title="Key Result 1",
-            level=GoalLevel.KEY_RESULT,
+            title="Mission 1",
+            level=GoalLevel.MISSION,
             parent_goal_id=parent_id,
         )
 
     assert goal.parent_goal_id == parent_id
-    assert goal.level == GoalLevel.KEY_RESULT.value
+    assert goal.level == GoalLevel.MISSION.value
+
+
+@pytest.mark.asyncio
+async def test_create_goal_invalid_level_hierarchy(svc: GoalService) -> None:
+    """A KEY_RESULT child under a VISION parent must raise 422."""
+    parent_id = uuid.uuid4()
+    parent = _make_goal(level=GoalLevel.VISION.value)
+    parent.id = parent_id
+    session = AsyncMock()
+
+    with patch.object(svc, "get", new=AsyncMock(return_value=parent)):
+        with pytest.raises(HTTPException) as exc_info:
+            await svc.create(
+                session,
+                company_id="co1",
+                title="Bad KR",
+                level=GoalLevel.KEY_RESULT,
+                parent_goal_id=parent_id,
+            )
+
+    assert exc_info.value.status_code == 422
 
 
 @pytest.mark.asyncio
@@ -112,7 +137,7 @@ async def test_update_goal(svc: GoalService) -> None:
     session.flush = AsyncMock()
 
     with patch.object(svc, "get", new=AsyncMock(return_value=goal)), \
-         patch.object(svc, "_index_goal", new=AsyncMock()):
+         patch.object(svc, "_schedule_post_commit_index"):
         updated = await svc.update(session, goal.id, title="New Title")
 
     assert updated is goal
@@ -128,25 +153,101 @@ async def test_update_goal_not_found(svc: GoalService) -> None:
 
 
 @pytest.mark.asyncio
+async def test_update_goal_cross_tenant_parent_rejected(svc: GoalService) -> None:
+    """Assigning a parent from a different company must raise HTTP 400."""
+    goal = _make_goal(company_id="co1")
+    parent = _make_goal(company_id="co2")  # different company
+    new_parent_id = uuid.uuid4()
+    parent.id = new_parent_id
+    session = AsyncMock()
+
+    async def _get(sess: object, gid: uuid.UUID) -> LLCGoal | None:
+        if gid == goal.id:
+            return goal
+        if gid == new_parent_id:
+            return parent
+        return None
+
+    with patch.object(svc, "get", new=_get):
+        with pytest.raises(HTTPException) as exc_info:
+            await svc.update(session, goal.id, parent_goal_id=new_parent_id)
+
+    assert exc_info.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_update_goal_invalid_level_hierarchy(svc: GoalService) -> None:
+    """Changing level to skip a step must raise 422."""
+    goal = _make_goal(level=GoalLevel.MISSION.value)
+    parent_id = uuid.uuid4()
+    parent = _make_goal(level=GoalLevel.VISION.value)
+    parent.id = parent_id
+    goal.parent_goal_id = parent_id
+    session = AsyncMock()
+
+    async def _get(sess: object, gid: uuid.UUID) -> LLCGoal | None:
+        if gid == goal.id:
+            return goal
+        if gid == parent_id:
+            return parent
+        return None
+
+    with patch.object(svc, "get", new=_get):
+        with pytest.raises(HTTPException) as exc_info:
+            # Trying to set level to KEY_RESULT while parent is VISION is invalid
+            await svc.update(session, goal.id, level=GoalLevel.KEY_RESULT)
+
+    assert exc_info.value.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_delete_goal_found(svc: GoalService) -> None:
+    goal = _make_goal()
     session = AsyncMock()
     mock_result = MagicMock()
     mock_result.rowcount = 1
     session.execute = AsyncMock(return_value=mock_result)
 
-    deleted = await svc.delete(session, uuid.uuid4())
+    with patch.object(svc, "get_subtree", new=AsyncMock(return_value=[goal])), \
+         patch.object(svc, "_schedule_post_commit_chromadb_delete"):
+        deleted = await svc.delete(session, goal.id)
+
     assert deleted is True
 
 
 @pytest.mark.asyncio
 async def test_delete_goal_not_found(svc: GoalService) -> None:
     session = AsyncMock()
+
+    with patch.object(svc, "get_subtree", new=AsyncMock(return_value=[])):
+        deleted = await svc.delete(session, uuid.uuid4())
+
+    assert deleted is False
+
+
+@pytest.mark.asyncio
+async def test_delete_goal_schedules_chromadb_cleanup(svc: GoalService) -> None:
+    """Deleting a goal with subtree must schedule ChromaDB cleanup for all IDs."""
+    root = _make_goal()
+    child = _make_goal(parent_goal_id=root.id)
+    subtree = [root, child]
+
+    session = AsyncMock()
     mock_result = MagicMock()
-    mock_result.rowcount = 0
+    mock_result.rowcount = 1
     session.execute = AsyncMock(return_value=mock_result)
 
-    deleted = await svc.delete(session, uuid.uuid4())
-    assert deleted is False
+    mock_schedule = MagicMock()
+    with patch.object(svc, "get_subtree", new=AsyncMock(return_value=subtree)), \
+         patch.object(svc, "_schedule_post_commit_chromadb_delete", mock_schedule):
+        deleted = await svc.delete(session, root.id)
+
+    assert deleted is True
+    mock_schedule.assert_called_once()
+    _, call_kwargs = mock_schedule.call_args[0], mock_schedule.call_args
+    ids_arg = call_kwargs[0][2]  # positional: session, company_id, ids
+    assert str(root.id) in ids_arg
+    assert str(child.id) in ids_arg
 
 
 # ------------------------------------------------------ Ancestry traversal
@@ -234,17 +335,20 @@ async def test_get_subtree_with_children(svc: GoalService) -> None:
 
 @pytest.mark.asyncio
 async def test_index_goal_upserts_to_chroma(svc: GoalService) -> None:
+    import sys
+
     goal = _make_goal(company_id="co_test", title="Vision 2030")
     goal.description = "Long-term vision statement"
 
     mock_collection = AsyncMock()
     mock_client = AsyncMock()
     mock_client.get_or_create_collection = AsyncMock(return_value=mock_collection)
+    mock_chroma_module = MagicMock()
+    mock_chroma_module.get_async_chromadb_client = AsyncMock(return_value=mock_client)
 
-    with patch(
-        "llc.services.goal.get_async_chromadb_client",
-        new=AsyncMock(return_value=mock_client),
-    ):
+    # utils.async_chromadb_client has a module-level NameError in the test env;
+    # inject a mock module so the lazy `from ... import` inside _index_goal works.
+    with patch.dict(sys.modules, {"utils.async_chromadb_client": mock_chroma_module}):
         await svc._index_goal(goal)
 
     mock_collection.upsert.assert_awaited_once()
@@ -255,10 +359,26 @@ async def test_index_goal_upserts_to_chroma(svc: GoalService) -> None:
 
 @pytest.mark.asyncio
 async def test_index_goal_swallows_chroma_error(svc: GoalService) -> None:
-    goal = _make_goal()
+    import sys
 
-    with patch(
-        "llc.services.goal.get_async_chromadb_client",
-        new=AsyncMock(side_effect=RuntimeError("chroma down")),
-    ):
+    goal = _make_goal()
+    mock_chroma_module = MagicMock()
+    mock_chroma_module.get_async_chromadb_client = AsyncMock(
+        side_effect=RuntimeError("chroma down")
+    )
+
+    with patch.dict(sys.modules, {"utils.async_chromadb_client": mock_chroma_module}):
         await svc._index_goal(goal)
+
+
+@pytest.mark.asyncio
+async def test_delete_from_chromadb_swallows_error(svc: GoalService) -> None:
+    import sys
+
+    mock_chroma_module = MagicMock()
+    mock_chroma_module.get_async_chromadb_client = AsyncMock(
+        side_effect=RuntimeError("chroma down")
+    )
+
+    with patch.dict(sys.modules, {"utils.async_chromadb_client": mock_chroma_module}):
+        await svc._delete_from_chromadb("co1", ["id-1", "id-2"])
