@@ -13,6 +13,7 @@ Routes:
   POST   /api/llc/routines/{routine_id}/trigger
 """
 
+import time
 import uuid
 from datetime import datetime
 from typing import List, Optional
@@ -21,8 +22,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
+
+_SCHEDULE_KEY = "llc:heartbeat:schedule"
 
 from ..models.enums import RoutineProduces, RoutineStatus
 from ..services.routine_service import RoutineService
@@ -184,6 +188,15 @@ async def update_routine(
         raise HTTPException(status_code=404, detail="Routine not found")
     await session.commit()
     await session.refresh(routine)
+    # Remove from scheduler when status transitions away from ACTIVE
+    new_status = updates.get("status")
+    if new_status is not None and new_status != RoutineStatus.ACTIVE:
+        try:
+            redis = await get_async_redis_client()
+            if redis is not None:
+                await redis.zrem(_SCHEDULE_KEY, f"routine:{routine_id}")
+        except Exception:
+            pass
     return RoutineRead.model_validate(routine)
 
 
@@ -222,7 +235,16 @@ async def trigger_routine(
     routine = await _service().get(session, routine_id)
     if routine is None:
         raise HTTPException(status_code=404, detail="Routine not found")
+    if routine.status != RoutineStatus.ACTIVE:
+        raise HTTPException(status_code=409, detail="Routine is not active")
     run = await _service().record_run(session, routine_id, "queued")
     await session.commit()
     await session.refresh(run)
+    # Push into the scheduler sorted-set for immediate dispatch (override existing score)
+    try:
+        redis = await get_async_redis_client()
+        if redis is not None:
+            await redis.zadd(_SCHEDULE_KEY, {f"routine:{routine_id}": time.time()}, nx=False)
+    except Exception:
+        pass  # non-fatal; run record is created, scheduler fires at next cron time
     return RoutineRunRead.model_validate(run)

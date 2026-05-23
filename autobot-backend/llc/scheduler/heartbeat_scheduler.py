@@ -15,6 +15,9 @@ RoutineService.record_run(), then re-inserts the member with the next fire time.
 
 Croniter is required (``pip install croniter``).  If the library is missing the
 scheduler logs a warning and skips routine scheduling gracefully.
+
+Session handling: each dispatch opens a fresh AsyncSession via
+get_async_session_factory() to avoid idle_in_transaction_session_timeout.
 """
 
 import asyncio
@@ -37,25 +40,32 @@ class HeartbeatScheduler:
     def __init__(self, poll_interval: float = _POLL_INTERVAL) -> None:
         self._poll_interval = poll_interval
         self._running = False
+        self._task: Optional[asyncio.Task] = None
 
     # ------------------------------------------------------------------
     # Startup / shutdown
     # ------------------------------------------------------------------
 
-    async def startup(self, session: object) -> None:
-        """Load agents (stub) and routines into the schedule on service start."""
-        await self._load_routines(session)
+    async def startup(self) -> None:
+        """Load routines into the schedule and start the polling loop."""
+        await self._load_routines()
         self._running = True
-        asyncio.ensure_future(self._poll_loop(session))
+        self._task = asyncio.ensure_future(self._poll_loop())
 
     async def shutdown(self) -> None:
         self._running = False
+        if self._task is not None:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
 
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
 
-    async def _load_routines(self, session: object) -> None:
+    async def _load_routines(self) -> None:
         """Load ACTIVE routines into ``llc:heartbeat:schedule`` (nx=True)."""
         try:
             from croniter import croniter
@@ -64,11 +74,15 @@ class HeartbeatScheduler:
             return
 
         try:
+            from user_management.database import get_async_session_factory
+
             from ..models.enums import RoutineStatus
             from ..services.routine_service import RoutineService
 
             svc = RoutineService()
-            routines = await svc.list(session, company_id=None, status=RoutineStatus.ACTIVE)  # type: ignore[arg-type]
+            factory = get_async_session_factory()
+            async with factory() as session:
+                routines = await svc.list(session, status=RoutineStatus.ACTIVE)
         except Exception as exc:
             logger.warning("Failed to load routines for scheduling: %s", exc)
             return
@@ -90,16 +104,16 @@ class HeartbeatScheduler:
             except Exception as exc:
                 logger.warning("Failed to schedule routine %s: %s", routine.id, exc)
 
-    async def _poll_loop(self, session: object) -> None:
+    async def _poll_loop(self) -> None:
         """Continuously poll for due items and dispatch them."""
         while self._running:
             try:
-                await self._process_due(session)
+                await self._process_due()
             except Exception as exc:
                 logger.error("HeartbeatScheduler poll error: %s", exc)
             await asyncio.sleep(self._poll_interval)
 
-    async def _process_due(self, session: object) -> None:
+    async def _process_due(self) -> None:
         """Pop and dispatch all members whose score ≤ now."""
         redis = await get_async_redis_client()
         if redis is None:
@@ -117,9 +131,9 @@ class HeartbeatScheduler:
 
             if member_str.startswith("routine:"):
                 routine_id_str = member_str[len("routine:"):]
-                await self._dispatch_routine(session, routine_id_str)
+                await self._dispatch_routine(routine_id_str)
 
-    async def _dispatch_routine(self, session: object, routine_id_str: str) -> None:
+    async def _dispatch_routine(self, routine_id_str: str) -> None:
         """Record a run and re-queue the routine at its next fire time."""
         try:
             from croniter import croniter
@@ -129,18 +143,30 @@ class HeartbeatScheduler:
         try:
             import uuid
 
+            from user_management.database import get_async_session_factory
+
+            from ..models.enums import RoutineStatus
             from ..services.routine_service import RoutineService
 
             svc = RoutineService()
             routine_id = uuid.UUID(routine_id_str)
-            routine = await svc.get(session, routine_id)  # type: ignore[arg-type]
-            await svc.record_run(session, routine_id, status="queued")  # type: ignore[arg-type]
+            factory = get_async_session_factory()
+            cron_schedule: Optional[str] = None
 
-            # Re-insert next fire time
+            async with factory() as session:
+                routine = await svc.get(session, routine_id)
+                if routine is None or routine.status != RoutineStatus.ACTIVE:
+                    return  # Archived or paused — don't re-queue
+                cron_schedule = routine.cron_schedule
+                routine.last_fired_at = datetime.now(tz=timezone.utc)
+                await svc.record_run(session, routine_id, status="queued")
+                await session.commit()
+
+            # Re-insert next fire time (outside session — session already committed)
             redis = await get_async_redis_client()
-            if redis is not None:
+            if redis is not None and cron_schedule is not None:
                 next_ts: float = croniter(
-                    routine.cron_schedule, datetime.now(tz=timezone.utc)
+                    cron_schedule, datetime.now(tz=timezone.utc)
                 ).get_next(float)
                 await redis.zadd(_SCHEDULE_KEY, {f"routine:{routine_id}": next_ts})
 

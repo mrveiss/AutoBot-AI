@@ -76,17 +76,14 @@ class RoutineService(LLCServiceBase):
     async def list(
         self,
         session: AsyncSession,
-        company_id: uuid.UUID,
+        company_id: Optional[uuid.UUID] = None,
         status: Optional[RoutineStatus] = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[LLCRoutine]:
-        stmt = (
-            select(LLCRoutine)
-            .where(LLCRoutine.company_id == company_id)
-            .limit(limit)
-            .offset(offset)
-        )
+        stmt = select(LLCRoutine).limit(limit).offset(offset)
+        if company_id is not None:
+            stmt = stmt.where(LLCRoutine.company_id == company_id)
         if status is not None:
             stmt = stmt.where(LLCRoutine.status == status)
         result = await session.execute(stmt)
@@ -116,6 +113,16 @@ class RoutineService(LLCServiceBase):
             return
         routine.status = RoutineStatus.ARCHIVED
         await session.flush()
+        try:
+            from autobot_shared.redis_client import get_async_redis_client
+
+            redis = await get_async_redis_client()
+            if redis is not None:
+                await redis.zrem("llc:heartbeat:schedule", f"routine:{routine_id}")
+        except Exception as exc:
+            logger.warning(
+                "Failed to remove routine %s from Redis schedule: %s", routine_id, exc
+            )
 
     # ------------------------------------------------------------------
     # Run recording
