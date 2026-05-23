@@ -188,11 +188,18 @@ class HeartbeatScheduler:
                 await redis.zrem(_SCHEDULE_KEY, agent_id)
                 return
 
-            run = await self._create_run(
-                session,
-                agent=agent,
-                source=HeartbeatInvocationSource.SCHEDULER,
-            )
+            try:
+                run = await self._create_run(
+                    session,
+                    agent=agent,
+                    source=HeartbeatInvocationSource.SCHEDULER,
+                )
+            except ValueError as exc:
+                logger.warning(
+                    "Skipping heartbeat for agent %s (no organization): %s", agent_id, exc
+                )
+                await redis.zrem(_SCHEDULE_KEY, agent_id)
+                return
             await session.commit()
 
         asyncio.create_task(
