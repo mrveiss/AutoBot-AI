@@ -18,6 +18,7 @@ from .enums import (
     WorkItemStatus,
     WorkItemType,
 )
+from .goal import GoalLevel, GoalStatus, LLCGoal
 from .work_item import LLCWorkItem, LLCWorkItemComment
 
 __all__ = [
@@ -28,8 +29,11 @@ __all__ = [
     "CompanyRead",
     "CompanyTreeNode",
     "CompanyUpdate",
+    "GoalLevel",
+    "GoalStatus",
     "LLCAgentStatus",
     "LLCCompanyStatus",
+    "LLCGoal",
     "LLCRunStatus",
     "LLCWorkItem",
     "LLCWorkItemComment",
