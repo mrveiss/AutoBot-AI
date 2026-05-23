@@ -27,6 +27,7 @@ from autobot_shared.async_compat import run_or_schedule
 from user_management.config import get_deployment_config
 
 # Import models to register with SQLAlchemy
+from llc.models.activity import LLCBase  # noqa: F401 — registers LLC tables with metadata
 from user_management.models import Base
 
 # this is the Alembic Config object
@@ -37,7 +38,7 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # add your model's MetaData object here for 'autogenerate' support
-target_metadata = Base.metadata
+target_metadata = [Base.metadata, LLCBase.metadata]
 
 
 def get_url() -> str:
