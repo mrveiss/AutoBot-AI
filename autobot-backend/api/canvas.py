@@ -21,8 +21,7 @@ import uuid
 from datetime import datetime, timezone
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import Response
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -74,6 +73,16 @@ _EXPORT_CONTENT_TYPES: dict[str, str] = {
     "html": "text/html; charset=utf-8",
     "pdf": "application/pdf",
 }
+
+# CSP for the canvas page (MVA-486 §2.3/§3.1).
+# Allows Vega SVG inline styles + data-URI images; blocks scripts, eval,
+# and all external network fetches (preventing data.url exfiltration at browser level).
+_CANVAS_PAGE_CSP = (
+    "default-src 'none'; "
+    "style-src 'unsafe-inline'; "
+    "img-src data:; "
+    "font-src data:"
+)
 
 
 def _user_id(current_user: dict) -> str:
@@ -185,6 +194,7 @@ async def _get_cell_owned(
 @router.get("/{canvas_id}", response_model=CanvasGetResponse)
 async def get_canvas(
     canvas_id: uuid.UUID,
+    response: Response,
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> CanvasGetResponse:
@@ -200,6 +210,8 @@ async def get_canvas(
             select(CanvasCell).where(CanvasCell.canvas_id == canvas_id).order_by(CanvasCell.position)
         )
         cells = cells_result.scalars().all()
+
+        response.headers["Content-Security-Policy"] = _CANVAS_PAGE_CSP
 
         return CanvasGetResponse(
             canvas=CanvasOut.model_validate(canvas),
@@ -436,6 +448,8 @@ async def export_canvas(
                     payload = data.encode("utf-8")
                 else:
                     payload = _export_pdf_from_html(data)
+        except HTTPException:
+            raise
         except Exception as exc:
             _log_metric("canvas.autosave.failure", canvas_id=str(canvas_id), format=body.format, error=str(exc))
             raise HTTPException(status_code=500, detail="Export generation failed") from exc
@@ -581,7 +595,7 @@ def _export_html(
         '<html lang="en">'
         "<head>"
         '<meta charset="utf-8">'
-        "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'\">"
+        f'<meta http-equiv="Content-Security-Policy" content="{_CANVAS_PAGE_CSP}">'
         f"<title>{title_safe}</title>"
         "</head>"
         f"<body><h1>{title_safe}</h1>{cells_html}</body>"
