@@ -9,8 +9,8 @@ Adds:
   - ``assignee_user_id`` already exists on ``llc_work_items``; this migration
     adds no work-item columns — claim/unclaim operate via the existing field.
 
-Revision ID: 20260523_030
-Revises: 20260523_029
+Revision ID: 20260523_033
+Revises: 20260523_032
 Create Date: 2026-05-23
 """
 
@@ -18,8 +18,8 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
 
-revision = "20260523_030"
-down_revision = "20260523_029"
+revision = "20260523_033"
+down_revision = "20260523_032"
 branch_labels = None
 depends_on = None
 
