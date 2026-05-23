@@ -1,24 +1,24 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""LLC Routine API routes (GH#8229).
+"""LLC Routines API routes (GH#8229).
 
 Routes:
-  POST   /api/llc/companies/{company_id}/routines          — create routine
-  GET    /api/llc/companies/{company_id}/routines          — list routines
-  GET    /api/llc/routines/{id}                            — get routine
-  PATCH  /api/llc/routines/{id}                            — update routine
-  DELETE /api/llc/routines/{id}                            — soft-delete (archive)
-  POST   /api/llc/routines/{id}/trigger                    — manual trigger → queued run
-  GET    /api/llc/routines/{id}/runs                       — paginated run history
+  GET    /api/llc/companies/{company_id}/routines
+  POST   /api/llc/companies/{company_id}/routines
+  GET    /api/llc/routines/{routine_id}
+  PATCH  /api/llc/routines/{routine_id}
+  DELETE /api/llc/routines/{routine_id}
+  GET    /api/llc/routines/{routine_id}/runs
+  POST   /api/llc/routines/{routine_id}/trigger
 """
 
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.singleton_factory import lazy_singleton
@@ -42,148 +42,149 @@ async def get_session() -> AsyncSession:
 
 
 # ------------------------------------------------------------------
-# Request / response schemas
+# Schemas
 # ------------------------------------------------------------------
 
 
 class RoutineCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=255)
-    cron_schedule: str = Field(..., description="Standard 5-field cron expression")
-    produces: RoutineProduces = RoutineProduces.NEW_WORK_ITEM
-    work_item_template: Dict[str, Any] = {}
-    assignee_agent_id: Optional[uuid.UUID] = None
+    name: str
     description: Optional[str] = None
-    env: Optional[Dict[str, Any]] = None
+    cron_schedule: str
+    assignee_agent_id: Optional[str] = None
+    env: Optional[dict] = None
+    produces: RoutineProduces = RoutineProduces.NEW_WORK_ITEM
+    work_item_template: Optional[dict] = None
+    recurring_work_item_id: Optional[str] = None
 
 
 class RoutineUpdate(BaseModel):
     name: Optional[str] = None
-    cron_schedule: Optional[str] = None
     description: Optional[str] = None
-    env: Optional[Dict[str, Any]] = None
+    cron_schedule: Optional[str] = None
+    assignee_agent_id: Optional[str] = None
     status: Optional[RoutineStatus] = None
+    env: Optional[dict] = None
+    produces: Optional[RoutineProduces] = None
+    work_item_template: Optional[dict] = None
+    recurring_work_item_id: Optional[str] = None
 
 
-class RoutineResponse(BaseModel):
-    id: str
-    company_id: str
+class RoutineRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    company_id: uuid.UUID
     name: str
-    cron_schedule: str
-    produces: str
     description: Optional[str]
-    env: Optional[Dict[str, Any]]
-    status: str
+    cron_schedule: str
+    assignee_agent_id: Optional[uuid.UUID]
+    status: RoutineStatus
+    env: Optional[dict]
+    produces: RoutineProduces
+    work_item_template: Optional[dict]
+    recurring_work_item_id: Optional[uuid.UUID]
+    last_fired_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime
 
-    model_config = {"from_attributes": True}
 
-    @classmethod
-    def from_orm_obj(cls, obj: Any) -> "RoutineResponse":
-        return cls(
-            id=str(obj.id),
-            company_id=str(obj.company_id),
-            name=obj.name,
-            cron_schedule=obj.cron_schedule,
-            produces=obj.produces if isinstance(obj.produces, str) else obj.produces.value,
-            description=obj.description,
-            env=obj.env,
-            status=obj.status if isinstance(obj.status, str) else obj.status.value,
-            created_at=obj.created_at,
-            updated_at=obj.updated_at,
-        )
+class RoutineRunRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
-
-class RoutineRunResponse(BaseModel):
-    id: str
-    routine_id: str
+    id: uuid.UUID
+    routine_id: uuid.UUID
+    heartbeat_run_id: Optional[uuid.UUID]
+    work_item_id: Optional[uuid.UUID]
     status: str
+    started_at: Optional[datetime]
+    finished_at: Optional[datetime]
     created_at: datetime
-    heartbeat_run_id: Optional[str]
-    work_item_id: Optional[str]
-
-    model_config = {"from_attributes": True}
-
-    @classmethod
-    def from_orm_obj(cls, obj: Any) -> "RoutineRunResponse":
-        return cls(
-            id=str(obj.id),
-            routine_id=str(obj.routine_id),
-            status=obj.status,
-            created_at=obj.created_at,
-            heartbeat_run_id=str(obj.heartbeat_run_id) if obj.heartbeat_run_id else None,
-            work_item_id=str(obj.work_item_id) if obj.work_item_id else None,
-        )
 
 
 # ------------------------------------------------------------------
-# Endpoints
+# Company-scoped routes
 # ------------------------------------------------------------------
+
+
+@router.get("/companies/{company_id}/routines", response_model=List[RoutineRead])
+async def list_routines(
+    company_id: uuid.UUID,
+    status: Optional[RoutineStatus] = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    session: AsyncSession = Depends(get_session),
+) -> List[RoutineRead]:
+    routines = await _service().list(
+        session,
+        company_id=company_id,
+        status=status,
+        limit=limit,
+        offset=offset,
+    )
+    return [RoutineRead.model_validate(r) for r in routines]
 
 
 @router.post(
     "/companies/{company_id}/routines",
-    response_model=RoutineResponse,
+    response_model=RoutineRead,
     status_code=status.HTTP_201_CREATED,
 )
 async def create_routine(
     company_id: uuid.UUID,
     body: RoutineCreate,
     session: AsyncSession = Depends(get_session),
-) -> RoutineResponse:
-    svc = _service()
-    routine = await svc.create(
+) -> RoutineRead:
+    routine = await _service().create(
         session,
         company_id,
         body.name,
         body.cron_schedule,
         body.produces,
-        body.work_item_template,
-        assignee_agent_id=body.assignee_agent_id,
+        body.work_item_template or {},
+        assignee_agent_id=uuid.UUID(body.assignee_agent_id) if body.assignee_agent_id else None,
         description=body.description,
         env=body.env,
+        recurring_work_item_id=uuid.UUID(body.recurring_work_item_id) if body.recurring_work_item_id else None,
     )
     await session.commit()
-    return RoutineResponse.from_orm_obj(routine)
+    await session.refresh(routine)
+    return RoutineRead.model_validate(routine)
 
 
-@router.get("/companies/{company_id}/routines", response_model=List[RoutineResponse])
-async def list_routines(
-    company_id: uuid.UUID,
-    status_filter: Optional[RoutineStatus] = Query(None, alias="status"),
-    session: AsyncSession = Depends(get_session),
-) -> List[RoutineResponse]:
-    svc = _service()
-    routines = await svc.list(session, company_id, status=status_filter)
-    return [RoutineResponse.from_orm_obj(r) for r in routines]
+# ------------------------------------------------------------------
+# Resource-level routes
+# ------------------------------------------------------------------
 
 
-@router.get("/routines/{routine_id}", response_model=RoutineResponse)
+@router.get("/routines/{routine_id}", response_model=RoutineRead)
 async def get_routine(
     routine_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
-) -> RoutineResponse:
-    svc = _service()
-    routine = await svc.get(session, routine_id)
+) -> RoutineRead:
+    routine = await _service().get(session, routine_id)
     if routine is None:
         raise HTTPException(status_code=404, detail="Routine not found")
-    return RoutineResponse.from_orm_obj(routine)
+    return RoutineRead.model_validate(routine)
 
 
-@router.patch("/routines/{routine_id}", response_model=RoutineResponse)
+@router.patch("/routines/{routine_id}", response_model=RoutineRead)
 async def update_routine(
     routine_id: uuid.UUID,
     body: RoutineUpdate,
     session: AsyncSession = Depends(get_session),
-) -> RoutineResponse:
-    svc = _service()
-    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+) -> RoutineRead:
+    updates = body.model_dump(exclude_unset=True)
+    if "assignee_agent_id" in updates and updates["assignee_agent_id"] is not None:
+        updates["assignee_agent_id"] = uuid.UUID(updates["assignee_agent_id"])
+    if "recurring_work_item_id" in updates and updates["recurring_work_item_id"] is not None:
+        updates["recurring_work_item_id"] = uuid.UUID(updates["recurring_work_item_id"])
     try:
-        routine = await svc.update(session, routine_id, **updates)
+        routine = await _service().update(session, routine_id, **updates)
     except ValueError:
         raise HTTPException(status_code=404, detail="Routine not found")
     await session.commit()
-    return RoutineResponse.from_orm_obj(routine)
+    await session.refresh(routine)
+    return RoutineRead.model_validate(routine)
 
 
 @router.delete("/routines/{routine_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -191,36 +192,37 @@ async def delete_routine(
     routine_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
 ) -> None:
-    svc = _service()
-    await svc.delete(session, routine_id)
+    await _service().delete(session, routine_id)
     await session.commit()
+
+
+@router.get("/routines/{routine_id}/runs", response_model=List[RoutineRunRead])
+async def list_routine_runs(
+    routine_id: uuid.UUID,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    session: AsyncSession = Depends(get_session),
+) -> List[RoutineRunRead]:
+    routine = await _service().get(session, routine_id)
+    if routine is None:
+        raise HTTPException(status_code=404, detail="Routine not found")
+    runs = await _service().list_runs(session, routine_id, limit=limit, offset=offset)
+    return [RoutineRunRead.model_validate(r) for r in runs]
 
 
 @router.post(
     "/routines/{routine_id}/trigger",
-    response_model=RoutineRunResponse,
+    response_model=RoutineRunRead,
     status_code=status.HTTP_201_CREATED,
 )
 async def trigger_routine(
     routine_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
-) -> RoutineRunResponse:
-    svc = _service()
-    routine = await svc.get(session, routine_id)
+) -> RoutineRunRead:
+    routine = await _service().get(session, routine_id)
     if routine is None:
         raise HTTPException(status_code=404, detail="Routine not found")
-    run = await svc.record_run(session, routine_id, "queued")
+    run = await _service().record_run(session, routine_id, "queued")
     await session.commit()
-    return RoutineRunResponse.from_orm_obj(run)
-
-
-@router.get("/routines/{routine_id}/runs", response_model=List[RoutineRunResponse])
-async def list_runs(
-    routine_id: uuid.UUID,
-    limit: int = Query(20, ge=1, le=100),
-    offset: int = Query(0, ge=0),
-    session: AsyncSession = Depends(get_session),
-) -> List[RoutineRunResponse]:
-    svc = _service()
-    runs = await svc.list_runs(session, routine_id, limit=limit, offset=offset)
-    return [RoutineRunResponse.from_orm_obj(r) for r in runs]
+    await session.refresh(run)
+    return RoutineRunRead.model_validate(run)
