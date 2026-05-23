@@ -22,4 +22,6 @@ class LLCServiceBase:
         self.activity_log = activity_log
 
 
-__all__ = ["LLCServiceBase", "LLCActivityLogService"]
+__all__ = ["GoalService", "LLCActivityLogService", "LLCServiceBase"]
+
+from .goal import GoalService  # noqa: E402 — after base class definition

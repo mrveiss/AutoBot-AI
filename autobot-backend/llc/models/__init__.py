@@ -10,12 +10,16 @@ from .enums import (
     WorkItemStatus,
     WorkItemType,
 )
+from .goal import GoalLevel, GoalStatus, LLCGoal
 
 __all__ = [
     "ApprovalStatus",
     "AssignmentType",
+    "GoalLevel",
+    "GoalStatus",
     "LLCAgentStatus",
     "LLCCompanyStatus",
+    "LLCGoal",
     "LLCRunStatus",
     "SprintStatus",
     "WorkItemStatus",
