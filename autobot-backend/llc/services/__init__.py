@@ -6,8 +6,9 @@ receive a typed ``activity_log`` reference at construction time.
 """
 
 from .activity_log import LLCActivityLogService
+from .approval import ApprovalService
 from .base import LLCServiceBase
 from .budget import BudgetService
 from .goal import GoalService
 
-__all__ = ["BudgetService", "GoalService", "LLCActivityLogService", "LLCServiceBase"]
+__all__ = ["ApprovalService", "BudgetService", "GoalService", "LLCActivityLogService", "LLCServiceBase"]
