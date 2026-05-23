@@ -13,12 +13,47 @@ Async workers are wrapped via ``_run_async`` (new event loop per task).
 """
 
 import asyncio
+import hashlib
+import json
 from datetime import datetime, timezone
 
 from celery_app import celery_app
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
+
+_PATTERN_CHECKPOINT_PREFIX = "pattern_complete_checkpoint:"
+_CHECKPOINT_TTL = 3600  # 1 h — recent-enough to resume from
+
+
+def _path_checkpoint_key(path: str) -> str:
+    return f"{_PATTERN_CHECKPOINT_PREFIX}{hashlib.sha256(path.encode()).hexdigest()[:16]}"
+
+
+async def _load_path_checkpoint(path: str) -> dict | None:
+    """Return a previously-saved completed analysis result for *path*, or None (GH#8439)."""
+    try:
+        from autobot_shared.redis_client import get_async_redis_client
+
+        redis = await get_async_redis_client(database="analytics")
+        if not redis:
+            return None
+        raw = await redis.get(_path_checkpoint_key(path))
+        return json.loads(raw) if raw else None
+    except Exception:
+        return None
+
+
+async def _save_path_checkpoint(path: str, result: dict) -> None:
+    """Persist *result* as the checkpoint for *path* (GH#8439)."""
+    try:
+        from autobot_shared.redis_client import get_async_redis_client
+
+        redis = await get_async_redis_client(database="analytics")
+        if redis:
+            await redis.set(_path_checkpoint_key(path), json.dumps(result, default=str), ex=_CHECKPOINT_TTL)
+    except Exception:
+        pass
 
 
 def _run_async(coro):
@@ -174,7 +209,12 @@ def run_dependency_analysis(self) -> dict:
 
 @celery_app.task(bind=True, name="analytics.run_pattern_analysis")
 def run_pattern_analysis(self, request_data: dict) -> dict:
-    """Celery wrapper for pattern analysis background job (#6505)."""
+    """Celery wrapper for pattern analysis background job (#6505, GH#8439).
+
+    GH#8439: saves a path-scoped checkpoint after successful completion so
+    that a retry (new task ID, same path) can resume from the cached result
+    instead of restarting from zero.
+    """
     from api.codebase_analytics.endpoints.pattern_analysis import (
         PatternAnalysisRequest,
         _ANALYSIS_TIMEOUT,
@@ -185,6 +225,13 @@ def run_pattern_analysis(self, request_data: dict) -> dict:
     _progress(self, "Initializing", 0.0, started)
 
     async def _work():
+        # Resume from checkpoint if analysis for this path was recently completed.
+        saved = await _load_path_checkpoint(request.path)
+        if saved:
+            logger.info("run_pattern_analysis: resuming from checkpoint for path %s", request.path)
+            _progress(self, "Loaded from checkpoint", 100.0, started)
+            return saved
+
         from code_intelligence.pattern_analysis import CodePatternAnalyzer
 
         async def _on_progress(step: str, progress: float) -> None:
@@ -201,7 +248,9 @@ def run_pattern_analysis(self, request_data: dict) -> dict:
             analyzer.analyze_directory(request.path, progress_callback=_on_progress),
             timeout=_ANALYSIS_TIMEOUT,
         )
-        return report.to_dict()
+        result = report.to_dict()
+        await _save_path_checkpoint(request.path, result)
+        return result
 
     return _wrap(_run_async(_work()), started)
 

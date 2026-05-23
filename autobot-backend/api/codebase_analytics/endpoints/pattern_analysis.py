@@ -175,19 +175,19 @@ async def get_analysis_result(task_id: str) -> Dict[str, Any]:
 
 @router.delete("/patterns/task/{task_id}")
 async def cancel_analysis(task_id: str) -> Dict[str, str]:
-    """Revoke a pending/running pattern analysis task."""
+    """Revoke a pending/running pattern analysis task (GH#8440: async-safe)."""
     from celery_app import celery_app
 
-    celery_app.control.revoke(task_id, terminate=True)
+    await asyncio.to_thread(celery_app.control.revoke, task_id, terminate=True)
     return {"message": f"Task {task_id} revoked"}
 
 
 @router.get("/patterns/tasks")
 async def list_analysis_tasks() -> Dict[str, Any]:
-    """List active pattern analysis tasks (Celery inspect)."""
+    """List active pattern analysis tasks (GH#8440: async-safe Celery inspect)."""
     from celery_app import celery_app
 
-    active = celery_app.control.inspect().active() or {}
+    active = await asyncio.to_thread(lambda: celery_app.control.inspect().active() or {})
     analytics_tasks = [t for worker_tasks in active.values() for t in worker_tasks if "pattern" in t.get("name", "")]
     return {"tasks": analytics_tasks, "count": len(analytics_tasks)}
 
@@ -202,11 +202,19 @@ async def clear_stuck_tasks(
 
 @router.post("/patterns/tasks/clear-all")
 async def clear_all_tasks() -> Dict[str, str]:
-    """Revoke all active analytics tasks."""
+    """Revoke active analytics tasks without purging other Celery queues (GH#8438)."""
     from celery_app import celery_app
 
-    celery_app.control.purge()
-    return {"message": "Purged pending analytics tasks"}
+    active = await asyncio.to_thread(lambda: celery_app.control.inspect().active() or {})
+    analytics_task_ids = [
+        t["id"]
+        for worker_tasks in active.values()
+        for t in worker_tasks
+        if t.get("name", "").startswith("analytics.")
+    ]
+    for task_id in analytics_task_ids:
+        await asyncio.to_thread(celery_app.control.revoke, task_id, terminate=True)
+    return {"message": f"Revoked {len(analytics_task_ids)} analytics task(s)"}
 
 
 @router.get("/patterns/summary", response_model=PatternSummary)
