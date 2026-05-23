@@ -158,6 +158,10 @@ class HeartbeatScheduler:
 
         for raw in due:
             agent_id = raw.decode() if isinstance(raw, bytes) else raw
+            # Atomic claim: zrem returns 0 if another worker already took it
+            removed = await redis.zrem(_SCHEDULE_KEY, agent_id)
+            if not removed:
+                continue
             await self._handle_due_agent(agent_id, redis)
 
     async def _handle_due_agent(self, agent_id: str, redis: Any) -> None:
@@ -189,7 +193,7 @@ class HeartbeatScheduler:
 
         now = datetime.now(tz=timezone.utc).timestamp()
         next_ts = _next_fire(cron_expr, now)
-        await redis.zadd(_SCHEDULE_KEY, {agent_id: next_ts}, xx=True)
+        await redis.zadd(_SCHEDULE_KEY, {agent_id: next_ts})
         logger.debug(
             "Dispatched heartbeat for agent=%s run=%s next=%.0f",
             agent_id,
@@ -233,11 +237,13 @@ class HeartbeatScheduler:
         result = await session.execute(
             text(
                 """
-                SELECT agent_id, name, heartbeat_cron, heartbeat_enabled,
-                       adapter_type, adapter_config, context_mode
-                FROM agent_org_nodes
-                WHERE agent_id = :agent_id
-                  AND heartbeat_enabled = true
+                SELECT aon.agent_id, aon.name, aon.heartbeat_cron, aon.heartbeat_enabled,
+                       aon.adapter_type, aon.adapter_config, aon.context_mode,
+                       a.organization_id AS company_id
+                FROM agent_org_nodes aon
+                LEFT JOIN agents a ON a.id::text = aon.agent_id
+                WHERE aon.agent_id = :agent_id
+                  AND aon.heartbeat_enabled = true
                 """
             ),
             {"agent_id": agent_id},

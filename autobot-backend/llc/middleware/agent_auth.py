@@ -23,7 +23,7 @@ from llc.models.api_key import LLCApiKey
 
 logger = logging.getLogger(__name__)
 
-_AGENT_PREFIX = "/api/llc/agent"
+_AGENT_PREFIX = "/api/llc/agent/"
 
 
 class LLCAgentAuthMiddleware(BaseHTTPMiddleware):
