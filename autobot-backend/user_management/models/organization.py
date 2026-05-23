@@ -10,9 +10,9 @@ In multi_company and provider modes, each organization is isolated.
 
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
@@ -97,6 +97,85 @@ class Organization(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
+    )
+
+    # ------------------------------------------------------------------ #
+    # LLC extension columns (GH#8211)                                     #
+    # ------------------------------------------------------------------ #
+
+    # Sub-company hierarchy: nullable for root companies
+    parent_org_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    # Per-company issue numbering (e.g. "ABO", "MVA")
+    issue_prefix: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        unique=True,
+        index=True,
+    )
+    issue_counter: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    # Budget tracking in cents to avoid floating-point precision issues
+    budget_monthly_cents: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+    spent_monthly_cents: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    # Branding
+    brand_color: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    # Governance
+    require_approval_for_hires: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
+
+    # LLC lifecycle status — stored as string, validated by LLCCompanyStatus enum
+    llc_status: Mapped[str] = mapped_column(
+        String(32),
+        default="onboarding",
+        nullable=False,
+    )
+    pause_reason: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+    paused_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    # Self-referential relationships for sub-company tree
+    children: Mapped[list["Organization"]] = relationship(
+        "Organization",
+        back_populates="parent",
+        foreign_keys="Organization.parent_org_id",
+        lazy="select",
+    )
+    parent: Mapped[Optional["Organization"]] = relationship(
+        "Organization",
+        back_populates="children",
+        foreign_keys="Organization.parent_org_id",
+        remote_side="Organization.id",
     )
 
     # Relationships
