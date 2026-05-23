@@ -1,0 +1,304 @@
+"""LLC work items API routes (GH#8213).
+
+Routes:
+  POST   /api/llc/work-items
+  GET    /api/llc/work-items
+  GET    /api/llc/work-items/{work_item_id}
+  PATCH  /api/llc/work-items/{work_item_id}
+  DELETE /api/llc/work-items/{work_item_id}
+  POST   /api/llc/work-items/{work_item_id}/checkout
+  POST   /api/llc/work-items/{work_item_id}/release
+  POST   /api/llc/work-items/{work_item_id}/transition
+  POST   /api/llc/work-items/{work_item_id}/comments
+"""
+
+import uuid
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from autobot_shared.redis_client import get_async_redis_client
+from user_management.database import get_async_session_factory
+
+from ..models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
+from ..services.work_item_service import CheckoutConflict, InvalidTransition, WorkItemService
+
+router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
+_service = WorkItemService()
+
+
+async def get_session() -> AsyncSession:
+    factory = get_async_session_factory()
+    async with factory() as session:
+        yield session
+
+
+# ------------------------------------------------------------------
+# Request / Response schemas
+# ------------------------------------------------------------------
+
+
+class WorkItemCreate(BaseModel):
+    company_id: str
+    type: WorkItemType
+    title: str
+    description: Optional[str] = None
+    acceptance_criteria: Optional[List[str]] = None
+    priority: WorkItemPriority = WorkItemPriority.MEDIUM
+    story_points: Optional[int] = None
+    parent_id: Optional[str] = None
+    project_id: Optional[str] = None
+    sprint_id: Optional[str] = None
+    goal_id: Optional[str] = None
+    assignee_agent_id: Optional[str] = None
+    assignee_user_id: Optional[str] = None
+    created_by_agent_id: Optional[str] = None
+    created_by_user_id: Optional[str] = None
+    labels: Optional[List[str]] = None
+
+
+class WorkItemUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    acceptance_criteria: Optional[List[str]] = None
+    priority: Optional[WorkItemPriority] = None
+    story_points: Optional[int] = None
+    labels: Optional[List[str]] = None
+    parent_id: Optional[str] = None
+    sprint_id: Optional[str] = None
+    goal_id: Optional[str] = None
+    assignee_agent_id: Optional[str] = None
+    assignee_user_id: Optional[str] = None
+
+
+class CheckoutRequest(BaseModel):
+    agent_id: str
+    run_id: Optional[str] = None
+
+
+class ReleaseRequest(BaseModel):
+    agent_id: str
+
+
+class TransitionRequest(BaseModel):
+    status: WorkItemStatus
+
+
+class CommentCreate(BaseModel):
+    company_id: str
+    body: str
+    author_agent_id: Optional[str] = None
+    author_user_id: Optional[str] = None
+
+
+def _item_to_dict(item: Any) -> Dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "company_id": str(item.company_id),
+        "identifier": item.identifier,
+        "type": item.type,
+        "title": item.title,
+        "description": item.description,
+        "acceptance_criteria": item.acceptance_criteria,
+        "status": item.status,
+        "priority": item.priority,
+        "story_points": item.story_points,
+        "labels": item.labels,
+        "parent_id": str(item.parent_id) if item.parent_id else None,
+        "project_id": str(item.project_id) if item.project_id else None,
+        "sprint_id": str(item.sprint_id) if item.sprint_id else None,
+        "goal_id": str(item.goal_id) if item.goal_id else None,
+        "assignee_agent_id": str(item.assignee_agent_id) if item.assignee_agent_id else None,
+        "assignee_user_id": str(item.assignee_user_id) if item.assignee_user_id else None,
+        "assignee_type": item.assignee_type,
+        "checkout_run_id": item.checkout_run_id,
+        "checkout_locked_at": item.checkout_locked_at.isoformat() if item.checkout_locked_at else None,
+        "version": item.version,
+        "created_by_agent_id": str(item.created_by_agent_id) if item.created_by_agent_id else None,
+        "created_by_user_id": str(item.created_by_user_id) if item.created_by_user_id else None,
+        "started_at": item.started_at.isoformat() if item.started_at else None,
+        "completed_at": item.completed_at.isoformat() if item.completed_at else None,
+        "cancelled_at": item.cancelled_at.isoformat() if item.cancelled_at else None,
+        "created_at": item.created_at.isoformat() if item.created_at else None,
+        "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+    }
+
+
+# ------------------------------------------------------------------
+# Routes
+# ------------------------------------------------------------------
+
+
+@router.post("", status_code=201)
+async def create_work_item(
+    body: WorkItemCreate,
+    session: AsyncSession = Depends(get_session),
+) -> Dict[str, Any]:
+    item = await _service.create(
+        session,
+        company_id=body.company_id,
+        type=body.type,
+        title=body.title,
+        description=body.description,
+        acceptance_criteria=body.acceptance_criteria,
+        priority=body.priority,
+        story_points=body.story_points,
+        parent_id=body.parent_id,
+        project_id=body.project_id,
+        sprint_id=body.sprint_id,
+        goal_id=body.goal_id,
+        assignee_agent_id=body.assignee_agent_id,
+        assignee_user_id=body.assignee_user_id,
+        created_by_agent_id=body.created_by_agent_id,
+        created_by_user_id=body.created_by_user_id,
+        labels=body.labels,
+    )
+    await session.commit()
+    return _item_to_dict(item)
+
+
+@router.get("")
+async def list_work_items(
+    company_id: str = Query(...),
+    project_id: Optional[str] = Query(None),
+    type: Optional[WorkItemType] = Query(None),
+    status: Optional[WorkItemStatus] = Query(None),
+    assignee: Optional[str] = Query(None),
+    sprint_id: Optional[str] = Query(None),
+    parent_id: Optional[str] = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    session: AsyncSession = Depends(get_session),
+) -> List[Dict[str, Any]]:
+    items = await _service.list_by_project(
+        session,
+        company_id=company_id,
+        project_id=project_id,
+        type=type,
+        status=status,
+        assignee_agent_id=assignee,
+        sprint_id=sprint_id,
+        parent_id=parent_id,
+        limit=limit,
+        offset=offset,
+    )
+    return [_item_to_dict(i) for i in items]
+
+
+@router.get("/{work_item_id}")
+async def get_work_item(
+    work_item_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> Dict[str, Any]:
+    item = await _service.get(session, work_item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Work item not found")
+    return _item_to_dict(item)
+
+
+@router.patch("/{work_item_id}")
+async def update_work_item(
+    work_item_id: str,
+    body: WorkItemUpdate,
+    session: AsyncSession = Depends(get_session),
+) -> Dict[str, Any]:
+    fields = {k: v for k, v in body.model_dump(exclude_none=True).items()}
+    item = await _service.update(session, work_item_id, **fields)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Work item not found")
+    await session.commit()
+    return _item_to_dict(item)
+
+
+@router.delete("/{work_item_id}", status_code=204)
+async def delete_work_item(
+    work_item_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    item = await _service.get(session, work_item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Work item not found")
+    await session.delete(item)
+    await session.commit()
+
+
+@router.post("/{work_item_id}/checkout")
+async def checkout_work_item(
+    work_item_id: str,
+    body: CheckoutRequest,
+    session: AsyncSession = Depends(get_session),
+) -> Dict[str, Any]:
+    try:
+        item = await _service.checkout(
+            session,
+            work_item_id=work_item_id,
+            agent_id=body.agent_id,
+            run_id=body.run_id,
+        )
+        await session.commit()
+        return _item_to_dict(item)
+    except CheckoutConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.post("/{work_item_id}/release")
+async def release_work_item(
+    work_item_id: str,
+    body: ReleaseRequest,
+    session: AsyncSession = Depends(get_session),
+) -> Dict[str, Any]:
+    try:
+        item = await _service.release(session, work_item_id=work_item_id, agent_id=body.agent_id)
+        await session.commit()
+        redis = await get_async_redis_client()
+        if redis is not None:
+            await redis.delete(f"llc:checkout:{work_item_id}")
+        return _item_to_dict(item)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/{work_item_id}/transition")
+async def transition_work_item(
+    work_item_id: str,
+    body: TransitionRequest,
+    session: AsyncSession = Depends(get_session),
+) -> Dict[str, Any]:
+    try:
+        item = await _service.transition_status(session, work_item_id, body.status)
+        await session.commit()
+        return _item_to_dict(item)
+    except InvalidTransition as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.post("/{work_item_id}/comments", status_code=201)
+async def add_comment(
+    work_item_id: str,
+    body: CommentCreate,
+    session: AsyncSession = Depends(get_session),
+) -> Dict[str, Any]:
+    comment = await _service.add_comment(
+        session,
+        work_item_id=work_item_id,
+        company_id=body.company_id,
+        body=body.body,
+        author_agent_id=body.author_agent_id,
+        author_user_id=body.author_user_id,
+    )
+    await session.commit()
+    return {
+        "id": str(comment.id),
+        "work_item_id": str(comment.work_item_id),
+        "company_id": str(comment.company_id),
+        "body": comment.body,
+        "author_agent_id": str(comment.author_agent_id) if comment.author_agent_id else None,
+        "author_user_id": str(comment.author_user_id) if comment.author_user_id else None,
+        "created_at": comment.created_at.isoformat() if comment.created_at else None,
+    }
