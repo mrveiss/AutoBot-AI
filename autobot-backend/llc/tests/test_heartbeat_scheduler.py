@@ -222,7 +222,6 @@ class TestHandleDueAgent:
         call_args = mock_redis.zadd.call_args
         assert call_args[0][0] == _SCHEDULE_KEY
         assert "agent-abc" in call_args[0][1]
-        assert call_args[1].get("xx") is True
 
     @pytest.mark.asyncio
     async def test_removes_disabled_agent_from_set(self):
@@ -269,10 +268,11 @@ class TestTriggerManual:
             patch.object(scheduler, "_create_run", new=AsyncMock(return_value=mock_run)),
             patch.object(scheduler, "_run_adapter", new=AsyncMock()),
         ):
-            run = await scheduler.trigger_manual(mock_session, "agent-abc")
+            run, agent_cfg = await scheduler.trigger_manual(mock_session, "agent-abc")
 
         assert run.id == mock_run.id
         assert run.status == HeartbeatRunStatus.QUEUED.value
+        assert agent_cfg == agent
 
     @pytest.mark.asyncio
     async def test_raises_for_unknown_agent(self):

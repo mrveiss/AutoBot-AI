@@ -162,7 +162,16 @@ class HeartbeatScheduler:
             removed = await redis.zrem(_SCHEDULE_KEY, agent_id)
             if not removed:
                 continue
-            await self._handle_due_agent(agent_id, redis)
+            try:
+                await self._handle_due_agent(agent_id, redis)
+            except Exception:
+                logger.exception(
+                    "Heartbeat dispatch error for agent %s; re-queuing in %ds",
+                    agent_id,
+                    int(_POLL_INTERVAL),
+                )
+                retry_ts = datetime.now(tz=timezone.utc).timestamp() + _POLL_INTERVAL
+                await redis.zadd(_SCHEDULE_KEY, {agent_id: retry_ts})
 
     async def _handle_due_agent(self, agent_id: str, redis: Any) -> None:
         """Create run record, dispatch adapter, advance sorted-set score."""
@@ -209,8 +218,14 @@ class HeartbeatScheduler:
         self,
         session: AsyncSession,
         agent_id: str,
-    ) -> LLCHeartbeatRun:
-        """Create a queued run and dispatch immediately (manual invocation)."""
+    ) -> tuple[LLCHeartbeatRun, Dict[str, Any]]:
+        """Flush a QUEUED run record; caller must commit then call dispatch_run.
+
+        Returns (run, agent_cfg) so the caller can fire the adapter task after
+        the DB commit is visible to other connections (avoids the race where
+        _run_adapter's RUNNING UPDATE matches 0 rows because the INSERT is
+        still uncommitted).
+        """
         agent = await self._get_agent_config(session, agent_id)
         if agent is None:
             raise ValueError(f"Agent {agent_id!r} not found or not configured")
@@ -221,11 +236,18 @@ class HeartbeatScheduler:
             source=HeartbeatInvocationSource.MANUAL,
         )
         await session.flush()
+        return run, agent
+
+    def dispatch_run(self, agent: Dict[str, Any], run_id: uuid.UUID) -> None:
+        """Schedule adapter execution as a fire-and-forget task.
+
+        Must be called after the DB session containing the run INSERT has been
+        committed — ensures _run_adapter's RUNNING status UPDATE is visible.
+        """
         asyncio.create_task(
-            self._run_adapter(agent, run.id),
-            name=f"heartbeat-manual-{agent_id}",
+            self._run_adapter(agent, run_id),
+            name=f"heartbeat-manual-{agent['agent_id']}",
         )
-        return run
 
     # ------------------------------------------------------------------
     # Shared helpers

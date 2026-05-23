@@ -18,8 +18,9 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.user_management.dependencies import get_current_user
 from autobot_shared.singleton_factory import lazy_singleton
-from user_management.database import get_async_session_factory
+from user_management.database import get_async_session
 
 from ..models.enums import HeartbeatRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
@@ -34,12 +35,6 @@ def _scheduler() -> HeartbeatScheduler:
     return _get_scheduler()
 
 
-async def get_session() -> AsyncSession:
-    factory = get_async_session_factory()
-    async with factory() as session:
-        yield session
-
-
 # ------------------------------------------------------------------
 # Response schemas
 # ------------------------------------------------------------------
@@ -47,7 +42,7 @@ async def get_session() -> AsyncSession:
 
 class HeartbeatRunRead(BaseModel):
     id: uuid.UUID
-    company_id: str
+    company_id: uuid.UUID
     agent_id: str
     invocation_source: str
     status: str
@@ -81,15 +76,17 @@ class TriggerResponse(BaseModel):
 @router.post("/{agent_id}/heartbeat/trigger", response_model=TriggerResponse, status_code=202)
 async def trigger_heartbeat(
     agent_id: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
 ) -> TriggerResponse:
     """Manually trigger a heartbeat run for *agent_id* immediately."""
     sched = _scheduler()
     try:
-        run = await sched.trigger_manual(session, agent_id)
+        run, agent_cfg = await sched.trigger_manual(session, agent_id)
         await session.commit()
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    sched.dispatch_run(agent_cfg, run.id)
     return TriggerResponse(run_id=run.id, status=run.status)
 
 
@@ -99,7 +96,8 @@ async def list_runs(
     status: Optional[HeartbeatRunStatus] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
 ) -> HeartbeatRunList:
     """List heartbeat runs for *agent_id*, paginated, optionally filtered by status."""
     stmt = (
@@ -130,7 +128,8 @@ async def list_runs(
 async def get_run(
     agent_id: str,
     run_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
 ) -> HeartbeatRunRead:
     """Fetch a single heartbeat run with its context snapshot."""
     result = await session.execute(
