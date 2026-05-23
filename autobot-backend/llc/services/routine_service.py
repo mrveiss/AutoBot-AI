@@ -116,9 +116,11 @@ class RoutineService(LLCServiceBase):
         try:
             from autobot_shared.redis_client import get_async_redis_client
 
+            from ..scheduler.routine_scheduler import _SCHEDULE_KEY
+
             redis = await get_async_redis_client()
             if redis is not None:
-                await redis.zrem("llc:heartbeat:schedule", f"routine:{routine_id}")
+                await redis.zrem(_SCHEDULE_KEY, f"routine:{routine_id}")
         except Exception as exc:
             logger.warning(
                 "Failed to remove routine %s from Redis schedule: %s", routine_id, exc
