@@ -1,24 +1,25 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Tests for Portfolio → Program → Project → Sprint hierarchy (GH#8219)."""
+"""Tests for Portfolio → Program → Project hierarchy services (GH#8219).
+
+Sprint CRUD + lifecycle tests live in the sprint planning service tests
+(GH#8220 / test_sprint_planning.py); the LLCSprint model is owned by that
+migration chain (revision 20260523_032).
+"""
 
 import uuid
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi import HTTPException
 
-from llc.models.enums import SprintStatus
 from llc.models.portfolio import LLCPortfolio
 from llc.models.program import LLCProgram
 from llc.models.project import LLCProject
-from llc.models.sprint import LLCSprint
 from llc.services.portfolio import PortfolioService
 from llc.services.program import ProgramService
 from llc.services.project import ProjectService
-from llc.services.sprint import SprintService
 
 
 # ----------------------------------------------------------------- Helpers
@@ -62,18 +63,6 @@ def _make_project(program_id: uuid.UUID | None = None, name: str = "Proj1") -> L
     p.created_at = _now()
     p.updated_at = _now()
     return p
-
-
-def _make_sprint(project_id: uuid.UUID | None = None, name: str = "S1") -> LLCSprint:
-    s = LLCSprint(
-        project_id=project_id or _uuid(),
-        name=name,
-        status=SprintStatus.PLANNING.value,
-    )
-    s.id = _uuid()
-    s.created_at = _now()
-    s.updated_at = _now()
-    return s
 
 
 # ----------------------------------------------------------------- PortfolioService
@@ -124,6 +113,17 @@ async def test_portfolio_delete_not_found(portfolio_svc: PortfolioService) -> No
     assert result is False
 
 
+@pytest.mark.asyncio
+async def test_portfolio_delete_ok(portfolio_svc: PortfolioService) -> None:
+    p = _make_portfolio()
+    session = AsyncMock()
+    session.flush = AsyncMock()
+    session.delete = AsyncMock()
+    with patch.object(portfolio_svc, "get", AsyncMock(return_value=p)):
+        result = await portfolio_svc.delete(session, p.id)
+    assert result is True
+
+
 # ----------------------------------------------------------------- ProgramService
 
 
@@ -141,6 +141,27 @@ async def test_program_create(program_svc: ProgramService) -> None:
     assert prog.portfolio_id == portfolio_id
     assert prog.name == "Prog1"
     assert prog.status == "active"
+
+
+@pytest.mark.asyncio
+async def test_program_get_none(program_svc: ProgramService) -> None:
+    session = AsyncMock()
+    mock_result = AsyncMock()
+    mock_result.scalar_one_or_none.return_value = None
+    session.execute = AsyncMock(return_value=mock_result)
+    result = await program_svc.get(session, _uuid())
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_program_update(program_svc: ProgramService) -> None:
+    prog = _make_program()
+    session = AsyncMock()
+    session.flush = AsyncMock()
+    with patch.object(program_svc, "get", AsyncMock(return_value=prog)):
+        updated = await program_svc.update(session, prog.id, status="archived")
+    assert updated is not None
+    assert updated.status == "archived"
 
 
 @pytest.mark.asyncio
@@ -175,6 +196,15 @@ async def test_project_create_with_owner(project_svc: ProjectService) -> None:
 
 
 @pytest.mark.asyncio
+async def test_project_create_defaults(project_svc: ProjectService) -> None:
+    session = AsyncMock()
+    session.flush = AsyncMock()
+    proj = await project_svc.create(session, _uuid(), "Proj2")
+    assert proj.status == "active"
+    assert proj.owner_agent_id is None
+
+
+@pytest.mark.asyncio
 async def test_project_update_none_if_missing(project_svc: ProjectService) -> None:
     session = AsyncMock()
     with patch.object(project_svc, "get", AsyncMock(return_value=None)):
@@ -182,87 +212,20 @@ async def test_project_update_none_if_missing(project_svc: ProjectService) -> No
     assert result is None
 
 
-# ----------------------------------------------------------------- SprintService
-
-
-@pytest.fixture
-def sprint_svc() -> SprintService:
-    return SprintService()
-
-
 @pytest.mark.asyncio
-async def test_sprint_create(sprint_svc: SprintService) -> None:
-    session = AsyncMock()
-    session.flush = AsyncMock()
-    project_id = _uuid()
-    sprint = await sprint_svc.create(session, project_id, "Sprint 1", capacity_points=40)
-    assert sprint.project_id == project_id
-    assert sprint.status == SprintStatus.PLANNING.value
-    assert sprint.capacity_points == 40
-
-
-@pytest.mark.asyncio
-async def test_sprint_start(sprint_svc: SprintService) -> None:
-    sprint = _make_sprint()
-    sprint.status = SprintStatus.PLANNING.value
-    session = AsyncMock()
-    session.flush = AsyncMock()
-    with patch.object(sprint_svc, "get", AsyncMock(return_value=sprint)):
-        started = await sprint_svc.start(session, sprint.id)
-    assert started.status == SprintStatus.ACTIVE.value
-    assert started.start_date is not None
-
-
-@pytest.mark.asyncio
-async def test_sprint_start_invalid_status(sprint_svc: SprintService) -> None:
-    sprint = _make_sprint()
-    sprint.status = SprintStatus.ACTIVE.value
-    session = AsyncMock()
-    with patch.object(sprint_svc, "get", AsyncMock(return_value=sprint)):
-        with pytest.raises(HTTPException) as exc:
-            await sprint_svc.start(session, sprint.id)
-    assert exc.value.status_code == 422
-
-
-@pytest.mark.asyncio
-async def test_sprint_close(sprint_svc: SprintService) -> None:
-    sprint = _make_sprint()
-    sprint.status = SprintStatus.ACTIVE.value
-    session = AsyncMock()
-    session.flush = AsyncMock()
-    with patch.object(sprint_svc, "get", AsyncMock(return_value=sprint)):
-        closed = await sprint_svc.close(session, sprint.id, velocity_actual=35)
-    assert closed.status == SprintStatus.CLOSED.value
-    assert closed.velocity_actual == 35
-    assert closed.end_date is not None
-
-
-@pytest.mark.asyncio
-async def test_sprint_close_invalid_status(sprint_svc: SprintService) -> None:
-    sprint = _make_sprint()
-    sprint.status = SprintStatus.PLANNING.value
-    session = AsyncMock()
-    with patch.object(sprint_svc, "get", AsyncMock(return_value=sprint)):
-        with pytest.raises(HTTPException) as exc:
-            await sprint_svc.close(session, sprint.id)
-    assert exc.value.status_code == 422
-
-
-@pytest.mark.asyncio
-async def test_sprint_close_not_found(sprint_svc: SprintService) -> None:
-    session = AsyncMock()
-    with patch.object(sprint_svc, "get", AsyncMock(return_value=None)):
-        with pytest.raises(HTTPException) as exc:
-            await sprint_svc.close(session, _uuid())
-    assert exc.value.status_code == 404
-
-
-@pytest.mark.asyncio
-async def test_sprint_delete(sprint_svc: SprintService) -> None:
-    sprint = _make_sprint()
+async def test_project_delete(project_svc: ProjectService) -> None:
+    proj = _make_project()
     session = AsyncMock()
     session.flush = AsyncMock()
     session.delete = AsyncMock()
-    with patch.object(sprint_svc, "get", AsyncMock(return_value=sprint)):
-        result = await sprint_svc.delete(session, sprint.id)
+    with patch.object(project_svc, "get", AsyncMock(return_value=proj)):
+        result = await project_svc.delete(session, proj.id)
     assert result is True
+
+
+@pytest.mark.asyncio
+async def test_project_delete_not_found(project_svc: ProjectService) -> None:
+    session = AsyncMock()
+    with patch.object(project_svc, "get", AsyncMock(return_value=None)):
+        result = await project_svc.delete(session, _uuid())
+    assert result is False

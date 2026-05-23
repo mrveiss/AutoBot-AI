@@ -13,7 +13,6 @@ from .goal import GoalService
 from .portfolio import PortfolioService
 from .program import ProgramService
 from .project import ProjectService
-from .sprint import SprintService
 
 __all__ = [
     "ApprovalService",
@@ -24,5 +23,4 @@ __all__ = [
     "PortfolioService",
     "ProgramService",
     "ProjectService",
-    "SprintService",
 ]

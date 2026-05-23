@@ -14,7 +14,6 @@ from .portfolios import router as portfolios_router
 from .programs import router as programs_router
 from .projects import router as projects_router
 from .secrets import router as secrets_router
-from .sprints import router as sprints_router
 from .work_items import router as work_items_router
 
 router = APIRouter(prefix="/llc", tags=["llc"])
@@ -28,7 +27,6 @@ router.include_router(portfolios_router)
 router.include_router(programs_router)
 router.include_router(projects_router)
 router.include_router(secrets_router)
-router.include_router(sprints_router)
 router.include_router(work_items_router)
 router.include_router(api_keys_router)
 router.include_router(agent_router)

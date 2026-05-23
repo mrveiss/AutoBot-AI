@@ -1,7 +1,11 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""LLC Portfolio → Program → Project → Sprint hierarchy tables (GH#8219).
+"""LLC Portfolio → Program → Project hierarchy tables (GH#8219).
+
+Creates llc_portfolios, llc_programs, llc_projects.
+llc_sprints is created by migration 20260523_032 (GH#8220) which revises this
+migration, preserving the FK chain: projects ← sprints.
 
 Revision ID: 20260523_031
 Revises: 20260523_030
@@ -60,25 +64,7 @@ def upgrade() -> None:
     op.create_index("ix_llc_projects_status", "llc_projects", ["status"])
     op.create_index("ix_llc_projects_owner_agent_id", "llc_projects", ["owner_agent_id"])
 
-    op.create_table(
-        "llc_sprints",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
-        sa.Column("project_id", UUID(as_uuid=True), sa.ForeignKey("llc_projects.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("name", sa.String(512), nullable=False),
-        sa.Column("status", sa.String(32), nullable=False, server_default="planning"),
-        sa.Column("start_date", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("end_date", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("capacity_points", sa.Integer, nullable=True),
-        sa.Column("velocity_actual", sa.Integer, nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-    )
-    op.create_index("ix_llc_sprints_project_id", "llc_sprints", ["project_id"])
-    op.create_index("ix_llc_sprints_status", "llc_sprints", ["status"])
-
-
 def downgrade() -> None:
-    op.drop_table("llc_sprints")
     op.drop_table("llc_projects")
     op.drop_table("llc_programs")
     op.drop_table("llc_portfolios")
