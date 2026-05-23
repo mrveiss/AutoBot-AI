@@ -83,16 +83,18 @@ async def trigger_heartbeat(
 ) -> TriggerResponse:
     """Manually trigger a heartbeat run for *agent_id* immediately."""
     sched = _scheduler()
-    try:
-        run, agent_cfg = await sched.trigger_manual(session, agent_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
-
+    # Fetch agent config first so tenant check runs before any DB write
+    agent_cfg = await sched._get_agent_config(session, agent_id)
+    if agent_cfg is None:
+        raise HTTPException(status_code=404, detail=f"Agent {agent_id!r} not found or not configured")
     if ctx.org_id is not None:
         agent_company = agent_cfg.get("company_id")
         if agent_company is not None and agent_company != ctx.org_id:
             raise HTTPException(status_code=403, detail="Agent belongs to a different organization")
-
+    try:
+        run, _ = await sched.trigger_manual(session, agent_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
     await session.commit()
     sched.dispatch_run(agent_cfg, run.id)
     return TriggerResponse(run_id=run.id, status=run.status)
