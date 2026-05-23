@@ -261,9 +261,9 @@ async def _init_llc_monitors(app: FastAPI, update_status_fn) -> None:
 async def _init_llc_routine_scheduler(app: FastAPI, update_status_fn, append_error_fn):
     """Start the LLC HeartbeatScheduler that fires cron-based routines (GH#8229)."""
     try:
-        from llc.scheduler import HeartbeatScheduler
+        from llc.scheduler import RoutineScheduler
 
-        scheduler = HeartbeatScheduler()
+        scheduler = RoutineScheduler()
         await scheduler.startup()
         app.state.llc_routine_scheduler = scheduler
         await update_status_fn("llc_routine_scheduler", "ready")

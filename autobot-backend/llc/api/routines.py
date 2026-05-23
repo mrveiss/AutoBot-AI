@@ -27,7 +27,7 @@ from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
 
 from ..models.enums import RoutineProduces, RoutineStatus
-from ..scheduler.heartbeat_scheduler import _SCHEDULE_KEY
+from ..scheduler.routine_scheduler import _SCHEDULE_KEY
 from ..services.routine_service import RoutineService
 
 router = APIRouter(tags=["llc-routines"])

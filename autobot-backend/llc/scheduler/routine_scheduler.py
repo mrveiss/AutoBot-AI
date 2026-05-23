@@ -1,7 +1,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""LLC HeartbeatScheduler — fires routines via Redis sorted set (GH#8229).
+"""LLC RoutineScheduler — fires routines via Redis sorted set (GH#8229).
 
 Architecture:
   - sorted set key: ``llc:heartbeat:schedule``
@@ -34,7 +34,7 @@ _SCHEDULE_KEY = "llc:heartbeat:schedule"
 _POLL_INTERVAL = 5.0  # seconds between sorted-set polls
 
 
-class HeartbeatScheduler:
+class RoutineScheduler:
     """Polls the sorted set and dispatches due routines."""
 
     def __init__(self, poll_interval: float = _POLL_INTERVAL) -> None:
@@ -110,7 +110,7 @@ class HeartbeatScheduler:
             try:
                 await self._process_due()
             except Exception as exc:
-                logger.error("HeartbeatScheduler poll error: %s", exc)
+                logger.error("RoutineScheduler poll error: %s", exc)
             await asyncio.sleep(self._poll_interval)
 
     async def _process_due(self) -> None:
