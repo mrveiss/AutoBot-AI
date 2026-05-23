@@ -1,5 +1,6 @@
 """LLC models package."""
 
+from .activity import ActorType, LLCActivityLog, LLCBase
 from .budget import LLCAgentBudget
 from .company import (
     CompanyAncestor,
@@ -23,9 +24,12 @@ from .goal import GoalLevel, GoalStatus, LLCGoal
 from .work_item import LLCWorkItem, LLCWorkItemComment
 
 __all__ = [
+    "ActorType",
     "ApprovalStatus",
     "AssignmentType",
     "CompanyAncestor",
+    "LLCActivityLog",
+    "LLCBase",
     "CompanyCreate",
     "CompanyRead",
     "CompanyTreeNode",
