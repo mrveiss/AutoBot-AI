@@ -8,11 +8,12 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from user_management.database import get_async_session
 
+from llc.exceptions import BudgetExhausted
 from llc.models.budget import LLCAgentBudget
 from llc.services.budget import BudgetService
 
@@ -68,8 +69,6 @@ async def get_budget(
     svc = BudgetService()
     remaining, is_over, alert = await svc.check_budget(session, agent_id)
 
-    from sqlalchemy import select
-
     result = await session.execute(
         select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id)
     )
@@ -87,9 +86,12 @@ async def ingest_cost(
     session: AsyncSession = Depends(get_async_session),
 ) -> IngestResponse:
     svc = BudgetService()
-    cost = await svc.ingest_cost_event(
-        session, agent_id, body.tokens_in, body.tokens_out, body.model
-    )
+    try:
+        cost = await svc.ingest_cost_event(
+            session, agent_id, body.tokens_in, body.tokens_out, body.model
+        )
+    except BudgetExhausted as exc:
+        raise HTTPException(status_code=402, detail=str(exc)) from exc
     return IngestResponse(cost=cost)
 
 

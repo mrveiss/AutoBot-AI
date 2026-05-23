@@ -3,7 +3,10 @@
 # Author: mrveiss
 """LLCServiceBase — shared DI slot for all LLC services."""
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from .activity_log import LLCActivityLogService
 
 
 class LLCServiceBase:
@@ -14,5 +17,5 @@ class LLCServiceBase:
     callers must guard with ``if self.activity_log``.
     """
 
-    def __init__(self, activity_log: Optional[object] = None) -> None:
+    def __init__(self, activity_log: "Optional[LLCActivityLogService]" = None) -> None:
         self.activity_log = activity_log
