@@ -3,16 +3,16 @@
 # Author: mrveiss
 """LLC per-agent budget table (GH#8215).
 
-Revision ID: 20260523_022
-Revises: 20260522_021
+Revision ID: 20260523_025
+Revises: 20260523_024
 Create Date: 2026-05-23
 """
 
 from alembic import op
 import sqlalchemy as sa
 
-revision = "20260523_022"
-down_revision = "20260522_021"
+revision = "20260523_025"
+down_revision = "20260523_024"
 branch_labels = None
 depends_on = None
 

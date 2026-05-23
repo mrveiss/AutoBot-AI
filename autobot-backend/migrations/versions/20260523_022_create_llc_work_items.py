@@ -79,7 +79,6 @@ def upgrade() -> None:
         sa.Column(
             "goal_id",
             UUID(as_uuid=True),
-            sa.ForeignKey("llc_goals.id", ondelete="SET NULL"),
             nullable=True,
         ),
         sa.Column(
