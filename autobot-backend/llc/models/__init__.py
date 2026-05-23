@@ -17,12 +17,14 @@ from .enums import (
     LLCAgentStatus,
     LLCCompanyStatus,
     LLCRunStatus,
+    MembershipRole,
     SprintStatus,
     WorkItemPriority,
     WorkItemStatus,
     WorkItemType,
 )
 from .goal import GoalLevel, GoalStatus, LLCGoal
+from .membership import LLCCompanyMembership
 from .secret import LLCSecret
 from .sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint
 from .work_item import LLCWorkItem, LLCWorkItemComment
@@ -44,6 +46,7 @@ __all__ = [
     "LLCAgentStatus",
     "LLCApproval",
     "LLCBase",
+    "LLCCompanyMembership",
     "LLCCompanyStatus",
     "LLCGoal",
     "LLCPortfolio",
@@ -52,6 +55,7 @@ __all__ = [
     "LLCRunStatus",
     "LLCSprint",
     "LLCSecret",
+    "MembershipRole",
     "LLCWorkItem",
     "LLCWorkItemComment",
     "SprintStatus",

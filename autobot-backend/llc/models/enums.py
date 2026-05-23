@@ -129,3 +129,12 @@ class AssignmentType(str, Enum):
     AUTO = "auto"
     DELEGATED = "delegated"
     INHERITED = "inherited"
+
+
+class MembershipRole(str, Enum):
+    """Role of a human user within an LLC company (GH#8223)."""
+
+    OWNER = "owner"
+    ADMIN = "admin"
+    MEMBER = "member"
+    GUEST = "guest"
