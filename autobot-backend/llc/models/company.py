@@ -52,7 +52,12 @@ class CompanyCreate(CompanyBase):
 
 
 class CompanyUpdate(BaseModel):
-    """Request body for PATCH /companies/{id}.  All fields optional."""
+    """Request body for PATCH /companies/{id}.  All fields optional.
+
+    ``llc_status`` is intentionally excluded — use the dedicated
+    ``suspend()`` / ``archive()`` service methods so transition guards and
+    audit trail are always applied.
+    """
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
@@ -60,7 +65,6 @@ class CompanyUpdate(BaseModel):
     budget_monthly_cents: Optional[int] = Field(None, ge=0)
     brand_color: Optional[str] = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$")
     require_approval_for_hires: Optional[bool] = None
-    llc_status: Optional[LLCCompanyStatus] = None
     pause_reason: Optional[str] = None
 
     model_config = {"from_attributes": True}
