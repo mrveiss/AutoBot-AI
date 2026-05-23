@@ -66,6 +66,7 @@ def _make_cell(
     cell.owner = owner
     cell.version = 1
     cell.locked_by = None
+    cell.rich_payload = None
     cell.created_at = _NOW
     cell.updated_at = _NOW
     return cell
