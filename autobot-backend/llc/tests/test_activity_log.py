@@ -16,14 +16,11 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import pytest_asyncio
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from llc.models.activity import ActorType, LLCActivityLog
 from llc.services.activity_log import (
     ActivityEventType,
-    ActivityLogPage,
     ActivityLogQuery,
     LLCActivityLogService,
 )
@@ -207,7 +204,9 @@ class TestRecordUnit:
         svc = LLCActivityLogService()
         assert not hasattr(svc, "update"), "update() must not exist on LLCActivityLogService"
         assert not hasattr(svc, "delete"), "delete() must not exist on LLCActivityLogService"
-        assert not hasattr(svc, "bulk_delete"), "bulk_delete() must not exist on LLCActivityLogService"
+        assert not hasattr(svc, "bulk_delete"), (
+            "bulk_delete() must not exist on LLCActivityLogService"
+        )
 
     @pytest.mark.asyncio
     async def test_publish_swallows_redis_errors(self) -> None:
@@ -332,3 +331,59 @@ class TestQueryUnit:
     async def test_query_page_minimum_is_1(self) -> None:
         params = ActivityLogQuery(page=0)
         assert params.page == 1
+
+    @pytest.mark.asyncio
+    async def test_query_raises_on_invalid_company_uuid(self) -> None:
+        svc = _make_service()
+        session = AsyncMock(spec=AsyncSession)
+        with pytest.raises(ValueError, match="Invalid company_id UUID"):
+            await svc.query(session=session, company_id="not-a-uuid")
+
+    @pytest.mark.asyncio
+    async def test_query_raises_on_invalid_entity_uuid(self) -> None:
+        svc = _make_service()
+        session = AsyncMock(spec=AsyncSession)
+        with pytest.raises(ValueError, match="Invalid entity_id UUID"):
+            await svc.query(
+                session=session,
+                company_id=_uuid(),
+                params=ActivityLogQuery(entity_id="not-a-uuid"),
+            )
+
+
+class TestRecordUUIDValidation:
+    """Unit tests for UUID validation in record()."""
+
+    def _mocked_session(self) -> AsyncSession:
+        session = AsyncMock(spec=AsyncSession)
+        session.add = MagicMock()
+        session.flush = AsyncMock()
+        return session
+
+    @pytest.mark.asyncio
+    async def test_record_raises_on_invalid_company_uuid(self) -> None:
+        svc = _make_service()
+        with pytest.raises(ValueError, match="Invalid company_id UUID"):
+            await svc.record(
+                session=self._mocked_session(),
+                company_id="bad-uuid",
+                actor_type=ActorType.SYSTEM,
+                actor_id=None,
+                event_type="heartbeat.started",
+                entity_type="heartbeat",
+                entity_id=_uuid(),
+            )
+
+    @pytest.mark.asyncio
+    async def test_record_raises_on_invalid_entity_uuid(self) -> None:
+        svc = _make_service()
+        with pytest.raises(ValueError, match="Invalid entity_id UUID"):
+            await svc.record(
+                session=self._mocked_session(),
+                company_id=_uuid(),
+                actor_type=ActorType.SYSTEM,
+                actor_id=None,
+                event_type="heartbeat.started",
+                entity_type="heartbeat",
+                entity_id="bad-uuid",
+            )

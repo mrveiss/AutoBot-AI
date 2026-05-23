@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.user_management.dependencies import get_current_user
 from user_management.database import get_async_session
 
 from ..models.activity import ActorType
@@ -58,6 +59,7 @@ async def get_activity_log(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
 ) -> ActivityLogResponse:
     """Return paginated activity log for a company.
 

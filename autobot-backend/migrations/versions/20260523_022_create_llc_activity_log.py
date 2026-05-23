@@ -1,7 +1,7 @@
 """Create llc_activity_log table.
 
-Revision ID: 20260523_022
-Revises: 20260522_021
+Revision ID: 20260523_025
+Revises: 20260523_022_organization_llc_extensions
 Create Date: 2026-05-23 00:00:00.000000
 
 GH#8216: Immutable activity log — company-scoped, all-mutations coverage.
@@ -14,8 +14,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
-revision: str = "20260523_022"
-down_revision: str | None = "20260522_021"
+revision: str = "20260523_025"
+down_revision: str | None = "20260523_022"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -32,7 +32,7 @@ def upgrade() -> None:
         sa.Column(
             "company_id",
             UUID(as_uuid=True),
-            sa.ForeignKey("companies.id", ondelete="CASCADE"),
+            sa.ForeignKey("organizations.id", ondelete="CASCADE"),
             nullable=False,
         ),
         sa.Column("actor_type", sa.String(20), nullable=False),

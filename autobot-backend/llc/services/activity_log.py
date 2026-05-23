@@ -174,19 +174,31 @@ class LLCActivityLogService:
         actor_user_id: uuid.UUID | None = None
 
         if actor_id is not None:
-            parsed_actor = uuid.UUID(actor_id) if isinstance(actor_id, str) else actor_id
+            try:
+                parsed_actor = uuid.UUID(actor_id) if isinstance(actor_id, str) else actor_id
+            except ValueError as exc:
+                raise ValueError(f"Invalid actor_id UUID: {actor_id!r}") from exc
             if actor_type_str == ActorType.AGENT.value:
                 actor_agent_id = parsed_actor
             elif actor_type_str == ActorType.USER.value:
                 actor_user_id = parsed_actor
 
+        try:
+            company_uuid = uuid.UUID(company_id) if isinstance(company_id, str) else company_id
+        except ValueError as exc:
+            raise ValueError(f"Invalid company_id UUID: {company_id!r}") from exc
+        try:
+            entity_uuid = uuid.UUID(entity_id) if isinstance(entity_id, str) else entity_id
+        except ValueError as exc:
+            raise ValueError(f"Invalid entity_id UUID: {entity_id!r}") from exc
+
         entry = LLCActivityLog(
-            company_id=uuid.UUID(company_id) if isinstance(company_id, str) else company_id,
+            company_id=company_uuid,
             actor_type=actor_type_str,
             actor_agent_id=actor_agent_id,
             actor_user_id=actor_user_id,
             entity_type=entity_type,
-            entity_id=uuid.UUID(entity_id) if isinstance(entity_id, str) else entity_id,
+            entity_id=entity_uuid,
             action=action_str,
             before_state=before,
             after_state=after or {},
@@ -205,10 +217,13 @@ class LLCActivityLogService:
         session: AsyncSession,
         entries: list[dict[str, Any]],
     ) -> list[LLCActivityLog]:
-        """Insert multiple activity log entries in a single flush.
+        """Insert multiple activity log entries, one flush per entry.
 
         Each dict in ``entries`` must match the record() kwarg signature.
-        All rows share the caller-owned session and transaction.
+        All rows share the caller-owned session and transaction. Each call to
+        record() flushes and publishes independently; a rollback on the outer
+        transaction after record_bulk() returns may result in phantom Redis
+        events for already-published entries.
 
         Returns:
             List of persisted LLCActivityLog rows in insertion order.
@@ -240,15 +255,20 @@ class LLCActivityLogService:
         if params is None:
             params = ActivityLogQuery()
 
-        company_uuid = uuid.UUID(company_id) if isinstance(company_id, str) else company_id
+        try:
+            company_uuid = uuid.UUID(company_id) if isinstance(company_id, str) else company_id
+        except ValueError as exc:
+            raise ValueError(f"Invalid company_id UUID: {company_id!r}") from exc
         stmt = select(LLCActivityLog).where(LLCActivityLog.company_id == company_uuid)
 
         if params.entity_type:
             stmt = stmt.where(LLCActivityLog.entity_type == params.entity_type)
         if params.entity_id:
-            stmt = stmt.where(
-                LLCActivityLog.entity_id == uuid.UUID(params.entity_id)
-            )
+            try:
+                entity_uuid = uuid.UUID(params.entity_id)
+            except ValueError as exc:
+                raise ValueError(f"Invalid entity_id UUID: {params.entity_id!r}") from exc
+            stmt = stmt.where(LLCActivityLog.entity_id == entity_uuid)
         if params.action:
             stmt = stmt.where(LLCActivityLog.action == params.action)
         if params.actor_type:
@@ -259,15 +279,28 @@ class LLCActivityLogService:
             )
             stmt = stmt.where(LLCActivityLog.actor_type == actor_type_str)
         if params.actor_id:
-            actor_uuid = uuid.UUID(params.actor_id)
+            try:
+                actor_uuid = uuid.UUID(params.actor_id)
+            except ValueError as exc:
+                raise ValueError(f"Invalid actor_id UUID: {params.actor_id!r}") from exc
             stmt = stmt.where(
                 (LLCActivityLog.actor_agent_id == actor_uuid)
                 | (LLCActivityLog.actor_user_id == actor_uuid)
             )
         if params.from_date:
-            stmt = stmt.where(LLCActivityLog.occurred_at >= params.from_date)
+            from_date = (
+                params.from_date.replace(tzinfo=timezone.utc)
+                if params.from_date.tzinfo is None
+                else params.from_date
+            )
+            stmt = stmt.where(LLCActivityLog.occurred_at >= from_date)
         if params.to_date:
-            stmt = stmt.where(LLCActivityLog.occurred_at <= params.to_date)
+            to_date = (
+                params.to_date.replace(tzinfo=timezone.utc)
+                if params.to_date.tzinfo is None
+                else params.to_date
+            )
+            stmt = stmt.where(LLCActivityLog.occurred_at <= to_date)
 
         count_stmt = select(sa.func.count()).select_from(stmt.subquery())
         total_result = await session.execute(count_stmt)
@@ -294,11 +327,10 @@ class LLCActivityLogService:
         """Publish to Redis pub/sub channel llc:activity:{company_id}.
 
         Failures are logged but never raised — publishing must not break writes.
+        Note: publish happens after flush but before the caller's commit; a
+        rollback on the outer transaction will leave a phantom event on the
+        channel. Subscribers must treat events as hints and requery on doubt.
         """
-        redis = await get_async_redis_client()
-        if redis is None:
-            return
-
         channel = f"{_PUBSUB_CHANNEL_PREFIX}:{company_id}"
         payload = {
             "id": str(entry.id),
@@ -312,6 +344,9 @@ class LLCActivityLogService:
             "occurred_at": entry.occurred_at.isoformat(),
         }
         try:
+            redis = await get_async_redis_client()
+            if redis is None:
+                return
             await redis.publish(channel, json.dumps(payload))
         except Exception:
             logger.exception(

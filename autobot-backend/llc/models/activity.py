@@ -50,7 +50,7 @@ class LLCActivityLog(LLCBase):
     )
     company_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        sa.ForeignKey("companies.id", ondelete="CASCADE"),
+        sa.ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
     actor_type: Mapped[str] = mapped_column(
