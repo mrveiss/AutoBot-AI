@@ -145,3 +145,11 @@ class MembershipRole(str, Enum):
     ADMIN = "admin"
     MEMBER = "member"
     GUEST = "guest"
+
+
+class RoutineStatus(str, Enum):
+    """Lifecycle status of an LLC routine (GH#8229)."""
+
+    ACTIVE = "active"
+    PAUSED = "paused"
+    ARCHIVED = "archived"

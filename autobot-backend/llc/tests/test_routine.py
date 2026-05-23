@@ -1,0 +1,378 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""LLC Routine pytest suite (GH#8229).
+
+Tests required by the issue:
+  1.  test_routine_create
+  2.  test_routine_list
+  3.  test_routine_update
+  4.  test_routine_soft_delete
+  5.  test_env_overlay_order
+  6.  test_secret_ref_resolution
+  7.  test_routine_run_record
+  8.  test_routine_runs_list
+  9.  test_api_create_routine
+  10. test_api_trigger
+
+Tests 1-8 use mocked sessions; tests 9-10 use FastAPI TestClient.
+"""
+
+import uuid
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from fastapi.testclient import TestClient
+
+from llc.models.enums import RoutineStatus
+from llc.models.routine import LLCRoutine, LLCRoutineRun
+from llc.services.routine_service import RoutineNotFoundError, RoutineService
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+_COMPANY_ID = uuid.uuid4()
+_AGENT_ID = uuid.uuid4()
+_CRON = "*/5 * * * *"
+
+
+def _routine(
+    routine_id: Optional[uuid.UUID] = None,
+    status: RoutineStatus = RoutineStatus.ACTIVE,
+    cron: str = _CRON,
+    env: Optional[Dict[str, Any]] = None,
+) -> MagicMock:
+    row = MagicMock(spec=LLCRoutine)
+    row.id = routine_id or uuid.uuid4()
+    row.company_id = _COMPANY_ID
+    row.agent_id = _AGENT_ID
+    row.name = "nightly-sync"
+    row.cron_schedule = cron
+    row.description = None
+    row.env = env or {}
+    row.status = status
+    row.created_at = datetime.now(tz=timezone.utc)
+    row.updated_at = datetime.now(tz=timezone.utc)
+    return row
+
+
+def _run(routine_id: Optional[uuid.UUID] = None) -> MagicMock:
+    row = MagicMock(spec=LLCRoutineRun)
+    row.id = uuid.uuid4()
+    row.routine_id = routine_id or uuid.uuid4()
+    row.status = "queued"
+    row.triggered_at = datetime.now(tz=timezone.utc)
+    row.completed_at = None
+    row.error = None
+    return row
+
+
+def _session(scalar=None, scalars: Optional[List[Any]] = None) -> AsyncMock:
+    session = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = scalar
+    if scalars is not None:
+        result.scalars.return_value.all.return_value = scalars
+    session.execute.return_value = result
+    session.get.return_value = scalar
+    session.add = MagicMock()
+    session.flush = AsyncMock()
+    return session
+
+
+# ---------------------------------------------------------------------------
+# 1. test_routine_create
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_routine_create() -> None:
+    session = _session()
+    svc = RoutineService()
+    routine = await svc.create(
+        session,
+        company_id=_COMPANY_ID,
+        agent_id=_AGENT_ID,
+        name="nightly-sync",
+        cron_schedule=_CRON,
+    )
+    session.add.assert_called_once()
+    session.flush.assert_awaited_once()
+    assert routine.company_id == _COMPANY_ID
+    assert routine.cron_schedule == _CRON
+    assert routine.status == RoutineStatus.ACTIVE
+
+
+# ---------------------------------------------------------------------------
+# 2. test_routine_list
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_routine_list() -> None:
+    active = _routine(status=RoutineStatus.ACTIVE)
+    archived = _routine(status=RoutineStatus.ARCHIVED)
+    session = _session(scalars=[active])
+    session.execute.return_value.scalars.return_value.all.return_value = [active]
+
+    svc = RoutineService()
+    results = await svc.list(session, company_id=_COMPANY_ID, status=RoutineStatus.ACTIVE)
+
+    assert len(results) == 1
+    assert results[0].status == RoutineStatus.ACTIVE
+
+
+# ---------------------------------------------------------------------------
+# 3. test_routine_update
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_routine_update() -> None:
+    routine_id = uuid.uuid4()
+    row = _routine(routine_id=routine_id)
+    session = _session(scalar=row)
+
+    svc = RoutineService()
+    updated = await svc.update(session, routine_id, cron_schedule="0 0 * * *")
+
+    assert updated.cron_schedule == "0 0 * * *"
+    session.flush.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# 4. test_routine_soft_delete
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_routine_soft_delete() -> None:
+    routine_id = uuid.uuid4()
+    row = _routine(routine_id=routine_id)
+    session = _session(scalar=row)
+
+    svc = RoutineService()
+    result = await svc.delete(session, routine_id)
+
+    assert result.status == RoutineStatus.ARCHIVED
+    session.flush.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# 5. test_env_overlay_order
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_env_overlay_order() -> None:
+    """routine_env must override project_env which overrides agent_env."""
+    routine = _routine(env={"KEY": "routine_val", "ONLY_ROUTINE": "r"})
+    session = _session()
+
+    svc = RoutineService()
+    with patch.dict(
+        "os.environ",
+        {"SYSTEM_OVERRIDE": "sys"},
+        clear=False,
+    ):
+        merged = await svc.resolve_env(
+            session,
+            routine,
+            agent_env={"KEY": "agent_val", "ONLY_AGENT": "a"},
+            project_env={"KEY": "project_val", "ONLY_PROJECT": "p"},
+        )
+
+    assert merged["KEY"] == "routine_val"
+    assert merged["ONLY_AGENT"] == "a"
+    assert merged["ONLY_PROJECT"] == "p"
+    assert merged["ONLY_ROUTINE"] == "r"
+    assert merged["SYSTEM_OVERRIDE"] == "sys"
+
+
+# ---------------------------------------------------------------------------
+# 6. test_secret_ref_resolution
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_secret_ref_resolution() -> None:
+    """Values matching 'secret:<NAME>' must be resolved via SecretService."""
+    routine = _routine(env={"DB_PASS": "secret:db_password"})
+    session = _session()
+
+    mock_secret_service = AsyncMock()
+    mock_secret_service.get.return_value = "supersecret"
+
+    svc = RoutineService()
+    merged = await svc.resolve_env(
+        session, routine, secret_service=mock_secret_service
+    )
+
+    mock_secret_service.get.assert_awaited_once_with(
+        session, str(_COMPANY_ID), "db_password"
+    )
+    assert merged["DB_PASS"] == "supersecret"
+
+
+# ---------------------------------------------------------------------------
+# 7. test_routine_run_record
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_routine_run_record() -> None:
+    routine_id = uuid.uuid4()
+    session = _session()
+
+    svc = RoutineService()
+    run = await svc.record_run(session, routine_id, status="queued")
+
+    session.add.assert_called_once()
+    session.flush.assert_awaited_once()
+    assert run.routine_id == routine_id
+    assert run.status == "queued"
+
+
+# ---------------------------------------------------------------------------
+# 8. test_routine_runs_list
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_routine_runs_list() -> None:
+    routine_id = uuid.uuid4()
+    runs = [_run(routine_id=routine_id) for _ in range(3)]
+    session = _session()
+    session.execute.return_value.scalars.return_value.all.return_value = runs
+
+    svc = RoutineService()
+    result = await svc.list_runs(session, routine_id, limit=10, offset=0)
+
+    assert len(result) == 3
+    assert all(r.routine_id == routine_id for r in result)
+
+
+# ---------------------------------------------------------------------------
+# 9. test_api_create_routine
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_api_create_routine() -> None:
+    import importlib
+    import sys
+    from fastapi import FastAPI
+
+    # Import directly from the module file to avoid llc/api/__init__.py
+    # which triggers the full app import chain (pre-existing environment constraint).
+    spec = importlib.util.spec_from_file_location(
+        "llc.api.routines",
+        str(__file__).replace("/tests/test_routine.py", "/api/routines.py"),
+    )
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault("llc.api.routines", mod)
+    spec.loader.exec_module(mod)
+    router = mod.router
+
+    routine_row = _routine()
+    mock_svc_create = MagicMock(create=AsyncMock(return_value=routine_row))
+    mock_session = _session()
+    mock_session.commit = AsyncMock()
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api/llc")
+
+    async def _override_session():
+        yield mock_session
+
+    app.dependency_overrides[mod.get_session] = _override_session
+
+    with patch.object(mod, "_service", lambda: mock_svc_create):
+        client = TestClient(app, raise_server_exceptions=True)
+        resp = client.post(
+            f"/api/llc/companies/{_COMPANY_ID}/routines",
+            json={
+                "agent_id": str(_AGENT_ID),
+                "name": "nightly-sync",
+                "cron_schedule": _CRON,
+                "env": {},
+            },
+        )
+
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["name"] == "nightly-sync"
+
+
+# ---------------------------------------------------------------------------
+# 10. test_api_trigger
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_api_trigger() -> None:
+    import importlib
+    import sys
+    from fastapi import FastAPI
+
+    spec = importlib.util.spec_from_file_location(
+        "llc.api.routines",
+        str(__file__).replace("/tests/test_routine.py", "/api/routines.py"),
+    )
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault("llc.api.routines", mod)
+    spec.loader.exec_module(mod)
+    router = mod.router
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api/llc")
+
+    routine_row = _routine()
+    run_row = _run(routine_id=routine_row.id)
+    mock_svc = MagicMock()
+    mock_svc.get = AsyncMock(return_value=routine_row)
+    mock_svc.record_run = AsyncMock(return_value=run_row)
+    mock_session = _session()
+    mock_session.commit = AsyncMock()
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api/llc")
+
+    async def _override_session():
+        yield mock_session
+
+    app.dependency_overrides[mod.get_session] = _override_session
+
+    with patch.object(mod, "_service", lambda: mock_svc):
+        client = TestClient(app, raise_server_exceptions=True)
+        resp = client.post(f"/api/llc/routines/{routine_row.id}/trigger")
+
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["status"] == "queued"
+
+
+# ---------------------------------------------------------------------------
+# Async session context helper for TestClient (sync → async bridge)
+# ---------------------------------------------------------------------------
+
+
+class _async_session_ctx:
+    """Minimal async context manager that yields a mock session for DI override."""
+
+    def __init__(self, _unused: Any = None) -> None:
+        self._session = _session()
+        self._session.commit = AsyncMock()
+
+    def __call__(self) -> "_async_session_ctx":
+        return self
+
+    async def __aenter__(self) -> AsyncMock:
+        return self._session
+
+    async def __aexit__(self, *args: Any) -> None:
+        pass
