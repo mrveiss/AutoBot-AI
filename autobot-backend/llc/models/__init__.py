@@ -26,6 +26,7 @@ from .enums import (
     WorkItemType,
 )
 from .goal import GoalLevel, GoalStatus, LLCGoal
+from .heartbeat_run import LLCHeartbeatRun
 from .membership import LLCCompanyMembership
 from .secret import LLCSecret
 from .sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint
@@ -54,6 +55,7 @@ __all__ = [
     "LLCCompanyMembership",
     "LLCCompanyStatus",
     "LLCGoal",
+    "LLCHeartbeatRun",
     "LLCPortfolio",
     "LLCProgram",
     "LLCProject",

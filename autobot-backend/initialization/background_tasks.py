@@ -240,6 +240,24 @@ async def _init_retrieval_learner_consolidation(update_status_fn, append_error_f
         # Non-fatal: learner absence degrades adaptivity, not core retrieval.
 
 
+async def _init_llc_monitors(app: FastAPI, update_status_fn) -> None:
+    """Start LLC LivenessMonitor and BudgetWatchdog background loops (GH#8228)."""
+    try:
+        from llc.scheduler import BudgetWatchdog, LivenessMonitor
+
+        liveness = LivenessMonitor()
+        watchdog = BudgetWatchdog()
+        liveness.start()
+        watchdog.start()
+        app.state.llc_liveness_monitor = liveness
+        app.state.llc_budget_watchdog = watchdog
+        await update_status_fn("llc_monitors", "ready")
+        log_initialization_step("LLC Monitors", "LivenessMonitor + BudgetWatchdog started", 90, True)
+    except Exception as exc:
+        logger.warning("LLC monitors initialization failed (non-fatal): %s", exc)
+        await update_status_fn("llc_monitors", "degraded")
+
+
 async def enhanced_background_init(app: FastAPI, update_status_fn, append_error_fn, get_status_fn):
     """
     Enhanced background initialization with AI Stack integration.
@@ -264,6 +282,7 @@ async def enhanced_background_init(app: FastAPI, update_status_fn, append_error_
             initialize_ai_stack(app, update_status_fn, append_error_fn),
             _init_distributed_tracing(app, update_status_fn),
             _init_retrieval_learner_consolidation(update_status_fn, append_error_fn),
+            _init_llc_monitors(app, update_status_fn),
         ]
 
         await asyncio.gather(*tasks, return_exceptions=True)

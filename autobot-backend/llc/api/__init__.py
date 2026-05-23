@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from .activity import router as activity_router
 from .agent_api import router as agent_router
+from .runs import router as runs_router
 from .boards import router as boards_router
 from .api_keys import router as api_keys_router
 from .approvals import router as approvals_router
@@ -28,6 +29,7 @@ router.include_router(sprints_router)
 router.include_router(work_items_router)
 router.include_router(api_keys_router)
 router.include_router(agent_router)
+router.include_router(runs_router)
 
 
 @router.get("/health")
