@@ -2,6 +2,7 @@
 
 from .activity import ActorType, LLCActivityLog, LLCBase
 from .approval import LLCApproval
+from .board import LLCBoard, LLCBoardColumn
 from .budget import LLCAgentBudget
 from .company import (
     CompanyAncestor,
@@ -14,6 +15,7 @@ from .enums import (
     ApprovalStatus,
     ApprovalType,
     AssignmentType,
+    BoardType,
     LLCAgentStatus,
     LLCCompanyStatus,
     LLCRunStatus,
@@ -34,6 +36,7 @@ __all__ = [
     "ApprovalStatus",
     "ApprovalType",
     "AssignmentType",
+    "BoardType",
     "CompanyAncestor",
     "CompanyCreate",
     "CompanyRead",
@@ -46,6 +49,8 @@ __all__ = [
     "LLCAgentStatus",
     "LLCApproval",
     "LLCBase",
+    "LLCBoard",
+    "LLCBoardColumn",
     "LLCCompanyMembership",
     "LLCCompanyStatus",
     "LLCGoal",

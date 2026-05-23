@@ -131,6 +131,13 @@ class AssignmentType(str, Enum):
     INHERITED = "inherited"
 
 
+class BoardType(str, Enum):
+    """Type of LLC board (GH#8221)."""
+
+    KANBAN = "kanban"
+    SPRINT = "sprint"
+
+
 class MembershipRole(str, Enum):
     """Role of a human user within an LLC company (GH#8223)."""
 
