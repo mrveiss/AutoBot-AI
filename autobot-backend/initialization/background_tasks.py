@@ -258,6 +258,22 @@ async def _init_llc_monitors(app: FastAPI, update_status_fn) -> None:
         await update_status_fn("llc_monitors", "degraded")
 
 
+async def _init_llc_routine_scheduler(app: FastAPI, update_status_fn, append_error_fn):
+    """Start the LLC HeartbeatScheduler that fires cron-based routines (GH#8229)."""
+    try:
+        from llc.scheduler import RoutineScheduler
+
+        scheduler = RoutineScheduler()
+        await scheduler.startup()
+        app.state.llc_routine_scheduler = scheduler
+        await update_status_fn("llc_routine_scheduler", "ready")
+        log_initialization_step("LLC Routine Scheduler", "HeartbeatScheduler started", 90, True)
+    except Exception as exc:
+        logger.warning("LLC routine scheduler startup failed (non-fatal): %s", exc)
+        await update_status_fn("llc_routine_scheduler", "degraded")
+        await append_error_fn(f"LLC routine scheduler: {str(exc)}")
+
+
 async def enhanced_background_init(app: FastAPI, update_status_fn, append_error_fn, get_status_fn):
     """
     Enhanced background initialization with AI Stack integration.
@@ -283,6 +299,7 @@ async def enhanced_background_init(app: FastAPI, update_status_fn, append_error_
             _init_distributed_tracing(app, update_status_fn),
             _init_retrieval_learner_consolidation(update_status_fn, append_error_fn),
             _init_llc_monitors(app, update_status_fn),
+            _init_llc_routine_scheduler(app, update_status_fn, append_error_fn),
         ]
 
         await asyncio.gather(*tasks, return_exceptions=True)

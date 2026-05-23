@@ -145,3 +145,18 @@ class MembershipRole(str, Enum):
     ADMIN = "admin"
     MEMBER = "member"
     GUEST = "guest"
+
+
+class RoutineStatus(str, Enum):
+    """Lifecycle status of an LLC routine (GH#8229)."""
+
+    ACTIVE = "active"
+    PAUSED = "paused"
+    ARCHIVED = "archived"
+
+
+class RoutineProduces(str, Enum):
+    """What a routine creates on each fire (GH#8229)."""
+
+    NEW_WORK_ITEM = "new_work_item"
+    UPDATES_RECURRING = "updates_recurring"

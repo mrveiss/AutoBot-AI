@@ -684,6 +684,21 @@ async def _init_log_forwarding():
         logger.warning("Log forwarding initialization failed: %s", log_fwd_error)
 
 
+async def _init_llc_routine_scheduler(app: FastAPI) -> None:
+    """Start the LLC RoutineScheduler that fires cron-based routines (GH#8229)."""
+    logger.info("LLC Routine Scheduler: Starting...")
+    try:
+        from llc.scheduler import RoutineScheduler
+
+        scheduler = RoutineScheduler()
+        await scheduler.startup()
+        app.state.llc_routine_scheduler = scheduler
+        logger.info("LLC Routine Scheduler: Started")
+    except Exception as exc:
+        logger.warning("LLC routine scheduler startup failed (non-fatal): %s", exc)
+        app.state.llc_routine_scheduler = None
+
+
 async def _init_heartbeat_scheduler(app: FastAPI) -> None:
     """
     Start heartbeat scheduler for scheduled agent wakeups (NON-CRITICAL).
@@ -1441,6 +1456,7 @@ async def initialize_background_services(app: FastAPI):
         await _auto_index_documentation()
         await _init_log_forwarding()
         await _init_heartbeat_scheduler(app)
+        await _init_llc_routine_scheduler(app)
         await _start_connector_scheduler()
         await _init_trigger_service(app)
         await _init_slm_reconciler(app)
@@ -1550,6 +1566,11 @@ async def cleanup_services(app: FastAPI):
         # REMOVED as part of Issue #729 - SLM moved to slm-server
         # SLM server manages its own reconciler lifecycle
         pass  # SLM reconciler now in slm-server
+
+        # GH#8229: Stop LLC routine scheduler
+        if hasattr(app.state, "llc_routine_scheduler") and app.state.llc_routine_scheduler:
+            await app.state.llc_routine_scheduler.shutdown()
+            logger.info("✅ LLC routine scheduler stopped")
 
         # Issue #3294: Stop backup scheduler
         if hasattr(app.state, "backup_scheduler") and app.state.backup_scheduler:
