@@ -1,5 +1,6 @@
 """LLC models package."""
 
+from .budget import LLCAgentBudget
 from .company import (
     CompanyAncestor,
     CompanyCreate,
@@ -31,6 +32,7 @@ __all__ = [
     "CompanyUpdate",
     "GoalLevel",
     "GoalStatus",
+    "LLCAgentBudget",
     "LLCAgentStatus",
     "LLCCompanyStatus",
     "LLCGoal",
