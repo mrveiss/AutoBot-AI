@@ -1,7 +1,7 @@
 """Create llc_work_items and llc_work_item_comments tables.
 
-Revision ID: 20260523_022
-Revises: 20260522_021
+Revision ID: 20260523_024
+Revises: 20260523_023
 Create Date: 2026-05-23 00:00:00.000000
 
 GH#8213: Core work item hierarchy — Epic/Feature/PBI/Task/Bug/Subtask/Spike/Risk.
@@ -22,8 +22,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
-revision: str = "20260523_022"
-down_revision: Union[str, None] = "20260522_021"
+revision: str = "20260523_024"
+down_revision: Union[str, None] = "20260523_023"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

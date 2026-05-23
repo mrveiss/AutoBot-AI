@@ -1,7 +1,7 @@
 """Create llc_goals table for 4-level goal hierarchy (GH#8212).
 
-Revision ID: 20260523_024
-Revises: 20260523_023
+Revision ID: 20260523_022
+Revises: 20260522_021
 Create Date: 2026-05-23 00:00:00.000000
 """
 
@@ -11,8 +11,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "20260523_024"
-down_revision: Union[str, None] = "20260523_023"
+revision: str = "20260523_022"
+down_revision: Union[str, None] = "20260522_021"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
