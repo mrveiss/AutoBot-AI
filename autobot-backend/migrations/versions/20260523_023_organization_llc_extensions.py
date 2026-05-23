@@ -1,7 +1,7 @@
 """Add LLC extension columns to organizations table.
 
-Revision ID: 20260523_022
-Revises: 20260522_021
+Revision ID: 20260523_023
+Revises: 20260523_022
 Create Date: 2026-05-23 00:00:00.000000
 
 GH#8211: Extends the organizations table with sub-company hierarchy, budget
@@ -14,8 +14,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "20260523_022"
-down_revision: Union[str, None] = "20260522_021"
+revision: str = "20260523_023"
+down_revision: Union[str, None] = "20260523_022"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
