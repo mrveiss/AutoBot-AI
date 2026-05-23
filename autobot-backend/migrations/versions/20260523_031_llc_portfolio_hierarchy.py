@@ -3,8 +3,8 @@
 # Author: mrveiss
 """LLC Portfolio → Program → Project → Sprint hierarchy tables (GH#8219).
 
-Revision ID: 20260523_026
-Revises: 20260523_025
+Revision ID: 20260523_031
+Revises: 20260523_030
 Create Date: 2026-05-23
 """
 
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import UUID
 
-revision = "20260523_026"
-down_revision = "20260523_025"
+revision = "20260523_031"
+down_revision = "20260523_030"
 branch_labels = None
 depends_on = None
 
