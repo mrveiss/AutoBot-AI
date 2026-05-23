@@ -1,0 +1,124 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""LLC per-agent budget API routes (GH#8215)."""
+
+from decimal import Decimal
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import select, text, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from user_management.database import get_async_session
+
+from llc.exceptions import BudgetExhausted
+from llc.models.budget import LLCAgentBudget
+from llc.services.budget import BudgetService
+
+router = APIRouter(prefix="/budget", tags=["llc-budget"])
+
+
+class BudgetResponse(BaseModel):
+    agent_id: str
+    budget_limit: Decimal
+    budget_spent: Decimal
+    alert_threshold: float
+    remaining: Decimal
+    is_over_limit: bool
+    alert_triggered: bool
+
+    model_config = {"from_attributes": True}
+
+
+class IngestRequest(BaseModel):
+    tokens_in: int
+    tokens_out: int
+    model: str
+
+
+class IngestResponse(BaseModel):
+    cost: Decimal
+
+
+class UpdateLimitRequest(BaseModel):
+    budget_limit: Decimal
+    alert_threshold: Optional[float] = None
+
+
+def _build_response(
+    row: LLCAgentBudget, remaining: Decimal, is_over: bool, alert: bool
+) -> BudgetResponse:
+    return BudgetResponse(
+        agent_id=row.agent_id,
+        budget_limit=Decimal(str(row.budget_limit)),
+        budget_spent=Decimal(str(row.budget_spent)),
+        alert_threshold=row.alert_threshold,
+        remaining=remaining,
+        is_over_limit=is_over,
+        alert_triggered=alert,
+    )
+
+
+@router.get("/{agent_id}", response_model=BudgetResponse)
+async def get_budget(
+    agent_id: str,
+    session: AsyncSession = Depends(get_async_session),
+) -> BudgetResponse:
+    svc = BudgetService()
+    remaining, is_over, alert = await svc.check_budget(session, agent_id)
+
+    result = await session.execute(
+        select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id)
+    )
+    row = result.scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"No budget row for agent {agent_id}")
+
+    return _build_response(row, remaining, is_over, alert)
+
+
+@router.post("/{agent_id}/ingest", response_model=IngestResponse)
+async def ingest_cost(
+    agent_id: str,
+    body: IngestRequest,
+    session: AsyncSession = Depends(get_async_session),
+) -> IngestResponse:
+    svc = BudgetService()
+    try:
+        cost = await svc.ingest_cost_event(
+            session, agent_id, body.tokens_in, body.tokens_out, body.model
+        )
+    except BudgetExhausted as exc:
+        raise HTTPException(status_code=402, detail=str(exc)) from exc
+    return IngestResponse(cost=cost)
+
+
+@router.patch("/{agent_id}/limit", response_model=BudgetResponse)
+async def update_limit(
+    agent_id: str,
+    body: UpdateLimitRequest,
+    session: AsyncSession = Depends(get_async_session),
+) -> BudgetResponse:
+    result = await session.execute(
+        select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id)
+    )
+    row = result.scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"No budget row for agent {agent_id}")
+
+    values: dict = {"budget_limit": str(body.budget_limit)}
+    if body.alert_threshold is not None:
+        values["alert_threshold"] = body.alert_threshold
+
+    await session.execute(
+        update(LLCAgentBudget)
+        .where(LLCAgentBudget.agent_id == agent_id)
+        .values(**values)
+    )
+    await session.refresh(row)
+
+    svc = BudgetService()
+    remaining, is_over, alert = await svc.check_budget(session, agent_id)
+    return _build_response(row, remaining, is_over, alert)
