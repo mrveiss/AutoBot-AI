@@ -17,7 +17,6 @@ class WorkItemType(str, Enum):
     """Type of LLC work item (GH#8213).
 
     Hierarchy: epic → feature → pbi → task/bug/subtask/spike/risk.
-    ``story`` kept as alias for pbi for backward compat with early scaffolding.
     """
 
     EPIC = "epic"

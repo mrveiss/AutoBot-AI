@@ -20,13 +20,18 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
 
 from ..models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
 from ..services.work_item_service import CheckoutConflict, InvalidTransition, WorkItemService
 
 router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
-_service = WorkItemService()
+_get_service = lazy_singleton(WorkItemService)
+
+
+def _service() -> WorkItemService:
+    return _get_service()
 
 
 async def get_session() -> AsyncSession:
@@ -136,7 +141,7 @@ async def create_work_item(
     body: WorkItemCreate,
     session: AsyncSession = Depends(get_session),
 ) -> Dict[str, Any]:
-    item = await _service.create(
+    item = await _service().create(
         session,
         company_id=body.company_id,
         type=body.type,
@@ -168,11 +173,12 @@ async def list_work_items(
     assignee: Optional[str] = Query(None),
     sprint_id: Optional[str] = Query(None),
     parent_id: Optional[str] = Query(None),
+    top_level_only: bool = Query(False),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
 ) -> List[Dict[str, Any]]:
-    items = await _service.list_by_project(
+    items = await _service().list_by_project(
         session,
         company_id=company_id,
         project_id=project_id,
@@ -181,6 +187,7 @@ async def list_work_items(
         assignee_agent_id=assignee,
         sprint_id=sprint_id,
         parent_id=parent_id,
+        top_level_only=top_level_only,
         limit=limit,
         offset=offset,
     )
@@ -192,7 +199,7 @@ async def get_work_item(
     work_item_id: str,
     session: AsyncSession = Depends(get_session),
 ) -> Dict[str, Any]:
-    item = await _service.get(session, work_item_id)
+    item = await _service().get(session, work_item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Work item not found")
     return _item_to_dict(item)
@@ -205,7 +212,7 @@ async def update_work_item(
     session: AsyncSession = Depends(get_session),
 ) -> Dict[str, Any]:
     fields = {k: v for k, v in body.model_dump(exclude_none=True).items()}
-    item = await _service.update(session, work_item_id, **fields)
+    item = await _service().update(session, work_item_id, **fields)
     if item is None:
         raise HTTPException(status_code=404, detail="Work item not found")
     await session.commit()
@@ -217,7 +224,7 @@ async def delete_work_item(
     work_item_id: str,
     session: AsyncSession = Depends(get_session),
 ) -> None:
-    item = await _service.get(session, work_item_id)
+    item = await _service().get(session, work_item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Work item not found")
     await session.delete(item)
@@ -231,7 +238,7 @@ async def checkout_work_item(
     session: AsyncSession = Depends(get_session),
 ) -> Dict[str, Any]:
     try:
-        item = await _service.checkout(
+        item = await _service().checkout(
             session,
             work_item_id=work_item_id,
             agent_id=body.agent_id,
@@ -252,7 +259,7 @@ async def release_work_item(
     session: AsyncSession = Depends(get_session),
 ) -> Dict[str, Any]:
     try:
-        item = await _service.release(session, work_item_id=work_item_id, agent_id=body.agent_id)
+        item = await _service().release(session, work_item_id=work_item_id, agent_id=body.agent_id)
         await session.commit()
         redis = await get_async_redis_client()
         if redis is not None:
@@ -269,7 +276,7 @@ async def transition_work_item(
     session: AsyncSession = Depends(get_session),
 ) -> Dict[str, Any]:
     try:
-        item = await _service.transition_status(session, work_item_id, body.status)
+        item = await _service().transition_status(session, work_item_id, body.status)
         await session.commit()
         return _item_to_dict(item)
     except InvalidTransition as exc:
@@ -284,7 +291,7 @@ async def add_comment(
     body: CommentCreate,
     session: AsyncSession = Depends(get_session),
 ) -> Dict[str, Any]:
-    comment = await _service.add_comment(
+    comment = await _service().add_comment(
         session,
         work_item_id=work_item_id,
         company_id=body.company_id,
