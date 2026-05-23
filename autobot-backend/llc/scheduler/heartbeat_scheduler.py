@@ -359,14 +359,15 @@ class HeartbeatScheduler:
                     error=error_msg,
                 )
             )
-            # Touch last_heartbeat_at on the org node
-            await session.execute(
-                text(
-                    "UPDATE agent_org_nodes SET last_heartbeat_at = now() "
-                    "WHERE agent_id = :aid"
-                ),
-                {"aid": agent["agent_id"]},
-            )
+            # Only bump last_heartbeat_at on success — failures must not mask stale agents
+            if final_status == HeartbeatRunStatus.SUCCEEDED.value:
+                await session.execute(
+                    text(
+                        "UPDATE agent_org_nodes SET last_heartbeat_at = now() "
+                        "WHERE agent_id = :aid"
+                    ),
+                    {"aid": agent["agent_id"]},
+                )
             await session.commit()
 
 
