@@ -1262,10 +1262,10 @@ async def start_dashboard_analysis(
 )
 async def get_dashboard_status(task_id: str):
     """Get dashboard overview task status (#1304, GH#8433)."""
-    task = celery_result_to_status(AsyncResult(task_id))
-    if task is None:
+    status = celery_result_to_status(AsyncResult(task_id))
+    if status is None or status["status"] == "pending":
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-    return task
+    return status
 
 
 @router.post("/dashboard/overview/tasks/clear-stuck", response_model=AnalyticsClearStuckTasksResponse)
@@ -1275,13 +1275,7 @@ async def get_dashboard_status(task_id: str):
     error_code_prefix="ANALYTICS",
 )
 async def clear_stuck_dashboard_tasks(
-    force: bool = Query(
-        default=False,
-        description="Force clear ALL running tasks",
-    ),
+    force: bool = Query(default=False, description="Force clear ALL running tasks"),
 ):
     """Clear stuck dashboard overview tasks — no-op, Celery handles recovery (GH#8433)."""
-    return {
-        "cleared_count": 0,
-        "message": "Celery handles task recovery automatically",
-    }
+    return {"cleared_count": 0, "message": "Celery handles task recovery automatically"}

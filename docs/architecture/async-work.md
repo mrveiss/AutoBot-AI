@@ -2,7 +2,7 @@
 
 > Tracks the consolidation effort under umbrella issue [#6495](https://github.com/mrveiss/AutoBot-AI/issues/6495). This document is updated as each phase lands.
 >
-> - **Phase 1 — Task queues** ([#6505](https://github.com/mrveiss/AutoBot-AI/issues/6505)): _facade landed_ — `async_work/` facade created (#6495); background_task_manager migration to Celery pending; task_queue.py retained as [#6468](https://github.com/mrveiss/AutoBot-AI/issues/6468) carve-out
+> - **Phase 1 — Task queues** ([#6505](https://github.com/mrveiss/AutoBot-AI/issues/6505)): ✅ **COMPLETE** — all 7 `BackgroundTaskManager` callers migrated to Celery; `background_task_manager.py` deleted; `task_queue.py` retained as [#6468](https://github.com/mrveiss/AutoBot-AI/issues/6468) carve-out
 > - **Phase 2 — Progress trackers** ([#6506](https://github.com/mrveiss/AutoBot-AI/issues/6506)): **landed**
 > - **Phase 3 — Periodic schedulers** ([#6507](https://github.com/mrveiss/AutoBot-AI/issues/6507)): **landed**
 >   - Beat deployment ([#6555](https://github.com/mrveiss/AutoBot-AI/issues/6555)): landed
@@ -116,15 +116,42 @@ Need async work?
 └── Event-driven wakeup         → services/heartbeat_scheduler.py
 ```
 
-## Task queues (Phase 1 — facade landed, full migration pending)
+## Task queues (Phase 1 — COMPLETE as of GH#6505)
 
-See [#6505](https://github.com/mrveiss/AutoBot-AI/issues/6505). Three
-task-queue implementations coexist; new code uses the facade:
+See [#6505](https://github.com/mrveiss/AutoBot-AI/issues/6505). The
+three-implementation era is over. **Celery is the sole task queue.**
 
-- `celery_app.py` — canonical going forward
-- `utils/task_queue.py` — Redis Streams + Sorted Sets; retained as a #6468
-  carve-out for atomic-claim semantics
-- `utils/background_task_manager.py` — to be deleted in Phase 1
+### Canonical pattern
+
+```python
+from tasks.analytics_tasks import run_import_tree_analysis
+from utils.celery_task_status import celery_result_to_status, store_latest_task_id
+from celery.result import AsyncResult
+
+# Enqueue
+result = run_import_tree_analysis.delay()
+await store_latest_task_id("import_task:", result.id)
+
+# Poll status (returns BackgroundTaskManager-compatible dict)
+status = celery_result_to_status(AsyncResult(result.id))
+```
+
+Progress is reported via `self.update_state(state="PROGRESS", meta={...})` in
+`tasks/analytics_tasks.py`. The `celery_result_to_status()` helper in
+`utils/celery_task_status.py` converts Celery state → the legacy response shape
+the frontend already understands (`status`, `progress`, `current_step`, etc.).
+
+### Carve-out: `utils/task_queue.py`
+
+`utils/task_queue.py` (Redis Streams + SETNX) is **explicitly retained** as a
+`#6468` carve-out. The NPU worker manager (`initialization/lifespan.py`)
+requires atomic-claim semantics that Celery does not expose. Do **not** migrate
+or delete this file until GH#6468 is resolved.
+
+### Deleted
+
+- `utils/background_task_manager.py` — deleted in GH#6505. All 7 callers
+  migrated to `tasks/analytics_tasks.py` Celery tasks.
 
 ## Periodic schedulers
 
