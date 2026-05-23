@@ -101,17 +101,13 @@ class TestStatusTransitions:
     async def test_valid_backlog_to_ready(self, service, mock_session):
         item = _make_item(status=WorkItemStatus.BACKLOG)
         mock_session._db_result.scalar_one_or_none.return_value = item
-        result = await service.transition_status(
-            mock_session, str(item.id), WorkItemStatus.READY
-        )
+        result = await service.transition_status(mock_session, str(item.id), WorkItemStatus.READY)
         assert result.status == WorkItemStatus.READY
 
     async def test_valid_in_progress_to_done(self, service, mock_session):
         item = _make_item(status=WorkItemStatus.IN_PROGRESS)
         mock_session._db_result.scalar_one_or_none.return_value = item
-        result = await service.transition_status(
-            mock_session, str(item.id), WorkItemStatus.DONE
-        )
+        result = await service.transition_status(mock_session, str(item.id), WorkItemStatus.DONE)
         assert result.status == WorkItemStatus.DONE
         assert result.completed_at is not None
 
@@ -119,31 +115,23 @@ class TestStatusTransitions:
         item = _make_item(status=WorkItemStatus.DONE)
         mock_session._db_result.scalar_one_or_none.return_value = item
         with pytest.raises(InvalidTransition):
-            await service.transition_status(
-                mock_session, str(item.id), WorkItemStatus.BACKLOG
-            )
+            await service.transition_status(mock_session, str(item.id), WorkItemStatus.BACKLOG)
 
     async def test_invalid_cancelled_to_in_progress_raises(self, service, mock_session):
         item = _make_item(status=WorkItemStatus.CANCELLED)
         mock_session._db_result.scalar_one_or_none.return_value = item
         with pytest.raises(InvalidTransition):
-            await service.transition_status(
-                mock_session, str(item.id), WorkItemStatus.IN_PROGRESS
-            )
+            await service.transition_status(mock_session, str(item.id), WorkItemStatus.IN_PROGRESS)
 
     async def test_not_found_raises_value_error(self, service, mock_session):
         mock_session.execute.return_value.scalar_one_or_none.return_value = None
         with pytest.raises(ValueError, match="not found"):
-            await service.transition_status(
-                mock_session, str(uuid.uuid4()), WorkItemStatus.READY
-            )
+            await service.transition_status(mock_session, str(uuid.uuid4()), WorkItemStatus.READY)
 
     async def test_transition_to_cancelled_sets_cancelled_at(self, service, mock_session):
         item = _make_item(status=WorkItemStatus.IN_PROGRESS)
         mock_session._db_result.scalar_one_or_none.return_value = item
-        result = await service.transition_status(
-            mock_session, str(item.id), WorkItemStatus.CANCELLED
-        )
+        result = await service.transition_status(mock_session, str(item.id), WorkItemStatus.CANCELLED)
         assert result.cancelled_at is not None
 
     async def test_version_bumped_on_every_transition(self, service, mock_session):
@@ -157,7 +145,5 @@ class TestListByProject:
     async def test_returns_all_for_company(self, service, mock_session):
         items = [_make_item(), _make_item()]
         mock_session._db_result.scalars.return_value.all.return_value = items
-        result = await service.list_by_project(
-            mock_session, company_id=str(uuid.uuid4())
-        )
+        result = await service.list_by_project(mock_session, company_id=str(uuid.uuid4()))
         assert len(result) == 2

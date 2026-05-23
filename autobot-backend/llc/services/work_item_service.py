@@ -38,8 +38,18 @@ _CHECKOUT_TTL = 1800  # seconds
 _ALLOWED_TRANSITIONS: Dict[WorkItemStatus, set] = {
     WorkItemStatus.BACKLOG: {WorkItemStatus.READY, WorkItemStatus.BLOCKED, WorkItemStatus.CANCELLED},
     WorkItemStatus.READY: {WorkItemStatus.IN_PROGRESS, WorkItemStatus.BLOCKED, WorkItemStatus.CANCELLED},
-    WorkItemStatus.IN_PROGRESS: {WorkItemStatus.IN_REVIEW, WorkItemStatus.BLOCKED, WorkItemStatus.DONE, WorkItemStatus.CANCELLED},
-    WorkItemStatus.IN_REVIEW: {WorkItemStatus.IN_PROGRESS, WorkItemStatus.DONE, WorkItemStatus.BLOCKED, WorkItemStatus.CANCELLED},
+    WorkItemStatus.IN_PROGRESS: {
+        WorkItemStatus.IN_REVIEW,
+        WorkItemStatus.BLOCKED,
+        WorkItemStatus.DONE,
+        WorkItemStatus.CANCELLED,
+    },
+    WorkItemStatus.IN_REVIEW: {
+        WorkItemStatus.IN_PROGRESS,
+        WorkItemStatus.DONE,
+        WorkItemStatus.BLOCKED,
+        WorkItemStatus.CANCELLED,
+    },
     WorkItemStatus.BLOCKED: {WorkItemStatus.READY, WorkItemStatus.IN_PROGRESS, WorkItemStatus.CANCELLED},
     WorkItemStatus.DONE: set(),
     WorkItemStatus.CANCELLED: set(),
@@ -108,9 +118,7 @@ class WorkItemService(LLCServiceBase):
         return item
 
     async def get(self, session: AsyncSession, work_item_id: str) -> Optional[LLCWorkItem]:
-        result = await session.execute(
-            select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id))
-        )
+        result = await session.execute(select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)))
         return result.scalar_one_or_none()
 
     async def update(
@@ -123,9 +131,18 @@ class WorkItemService(LLCServiceBase):
         if item is None:
             return None
         allowed = {
-            "title", "description", "acceptance_criteria", "priority",
-            "story_points", "labels", "parent_id", "sprint_id", "goal_id",
-            "assignee_agent_id", "assignee_user_id", "assignee_type",
+            "title",
+            "description",
+            "acceptance_criteria",
+            "priority",
+            "story_points",
+            "labels",
+            "parent_id",
+            "sprint_id",
+            "goal_id",
+            "assignee_agent_id",
+            "assignee_user_id",
+            "assignee_type",
         }
         for key, val in fields.items():
             if key not in allowed:
@@ -148,9 +165,7 @@ class WorkItemService(LLCServiceBase):
         limit: int = 100,
         offset: int = 0,
     ) -> Sequence[LLCWorkItem]:
-        q = select(LLCWorkItem).where(
-            LLCWorkItem.company_id == uuid.UUID(company_id)
-        )
+        q = select(LLCWorkItem).where(LLCWorkItem.company_id == uuid.UUID(company_id))
         if project_id:
             q = q.where(LLCWorkItem.project_id == uuid.UUID(project_id))
         if type:
@@ -194,15 +209,11 @@ class WorkItemService(LLCServiceBase):
             if not acquired:
                 existing = await redis.get(redis_key)
                 if existing and existing != agent_id:
-                    raise CheckoutConflict(
-                        f"Work item {work_item_id} already checked out by agent {existing}"
-                    )
+                    raise CheckoutConflict(f"Work item {work_item_id} already checked out by agent {existing}")
 
         # DB-level lock
         result = await session.execute(
-            select(LLCWorkItem)
-            .where(LLCWorkItem.id == uuid.UUID(work_item_id))
-            .with_for_update()
+            select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
         )
         item = result.scalar_one_or_none()
         if item is None:
@@ -210,16 +221,10 @@ class WorkItemService(LLCServiceBase):
                 await redis.delete(redis_key)
             raise ValueError(f"Work item {work_item_id} not found")
 
-        if (
-            item.checkout_run_id is not None
-            and item.checkout_run_id != run_id
-            and str(item.assignee_agent_id) != agent_id
-        ):
+        if item.checkout_run_id is not None and str(item.assignee_agent_id) != agent_id:
             if redis is not None:
                 await redis.delete(redis_key)
-            raise CheckoutConflict(
-                f"Work item {work_item_id} already checked out by agent {item.assignee_agent_id}"
-            )
+            raise CheckoutConflict(f"Work item {work_item_id} already checked out by agent {item.assignee_agent_id}")
 
         item.checkout_run_id = run_id or str(uuid.uuid4())
         item.checkout_locked_at = datetime.now(timezone.utc)
@@ -244,26 +249,17 @@ class WorkItemService(LLCServiceBase):
         Raises ValueError if the caller does not hold the lock.
         """
         result = await session.execute(
-            select(LLCWorkItem)
-            .where(LLCWorkItem.id == uuid.UUID(work_item_id))
-            .with_for_update()
+            select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
         )
         item = result.scalar_one_or_none()
         if item is None:
             raise ValueError(f"Work item {work_item_id} not found")
         if item.assignee_agent_id and str(item.assignee_agent_id) != agent_id:
-            raise ValueError(
-                f"Agent {agent_id} does not hold checkout for work item {work_item_id}"
-            )
+            raise ValueError(f"Agent {agent_id} does not hold checkout for work item {work_item_id}")
         item.checkout_run_id = None
         item.checkout_locked_at = None
         item.version += 1
         await session.flush()
-
-        redis = await get_async_redis_client()
-        if redis is not None:
-            await redis.delete(f"llc:checkout:{work_item_id}")
-
         return item
 
     # ------------------------------------------------------------------
@@ -278,9 +274,7 @@ class WorkItemService(LLCServiceBase):
     ) -> LLCWorkItem:
         """Transition a work item to a new status, enforcing the state machine."""
         result = await session.execute(
-            select(LLCWorkItem)
-            .where(LLCWorkItem.id == uuid.UUID(work_item_id))
-            .with_for_update()
+            select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
         )
         item = result.scalar_one_or_none()
         if item is None:
@@ -346,14 +340,12 @@ class WorkItemService(LLCServiceBase):
         """
         try:
             row = await session.execute(
-                text(
-                    """
+                text("""
                     UPDATE llc_companies
                        SET issue_counter = issue_counter + 1
                      WHERE id = :company_id
                     RETURNING issue_prefix, issue_counter
-                    """
-                ),
+                    """),
                 {"company_id": company_id},
             )
             rec = row.fetchone()

@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.redis_client import get_async_redis_client
 from user_management.database import get_async_session_factory
 
 from ..models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
@@ -253,6 +254,9 @@ async def release_work_item(
     try:
         item = await _service.release(session, work_item_id=work_item_id, agent_id=body.agent_id)
         await session.commit()
+        redis = await get_async_redis_client()
+        if redis is not None:
+            await redis.delete(f"llc:checkout:{work_item_id}")
         return _item_to_dict(item)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

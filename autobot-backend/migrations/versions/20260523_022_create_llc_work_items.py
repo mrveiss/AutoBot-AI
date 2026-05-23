@@ -9,10 +9,11 @@ Single ``llc_work_items`` table with a ``type`` discriminator. Atomic checkout
 via ``checkout_run_id`` + ``checkout_locked_at`` (Redis SET NX EX fence in the
 service layer; DB lock column here for persistence).
 
-ENUM types are created without IF NOT EXISTS so the migration is idempotent via
-``checkfirst=True`` in the service layer. The ``workitemtype``, ``workitemstatus``,
-and ``workitempriority`` enums are created once here and re-used wherever the
-LLC module references them.
+ENUM types are created with ``checkfirst=True``. For ``workitemstatus``, an
+``ALTER TYPE ... ADD VALUE IF NOT EXISTS`` call follows to ensure the ``ready``
+value is present even when the enum pre-existed without it (e.g. from a manual
+scaffold). The ``workitemtype``, ``workitemstatus``, and ``workitempriority``
+enums are created once here and re-used wherever the LLC module references them.
 """
 
 from typing import Sequence, Union
@@ -27,23 +28,42 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 _workitemtype = sa.Enum(
-    "epic", "feature", "pbi", "task", "bug", "subtask", "spike", "risk",
+    "epic",
+    "feature",
+    "pbi",
+    "task",
+    "bug",
+    "subtask",
+    "spike",
+    "risk",
     name="workitemtype",
 )
 _workitemstatus = sa.Enum(
-    "backlog", "ready", "in_progress", "in_review", "done", "cancelled", "blocked",
+    "backlog",
+    "ready",
+    "in_progress",
+    "in_review",
+    "done",
+    "cancelled",
+    "blocked",
     name="workitemstatus",
 )
 _workitempriority = sa.Enum(
-    "critical", "high", "medium", "low",
+    "critical",
+    "high",
+    "medium",
+    "low",
     name="workitempriority",
 )
 
 
 def upgrade() -> None:
-    _workitemtype.create(op.get_bind(), checkfirst=True)
-    _workitemstatus.create(op.get_bind(), checkfirst=True)
-    _workitempriority.create(op.get_bind(), checkfirst=True)
+    bind = op.get_bind()
+    _workitemtype.create(bind, checkfirst=True)
+    _workitemstatus.create(bind, checkfirst=True)
+    # Ensure 'ready' exists even when workitemstatus was pre-created without it.
+    bind.execute(sa.text("ALTER TYPE workitemstatus ADD VALUE IF NOT EXISTS 'ready'"))
+    _workitempriority.create(bind, checkfirst=True)
 
     op.create_table(
         "llc_work_items",
@@ -96,9 +116,7 @@ def upgrade() -> None:
         sa.Column("assignee_agent_id", UUID(as_uuid=True), nullable=True),
         sa.Column("assignee_user_id", UUID(as_uuid=True), nullable=True),
         sa.Column("checkout_run_id", sa.Text, nullable=True),
-        sa.Column(
-            "checkout_locked_at", sa.DateTime(timezone=True), nullable=True
-        ),
+        sa.Column("checkout_locked_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("version", sa.Integer, nullable=False, server_default="1"),
         sa.Column("created_by_agent_id", UUID(as_uuid=True), nullable=True),
         sa.Column("created_by_user_id", UUID(as_uuid=True), nullable=True),

@@ -65,7 +65,7 @@ def mock_session():
 @pytest.fixture
 def mock_redis():
     redis = AsyncMock()
-    redis.set = AsyncMock(return_value=True)   # NX acquire succeeds by default
+    redis.set = AsyncMock(return_value=True)  # NX acquire succeeds by default
     redis.get = AsyncMock(return_value=None)
     redis.delete = AsyncMock()
     return redis
@@ -82,17 +82,13 @@ class TestAtomicCheckout:
             "llc.services.work_item_service.get_async_redis_client",
             new=AsyncMock(return_value=mock_redis),
         ):
-            result = await service.checkout(
-                mock_session, str(item.id), agent_id, run_id=run_id
-            )
+            result = await service.checkout(mock_session, str(item.id), agent_id, run_id=run_id)
 
         assert result.checkout_run_id == run_id
         assert result.checkout_locked_at is not None
         assert str(result.assignee_agent_id) == agent_id
         assert result.version == 2
-        mock_redis.set.assert_called_once_with(
-            f"llc:checkout:{item.id}", agent_id, nx=True, ex=1800
-        )
+        mock_redis.set.assert_called_once_with(f"llc:checkout:{item.id}", agent_id, nx=True, ex=1800)
 
     async def test_checkout_conflict_different_agent(self, service, mock_session, mock_redis):
         """Redis NX returns False (key exists for another agent) → CheckoutConflict."""
@@ -125,9 +121,7 @@ class TestAtomicCheckout:
             "llc.services.work_item_service.get_async_redis_client",
             new=AsyncMock(return_value=mock_redis),
         ):
-            result = await service.checkout(
-                mock_session, str(item.id), agent_id, run_id=run_id
-            )
+            result = await service.checkout(mock_session, str(item.id), agent_id, run_id=run_id)
         # Should not raise; item returned
         assert result is item
 
@@ -152,13 +146,12 @@ class TestAtomicCheckout:
             new=AsyncMock(return_value=mock_redis),
         ):
             with pytest.raises(ValueError, match="not found"):
-                await service.checkout(
-                    mock_session, str(uuid.uuid4()), str(uuid.uuid4())
-                )
+                await service.checkout(mock_session, str(uuid.uuid4()), str(uuid.uuid4()))
 
 
 class TestRelease:
-    async def test_release_clears_checkout_fields(self, service, mock_session, mock_redis):
+    async def test_release_clears_checkout_fields(self, service, mock_session):
+        """Service clears DB checkout fields; Redis deletion happens in the route after commit."""
         agent_id = str(uuid.uuid4())
         item = _make_item(
             checkout_run_id="run-123",
@@ -166,25 +159,17 @@ class TestRelease:
         )
         mock_session._db_result.scalar_one_or_none.return_value = item
 
-        with patch(
-            "llc.services.work_item_service.get_async_redis_client",
-            new=AsyncMock(return_value=mock_redis),
-        ):
-            result = await service.release(mock_session, str(item.id), agent_id)
+        result = await service.release(mock_session, str(item.id), agent_id)
 
         assert result.checkout_run_id is None
         assert result.checkout_locked_at is None
-        mock_redis.delete.assert_called_once_with(f"llc:checkout:{item.id}")
+        mock_session.flush.assert_called_once()
 
-    async def test_release_wrong_agent_raises(self, service, mock_session, mock_redis):
+    async def test_release_wrong_agent_raises(self, service, mock_session):
         real_agent = str(uuid.uuid4())
         wrong_agent = str(uuid.uuid4())
         item = _make_item(assignee_agent_id=uuid.UUID(real_agent))
         mock_session._db_result.scalar_one_or_none.return_value = item
 
-        with patch(
-            "llc.services.work_item_service.get_async_redis_client",
-            new=AsyncMock(return_value=mock_redis),
-        ):
-            with pytest.raises(ValueError, match="does not hold checkout"):
-                await service.release(mock_session, str(item.id), wrong_agent)
+        with pytest.raises(ValueError, match="does not hold checkout"):
+            await service.release(mock_session, str(item.id), wrong_agent)
