@@ -28,3 +28,25 @@ class WipLimitExceeded(Exception):
         super().__init__(
             f"Column '{column_name}' is at WIP limit ({wip_limit}); " f"currently has {current_count} item(s)."
         )
+
+
+class ProviderRateLimited(Exception):
+    """Raised by an adapter when the LLM provider rejects a request due to rate or quota limits.
+
+    The heartbeat scheduler catches this and schedules an exponential-backoff retry
+    rather than marking the run as a permanent failure.  The work item checkout is
+    preserved so the agent resumes exactly where it left off when limits reset.
+
+    Args:
+        provider: Short name of the provider (e.g. ``"anthropic"``, ``"openai"``).
+        retry_after_seconds: Hint from the provider (e.g. Retry-After header).
+            Zero means unknown — the scheduler will use its own backoff table.
+    """
+
+    def __init__(self, provider: str = "", retry_after_seconds: int = 0) -> None:
+        self.provider = provider
+        self.retry_after_seconds = retry_after_seconds
+        msg = f"Provider {provider!r} rate-limited"
+        if retry_after_seconds:
+            msg += f"; retry after {retry_after_seconds}s"
+        super().__init__(msg)
