@@ -641,8 +641,6 @@ async def get_handoff_brief(
         return {"work_item_id": work_item_id, "brief": brief}
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
-
-
 @router.get("/{work_item_id}/products")
 async def list_work_products(
     work_item_id: str,
@@ -708,7 +706,3 @@ async def remove_relation(
             relation_id=relation_id,
             actor_agent_id=actor_agent_id,
             actor_user_id=actor_user_id,
-        )
-        await session.commit()
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
