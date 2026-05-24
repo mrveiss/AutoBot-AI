@@ -14,9 +14,14 @@ from typing import List, Optional
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
-from knowledge import get_knowledge_base
 
 logger = get_logger(__name__)
+
+
+async def _get_kb():
+    from knowledge import get_knowledge_base  # lazy — avoids chromadb at import time
+
+    return await get_knowledge_base()
 
 
 class KbCollectionManager:
@@ -82,7 +87,7 @@ class KbCollectionManager:
         collection_name = self.collection_name(entity_type, entity_id, suffix)
 
         try:
-            kb = await get_knowledge_base()
+            kb = await _get_kb()
             # get_or_create_collection is idempotent
             collection = await kb._async_chroma_client.get_or_create_collection(
                 name=collection_name,
@@ -96,7 +101,9 @@ class KbCollectionManager:
                 collection_name,
                 str(e),
             )
-            raise RuntimeError(f"Failed to ensure KB collection {collection_name}") from e
+            raise RuntimeError(
+                f"Failed to ensure KB collection {collection_name}"
+            ) from e
 
     async def archive_collection(
         self,
@@ -124,7 +131,7 @@ class KbCollectionManager:
         archived_name = f"{original_name}:archived:{timestamp}"
 
         try:
-            kb = await get_knowledge_base()
+            kb = await _get_kb()
             # Get original collection to verify it exists
             try:
                 original = await kb._async_chroma_client.get_collection(original_name)
@@ -148,12 +155,15 @@ class KbCollectionManager:
             # Copy all documents from original to archived
             documents = await original.get()
             if documents and documents.get("ids"):
-                await archived.add(
-                    ids=documents["ids"],
-                    embeddings=documents.get("embeddings"),
-                    metadatas=documents.get("metadatas"),
-                    documents=documents.get("documents"),
-                )
+                embeddings = documents.get("embeddings")
+                add_kwargs: dict = {
+                    "ids": documents["ids"],
+                    "metadatas": documents.get("metadatas"),
+                    "documents": documents.get("documents"),
+                }
+                if embeddings is not None:
+                    add_kwargs["embeddings"] = embeddings
+                await archived.add(**add_kwargs)
 
             # Delete original collection
             await kb._async_chroma_client.delete_collection(original_name)
@@ -172,7 +182,9 @@ class KbCollectionManager:
                 original_name,
                 str(e),
             )
-            raise RuntimeError(f"Failed to archive KB collection {original_name}") from e
+            raise RuntimeError(
+                f"Failed to archive KB collection {original_name}"
+            ) from e
 
     async def merge_collection(
         self,
@@ -207,14 +219,15 @@ class KbCollectionManager:
 
         if summarize:
             logger.info(
-                "Collection merge with summarization requested (%s -> %s); " "deferring to GH#8238",
+                "Collection merge with summarization requested (%s -> %s); "
+                "deferring to GH#8238",
                 src_name,
                 dst_name,
             )
             return
 
         try:
-            kb = await get_knowledge_base()
+            kb = await _get_kb()
 
             # Get source collection
             try:
@@ -263,4 +276,6 @@ class KbCollectionManager:
                 dst_name,
                 str(e),
             )
-            raise RuntimeError(f"Failed to merge KB collection {src_name} -> {dst_name}") from e
+            raise RuntimeError(
+                f"Failed to merge KB collection {src_name} -> {dst_name}"
+            ) from e

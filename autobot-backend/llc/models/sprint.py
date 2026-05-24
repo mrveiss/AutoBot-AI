@@ -182,6 +182,8 @@ class LLCSprint(Base):
     actual_points: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     # Stores the approval_id once a sprint_close gate is requested.
     pending_close_approval_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    # LLM-generated KB summary stored on sprint close (GH#8238).
+    kb_summary: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=sa.func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

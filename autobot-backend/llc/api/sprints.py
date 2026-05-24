@@ -183,6 +183,7 @@ class SprintResponse(BaseModel):
     committed_points: int
     actual_points: int
     pending_close_approval_id: Optional[uuid.UUID]
+    kb_summary: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -589,3 +590,29 @@ async def get_project_knowledge(
         "artifacts": artifacts,
         "total": len(artifacts),
     }
+class SprintSummaryResponse(BaseModel):
+    sprint_id: uuid.UUID
+    sprint_name: str
+    status: str
+    kb_summary: Optional[str]
+
+
+@router.get("/sprints/{sprint_id}/summary", response_model=SprintSummaryResponse)
+async def get_sprint_summary(
+    sprint_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+) -> SprintSummaryResponse:
+    """Return the LLM-generated KB summary for a closed sprint (GH#8238).
+
+    The summary is populated when the sprint is closed; NULL until then.
+    """
+    result = await session.execute(select(LLCSprint).where(LLCSprint.id == sprint_id))
+    sprint = result.scalar_one_or_none()
+    if sprint is None:
+        raise HTTPException(status_code=404, detail="Sprint not found")
+    return SprintSummaryResponse(
+        sprint_id=sprint.id,
+        sprint_name=sprint.name,
+        status=sprint.status,
+        kb_summary=sprint.kb_summary,
+    )
