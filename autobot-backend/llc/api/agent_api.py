@@ -194,4 +194,76 @@ async def get_item_context(item_id: uuid.UUID, request: Request) -> Dict[str, An
     }
 
 
+class PeerAgent(BaseModel):
+    agent_id: str
+    agent_name: str
+    title: str
+    role: str
+    capabilities: str
+    manager_name: Optional[str] = None
+
+
+@router.get("/peers/search")
+async def search_peer_agents(
+    q: str,
+    limit: int = 10,
+    request: Request = None,
+) -> Dict[str, Any]:
+    """Search peer agents by capabilities (for delegation decisions).
+
+    Agents use this to discover peers who can handle specific work.
+    Returns matching agents from the company agents KB collection.
+
+    Args:
+        q: Search query (\"who handles cloud devops?\", etc.)
+        limit: Max results to return
+        request: Request context injected by middleware
+
+    Returns:
+        List of matching peer agents with capability metadata.
+    """
+    agent_id, company_id = _agent_context(request)
+    try:
+        from autobot_shared.logging_manager import get_logger
+        from ..kb import AgentCapabilityIndexer
+        from knowledge import get_knowledge_base
+
+        logger_inner = get_logger(__name__)
+        indexer = AgentCapabilityIndexer()
+        kb = await get_knowledge_base()
+        collection_name = indexer._collection_name(company_id)
+
+        try:
+            collection = await kb._async_chroma_client.get_collection(collection_name)
+        except Exception:
+            return {"agents": [], "count": 0, "query": q}
+
+        results = await collection.query(
+            query_texts=[q],
+            n_results=min(limit, 50),
+            include=["documents", "metadatas"],
+        )
+
+        agents = []
+        if results.get("ids") and len(results["ids"]) > 0:
+            docs = results.get("documents", [[]])[0] if results.get("documents") else []
+            for idx, (doc_id, metadata) in enumerate(zip(results["ids"][0], results.get("metadatas", [[]])[0])):
+                agents.append(PeerAgent(
+                    agent_id=metadata.get("agent_id", ""),
+                    agent_name=metadata.get("agent_name", ""),
+                    title=metadata.get("title", ""),
+                    role=metadata.get("role", ""),
+                    capabilities=docs[idx] if idx < len(docs) else "",
+                    manager_name=metadata.get("manager_name"),
+                ))
+
+        return {"agents": agents, "count": len(agents), "query": q, "querying_agent": agent_id}
+    except Exception as e:
+        from autobot_shared.logging_manager import get_logger
+
+        logger_inner = get_logger(__name__)
+        logger_inner.exception("Peer agent search failed for agent %s: %s", agent_id, str(e))
+        raise HTTPException(status_code=500, detail=f"Peer search failed: {str(e)}")
+
+
 __all__ = ["router"]

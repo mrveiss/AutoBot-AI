@@ -29,7 +29,11 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.logging_manager import get_logger
+
 from llc.kb.collections import KbCollectionManager
+
+logger = get_logger(__name__)
 from llc.models.company import (
     CompanyAncestor,
     CompanyCreate,
@@ -442,6 +446,79 @@ async def _test_pm_connectivity(pm_type: str, pm_config: Dict[str, Any]) -> Dict
         "message": health.message,
         "details": health.details,
     }
+
+
+# ------------------------------------------------------------------
+# Agent search endpoints (GH#8244)
+# ------------------------------------------------------------------
+
+
+class AgentSearchResult(BaseModel):
+    agent_id: str
+    agent_name: str
+    title: str
+    role: str
+    capabilities: str
+    manager_name: Optional[str] = None
+
+
+@router.get("/{company_id}/agents/search")
+async def search_agents(
+    company_id: uuid.UUID,
+    q: str = Query(..., min_length=1, description="Search query for agent capabilities"),
+    limit: int = Query(10, ge=1, le=100, description="Max results"),
+) -> Dict[str, Any]:
+    """Search agents in company by capabilities using RAG.
+
+    Queries the company:agents KB collection for agents matching the capability
+    search query. Returns agent metadata and capability descriptions.
+
+    Args:
+        company_id: Company ID to search within
+        q: Search query (\"who can do X?\", \"security audit expertise\", etc.)
+        limit: Max results to return (default 10, max 100)
+
+    Returns:
+        List of matching agents with capability metadata.
+    """
+    try:
+        from llc.kb import AgentCapabilityIndexer
+        from knowledge import get_knowledge_base
+
+        indexer = AgentCapabilityIndexer()
+        kb = await get_knowledge_base()
+        collection_name = indexer._collection_name(str(company_id))
+
+        try:
+            collection = await kb._async_chroma_client.get_collection(collection_name)
+        except Exception:
+            return {"agents": [], "count": 0, "query": q}
+
+        results = await collection.query(
+            query_texts=[q],
+            n_results=limit,
+            include=["documents", "metadatas"],
+        )
+
+        agents = []
+        if results.get("ids") and len(results["ids"]) > 0:
+            for doc_id, metadata in zip(results["ids"][0], results.get("metadatas", [[]])[0]):
+                agents.append(AgentSearchResult(
+                    agent_id=metadata.get("agent_id", ""),
+                    agent_name=metadata.get("agent_name", ""),
+                    title=metadata.get("title", ""),
+                    role=metadata.get("role", ""),
+                    capabilities=results.get("documents", [[]])[0][len(agents)] if len(agents) < len(results.get("documents", [[]])[0]) else "",
+                    manager_name=metadata.get("manager_name"),
+                ))
+
+        return {"agents": agents, "count": len(agents), "query": q}
+    except Exception as e:
+        logger.exception("Agent search failed for company %s: %s", company_id, str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Agent search failed: {str(e)}",
+        )
 
 
 # Export endpoints (GH#8245)
