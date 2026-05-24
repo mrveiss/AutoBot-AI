@@ -35,7 +35,6 @@ from user_management.database import get_async_session_factory
 from ..kb.ac_suggester import AcSuggester
 from ..models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
 from ..services.handoff import HandoffAttachment, HandoffNotAllowed, HandoffNotAuthorized, HandoffService
-from ..services.work_item_service import CheckoutConflict, InvalidTransition, WorkItemService
 from ..services.work_item_service import (
     CheckoutConflict,
     CoWorkingPermissionError,
@@ -54,12 +53,12 @@ class HumanUnclaimRequest(BaseModel):
     company_id: str
 
 
-
 class CoworkerRequest(BaseModel):
     """Set or clear a co-worker on a work item (GH#8230).
     To clear the co-worker, omit co_worker_type (or send null).
     caller_role must be 'owner', 'admin', or 'lead' to mutate co-working state.
     """
+
     company_id: str
     co_worker_type: Optional[str] = None
     co_worker_agent_id: Optional[str] = None
@@ -67,6 +66,8 @@ class CoworkerRequest(BaseModel):
     actor_agent_id: Optional[str] = None
     actor_user_id: Optional[str] = None
     caller_role: str = "member"
+
+
 router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
 _get_service = lazy_singleton(WorkItemService)
 _get_handoff_service = lazy_singleton(HandoffService)
@@ -600,6 +601,8 @@ async def handoff_to_agent(
         raise HTTPException(status_code=403, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+
+
 # ------------------------------------------------------------------
 # Handoff routes (GH#8231)
 # ------------------------------------------------------------------

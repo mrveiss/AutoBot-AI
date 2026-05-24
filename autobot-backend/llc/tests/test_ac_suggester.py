@@ -11,7 +11,6 @@ import pytest
 
 from llc.kb.ac_suggester import AcSuggester, _format_chunks, _parse_bullet_list, _zip_results
 
-
 # ------------------------------------------------------------------ Helpers
 
 

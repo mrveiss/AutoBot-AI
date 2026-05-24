@@ -30,7 +30,6 @@ from llc.services.review_gate import (
 )
 from llc.services.work_item_service import InvalidTransition, WorkItemService
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

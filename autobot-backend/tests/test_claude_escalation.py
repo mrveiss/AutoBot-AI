@@ -67,6 +67,7 @@ def _make_error_response() -> LLMResponse:
 def _make_provider_with_resolved_key():
     """Build a bare AnthropicProvider instance with _api_key set via env (no literal)."""
     import os
+
     from llm_shared.providers.anthropic import AnthropicProvider
 
     provider = AnthropicProvider.__new__(AnthropicProvider)

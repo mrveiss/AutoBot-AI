@@ -117,8 +117,8 @@ class HandoffService(LLCServiceBase):
         await self._publish_a2h_notification(company_id, work_item_id, reviewer_user_id, brief)
         if self.activity_log:
             try:
-                from .activity_log import ActivityEventType
                 from ..models.activity import ActorType
+                from .activity_log import ActivityEventType
                 await self.activity_log.record(session, company_id=company_id, actor_type=ActorType.AGENT, actor_id=agent_id, event_type=ActivityEventType.WORK_ITEM_HANDOFF, entity_type="work_item", entity_id=work_item_id, after={"status": WorkItemStatus.IN_REVIEW.value, "reviewer_user_id": reviewer_user_id}, metadata={"brief": brief})
             except Exception:
                 logger.warning("Activity log failed for agent_to_human %s", work_item_id)
@@ -142,8 +142,8 @@ class HandoffService(LLCServiceBase):
         await session.flush()
         if self.activity_log:
             try:
-                from .activity_log import ActivityEventType
                 from ..models.activity import ActorType
+                from .activity_log import ActivityEventType
                 await self.activity_log.record(session, company_id=company_id, actor_type=ActorType.USER, actor_id=reviewer_user_id, event_type=ActivityEventType.WORK_ITEM_REVIEW_APPROVED, entity_type="work_item", entity_id=work_item_id, after={"status": WorkItemStatus.DONE.value, "completed_at": now.isoformat()})
             except Exception:
                 logger.warning("Activity log failed for approve %s", work_item_id)
@@ -169,8 +169,8 @@ class HandoffService(LLCServiceBase):
         await session.flush()
         if self.activity_log:
             try:
-                from .activity_log import ActivityEventType
                 from ..models.activity import ActorType
+                from .activity_log import ActivityEventType
                 await self.activity_log.record(session, company_id=company_id, actor_type=ActorType.USER, actor_id=reviewer_user_id, event_type=ActivityEventType.WORK_ITEM_REVIEW_CHANGES_REQUESTED, entity_type="work_item", entity_id=work_item_id, after={"status": WorkItemStatus.IN_PROGRESS.value, "assignee_agent_id": return_to_agent_id}, metadata={"change_request": change_request})
             except Exception:
                 logger.warning("Activity log failed for request_changes %s", work_item_id)

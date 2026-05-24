@@ -231,10 +231,7 @@ def _zip_results(results: Dict[str, Any]) -> List[Dict[str, Any]]:
     ids = results.get("ids", [[]])[0]
     docs = results.get("documents", [[]])[0]
     metas = results.get("metadatas", [[]])[0]
-    return [
-        {"id": doc_id, "document": doc, "metadata": meta}
-        for doc_id, doc, meta in zip(ids, docs, metas)
-    ]
+    return [{"id": doc_id, "document": doc, "metadata": meta} for doc_id, doc, meta in zip(ids, docs, metas)]
 
 
 def _format_chunks(chunks: List[Dict[str, Any]]) -> str:
@@ -248,7 +245,7 @@ def _parse_bullet_list(raw: str) -> List[str]:
         stripped = line.strip()
         for prefix in ("- ", "* ", "• "):
             if stripped.startswith(prefix):
-                text = stripped[len(prefix):].strip()
+                text = stripped[len(prefix) :].strip()
                 if text:
                     items.append(text)
                 break

@@ -12,7 +12,6 @@ import pytest
 from llc.models.ceo_chat import LLCCeoChatMessage, LLCCeoChatThread
 from llc.services.ceo_chat import CeoChatService
 
-
 # ----------------------------------------------------------------- Helpers
 
 

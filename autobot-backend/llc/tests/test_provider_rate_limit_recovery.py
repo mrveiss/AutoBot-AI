@@ -26,10 +26,10 @@ from llc.exceptions import ProviderRateLimited
 from llc.models.enums import HeartbeatRunStatus
 from llc.models.heartbeat_run import LLCHeartbeatRun
 from llc.scheduler.heartbeat_scheduler import (
-    HeartbeatScheduler,
     _MAX_RATE_LIMIT_RETRIES,
     _RL_BASE_SECONDS,
     _RL_MAX_SECONDS,
+    HeartbeatScheduler,
 )
 
 # ---------------------------------------------------------------------------
