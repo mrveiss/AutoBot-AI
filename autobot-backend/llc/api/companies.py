@@ -242,6 +242,49 @@ async def get_company_ancestry(
 
 
 # ------------------------------------------------------------------
+# KB inheritance routes (GH#8241)
+# ------------------------------------------------------------------
+
+
+class KbAncestryCollection(BaseModel):
+    """A single entry in the KB ancestry-collection chain."""
+
+    collection_name: str
+    company_id: str
+    weight: float
+
+
+@router.get("/{company_id}/kb/ancestry-collections", response_model=List[KbAncestryCollection])
+async def get_kb_ancestry_collections(
+    company_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+) -> List[KbAncestryCollection]:
+    """Return the resolved KB collection chain for a company (GH#8241).
+
+    Lists each collection in the parent hierarchy, with the weight that would
+    be applied when merging search results. Useful for inspecting what context
+    a sub-company agent inherits.
+    """
+    from llc.kb.inheritance import KbInheritanceResolver
+    from llc.kb.rag_assembler import LLCRAGAssembler
+
+    resolver = KbInheritanceResolver(rag_assembler=LLCRAGAssembler())
+    try:
+        chain = await resolver.get_query_collections(session, str(company_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+    return [
+        KbAncestryCollection(
+            collection_name=collection_name,
+            company_id=collection_name.split(":")[0],
+            weight=weight,
+        )
+        for collection_name, weight in chain
+    ]
+
+
+# ------------------------------------------------------------------
 # Member management routes (GH#8223)
 # ------------------------------------------------------------------
 

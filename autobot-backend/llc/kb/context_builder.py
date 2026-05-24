@@ -21,6 +21,7 @@ from ..config import AGENT_API_BASE_URL
 from ..models.goal import LLCGoal
 from ..services.goal import GoalService
 from ..services.work_item_service import WorkItemService
+from .inheritance import KbInheritanceResolver
 from .rag_assembler import AssemblerProfile, LLCRAGAssembler
 
 logger = get_logger(__name__)
@@ -39,6 +40,7 @@ class HeartbeatContextBuilder:
         rag_assembler: LLCRAGAssembler,
         goal_service: GoalService,
         work_item_service: WorkItemService,
+        inheritance_resolver: Optional[KbInheritanceResolver] = None,
     ):
         """Initialize builder with services.
 
@@ -46,10 +48,12 @@ class HeartbeatContextBuilder:
             rag_assembler: RAG service for KB queries
             goal_service: Goal ancestry and retrieval
             work_item_service: Work item details and history
+            inheritance_resolver: KB inheritance resolver (GH#8241), optional for backwards compat
         """
         self.rag_assembler = rag_assembler
         self.goal_service = goal_service
         self.work_item_service = work_item_service
+        self.inheritance_resolver = inheritance_resolver or KbInheritanceResolver(rag_assembler)
 
     async def build(
         self,
@@ -128,17 +132,15 @@ class HeartbeatContextBuilder:
         # Start parallel tasks (P95 ≤ 2s per task, 4 tasks → ≤ 2s total)
         query_text = f"{work_item.title}\n{work_item.description or ''}"
 
-        # Task 1: Company context (top 5)
+        # Task 1: Company context with inheritance (top 5, GH#8241)
         company_task = (
-            self.rag_assembler.assemble(
+            self.inheritance_resolver.search_with_inheritance(
+                session=session,
                 company_id=company_id,
-                profile=AssemblerProfile.HEARTBEAT,
-                project_id=None,
-                agent_id=None,
-                work_item_id=work_item_id,
                 query_text=query_text,
+                top_k=5,
             )
-            if hasattr(self.rag_assembler, "assemble")
+            if hasattr(self.inheritance_resolver, "search_with_inheritance")
             else asyncio.sleep(0)
         )
 
@@ -182,10 +184,13 @@ class HeartbeatContextBuilder:
             return_exceptions=True,
         )
 
-        company_ctx = results[0] if not isinstance(results[0], Exception) else None
+        company_ctx_raw = results[0] if not isinstance(results[0], Exception) else None
         project_ctx = results[1] if not isinstance(results[1], Exception) else None
         agent_mem = results[2] if not isinstance(results[2], Exception) else None
         past_work = results[3] if not isinstance(results[3], Exception) else []
+
+        # Format company_context from inheritance results (GH#8241)
+        company_ctx = self._format_inherited_context(company_ctx_raw)
 
         # Build goal ancestry
         goal_ancestry = []
@@ -211,6 +216,37 @@ class HeartbeatContextBuilder:
             "similar_past_work": past_work,
             "api_base": "http://localhost:8001/api",
             "agent_api_key": "<injected-at-runtime>",
+        }
+
+    def _format_inherited_context(self, results: Optional[List[Dict[str, Any]]]) -> Dict[str, Any]:
+        """Format inheritance resolver results into standard context format (GH#8241).
+
+        Args:
+            results: List of dicts from KbInheritanceResolver.search_with_inheritance()
+
+        Returns:
+            Dict with 'chunks' and 'sources' keys for compatibility with existing context format.
+        """
+        if not results:
+            return {"chunks": [], "sources": []}
+
+        chunks = []
+        sources_set = set()
+
+        for result in results:
+            chunks.append({
+                "id": result.get("id"),
+                "content": result.get("content", ""),
+                "score": result.get("weighted_score", result.get("score", 0.0)),
+                "source_company_id": result.get("source_company_id"),
+                "metadata": result.get("metadata", {}),
+            })
+            if result.get("source_company_id"):
+                sources_set.add(result["source_company_id"])
+
+        return {
+            "chunks": chunks,
+            "sources": list(sources_set),
         }
 
     async def _get_similar_completed_items(
