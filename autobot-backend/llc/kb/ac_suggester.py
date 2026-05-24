@@ -101,7 +101,7 @@ class AcSuggester:
         cache_key = self._cache_key(item_title, item_description)
         cached = await self._get_cached(cache_key)
         if cached is not None:
-            logger.debug("AC suggestion cache hit for key=%s", cache_key[:16])
+            logger.debug("AC suggestion cache hit for key=%s", cache_key[-16:])
             return cached
 
         query = f"{item_title} {item_description}".strip()
@@ -197,7 +197,7 @@ class AcSuggester:
 
     @staticmethod
     def _cache_key(title: str, description: str) -> str:
-        digest = hashlib.sha256(f"{title}{description}".encode("utf-8")).hexdigest()
+        digest = hashlib.sha256(f"{title}\x00{description}".encode("utf-8")).hexdigest()
         return f"llc:ac_suggestions:{digest}"
 
     async def _get_cached(self, key: str) -> Optional[Dict[str, Any]]:

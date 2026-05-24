@@ -194,5 +194,11 @@ def test_cache_key_differs_on_different_inputs():
 
 def test_cache_key_matches_sha256():
     s = AcSuggester()
-    expected = "llc:ac_suggestions:" + hashlib.sha256("TitleDesc".encode("utf-8")).hexdigest()
+    expected = "llc:ac_suggestions:" + hashlib.sha256("Title\x00Desc".encode("utf-8")).hexdigest()
     assert s._cache_key("Title", "Desc") == expected
+
+
+def test_cache_key_no_collision_with_concat():
+    s = AcSuggester()
+    # "AB"+"C" must not collide with "A"+"BC" — the \x00 separator prevents this
+    assert s._cache_key("AB", "C") != s._cache_key("A", "BC")
