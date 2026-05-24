@@ -26,6 +26,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from llc.kb.collections import KbCollectionManager
 from llc.models.company import (
     CompanyAncestor,
     CompanyCreate,
@@ -48,7 +49,6 @@ from llc.services.membership_service import (
     MemberNotFoundError,
     MembershipService,
 )
-from llc.kb.collections import KbCollectionManager
 from user_management.database import get_async_session
 from user_management.models.organization import Organization
 

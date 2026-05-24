@@ -15,7 +15,9 @@ Routes:
   POST   /api/llc/work-items/{work_item_id}/handoff/to-human   (GH#8231)
   POST   /api/llc/work-items/{work_item_id}/review/approve     (GH#8231)
   POST   /api/llc/work-items/{work_item_id}/review/request-changes (GH#8231)
-  GET    /api/llc/work-items/{work_item_id}/handoff-brief       (GH#8231)"""
+  GET    /api/llc/work-items/{work_item_id}/handoff-brief       (GH#8231)
+  POST   /api/llc/work-items/{work_item_id}/coworker   (set/clear co-worker — GH#8230)
+"""
 
 import uuid
 from typing import Any, Dict, List, Optional
@@ -28,7 +30,6 @@ from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
 
-from ..kb.ac_suggester import AcSuggester
 from ..kb.collections import KbCollectionManager
 from ..models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
 from ..services.handoff import HandoffAttachment, HandoffNotAllowed, HandoffNotAuthorized, HandoffService
@@ -48,7 +49,6 @@ class HumanUnclaimRequest(BaseModel):
 router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
 _get_service = lazy_singleton(WorkItemService)
 _get_handoff_service = lazy_singleton(HandoffService)
-_get_ac_suggester = lazy_singleton(AcSuggester)
 _kb_manager = KbCollectionManager()
 
 

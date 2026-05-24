@@ -136,8 +136,6 @@ class TestMergeCollection:
         mock_kb = MagicMock()
 
         with patch("llc.kb.collections.get_knowledge_base", AsyncMock(return_value=mock_kb)):
-            await manager.merge_collection(
-                "sprint", entity_id, "project", project_id, summarize=True
-            )
+            await manager.merge_collection("sprint", entity_id, "project", project_id, summarize=True)
 
         mock_kb._async_chroma_client.get_collection.assert_not_called()
