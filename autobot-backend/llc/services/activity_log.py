@@ -53,6 +53,9 @@ class ActivityEventType(str, Enum):
     WORK_ITEM_ASSIGNED = "work_item.assigned"
     WORK_ITEM_COMPLETED = "work_item.completed"
     WORK_ITEM_CANCELLED = "work_item.cancelled"
+    WORK_ITEM_HANDOFF = "work_item.handoff"
+    WORK_ITEM_REVIEW_APPROVED = "work_item.review_approved"
+    WORK_ITEM_REVIEW_CHANGES_REQUESTED = "work_item.review_changes_requested"
 
     # Sprint lifecycle
     SPRINT_CREATED = "sprint.created"

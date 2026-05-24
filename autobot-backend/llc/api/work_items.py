@@ -1,5 +1,4 @@
-"""LLC work items API routes (GH#8213, GH#8223, GH#8232).
-
+"""LLC work items API routes (GH#8213, GH#8223, GH#8231, GH#8232).
 Routes:
   POST   /api/llc/work-items
   GET    /api/llc/work-items
@@ -13,7 +12,10 @@ Routes:
   POST   /api/llc/work-items/{work_item_id}/claim    (human claim — GH#8223)
   POST   /api/llc/work-items/{work_item_id}/unclaim  (human unclaim — GH#8223)
   POST   /api/llc/work-items/{work_item_id}/handoff/to-agent  (GH#8232)
-"""
+  POST   /api/llc/work-items/{work_item_id}/handoff/to-human   (GH#8231)
+  POST   /api/llc/work-items/{work_item_id}/review/approve     (GH#8231)
+  POST   /api/llc/work-items/{work_item_id}/review/request-changes (GH#8231)
+  GET    /api/llc/work-items/{work_item_id}/handoff-brief       (GH#8231)"""
 
 import uuid
 from typing import Any, Dict, List, Optional
@@ -27,7 +29,7 @@ from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
 
 from ..models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
-from ..services.handoff import HandoffAttachment, HandoffNotAuthorized, HandoffService
+from ..services.handoff import HandoffAttachment, HandoffNotAllowed, HandoffNotAuthorized, HandoffService
 from ..services.work_item_service import CheckoutConflict, InvalidTransition, WorkItemService
 
 
@@ -134,6 +136,24 @@ class HandoffToAgentRequest(BaseModel):
     attachments: Optional[List[HandoffAttachmentRequest]] = None
 
 
+class HandoffToHumanRequest(BaseModel):
+    agent_id: str
+    reviewer_user_id: str
+    company_id: str
+    agent_notes: Optional[str] = None
+
+
+class ReviewApproveRequest(BaseModel):
+    reviewer_user_id: str
+    company_id: str
+
+
+class ReviewChangesRequest(BaseModel):
+    reviewer_user_id: str
+    company_id: str
+    change_request: str
+    return_to_agent_id: Optional[str] = None
+
 def _assignee_display(item: Any) -> Optional[Dict[str, Any]]:
     """Return structured assignee display info (GH#8223).
 
@@ -183,6 +203,9 @@ def _item_to_dict(item: Any) -> Dict[str, Any]:
         "version": item.version,
         "created_by_agent_id": str(item.created_by_agent_id) if item.created_by_agent_id else None,
         "created_by_user_id": str(item.created_by_user_id) if item.created_by_user_id else None,
+        "reviewer_user_id": str(item.reviewer_user_id) if item.reviewer_user_id else None,
+        "reviewer_agent_id": str(item.reviewer_agent_id) if item.reviewer_agent_id else None,
+        "review_brief": item.review_brief,
         "started_at": item.started_at.isoformat() if item.started_at else None,
         "completed_at": item.completed_at.isoformat() if item.completed_at else None,
         "cancelled_at": item.cancelled_at.isoformat() if item.cancelled_at else None,
@@ -449,5 +472,87 @@ async def handoff_to_agent(
         }
     except HandoffNotAuthorized as exc:
         raise HTTPException(status_code=403, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+# ------------------------------------------------------------------
+# Handoff routes (GH#8231)
+# ------------------------------------------------------------------
+
+
+@router.post("/{work_item_id}/handoff/to-human")
+async def handoff_to_human(
+    work_item_id: str,
+    body: HandoffToHumanRequest,
+    session: AsyncSession = Depends(get_session),
+) -> Dict[str, Any]:
+    try:
+        item = await _handoff_service().agent_to_human(
+            session,
+            work_item_id=work_item_id,
+            agent_id=body.agent_id,
+            reviewer_user_id=body.reviewer_user_id,
+            company_id=body.company_id,
+            agent_notes=body.agent_notes,
+        )
+        await session.commit()
+        return _item_to_dict(item)
+    except HandoffNotAllowed as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.post("/{work_item_id}/review/approve")
+async def review_approve(
+    work_item_id: str,
+    body: ReviewApproveRequest,
+    session: AsyncSession = Depends(get_session),
+) -> Dict[str, Any]:
+    try:
+        item = await _handoff_service().approve(
+            session,
+            work_item_id=work_item_id,
+            reviewer_user_id=body.reviewer_user_id,
+            company_id=body.company_id,
+        )
+        await session.commit()
+        return _item_to_dict(item)
+    except HandoffNotAllowed as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.post("/{work_item_id}/review/request-changes")
+async def review_request_changes(
+    work_item_id: str,
+    body: ReviewChangesRequest,
+    session: AsyncSession = Depends(get_session),
+) -> Dict[str, Any]:
+    try:
+        item = await _handoff_service().request_changes(
+            session,
+            work_item_id=work_item_id,
+            reviewer_user_id=body.reviewer_user_id,
+            company_id=body.company_id,
+            change_request=body.change_request,
+            return_to_agent_id=body.return_to_agent_id,
+        )
+        await session.commit()
+        return _item_to_dict(item)
+    except HandoffNotAllowed as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.get("/{work_item_id}/handoff-brief")
+async def get_handoff_brief(
+    work_item_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> Dict[str, Any]:
+    try:
+        brief = await _handoff_service().get_brief(session, work_item_id)
+        return {"work_item_id": work_item_id, "brief": brief}
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
