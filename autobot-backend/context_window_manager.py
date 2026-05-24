@@ -24,9 +24,7 @@ logger = get_logger(__name__)
 # Architecture families whose cost curve does not require transformer caps.
 # Matches the string values of llm_shared.types.ArchitectureFamily; kept as a
 # frozenset of strings here to avoid a circular import with llm_shared.
-_NON_TRANSFORMER_FAMILIES: frozenset[str] = frozenset(
-    {"state_space", "linear_attention", "hybrid"}
-)
+_NON_TRANSFORMER_FAMILIES: frozenset[str] = frozenset({"state_space", "linear_attention", "hybrid"})
 
 # Lazy singleton — imported on first call to avoid circular imports.
 _compression_service = None

@@ -9,6 +9,7 @@ Part of Issue #872 - Session Collaboration API (#608 Phase 3).
 """
 
 import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 

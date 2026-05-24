@@ -23,6 +23,7 @@ Related Issues: #77 (Organization), #411 (Categories)
 """
 
 import re
+
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 
 from api.schemas_knowledge import (

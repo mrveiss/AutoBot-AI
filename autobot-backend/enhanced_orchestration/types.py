@@ -21,7 +21,8 @@ if TYPE_CHECKING:
 from autobot_shared.workflow import ExecutionStrategy as ExecutionStrategy  # noqa: F401  # re-export
 from autobot_shared.workflow import WorkflowPlan as _SharedWorkflowPlan
 from autobot_shared.workflow import WorkflowTask
-from orchestration.types import AgentCapability, AgentPerformance as AgentPerformance  # noqa: F401  # re-export
+from orchestration.types import AgentCapability
+from orchestration.types import AgentPerformance as AgentPerformance  # noqa: F401  # re-export
 
 # Module-level frozenset for fallback tier checks
 FALLBACK_TIERS: FrozenSet[str] = frozenset({"basic", "emergency"})

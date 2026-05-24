@@ -288,9 +288,7 @@ def format_connection_info_box(
             iface_type = iface["type"]
             iface_ip = iface["ip"]
             primary_mark = " ★" if iface.get("is_primary") else ""
-            lines.append(
-                f"  • {iface_type:15} ({iface_name}): {iface_ip}{primary_mark}"
-            )
+            lines.append(f"  • {iface_type:15} ({iface_name}): {iface_ip}{primary_mark}")
     else:
         lines.append("  (No network interfaces detected)")
 

@@ -9,6 +9,7 @@ Related to Issue #760 Phase 2.
 """
 
 import logging
+
 from cryptography.fernet import Fernet
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select

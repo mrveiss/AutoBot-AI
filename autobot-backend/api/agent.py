@@ -47,10 +47,10 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from constants.threshold_constants import TimingConstants
 from dependencies import get_config, get_knowledge_base
+from events.bus import PersistStrategy, get_event_bus
 from exceptions import InternalError, SubprocessError
 from monitoring.prometheus_metrics import get_metrics_manager
 from services.ai_stack_client import AIStackError, get_ai_stack_client
-from events.bus import PersistStrategy, get_event_bus
 from utils.response_helpers import create_success_response, handle_ai_stack_error
 
 router = APIRouter()
@@ -881,9 +881,7 @@ async def execute_command(
     stdout, stderr, returncode = await _run_subprocess(command, security_layer, user_role)
 
     # Handle result and publish completion event (Issue #620: uses helper)
-    return await _handle_command_result(
-        security_layer, user_role, command, stdout, stderr, returncode
-    )
+    return await _handle_command_result(security_layer, user_role, command, stdout, stderr, returncode)
 
 
 # ====================================================================

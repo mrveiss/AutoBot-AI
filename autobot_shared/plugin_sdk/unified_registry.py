@@ -9,6 +9,7 @@ Single registry for all manifest types: plugins, skills, and extensions.
 
 import logging
 import threading
+
 from plugin_sdk.manifest_contract import ManifestContract
 
 logger = logging.getLogger(__name__)

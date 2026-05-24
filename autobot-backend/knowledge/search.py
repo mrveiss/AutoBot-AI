@@ -273,6 +273,7 @@ class SearchMixin:
         # Issue #8392: Record collection access for tiering promotions (non-critical).
         try:
             from knowledge.tiering import get_tier_manager
+
             collection_id = getattr(chroma_collection, "name", None) or getattr(self, "chromadb_collection", "default")
             await get_tier_manager().record_access(collection_id)
         except Exception as _tier_err:

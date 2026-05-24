@@ -23,7 +23,7 @@ FIX_HINT = (
     "Replace print() with a logger call:\n"
     "    from autobot_shared.logging import get_logger\n"
     "    logger = get_logger(__name__)\n"
-    "    logger.info(\"...\")"
+    '    logger.info("...")'
 )
 
 _WAIVER = re.compile(r"#\s*canonical:\s*ignore\s+py-print-smoke\b")
@@ -37,11 +37,7 @@ def check(file_path: Path, tree: ast.AST, ctx: Context) -> list[Diagnostic]:
 
     diagnostics: list[Diagnostic] = []
     for node in ast.walk(tree):
-        if not (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id == "print"
-        ):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "print"):
             continue
         line_idx = node.lineno - 1
         if 0 <= line_idx < len(source_lines) and _WAIVER.search(source_lines[line_idx]):

@@ -2136,9 +2136,7 @@ class AntiPatternDetector:
             if not module_info:
                 return []
             detector.modules = {module_info.name: module_info}
-            detector.classes = {
-                f"{module_info.name}.{cls.name}": cls for cls in module_info.classes
-            }
+            detector.classes = {f"{module_info.name}.{cls.name}": cls for cls in module_info.classes}
             detector.all_defined_names = {cls.name for cls in module_info.classes}
             detector.all_defined_names.update(module_info.functions)
 

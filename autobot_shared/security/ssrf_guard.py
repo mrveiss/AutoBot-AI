@@ -24,6 +24,7 @@ Dependencies: stdlib + aiohttp only (no autobot-* imports).
 from __future__ import annotations
 
 import socket
+
 import aiohttp
 import aiohttp.abc
 

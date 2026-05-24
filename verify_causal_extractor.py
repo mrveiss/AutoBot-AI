@@ -20,7 +20,7 @@ sys.modules.setdefault("autobot_shared", _mock_shared)
 sys.modules.setdefault("autobot_shared.redis_client", _mock_redis_mod)
 
 # Now import our modules
-sys.path.insert(0, '/home/martins/AutoBot-Ai/AutoBot-AI/autobot-backend')
+sys.path.insert(0, "/home/martins/AutoBot-Ai/AutoBot-AI/autobot-backend")
 
 from knowledge.pipeline.cognifiers.causal_relationship_extractor import (
     CausalRelationshipExtractor,
@@ -106,18 +106,12 @@ def test_mode_selection():
     extractor = CausalRelationshipExtractor(mode="auto", nlp_threshold=100)
 
     # Small chunk set
-    small_chunks = [
-        ProcessedChunk(content=f"Text {i}", document_id=uuid4(), chunk_index=i)
-        for i in range(10)
-    ]
+    small_chunks = [ProcessedChunk(content=f"Text {i}", document_id=uuid4(), chunk_index=i) for i in range(10)]
     mode = extractor._select_mode(small_chunks)
     print(f"✓ Mode for 10 chunks: {mode} (expected: llm)")
 
     # Large chunk set
-    large_chunks = [
-        ProcessedChunk(content=f"Text {i}", document_id=uuid4(), chunk_index=i)
-        for i in range(150)
-    ]
+    large_chunks = [ProcessedChunk(content=f"Text {i}", document_id=uuid4(), chunk_index=i) for i in range(150)]
     mode = extractor._select_mode(large_chunks)
     print(f"✓ Mode for 150 chunks: {mode} (expected: nlp)")
 
@@ -211,6 +205,7 @@ def main():
     except Exception as e:
         print(f"\n❌ Verification failed: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 

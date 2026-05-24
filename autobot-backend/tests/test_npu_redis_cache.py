@@ -13,10 +13,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import numpy as np
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_search_instance():
     """Return an NPUSemanticSearch with __init__ bypassed to avoid real I/O."""
@@ -43,6 +43,7 @@ def _embedding_bytes(arr: np.ndarray) -> bytes:
 # ---------------------------------------------------------------------------
 # _l2_cache_get
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_l2_cache_get_returns_array_on_hit():
@@ -99,6 +100,7 @@ async def test_l2_cache_get_swallows_redis_exceptions():
 # _l2_cache_set
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_l2_cache_set_stores_bytes():
     obj = _make_search_instance()
@@ -144,6 +146,7 @@ async def test_l2_cache_set_swallows_redis_exceptions():
 # ---------------------------------------------------------------------------
 # _generate_optimized_embedding — L2 hit path
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_generate_optimized_embedding_l2_hit_warms_l1():

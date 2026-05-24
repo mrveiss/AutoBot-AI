@@ -119,8 +119,8 @@ class TestGetCanvas:
 
         session.execute = AsyncMock(side_effect=_execute_side_effect)
 
-        from user_management.database import get_async_session
         from auth_middleware import get_current_user
+        from user_management.database import get_async_session
 
         app.dependency_overrides = {
             get_async_session: lambda: session,
@@ -138,8 +138,8 @@ class TestGetCanvas:
         session = _mock_session()
         session.execute.return_value.scalar_one_or_none = MagicMock(return_value=None)
 
-        from user_management.database import get_async_session
         from auth_middleware import get_current_user
+        from user_management.database import get_async_session
 
         app.dependency_overrides = {
             get_async_session: lambda: session,
@@ -155,8 +155,8 @@ class TestGetCanvas:
         session = _mock_session()
         session.execute.return_value.scalar_one_or_none = MagicMock(return_value=canvas)
 
-        from user_management.database import get_async_session
         from auth_middleware import get_current_user
+        from user_management.database import get_async_session
 
         app.dependency_overrides = {
             get_async_session: lambda: session,
@@ -179,8 +179,8 @@ class TestPutCanvas:
         session = _mock_session()
         session.execute.return_value.scalar_one_or_none = MagicMock(return_value=canvas)
 
-        from user_management.database import get_async_session
         from auth_middleware import get_current_user
+        from user_management.database import get_async_session
 
         app.dependency_overrides = {
             get_async_session: lambda: session,
@@ -202,8 +202,8 @@ class TestPutCanvas:
         session = _mock_session()
         session.execute.return_value.scalar_one_or_none = MagicMock(return_value=canvas)
 
-        from user_management.database import get_async_session
         from auth_middleware import get_current_user
+        from user_management.database import get_async_session
 
         app.dependency_overrides = {
             get_async_session: lambda: session,
@@ -241,8 +241,8 @@ class TestAddCell:
 
         session.refresh = _refresh_patch
 
-        from user_management.database import get_async_session
         from auth_middleware import get_current_user
+        from user_management.database import get_async_session
 
         app.dependency_overrides = {
             get_async_session: lambda: session,
@@ -261,8 +261,8 @@ class TestAddCell:
         session = _mock_session()
         session.execute.return_value.scalar_one_or_none = MagicMock(return_value=canvas)
 
-        from user_management.database import get_async_session
         from auth_middleware import get_current_user
+        from user_management.database import get_async_session
 
         app.dependency_overrides = {
             get_async_session: lambda: session,
@@ -307,8 +307,8 @@ class TestTransitionCell:
 
         session.refresh = _refresh_patch
 
-        from user_management.database import get_async_session
         from auth_middleware import get_current_user
+        from user_management.database import get_async_session
 
         app.dependency_overrides = {
             get_async_session: lambda: session,
@@ -386,8 +386,8 @@ class TestTransitionCell:
         session = _mock_session()
         session.execute.return_value.scalar_one_or_none = MagicMock(return_value=canvas)
 
-        from user_management.database import get_async_session
         from auth_middleware import get_current_user
+        from user_management.database import get_async_session
 
         app.dependency_overrides = {
             get_async_session: lambda: session,
@@ -485,9 +485,9 @@ class TestCanvasWebSocketStreaming:
     @pytest.mark.asyncio
     async def test_register_and_unregister_streaming_task(self):
         from api.websockets import (
+            _canvas_streaming_tasks,
             register_canvas_streaming_task,
             unregister_canvas_streaming_task,
-            _canvas_streaming_tasks,
         )
 
         task = asyncio.create_task(asyncio.sleep(10))
@@ -511,9 +511,9 @@ class TestCanvasWebSocketStreaming:
     @pytest.mark.asyncio
     async def test_canvas_cancel_stops_streaming_task(self):
         from api.websockets import (
-            register_canvas_streaming_task,
-            _handle_canvas_cancel,
             _canvas_streaming_tasks,
+            _handle_canvas_cancel,
+            register_canvas_streaming_task,
         )
 
         canvas_id = str(uuid.uuid4())
@@ -542,9 +542,9 @@ class TestCanvasWebSocketStreaming:
     @pytest.mark.asyncio
     async def test_canvas_cancel_with_multiple_tasks(self):
         from api.websockets import (
-            register_canvas_streaming_task,
-            _handle_canvas_cancel,
             _canvas_streaming_tasks,
+            _handle_canvas_cancel,
+            register_canvas_streaming_task,
         )
 
         canvas_id = str(uuid.uuid4())
@@ -582,9 +582,9 @@ class TestCanvasWebSocketStreaming:
     async def test_canvas_cancel_cross_user_rejected(self):
         """User B cannot cancel User A's streaming task (MVA-362 security fix)."""
         from api.websockets import (
-            register_canvas_streaming_task,
-            _handle_canvas_cancel,
             _canvas_streaming_tasks,
+            _handle_canvas_cancel,
+            register_canvas_streaming_task,
         )
 
         canvas_id = str(uuid.uuid4())

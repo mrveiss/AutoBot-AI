@@ -31,11 +31,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 _portfolio_status = sa.Enum("active", "paused", "archived", name="portfoliostatus")
 _program_status = sa.Enum("active", "paused", "archived", name="programstatus")
-_project_status = sa.Enum(
-    "backlog", "planned", "in_progress", "completed", "cancelled", name="projectstatus"
-)
+_project_status = sa.Enum("backlog", "planned", "in_progress", "completed", "cancelled", name="projectstatus")
 _sprint_status = sa.Enum(
-    "planning", "active", "review", "retrospective", "closed", "cancelled",
+    "planning",
+    "active",
+    "review",
+    "retrospective",
+    "closed",
+    "cancelled",
     name="sprintstatus",
 )
 
@@ -67,7 +70,8 @@ def upgrade() -> None:
         sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column("company_id", UUID(as_uuid=True), nullable=False),
         sa.Column(
-            "portfolio_id", UUID(as_uuid=True),
+            "portfolio_id",
+            UUID(as_uuid=True),
             sa.ForeignKey("llc_portfolios.id", ondelete="SET NULL"),
             nullable=True,
         ),
@@ -87,12 +91,14 @@ def upgrade() -> None:
         sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column("company_id", UUID(as_uuid=True), nullable=False),
         sa.Column(
-            "program_id", UUID(as_uuid=True),
+            "program_id",
+            UUID(as_uuid=True),
             sa.ForeignKey("llc_programs.id", ondelete="SET NULL"),
             nullable=True,
         ),
         sa.Column(
-            "goal_id", UUID(as_uuid=True),
+            "goal_id",
+            UUID(as_uuid=True),
             sa.ForeignKey("llc_goals.id", ondelete="SET NULL"),
             nullable=True,
         ),
@@ -117,7 +123,8 @@ def upgrade() -> None:
         sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column("company_id", UUID(as_uuid=True), nullable=False),
         sa.Column(
-            "project_id", UUID(as_uuid=True),
+            "project_id",
+            UUID(as_uuid=True),
             sa.ForeignKey("llc_projects.id", ondelete="RESTRICT"),
             nullable=False,
         ),
@@ -140,14 +147,18 @@ def upgrade() -> None:
     # -- Wire deferred FKs from 20260523_022 --
     op.create_foreign_key(
         "fk_llc_work_items_project_id",
-        "llc_work_items", "llc_projects",
-        ["project_id"], ["id"],
+        "llc_work_items",
+        "llc_projects",
+        ["project_id"],
+        ["id"],
         ondelete="SET NULL",
     )
     op.create_foreign_key(
         "fk_llc_work_items_sprint_id",
-        "llc_work_items", "llc_sprints",
-        ["sprint_id"], ["id"],
+        "llc_work_items",
+        "llc_sprints",
+        ["sprint_id"],
+        ["id"],
         ondelete="SET NULL",
     )
 

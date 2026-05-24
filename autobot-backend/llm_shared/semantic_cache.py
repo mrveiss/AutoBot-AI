@@ -109,9 +109,7 @@ class SemanticLLMCache:
 
         if hit_response is not None:
             self._stats["semantic_hits"] += 1
-            logger.debug(
-                "SemanticLLMCache: semantic hit for cache_key=%s...", cache_key[:16]
-            )
+            logger.debug("SemanticLLMCache: semantic hit for cache_key=%s...", cache_key[:16])
             # Backfill exact caches so the next identical prompt skips tier-2.
             await self._exact.set(cache_key, hit_response)
             # Also register this new embedding so future similar prompts match it.
@@ -122,9 +120,7 @@ class SemanticLLMCache:
         self._stats["semantic_misses"] += 1
         return None
 
-    async def set(
-        self, cache_key: str, response: Any, prompt: str | None = None, skip_redis: bool = False
-    ) -> None:
+    async def set(self, cache_key: str, response: Any, prompt: str | None = None, skip_redis: bool = False) -> None:
         """
         Store in exact cache and, when prompt is provided, register the
         embedding in the semantic index.
@@ -143,9 +139,7 @@ class SemanticLLMCache:
         try:
             embedding = await self._embed(prompt)
         except Exception as exc:
-            logger.debug(
-                "SemanticLLMCache: embedding for set failed (non-critical): %s", exc
-            )
+            logger.debug("SemanticLLMCache: embedding for set failed (non-critical): %s", exc)
             return
 
         async with self._lock:

@@ -59,16 +59,10 @@ def build_table(registry: dict) -> str:
         spec = registry[name]
         desc = spec.description.replace("|", "\\|")
         desc += _format_range(spec)
-        row = (
-            f"| `{name}` | {spec.component} | {_format_type(spec)} "
-            f"| {_format_default(spec)} | {desc} |"
-        )
+        row = f"| `{name}` | {spec.component} | {_format_type(spec)} " f"| {_format_default(spec)} | {desc} |"
         rows.append(row)
 
-    header = (
-        "| Name | Component | Type | Default | Description |\n"
-        "|---|---|---|---|---|"
-    )
+    header = "| Name | Component | Type | Default | Description |\n" "|---|---|---|---|---|"
     table_body = "\n".join(rows)
     count_note = f"\n\n*{len(registry)} variables registered as of last generation.*\n"
     return f"{header}\n{table_body}{count_note}"
@@ -89,12 +83,7 @@ def rewrite_docs(docs_path: Path, table: str) -> None:
     if begin_idx >= end_idx:
         raise ValueError("BEGIN marker must appear before END marker.")
 
-    new_content = (
-        original[: begin_idx + len(BEGIN_MARKER)]
-        + "\n"
-        + table
-        + original[end_idx:]
-    )
+    new_content = original[: begin_idx + len(BEGIN_MARKER)] + "\n" + table + original[end_idx:]
     docs_path.write_text(new_content, encoding="utf-8")
 
 

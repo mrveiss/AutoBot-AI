@@ -13,9 +13,18 @@ import time
 from typing import Dict, List
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
-    QLabel, QPushButton, QSpinBox, QComboBox,
-    QProgressBar, QTextEdit, QGridLayout, QFrame
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QGroupBox,
+    QLabel,
+    QPushButton,
+    QSpinBox,
+    QComboBox,
+    QProgressBar,
+    QTextEdit,
+    QGridLayout,
+    QFrame,
 )
 from PySide6.QtCore import Qt, Signal, Slot, QThread
 from PySide6.QtGui import QFont
@@ -71,7 +80,7 @@ class BenchmarkWorker(QThread):
                         f"{self.api_url}/embedding/generate",
                         json=batch,
                         params={"model_name": self.model_name},
-                        timeout=30
+                        timeout=30,
                     )
                     latency = (time.time() - start) * 1000
 
@@ -151,11 +160,7 @@ class BenchmarkWidget(QWidget):
         # Model selection
         config_layout.addWidget(QLabel("Model:"), 1, 0)
         self.model_combo = QComboBox()
-        self.model_combo.addItems([
-            "nomic-embed-text",
-            "all-MiniLM-L6-v2",
-            "bge-small-en-v1.5"
-        ])
+        self.model_combo.addItems(["nomic-embed-text", "all-MiniLM-L6-v2", "bge-small-en-v1.5"])
         config_layout.addWidget(self.model_combo, 1, 1, 1, 3)
 
         layout.addWidget(config_group)
@@ -288,10 +293,7 @@ class BenchmarkWidget(QWidget):
         self.output_text.append("Starting benchmark...\n")
 
         self._benchmark_worker = BenchmarkWorker(
-            self.api_url,
-            self.num_requests_spin.value(),
-            self.batch_size_spin.value(),
-            self.model_combo.currentText()
+            self.api_url, self.num_requests_spin.value(), self.batch_size_spin.value(), self.model_combo.currentText()
         )
         self._benchmark_worker.progress_updated.connect(self._on_progress)
         self._benchmark_worker.result_ready.connect(self._on_result)
@@ -323,11 +325,11 @@ class BenchmarkWidget(QWidget):
         self.metric_labels["avg_latency_ms"].setText(f"{results.get('avg_latency_ms', 0):.1f} ms")
         self.metric_labels["p50_latency_ms"].setText(f"{results.get('p50_latency_ms', 0):.1f} ms")
         self.metric_labels["p95_latency_ms"].setText(f"{results.get('p95_latency_ms', 0):.1f} ms")
-        self.metric_labels["successful"].setText(str(results.get('successful', 0)))
-        self.metric_labels["failed"].setText(str(results.get('failed', 0)))
+        self.metric_labels["successful"].setText(str(results.get("successful", 0)))
+        self.metric_labels["failed"].setText(str(results.get("failed", 0)))
 
         # Color failed count
-        if results.get('failed', 0) > 0:
+        if results.get("failed", 0) > 0:
             self.metric_labels["failed"].setStyleSheet("color: red;")
         else:
             self.metric_labels["failed"].setStyleSheet("color: green;")
@@ -376,15 +378,18 @@ Success Rate: {results.get('successful', 0) / max(results.get('total_requests', 
         """Fetch and display device information"""
         try:
             import requests
+
             response = requests.get(f"{self.api_url}/device-info", timeout=5)
             if response.status_code == 200:
                 info = response.json()
                 model_manager = info.get("model_manager", {})
 
                 # Use full device name if available, fallback to selected_device
-                device = (model_manager.get("selected_device_full_name") or
-                          model_manager.get("device_name") or
-                          info.get("selected_device", "Unknown"))
+                device = (
+                    model_manager.get("selected_device_full_name")
+                    or model_manager.get("device_name")
+                    or info.get("selected_device", "Unknown")
+                )
                 device_type = info.get("selected_device", "Unknown")
 
                 # Build available devices with full names if present

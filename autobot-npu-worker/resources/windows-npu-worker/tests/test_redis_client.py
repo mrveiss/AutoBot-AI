@@ -259,9 +259,7 @@ class TestGetRedisClient:
 
         redis_module._connection_manager = None
 
-        with patch.object(
-            redis_module.RedisConnectionManager, "get_client", new_callable=AsyncMock
-        ) as mock_get_client:
+        with patch.object(redis_module.RedisConnectionManager, "get_client", new_callable=AsyncMock) as mock_get_client:
             mock_get_client.return_value = AsyncMock()
 
             await redis_module.get_redis_client(sample_config)

@@ -40,6 +40,7 @@ response_model=DataResponse on endpoints that returned plain dicts without 'succ
 Extended in #5925 to cover SuccessMessageResponse and SuccessDataResponse.
 Extended in #6143 to catch import-after-decorator ordering bugs.
 """
+
 from __future__ import annotations
 
 import ast
@@ -67,9 +68,7 @@ BYPASS_TYPES = frozenset(
 )
 
 # Route decorator attribute names accepted by FastAPI routers.
-ROUTE_METHODS = frozenset(
-    {"get", "post", "put", "delete", "patch", "head", "options", "route", "api_route"}
-)
+ROUTE_METHODS = frozenset({"get", "post", "put", "delete", "patch", "head", "options", "route", "api_route"})
 
 # Schemas with required fields (no defaults) that this hook validates.
 # Maps schema name → frozenset of required key names that must appear in return dicts.
@@ -106,11 +105,7 @@ def _checked_schema(decorator: ast.expr) -> str | None:
     if func.attr not in ROUTE_METHODS:
         return None
     for kw in decorator.keywords:
-        if (
-            kw.arg == "response_model"
-            and isinstance(kw.value, ast.Name)
-            and kw.value.id in CHECKED_SCHEMAS
-        ):
+        if kw.arg == "response_model" and isinstance(kw.value, ast.Name) and kw.value.id in CHECKED_SCHEMAS:
             return kw.value.id
     return None
 
@@ -139,9 +134,7 @@ def _collect_import_line_map(tree: ast.Module) -> Dict[str, int]:
     return name_to_line
 
 
-def _import_order_violation(
-    schema: str, decorator_line: int, import_line_map: Dict[str, int]
-) -> Optional[str]:
+def _import_order_violation(schema: str, decorator_line: int, import_line_map: Dict[str, int]) -> Optional[str]:
     """Return an error message if *schema* is not imported before *decorator_line*.
 
     Returns None when the import is present and precedes the decorator.
@@ -281,11 +274,7 @@ def _check_file(path: Path, repo_root: Path) -> List[_Violation]:
             # Single-assignment variable pattern: result = {"success": ...}; return result
             var_keys = _var_dict_keys(func_node)
             returned_vars = _returned_var_names(func_node)
-            if any(
-                required_keys.issubset(var_keys[name])
-                for name in returned_vars
-                if name in var_keys
-            ):
+            if any(required_keys.issubset(var_keys[name]) for name in returned_vars if name in var_keys):
                 break
             violations.append((func_node.lineno, func_node.name, _SHAPE_VIOLATION_MSG))
             break

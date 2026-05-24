@@ -50,6 +50,7 @@ def _make_git_repo(tmp_path: Path, files: dict[str, str]) -> Path:
 
 # === Color codes ===
 
+
 def test_color_codes_exported():
     """RED/GREEN/YELLOW/CYAN/BOLD/NC are defined and ANSI-escape strings."""
     result = _run_in_subshell('printf "%s|%s|%s|%s|%s|%s" "$RED" "$YELLOW" "$GREEN" "$CYAN" "$BOLD" "$NC"')
@@ -62,6 +63,7 @@ def test_color_codes_exported():
 
 
 # === get_staged_files: argv mode ===
+
 
 def test_get_staged_files_argv_mode_passes_through(tmp_path):
     """When positional args are provided, they bypass git diff."""
@@ -101,14 +103,18 @@ def test_get_staged_files_argv_mode_no_args(tmp_path):
 
 # === get_staged_files: git mode ===
 
+
 def test_get_staged_files_git_mode_filters_by_pattern(tmp_path):
     """When no argv args, reads staged files and filters by pattern."""
-    _make_git_repo(tmp_path, {
-        "src/foo.py": "# python",
-        "src/bar.py": "# python",
-        "docs/readme.md": "# markdown",
-        "config.yml": "key: value",
-    })
+    _make_git_repo(
+        tmp_path,
+        {
+            "src/foo.py": "# python",
+            "src/bar.py": "# python",
+            "docs/readme.md": "# markdown",
+            "config.yml": "key: value",
+        },
+    )
     result = _run_in_subshell(
         'get_staged_files "\\.py$"',
         cwd=tmp_path,
@@ -121,10 +127,13 @@ def test_get_staged_files_git_mode_filters_by_pattern(tmp_path):
 
 def test_get_staged_files_git_mode_no_match(tmp_path):
     """Pattern with zero matches returns empty stdout, exit 0."""
-    _make_git_repo(tmp_path, {
-        "src/foo.py": "# python",
-        "docs/readme.md": "# markdown",
-    })
+    _make_git_repo(
+        tmp_path,
+        {
+            "src/foo.py": "# python",
+            "docs/readme.md": "# markdown",
+        },
+    )
     result = _run_in_subshell(
         'get_staged_files "\\.tsx$"',
         cwd=tmp_path,
@@ -135,12 +144,15 @@ def test_get_staged_files_git_mode_no_match(tmp_path):
 
 def test_get_staged_files_git_mode_workflow_pattern(tmp_path):
     """Realistic pattern from pre-commit-no-tag-pinned-action."""
-    _make_git_repo(tmp_path, {
-        ".github/workflows/ci.yml": "name: CI",
-        ".github/actions/setup/action.yml": "name: setup",
-        ".github/dependabot.yml": "version: 2",
-        "src/main.py": "# code",
-    })
+    _make_git_repo(
+        tmp_path,
+        {
+            ".github/workflows/ci.yml": "name: CI",
+            ".github/actions/setup/action.yml": "name: setup",
+            ".github/dependabot.yml": "version: 2",
+            "src/main.py": "# code",
+        },
+    )
     result = _run_in_subshell(
         "get_staged_files '^\\.github/(workflows|actions)/.*\\.ya?ml$'",
         cwd=tmp_path,
@@ -152,6 +164,7 @@ def test_get_staged_files_git_mode_workflow_pattern(tmp_path):
 
 
 # === Idempotent sourcing ===
+
 
 def test_idempotent_sourcing(tmp_path):
     """Sourcing _common.sh twice doesn't re-define / break anything."""

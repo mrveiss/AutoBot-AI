@@ -9,6 +9,7 @@ import logging
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
+
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
@@ -439,7 +440,7 @@ class ConversationFilesMigration:
                 cursor.execute("SELECT name FROM sqlite_master WHERE type='view'")
                 views = [row[0] for row in cursor.fetchall()]
                 for view in views:
-                    cursor.execute(f"DROP VIEW IF EXISTS {view}")
+                    cursor.execute(f"DROP VIEW IF EXISTS {view}")  # nosemgrep: autobot-sql-string-format
                     logger.info(f"Dropped view: {view}")
 
                 # Drop tables (in reverse dependency order)
@@ -453,7 +454,7 @@ class ConversationFilesMigration:
                 ]
 
                 for table in tables_to_drop:
-                    cursor.execute(f"DROP TABLE IF EXISTS {table}")
+                    cursor.execute(f"DROP TABLE IF EXISTS {table}")  # nosemgrep: autobot-sql-string-format
                     logger.info(f"Dropped table: {table}")
 
                 self.connection.commit()

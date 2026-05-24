@@ -30,9 +30,7 @@ class Diagnostic:
 
     def __post_init__(self) -> None:
         if self.severity not in _VALID_SEVERITIES:
-            raise ValueError(
-                f"severity must be one of {sorted(_VALID_SEVERITIES)}, got {self.severity!r}"
-            )
+            raise ValueError(f"severity must be one of {sorted(_VALID_SEVERITIES)}, got {self.severity!r}")
 
     def to_dict(self) -> dict[str, Any]:
         return {

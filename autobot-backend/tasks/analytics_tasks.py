@@ -17,8 +17,8 @@ import hashlib
 import json
 from datetime import datetime, timezone
 
-from celery_app import celery_app
 from autobot_shared.logging_manager import get_logger
+from celery_app import celery_app
 
 logger = get_logger(__name__)
 
@@ -224,8 +224,8 @@ def run_pattern_analysis(self, request_data: dict) -> dict:
     instead of restarting from zero.
     """
     from api.codebase_analytics.endpoints.pattern_analysis import (
-        PatternAnalysisRequest,
         _ANALYSIS_TIMEOUT,
+        PatternAnalysisRequest,
     )
 
     started = datetime.now(tz=timezone.utc).isoformat()
@@ -297,8 +297,8 @@ def run_security_analysis(self, path: str) -> dict:
     _progress(self, "Initializing security analyzer", 10.0, started)
 
     async def _work():
-        from code_intelligence.security_analyzer import SecurityAnalyzer
         from api.code_intelligence import _calculate_grade_from_score, _get_security_status_message
+        from code_intelligence.security_analyzer import SecurityAnalyzer
 
         analyzer = SecurityAnalyzer(project_root=path)
         _progress(self, "Scanning for vulnerabilities", 30.0, started)

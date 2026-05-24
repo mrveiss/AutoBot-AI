@@ -24,10 +24,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Import canvas models so Alembic autogenerate sees them (MVA-359)
 import canvas.models  # noqa: F401
 from autobot_shared.async_compat import run_or_schedule
-from user_management.config import get_deployment_config
 
 # Import models to register with SQLAlchemy
 from llc.models.activity import LLCBase  # noqa: F401 — registers LLC tables with metadata
+from user_management.config import get_deployment_config
 from user_management.models import Base
 
 # this is the Alembic Config object

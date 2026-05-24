@@ -101,9 +101,7 @@ async def example_single_agent_workflow():
             user_name="Alice",
             user_role="Developer",
             available_tools=["file_read", "file_write", "code_review"],
-            recent_context=(
-                f"Previous task: " f"{FRONTEND_TASKS[i-2] if i > 1 else 'None'}"
-            ),
+            recent_context=(f"Previous task: " f"{FRONTEND_TASKS[i-2] if i > 1 else 'None'}"),
         )
 
         request = LLMRequest(
@@ -117,9 +115,7 @@ async def example_single_agent_workflow():
         )
 
         logger.info(f"Task {i}: {task[:50]}...")
-        first_task_time = await _execute_task_with_cache_tracking(
-            llm, request, i, first_task_time
-        )
+        first_task_time = await _execute_task_with_cache_tracking(llm, request, i, first_task_time)
 
     total_time = time.time() - start_time
     logger.info(f"Total Time: {total_time:.2f}s")
@@ -178,9 +174,7 @@ async def example_mixed_agent_workflow():
 
             cached_tokens = response.metadata.get("cached_tokens", 0)
             total_tokens = response.usage.get("prompt_tokens", 0)
-            cache_hit_rate = (
-                (cached_tokens / total_tokens * 100) if total_tokens > 0 else 0
-            )
+            cache_hit_rate = (cached_tokens / total_tokens * 100) if total_tokens > 0 else 0
 
             logger.info(f"  Cache Hit Rate: {cache_hit_rate:.1f}%")
             logger.info(f"  Processing Time: {response.processing_time:.2f}s\n")
@@ -237,9 +231,7 @@ def example_performance_comparison():
 
     logger.info("WITH Optimization (vLLM Prefix Caching):")
     logger.info("  - First request: Full prompt (12,800 tokens) - 6 seconds")
-    logger.info(
-        "  - Requests 2-10: Only dynamic suffix (200 tokens) - 1.7 seconds each"
-    )
+    logger.info("  - Requests 2-10: Only dynamic suffix (200 tokens) - 1.7 seconds each")
     logger.info("  - Total time: ~17 seconds for 10 tasks")
     logger.info("")
 

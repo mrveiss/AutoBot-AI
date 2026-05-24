@@ -22,26 +22,18 @@ from pathlib import Path
 
 import pytest
 
-HOOK_PATH = (
-    Path(__file__).resolve().parent / "pre-commit-hardcoded-values"
-)
+HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-hardcoded-values"
 
 
-def _run_hook_with_staged(
-    tmp_path: Path, files: dict[str, str]
-) -> subprocess.CompletedProcess:
+def _run_hook_with_staged(tmp_path: Path, files: dict[str, str]) -> subprocess.CompletedProcess:
     """
     Stage ``files`` in a fresh git repo at ``tmp_path`` and run the hook.
 
     files: relative path -> file content
     """
     subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True)
-    subprocess.run(
-        ["git", "config", "user.email", "test@test"], cwd=tmp_path, check=True
-    )
-    subprocess.run(
-        ["git", "config", "user.name", "test"], cwd=tmp_path, check=True
-    )
+    subprocess.run(["git", "config", "user.email", "test@test"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "test"], cwd=tmp_path, check=True)
     for rel, content in files.items():
         path = tmp_path / rel
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -56,9 +48,7 @@ def _run_hook_with_staged(
     )
 
 
-@pytest.mark.skipif(
-    not HOOK_PATH.exists(), reason="hook script missing at expected path"
-)
+@pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
 class TestHardcodedIPDetection:
     """Hook MUST block hardcoded VM IPs in runtime code."""
 
@@ -81,9 +71,7 @@ class TestHardcodedIPDetection:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "src/Comp.vue": (
-                    "<script>\nconst h = '172.16.168.21';\n</script>\n"
-                ),
+                "src/Comp.vue": ("<script>\nconst h = '172.16.168.21';\n</script>\n"),
             },
         )
         assert result.returncode != 0
@@ -107,9 +95,7 @@ class TestHardcodedIPDetection:
         assert result.returncode != 0
 
 
-@pytest.mark.skipif(
-    not HOOK_PATH.exists(), reason="hook script missing at expected path"
-)
+@pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
 class TestAllowlistedContexts:
     """Files in allowlisted paths or using SSOT must NOT be flagged."""
 
@@ -117,23 +103,16 @@ class TestAllowlistedContexts:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "ssot_config.py": (
-                    "# This file IS the SSOT — IPs allowed\n"
-                    'DEFAULT_REDIS = "172.16.168.23"\n'
-                ),
+                "ssot_config.py": ("# This file IS the SSOT — IPs allowed\n" 'DEFAULT_REDIS = "172.16.168.23"\n'),
             },
         )
-        assert result.returncode == 0, (
-            f"hook should allow ssot_config.py:\n{result.stdout}"
-        )
+        assert result.returncode == 0, f"hook should allow ssot_config.py:\n{result.stdout}"
 
     def test_allows_network_constants(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "network_constants.py": (
-                    'PRIVATE_PREFIX = "172.16.168."\n'
-                ),
+                "network_constants.py": ('PRIVATE_PREFIX = "172.16.168."\n'),
             },
         )
         assert result.returncode == 0
@@ -160,10 +139,7 @@ class TestAllowlistedContexts:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "src/db.py": (
-                    "import os\n"
-                    'host = os.getenv("AUTOBOT_REDIS_HOST", "172.16.168.23")\n'
-                ),
+                "src/db.py": ("import os\n" 'host = os.getenv("AUTOBOT_REDIS_HOST", "172.16.168.23")\n'),
             },
         )
         # NOTE: This test documents the CURRENT behavior of the hook —
@@ -192,9 +168,7 @@ class TestAllowlistedContexts:
         assert result.returncode == 0
 
 
-@pytest.mark.skipif(
-    not HOOK_PATH.exists(), reason="hook script missing at expected path"
-)
+@pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
 class TestNonBlockingPatterns:
     """Lines that look like hardcoded IPs but aren't deployment IPs are allowed."""
 
@@ -207,9 +181,7 @@ class TestNonBlockingPatterns:
         assert result.returncode == 0
 
     def test_allows_loopback_literal(self, tmp_path: Path) -> None:
-        result = _run_hook_with_staged(
-            tmp_path, {"src/local.py": 'HOST = "127.0.0.1"\n'}
-        )
+        result = _run_hook_with_staged(tmp_path, {"src/local.py": 'HOST = "127.0.0.1"\n'})
         assert result.returncode == 0
 
     def test_allows_comments(self, tmp_path: Path) -> None:
@@ -227,9 +199,7 @@ class TestNonBlockingPatterns:
         assert result.returncode == 0
 
 
-@pytest.mark.skipif(
-    not HOOK_PATH.exists(), reason="hook script missing at expected path"
-)
+@pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
 class TestHookExecutability:
     """Sanity: the script is executable and reports its rules on a clean stage."""
 
@@ -246,9 +216,8 @@ class TestHookExecutability:
 # 1 deny + 1 allow per category = 16 new tests. Locks current behavior so
 # refactoring or tightening any category is safe.
 
-@pytest.mark.skipif(
-    not HOOK_PATH.exists(), reason="hook script missing at expected path"
-)
+
+@pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
 class TestHardcodedPorts:
     """check_hardcoded_ports: blocks `:8001` etc. literals in URL context."""
 
@@ -274,9 +243,7 @@ class TestHardcodedPorts:
         assert result.returncode == 0
 
 
-@pytest.mark.skipif(
-    not HOOK_PATH.exists(), reason="hook script missing at expected path"
-)
+@pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
 class TestMagicNumbers:
     """check_magic_numbers: blocks ``limit = 10``, ``page_size = 50``, etc.
 
@@ -298,9 +265,7 @@ class TestMagicNumbers:
         assert result.returncode != 0
         assert "10" in result.stdout
 
-    def test_allows_limit_no_spaces_documented_false_negative(
-        self, tmp_path: Path
-    ) -> None:
+    def test_allows_limit_no_spaces_documented_false_negative(self, tmp_path: Path) -> None:
         # #6786 regression target: see class docstring. Flip this assertion
         # when the regex is tightened to catch the no-spaces form too.
         result = _run_hook_with_staged(
@@ -324,9 +289,7 @@ class TestMagicNumbers:
         assert result.returncode == 0
 
 
-@pytest.mark.skipif(
-    not HOOK_PATH.exists(), reason="hook script missing at expected path"
-)
+@pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
 class TestHardcodedRoles:
     """check_hardcoded_roles: blocks `role="user"` literals."""
 
@@ -343,17 +306,14 @@ class TestHardcodedRoles:
             tmp_path,
             {
                 "src/chat.py": (
-                    "from constants import CategoryDefaults\n"
-                    'msg = {"role": CategoryDefaults.ROLE_USER}\n'
+                    "from constants import CategoryDefaults\n" 'msg = {"role": CategoryDefaults.ROLE_USER}\n'
                 ),
             },
         )
         assert result.returncode == 0
 
 
-@pytest.mark.skipif(
-    not HOOK_PATH.exists(), reason="hook script missing at expected path"
-)
+@pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
 class TestHardcodedCategories:
     """check_hardcoded_categories: blocks `category="general"` literals."""
 
@@ -369,18 +329,13 @@ class TestHardcodedCategories:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "src/q.py": (
-                    "from constants import CategoryDefaults\n"
-                    'q = {"category": CategoryDefaults.GENERAL}\n'
-                ),
+                "src/q.py": ("from constants import CategoryDefaults\n" 'q = {"category": CategoryDefaults.GENERAL}\n'),
             },
         )
         assert result.returncode == 0
 
 
-@pytest.mark.skipif(
-    not HOOK_PATH.exists(), reason="hook script missing at expected path"
-)
+@pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
 class TestHardcodedPaths:
     """check_hardcoded_paths: blocks `/opt/autobot` literal paths."""
 
@@ -396,18 +351,13 @@ class TestHardcodedPaths:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "src/p.py": (
-                    "from autobot_shared.ssot_config import config\n"
-                    "BASE = config.path.base_dir\n"
-                ),
+                "src/p.py": ("from autobot_shared.ssot_config import config\n" "BASE = config.path.base_dir\n"),
             },
         )
         assert result.returncode == 0
 
 
-@pytest.mark.skipif(
-    not HOOK_PATH.exists(), reason="hook script missing at expected path"
-)
+@pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
 class TestHardcodedModelNames:
     """check_hardcoded_model_names: blocks specific LLM model name literals.
 
@@ -429,9 +379,7 @@ class TestHardcodedModelNames:
         assert result.returncode != 0
         assert "qwen3.5:9b" in result.stdout
 
-    def test_allows_unlisted_model_documented_false_negative(
-        self, tmp_path: Path
-    ) -> None:
+    def test_allows_unlisted_model_documented_false_negative(self, tmp_path: Path) -> None:
         # #6786 regression target: the model_pattern is a hardcoded allowlist
         # (model names that get fenced); models added later (qwen3:8b, etc.)
         # silently pass. Flip the assertion when the model_pattern is generalized.
@@ -445,18 +393,13 @@ class TestHardcodedModelNames:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "src/llm.py": (
-                    "from autobot_shared.ssot_config import config\n"
-                    "MODEL = config.llm.default_model\n"
-                ),
+                "src/llm.py": ("from autobot_shared.ssot_config import config\n" "MODEL = config.llm.default_model\n"),
             },
         )
         assert result.returncode == 0
 
 
-@pytest.mark.skipif(
-    not HOOK_PATH.exists(), reason="hook script missing at expected path"
-)
+@pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
 class TestHardcodedDbDsns:
     """check_hardcoded_db_dsns: blocks bare connection-string literals."""
 
@@ -472,18 +415,13 @@ class TestHardcodedDbDsns:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "src/db.py": (
-                    "import os\n"
-                    'DSN = os.getenv("DATABASE_URL")\n'
-                ),
+                "src/db.py": ("import os\n" 'DSN = os.getenv("DATABASE_URL")\n'),
             },
         )
         assert result.returncode == 0
 
 
-@pytest.mark.skipif(
-    not HOOK_PATH.exists(), reason="hook script missing at expected path"
-)
+@pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
 class TestHardcodedTimeouts:
     """check_hardcoded_timeouts: blocks bare `timeout=N` literals."""
 
@@ -497,9 +435,7 @@ class TestHardcodedTimeouts:
         # common literal the hook tries to flag. If this test fails after
         # a hook tightening, the new behavior should be reflected here
         # rather than the test being deleted.
-        assert result.returncode in (0, 1), (
-            "Hook should produce either pass or violation, not error"
-        )
+        assert result.returncode in (0, 1), "Hook should produce either pass or violation, not error"
 
     def test_allows_timeout_via_config(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(

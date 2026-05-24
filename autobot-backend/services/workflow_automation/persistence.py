@@ -13,6 +13,7 @@ The notification config is a simple dataclass so we serialise it with
 
 import json
 from dataclasses import asdict
+
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from constants.redis_constants import REDIS_KEY

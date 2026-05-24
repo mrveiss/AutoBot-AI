@@ -68,8 +68,10 @@ from _scan_helpers import iter_python_files  # noqa: E402
 
 class _ResolutionCache(NamedTuple):
     """Cache key for module resolution results: (file_path, mtime)."""
+
     file_path: str
     mtime: float
+
 
 # Files exempt from the check.
 ALLOWLIST: frozenset[str] = frozenset(

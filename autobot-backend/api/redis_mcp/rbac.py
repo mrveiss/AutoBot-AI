@@ -12,6 +12,7 @@ Roles:
 """
 
 from enum import Enum
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -108,7 +109,7 @@ def validate_key_namespace(key: str, is_admin: bool, access: ToolAccess) -> tupl
 # Tool capability tags for bundle membership (data-driven, not name-based)
 # New tools auto-classify based on their declared ToolAccess level.
 _BUNDLE_TAG_MAP: dict[str, set[str]] = {
-    "voice_safe": {"read"},           # read-only tools only
+    "voice_safe": {"read"},  # read-only tools only
     "voice_extended": {"read", "scoped_write"},  # read + scoped writes
     "voice_admin": {"read", "scoped_write", "full", "approval"},  # all non-blocked
 }

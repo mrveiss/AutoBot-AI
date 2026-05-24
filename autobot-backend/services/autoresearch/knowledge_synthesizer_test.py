@@ -110,9 +110,7 @@ class TestKnowledgeSynthesizer:
         assert insights == []
 
     @pytest.mark.asyncio
-    async def test_synthesize_session_llm_failure_returns_empty(
-        self, synthesizer, mock_llm
-    ) -> None:
+    async def test_synthesize_session_llm_failure_returns_empty(self, synthesizer, mock_llm) -> None:
         """LLM exception during synthesis returns [] gracefully — Issue #3211."""
         mock_llm.chat.side_effect = RuntimeError("LLM service unavailable")
         insights = await synthesizer.synthesize_session("session-1")

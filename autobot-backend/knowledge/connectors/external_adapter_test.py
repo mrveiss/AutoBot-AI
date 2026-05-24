@@ -51,7 +51,7 @@ def _make_process_mock(stdout_lines: list[str], stderr_lines: list[str] | None =
             yield (line + "\n").encode("utf-8")
 
     async def _async_iter_stderr():
-        for line in (stderr_lines or []):
+        for line in stderr_lines or []:
             yield (line + "\n").encode("utf-8")
 
     stdout_mock = MagicMock()
@@ -73,17 +73,22 @@ def adapter():
 # test_connection
 # ------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_connection_returns_true_on_succeeded(adapter):
-    check_msg = json.dumps({
-        "type": "CONNECTION_STATUS",
-        "connectionStatus": {"status": "SUCCEEDED"},
-    })
+    check_msg = json.dumps(
+        {
+            "type": "CONNECTION_STATUS",
+            "connectionStatus": {"status": "SUCCEEDED"},
+        }
+    )
     proc = MagicMock()
-    proc.communicate = AsyncMock(return_value=(
-        (check_msg + "\n").encode("utf-8"),
-        b"",
-    ))
+    proc.communicate = AsyncMock(
+        return_value=(
+            (check_msg + "\n").encode("utf-8"),
+            b"",
+        )
+    )
     proc.kill = MagicMock()
     with patch("asyncio.create_subprocess_exec", return_value=proc):
         result = await adapter.test_connection()
@@ -92,15 +97,19 @@ async def test_connection_returns_true_on_succeeded(adapter):
 
 @pytest.mark.asyncio
 async def test_connection_returns_false_on_failed(adapter):
-    check_msg = json.dumps({
-        "type": "CONNECTION_STATUS",
-        "connectionStatus": {"status": "FAILED", "message": "Invalid token"},
-    })
+    check_msg = json.dumps(
+        {
+            "type": "CONNECTION_STATUS",
+            "connectionStatus": {"status": "FAILED", "message": "Invalid token"},
+        }
+    )
     proc = MagicMock()
-    proc.communicate = AsyncMock(return_value=(
-        (check_msg + "\n").encode("utf-8"),
-        b"",
-    ))
+    proc.communicate = AsyncMock(
+        return_value=(
+            (check_msg + "\n").encode("utf-8"),
+            b"",
+        )
+    )
     proc.kill = MagicMock()
     with patch("asyncio.create_subprocess_exec", return_value=proc):
         result = await adapter.test_connection()
@@ -116,15 +125,19 @@ async def test_connection_returns_false_on_exception(adapter):
 
 @pytest.mark.asyncio
 async def test_connection_logs_stderr_as_warning(adapter):
-    check_msg = json.dumps({
-        "type": "CONNECTION_STATUS",
-        "connectionStatus": {"status": "SUCCEEDED"},
-    })
+    check_msg = json.dumps(
+        {
+            "type": "CONNECTION_STATUS",
+            "connectionStatus": {"status": "SUCCEEDED"},
+        }
+    )
     proc = MagicMock()
-    proc.communicate = AsyncMock(return_value=(
-        (check_msg + "\n").encode("utf-8"),
-        b"warning: something\n",
-    ))
+    proc.communicate = AsyncMock(
+        return_value=(
+            (check_msg + "\n").encode("utf-8"),
+            b"warning: something\n",
+        )
+    )
     proc.kill = MagicMock()
     with patch("asyncio.create_subprocess_exec", return_value=proc):
         with patch.object(adapter.logger, "warning") as mock_warn:
@@ -136,13 +149,16 @@ async def test_connection_logs_stderr_as_warning(adapter):
 # sync -- RECORD messages
 # ------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_sync_record_messages_ingested(adapter):
-    record_msg = json.dumps({
-        "type": "RECORD",
-        "stream": "issues",
-        "record": {"data": {"title": "Bug report", "body": "Details here", "url": "https://example.com"}},
-    })
+    record_msg = json.dumps(
+        {
+            "type": "RECORD",
+            "stream": "issues",
+            "record": {"data": {"title": "Bug report", "body": "Details here", "url": "https://example.com"}},
+        }
+    )
     proc = _make_process_mock([record_msg])
     with patch("asyncio.create_subprocess_exec", return_value=proc):
         with patch.object(adapter, "_ingest_content", new=AsyncMock()) as mock_ingest:
@@ -155,10 +171,12 @@ async def test_sync_record_messages_ingested(adapter):
 
 @pytest.mark.asyncio
 async def test_sync_state_messages_persisted(adapter):
-    state_msg = json.dumps({
-        "type": "STATE",
-        "state": {"data": {"cursor": "2026-01-01T00:00:00Z"}},
-    })
+    state_msg = json.dumps(
+        {
+            "type": "STATE",
+            "state": {"data": {"cursor": "2026-01-01T00:00:00Z"}},
+        }
+    )
     proc = _make_process_mock([state_msg])
     with patch("asyncio.create_subprocess_exec", return_value=proc):
         with patch.object(adapter, "_save_state", new=AsyncMock()) as mock_save:
@@ -169,10 +187,12 @@ async def test_sync_state_messages_persisted(adapter):
 
 @pytest.mark.asyncio
 async def test_sync_trace_messages_recorded_as_errors(adapter):
-    trace_msg = json.dumps({
-        "type": "TRACE",
-        "trace": {"error": {"message": "Connection refused"}},
-    })
+    trace_msg = json.dumps(
+        {
+            "type": "TRACE",
+            "trace": {"error": {"message": "Connection refused"}},
+        }
+    )
     proc = _make_process_mock([trace_msg])
     with patch("asyncio.create_subprocess_exec", return_value=proc):
         with patch.object(adapter, "_load_state", new=AsyncMock(return_value=None)):
@@ -201,6 +221,7 @@ async def test_sync_incremental_passes_state_arg(adapter):
 # field_map conversion
 # ------------------------------------------------------------------
 
+
 def test_convert_record_maps_title_and_body(adapter):
     data = {"title": "My Issue", "body": "Description", "url": "https://github.com/issue/1"}
     content = adapter._convert_record("issues", data)
@@ -226,22 +247,27 @@ def test_convert_record_returns_none_for_empty_data(adapter):
 # discover_sources
 # ------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_discover_sources_filters_by_selected_streams(adapter):
-    catalog_msg = json.dumps({
-        "type": "CATALOG",
-        "catalog": {
-            "streams": [
-                {"stream": {"name": "issues", "json_schema": {}}},
-                {"stream": {"name": "pull_requests", "json_schema": {}}},
-            ]
-        },
-    })
+    catalog_msg = json.dumps(
+        {
+            "type": "CATALOG",
+            "catalog": {
+                "streams": [
+                    {"stream": {"name": "issues", "json_schema": {}}},
+                    {"stream": {"name": "pull_requests", "json_schema": {}}},
+                ]
+            },
+        }
+    )
     proc = MagicMock()
-    proc.communicate = AsyncMock(return_value=(
-        (catalog_msg + "\n").encode("utf-8"),
-        b"",
-    ))
+    proc.communicate = AsyncMock(
+        return_value=(
+            (catalog_msg + "\n").encode("utf-8"),
+            b"",
+        )
+    )
     proc.kill = MagicMock()
     with patch("asyncio.create_subprocess_exec", return_value=proc):
         sources = await adapter.discover_sources()
@@ -254,6 +280,7 @@ async def test_discover_sources_filters_by_selected_streams(adapter):
 # fetch_content
 # ------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_fetch_content_raises_not_implemented(adapter):
     with pytest.raises(NotImplementedError):
@@ -263,6 +290,7 @@ async def test_fetch_content_raises_not_implemented(adapter):
 # ------------------------------------------------------------------
 # detect_changes
 # ------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_detect_changes_returns_empty_list(adapter):

@@ -197,10 +197,7 @@ def main(argv: list[str]) -> int:
         all_violations.extend(check_file(path, plural_keys))
 
     if all_violations:
-        print(
-            "i18n-plural-third-arg: t(plural-key, …) calls missing the required "
-            "3rd count argument:\n"
-        )
+        print("i18n-plural-third-arg: t(plural-key, …) calls missing the required " "3rd count argument:\n")
         for v in all_violations:
             print(f"  {v}")
         print(

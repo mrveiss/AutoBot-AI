@@ -14,8 +14,7 @@ timestamp.  All writes are fire-and-forget — callers are never blocked.
 import warnings
 
 warnings.warn(
-    "services.event_log is deprecated (GH#8290). "
-    "Import from services.audit.unified_audit instead.",
+    "services.event_log is deprecated (GH#8290). " "Import from services.audit.unified_audit instead.",
     DeprecationWarning,
     stacklevel=2,
 )

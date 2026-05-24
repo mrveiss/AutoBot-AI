@@ -25,7 +25,7 @@ from enhanced_orchestration.execution_strategies import ExecutionStrategyHandler
 from enhanced_orchestration.success_criteria import SuccessCriteriaEvaluator
 from enhanced_orchestration.types import AgentTask, WorkflowDependencies, WorkflowPlan
 from enhanced_orchestration.workflow_planning import StrategyPlanner
-from events.bus import publish_event, PersistStrategy
+from events.bus import PersistStrategy, publish_event
 from orchestration.performance_tracker import PerformanceTracker
 
 logger = get_logger("workflow_runner")
@@ -381,7 +381,9 @@ class WorkflowRunner:
         return task.to_completed_result(result)
 
     async def _publish_workflow_event(self, workflow_id: str, event_type: str, data: Dict[str, Any]) -> None:
-        await publish_event("global", 
+        await publish_event(
+            "global",
             "workflow_event",
-            {"workflow_id": workflow_id, "event_type": event_type, "timestamp": time.time(), "data": data}, persist=PersistStrategy.NONE
+            {"workflow_id": workflow_id, "event_type": event_type, "timestamp": time.time(), "data": data},
+            persist=PersistStrategy.NONE,
         )

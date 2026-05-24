@@ -143,11 +143,7 @@ async def backfill_sessions(dry_run: bool = False) -> None:
         logger.error("Chats directory not found: %s", chats_dir)
         return
 
-    files = [
-        f
-        for f in chats_dir.iterdir()
-        if f.name.endswith("_chat.json") or f.name.startswith("chat_")
-    ]
+    files = [f for f in chats_dir.iterdir() if f.name.endswith("_chat.json") or f.name.startswith("chat_")]
     logger.info("Found %d session files to process", len(files))
 
     user_cache: dict[str, str | None] = {}

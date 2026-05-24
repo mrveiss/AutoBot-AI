@@ -18,9 +18,7 @@ from pathlib import Path
 
 import pytest
 
-HOOK_PATH = (
-    Path(__file__).resolve().parent / "pre-commit-no-tag-pinned-action"
-)
+HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-tag-pinned-action"
 
 
 def _run(tmp_path: Path, content: str, rel: str = ".github/workflows/test.yml") -> subprocess.CompletedProcess:
@@ -36,6 +34,7 @@ def _run(tmp_path: Path, content: str, rel: str = ".github/workflows/test.yml") 
 
 
 # === Allowed forms ===
+
 
 def test_allow_first_party_actions_tag_pinned(tmp_path):
     """actions/* (first-party, GitHub-maintained) are allowed with tag pins."""
@@ -60,6 +59,7 @@ def test_allow_actions_with_subpath_tag_pinned(tmp_path):
 
 
 # === Rejected forms ===
+
 
 def test_reject_third_party_tag_pinned_v3(tmp_path):
     """Common 3rd-party tag pin must be rejected."""
@@ -101,6 +101,7 @@ def test_reject_semver_patch_tag(tmp_path):
 
 
 # === Mixed / multi-line ===
+
 
 def test_multiple_uses_only_violators_reported(tmp_path):
     """File with mixed allowed + rejected — should fail and report only violators."""

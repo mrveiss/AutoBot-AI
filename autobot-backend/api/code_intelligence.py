@@ -19,6 +19,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Tuple
 
+from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
@@ -80,7 +81,6 @@ from code_intelligence.security_analyzer import (
     SecuritySeverity,
     get_vulnerability_types,
 )
-from celery.result import AsyncResult
 from constants.ttl_constants import TTL_5_MINUTES
 from tasks.analytics_tasks import run_security_analysis
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found

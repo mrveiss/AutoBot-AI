@@ -31,10 +31,8 @@ import re
 # no import-path changes.  Fall back to the package-local implementations only
 # when code_analysis is unavailable (e.g., isolated test environments).
 try:
-    from code_analysis.src.anti_pattern_detector import (
-        AntiPatternDetector,  # noqa: F401
-        AntiPatternType,  # noqa: F401  — canonical SSOT enum (GH#6757)
-    )
+    from code_analysis.src.anti_pattern_detector import AntiPatternDetector  # noqa: F401
+    from code_analysis.src.anti_pattern_detector import AntiPatternType  # noqa: F401  — canonical SSOT enum (GH#6757)
 except ImportError:
     from .anti_pattern_detection import (  # type: ignore[assignment]
         AntiPatternDetector,

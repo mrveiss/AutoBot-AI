@@ -46,9 +46,7 @@ class AutoBotServiceWithRetry:
                 base_delay=0.5,
                 max_delay=5.0,
                 strategy=RetryStrategy.JITTERED_BACKOFF,
-                retryable_exceptions=(
-                    Exception,
-                ),  # More specific in real implementation
+                retryable_exceptions=(Exception,),  # More specific in real implementation
             )
         )
 
@@ -61,9 +59,7 @@ class AutoBotServiceWithRetry:
             )
         )
 
-    @retry_async(
-        max_attempts=3, base_delay=1.0, strategy=RetryStrategy.EXPONENTIAL_BACKOFF
-    )
+    @retry_async(max_attempts=3, base_delay=1.0, strategy=RetryStrategy.EXPONENTIAL_BACKOFF)
     async def fetch_llm_response(self, prompt: str) -> Dict[str, Any]:
         """
         Example LLM API call with retry mechanism
@@ -86,9 +82,7 @@ class AutoBotServiceWithRetry:
             "timestamp": time.time(),
         }
 
-    async def search_knowledge_base(
-        self, query: str, limit: int = 5
-    ) -> List[Dict[str, Any]]:
+    async def search_knowledge_base(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
         """
         Knowledge base search with database retry
         Uses specialized database retry configuration
@@ -104,15 +98,10 @@ class AutoBotServiceWithRetry:
                 raise ConnectionError("Vector database temporarily unavailable")
 
             # Simulate search results
-            return [
-                {"content": f"Result {i} for query: {query}", "score": 0.9 - i * 0.1}
-                for i in range(min(limit, 3))
-            ]
+            return [{"content": f"Result {i} for query: {query}", "score": 0.9 - i * 0.1} for i in range(min(limit, 3))]
 
         try:
-            return await self.database_retry.execute_async(
-                perform_search, operation_name="knowledge_base_search"
-            )
+            return await self.database_retry.execute_async(perform_search, operation_name="knowledge_base_search")
         except RetryExhaustedError as e:
             logger.error(f"Knowledge base search failed after retries: {e}")
             return []
@@ -181,9 +170,7 @@ class AutoBotServiceWithRetry:
             }
 
         try:
-            return await command_retry.execute_async(
-                execute_command, operation_name="command_execution"
-            )
+            return await command_retry.execute_async(execute_command, operation_name="command_execution")
         except PermissionError:
             logger.error(f"Permission denied for command: {command}")
             return {
@@ -242,10 +229,7 @@ class WorkflowOrchestratorWithRetry:
 
         if kb_results:
             context = "\\n".join([result["content"] for result in kb_results[:3]])
-            prompt = (
-                f"Based on this context:\\n{context}\\n\\n"
-                f"Answer this query: {query}"
-            )
+            prompt = f"Based on this context:\\n{context}\\n\\n" f"Answer this query: {query}"
         else:
             prompt = f"Answer this query: {query}"
 
@@ -261,9 +245,7 @@ class WorkflowOrchestratorWithRetry:
         )
 
         logger.info("Step 3: Processing related files...")
-        file_results = await self.service.process_file_upload(
-            f"research_{query[:20]}.txt"
-        )
+        file_results = await self.service.process_file_upload(f"research_{query[:20]}.txt")
         workflow_results["steps"].append(
             {
                 "step": "file_processing",
@@ -287,9 +269,7 @@ class WorkflowOrchestratorWithRetry:
         }
 
         try:
-            kb_results, llm_response, file_results = await self._run_research_steps(
-                query, workflow_results
-            )
+            kb_results, llm_response, file_results = await self._run_research_steps(query, workflow_results)
             workflow_results.update(
                 {
                     "status": "completed",
@@ -334,9 +314,7 @@ class WorkflowOrchestratorWithRetry:
         async def process_item(item: str) -> Dict[str, Any]:
             async with semaphore:
                 try:
-                    result = await self.service.fetch_llm_response(
-                        f"Process item: {item}"
-                    )
+                    result = await self.service.fetch_llm_response(f"Process item: {item}")
                     return {"item": item, "status": "success", "result": result}
                 except RetryExhaustedError as e:
                     logger.warning(f"Item {item} failed after retries: {e}")
@@ -350,9 +328,7 @@ class WorkflowOrchestratorWithRetry:
         for item_result in item_results:
             if isinstance(item_result, Exception):
                 results["failed"] += 1
-                results["results"].append(
-                    {"item": "unknown", "status": "error", "error": str(item_result)}
-                )
+                results["results"].append({"item": "unknown", "status": "error", "error": str(item_result)})
             elif item_result["status"] == "success":
                 results["successful"] += 1
                 results["results"].append(item_result)
@@ -380,20 +356,14 @@ def _log_retry_statistics(stats):
         label = component.replace("_", " ").title()
         logger.info(f"\\n📊 {label} Statistics:")
         logger.info(f"   Total Attempts: {component_stats['total_attempts']}")
-        logger.info(
-            f"   Successful Retries: " f"{component_stats['successful_retries']}"
-        )
+        logger.info(f"   Successful Retries: " f"{component_stats['successful_retries']}")
         logger.info(f"   Failed Operations: " f"{component_stats['failed_operations']}")
         logger.info(f"   Success Rate: {component_stats['success_rate']:.1f}%")
 
         if component_stats["operations_by_type"]:
             logger.info("   Operations by Type:")
             for op_type, op_stats in component_stats["operations_by_type"].items():
-                logger.info(
-                    f"     {op_type}: "
-                    f"{op_stats['succeeded']}/{op_stats['total']} "
-                    f"succeeded"
-                )
+                logger.info(f"     {op_type}: " f"{op_stats['succeeded']}/{op_stats['total']} " f"succeeded")
 
 
 async def demonstrate_retry_patterns():
@@ -405,9 +375,7 @@ async def demonstrate_retry_patterns():
     service = AutoBotServiceWithRetry()
 
     try:
-        llm_result = await service.fetch_llm_response(
-            "What is artificial intelligence?"
-        )
+        llm_result = await service.fetch_llm_response("What is artificial intelligence?")
         logger.info(f"✅ LLM Response: {llm_result['response'][:100]}...")
 
         kb_results = await service.search_knowledge_base("machine learning algorithms")
@@ -422,9 +390,7 @@ async def demonstrate_retry_patterns():
     logger.info("\\n2. Workflow Orchestration with Retry")
     orchestrator = WorkflowOrchestratorWithRetry()
 
-    workflow_result = await orchestrator.execute_research_workflow(
-        "quantum computing applications"
-    )
+    workflow_result = await orchestrator.execute_research_workflow("quantum computing applications")
     logger.info(f"✅ Workflow Status: {workflow_result['status']}")
     logger.info(f"📊 Steps Completed: {len(workflow_result['steps'])}")
     logger.info(f"⏱️  Duration: {workflow_result['duration']:.2f} seconds")
@@ -433,11 +399,7 @@ async def demonstrate_retry_patterns():
     test_items = [f"analyze data trend {i}" for i in range(1, 6)]
 
     batch_result = await orchestrator.batch_process_with_retry(test_items)
-    logger.info(
-        f"✅ Batch Processing: "
-        f"{batch_result['successful']}/{batch_result['total_items']} "
-        f"succeeded"
-    )
+    logger.info(f"✅ Batch Processing: " f"{batch_result['successful']}/{batch_result['total_items']} " f"succeeded")
     logger.info(f"📈 Success Rate: {batch_result['success_rate']:.1f}%")
     logger.info(f"⏱️  Total Duration: {batch_result['duration']:.2f} seconds")
 
@@ -494,9 +456,7 @@ async def demonstrate_decorators():
     # Test sync decorator
     try:
         config_result = config_file_operation("/etc/autobot/config.json")
-        logger.info(
-            f"✅ Config Loading: {len(config_result['settings'])} settings loaded"
-        )
+        logger.info(f"✅ Config Loading: {len(config_result['settings'])} settings loaded")
     except RetryExhaustedError as e:
         logger.error(f"❌ Config loading failed after {e.attempts} attempts")
 
@@ -510,16 +470,10 @@ if __name__ == "__main__":
 
         logger.info("\\n🎉 Retry Mechanism Demonstration Complete!")
         logger.info("\\n💡 Key Takeaways:")
-        logger.info(
-            "   - Use specialized retry functions for different operation types"
-        )
-        logger.info(
-            "   - Configure retry strategies based on operation characteristics"
-        )
+        logger.info("   - Use specialized retry functions for different operation types")
+        logger.info("   - Configure retry strategies based on operation characteristics")
         logger.info("   - Monitor retry statistics to optimize configurations")
-        logger.info(
-            "   - Use decorators for simple cases, RetryMechanism for complex ones"
-        )
+        logger.info("   - Use decorators for simple cases, RetryMechanism for complex ones")
         logger.error("   - Handle RetryExhaustedError gracefully in production code")
 
     # Run the demonstration

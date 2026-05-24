@@ -297,7 +297,7 @@ def _list_tables_sync(db_path: Path) -> list[dict]:
         table_info = []
         for (table_name,) in tables:
             # nosec B608 - table_name comes from sqlite_master (system table), not user input
-            cursor.execute(f"SELECT COUNT(*) FROM [{table_name}]")  # nosec B608
+            cursor.execute(f"SELECT COUNT(*) FROM [{table_name}]")  # nosec B608  # nosemgrep: autobot-sql-string-format
             row_count = cursor.fetchone()[0]
             table_info.append({"name": table_name, "row_count": row_count})
 
@@ -318,7 +318,7 @@ def _describe_schema_sync(db_path: Path, table: str | None) -> dict:
 
         if table:
             _validate_sql_identifier(table, "table name")
-            cursor.execute(f"PRAGMA table_info([{table}])")  # nosec B608
+            cursor.execute(f"PRAGMA table_info([{table}])")  # nosec B608  # nosemgrep: autobot-sql-string-format
             columns = cursor.fetchall()
             schemas[table] = [
                 {
@@ -336,7 +336,7 @@ def _describe_schema_sync(db_path: Path, table: str | None) -> dict:
             tables = cursor.fetchall()
 
             for (table_name,) in tables:
-                cursor.execute(f"PRAGMA table_info([{table_name}])")
+                cursor.execute(f"PRAGMA table_info([{table_name}])")  # nosemgrep: autobot-sql-string-format
                 columns = cursor.fetchall()
                 schemas[table_name] = [
                     {
@@ -380,7 +380,7 @@ def _get_db_statistics_sync(db_path: Path) -> dict:
         tables = cursor.fetchall()
         for (table_name,) in tables:
             # nosec B608 - table_name comes from sqlite_master (system table), not user input
-            cursor.execute(f"SELECT COUNT(*) FROM [{table_name}]")  # nosec B608
+            cursor.execute(f"SELECT COUNT(*) FROM [{table_name}]")  # nosec B608  # nosemgrep: autobot-sql-string-format
             total_rows += cursor.fetchone()[0]
 
         cursor.execute("SELECT sqlite_version()")

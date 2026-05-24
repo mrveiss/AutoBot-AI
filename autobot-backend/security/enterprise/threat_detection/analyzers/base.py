@@ -10,6 +10,7 @@ Part of Issue #381 - God Class Refactoring
 """
 
 from abc import ABC, abstractmethod
+
 from ..models import AnalysisContext, SecurityEvent, ThreatEvent
 
 

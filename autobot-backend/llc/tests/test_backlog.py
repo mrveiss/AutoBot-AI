@@ -231,8 +231,9 @@ class TestBacklogRoute:
             mock_svc_factory.return_value = svc
 
             # Override the session dependency
-            from llc.api.backlog import get_session, router
             from fastapi import FastAPI
+
+            from llc.api.backlog import get_session, router
 
             app = FastAPI()
 

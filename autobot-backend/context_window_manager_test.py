@@ -9,7 +9,7 @@ Issue #7351: non-transformer models must not be compressed at the 4K/8K cap.
 
 import pytest
 
-from context_window_manager import ContextWindowManager, _NON_TRANSFORMER_FAMILIES
+from context_window_manager import _NON_TRANSFORMER_FAMILIES, ContextWindowManager
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -140,7 +140,10 @@ class TestGetCompressionThresholdTransformer:
     def test_transformer_respects_explicit_compression_threshold(self):
         config = {
             "models": {
-                "default": {"name": "model-a", "message_budget": {"system_prompt": 0, "recent_messages": 10, "max_history_tokens": 1000}},
+                "default": {
+                    "name": "model-a",
+                    "message_budget": {"system_prompt": 0, "recent_messages": 10, "max_history_tokens": 1000},
+                },
                 "model-a": {
                     "compression_threshold": 16384,
                     "context_window_tokens": 32768,
@@ -182,7 +185,10 @@ class TestGetCompressionThresholdNonTransformer:
         """If context_window_tokens absent on a non-transformer, fall back to 8192."""
         config = {
             "models": {
-                "default": {"name": "ssm", "message_budget": {"system_prompt": 0, "recent_messages": 10, "max_history_tokens": 1000}},
+                "default": {
+                    "name": "ssm",
+                    "message_budget": {"system_prompt": 0, "recent_messages": 10, "max_history_tokens": 1000},
+                },
                 "ssm": {
                     "architecture_family": "state_space",
                     # no context_window_tokens
@@ -231,7 +237,10 @@ class TestCompressionThresholdExplicitOverride:
         """Issue #8359: explicit compression_threshold must win over context_window_tokens."""
         config = {
             "models": {
-                "default": {"name": "ssm-big", "message_budget": {"system_prompt": 0, "recent_messages": 10, "max_history_tokens": 1000}},
+                "default": {
+                    "name": "ssm-big",
+                    "message_budget": {"system_prompt": 0, "recent_messages": 10, "max_history_tokens": 1000},
+                },
                 "ssm-big": {
                     "architecture_family": "state_space",
                     "context_window_tokens": 131072,
@@ -249,7 +258,10 @@ class TestCompressionThresholdExplicitOverride:
         """Explicit override must also work for transformer models (existing behaviour)."""
         config = {
             "models": {
-                "default": {"name": "t5", "message_budget": {"system_prompt": 0, "recent_messages": 10, "max_history_tokens": 1000}},
+                "default": {
+                    "name": "t5",
+                    "message_budget": {"system_prompt": 0, "recent_messages": 10, "max_history_tokens": 1000},
+                },
                 "t5": {
                     "compression_threshold": 4096,
                     "context_window_tokens": 8192,
@@ -301,7 +313,10 @@ class TestArchitectureFamilyNormalization:
         """Issue #8361: 'State_Space' must be normalized to 'state_space'."""
         config = {
             "models": {
-                "default": {"name": "m", "message_budget": {"system_prompt": 0, "recent_messages": 10, "max_history_tokens": 1000}},
+                "default": {
+                    "name": "m",
+                    "message_budget": {"system_prompt": 0, "recent_messages": 10, "max_history_tokens": 1000},
+                },
                 "m": {
                     "architecture_family": "State_Space",
                     "context_window_tokens": 131072,
@@ -317,7 +332,10 @@ class TestArchitectureFamilyNormalization:
         """Issue #8361: ' hybrid ' must be stripped and lowercased."""
         config = {
             "models": {
-                "default": {"name": "j", "message_budget": {"system_prompt": 0, "recent_messages": 10, "max_history_tokens": 1000}},
+                "default": {
+                    "name": "j",
+                    "message_budget": {"system_prompt": 0, "recent_messages": 10, "max_history_tokens": 1000},
+                },
                 "j": {
                     "architecture_family": " Hybrid ",
                     "context_window_tokens": 256000,
@@ -333,7 +351,10 @@ class TestArchitectureFamilyNormalization:
         """Issue #8361: uppercase family must still trigger non-transformer bypass."""
         config = {
             "models": {
-                "default": {"name": "ssm", "message_budget": {"system_prompt": 0, "recent_messages": 10, "max_history_tokens": 1000}},
+                "default": {
+                    "name": "ssm",
+                    "message_budget": {"system_prompt": 0, "recent_messages": 10, "max_history_tokens": 1000},
+                },
                 "ssm": {
                     "architecture_family": "STATE_SPACE",
                     "context_window_tokens": 100000,

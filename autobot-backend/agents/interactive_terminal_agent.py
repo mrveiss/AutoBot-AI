@@ -19,7 +19,7 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
-from events.bus import publish_event, PersistStrategy
+from events.bus import PersistStrategy, publish_event
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
@@ -178,14 +178,16 @@ class InteractiveTerminalAgent(StandardizedAgent):
 
     async def _notify_session_started(self, command: str) -> None:
         """Publish session started event. Issue #620."""
-        await publish_event("global", 
+        await publish_event(
+            "global",
             "terminal_session",
             {
                 "chat_id": self.chat_id,
                 "status": "started",
                 "command": command,
                 "pid": self.process.pid,
-            }, persist=PersistStrategy.NONE
+            },
+            persist=PersistStrategy.NONE,
         )
 
     async def start_session(self, command: str, env: dict = None, cwd: str = None) -> None:
@@ -308,7 +310,8 @@ class InteractiveTerminalAgent(StandardizedAgent):
 
     async def _handle_sudo_prompt(self, prompt_data: str):
         """Handle sudo password prompts"""
-        await publish_event("global", 
+        await publish_event(
+            "global",
             "terminal_output",
             {
                 "chat_id": self.chat_id,
@@ -317,7 +320,8 @@ class InteractiveTerminalAgent(StandardizedAgent):
                 "requires_input": True,
                 "input_type": "password",
                 "message": ("🔐 Sudo password required. " "Click 'Send Input' to provide password."),
-            }, persist=PersistStrategy.NONE
+            },
+            persist=PersistStrategy.NONE,
         )
 
         # Switch to user input mode for password
@@ -325,7 +329,8 @@ class InteractiveTerminalAgent(StandardizedAgent):
 
     async def _handle_input_prompt(self, prompt_data: str):
         """Handle interactive prompts"""
-        await publish_event("global", 
+        await publish_event(
+            "global",
             "terminal_output",
             {
                 "chat_id": self.chat_id,
@@ -334,31 +339,36 @@ class InteractiveTerminalAgent(StandardizedAgent):
                 "requires_input": True,
                 "input_type": "text",
                 "message": "⌨️ Input required. Enter your response.",
-            }, persist=PersistStrategy.NONE
+            },
+            persist=PersistStrategy.NONE,
         )
 
     async def _send_to_chat(self, output: str):
         """Send regular output to chat"""
-        await publish_event("global", 
+        await publish_event(
+            "global",
             "terminal_output",
             {
                 "chat_id": self.chat_id,
                 "output": output,
                 "type": "output",
                 "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            }, persist=PersistStrategy.NONE
+            },
+            persist=PersistStrategy.NONE,
         )
 
     async def _send_error(self, error: str):
         """Send error message to chat"""
-        await publish_event("global", 
+        await publish_event(
+            "global",
             "terminal_output",
             {
                 "chat_id": self.chat_id,
                 "output": f"❌ Error: {error}",
                 "type": "error",
                 "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            }, persist=PersistStrategy.NONE
+            },
+            persist=PersistStrategy.NONE,
         )
 
     async def send_input(self, user_input: str, is_password: bool = False):
@@ -392,25 +402,29 @@ class InteractiveTerminalAgent(StandardizedAgent):
     async def take_control(self):
         """Allow user to take full control of terminal"""
         self.input_mode = "user"
-        await publish_event("global", 
+        await publish_event(
+            "global",
             "terminal_control",
             {
                 "chat_id": self.chat_id,
                 "status": "user_control",
                 "message": ("🎮 You now have control of the terminal. " "Type commands directly."),
-            }, persist=PersistStrategy.NONE
+            },
+            persist=PersistStrategy.NONE,
         )
 
     async def return_control(self):
         """Return control to agent"""
         self.input_mode = "agent"
-        await publish_event("global", 
+        await publish_event(
+            "global",
             "terminal_control",
             {
                 "chat_id": self.chat_id,
                 "status": "agent_control",
                 "message": "🤖 Agent has resumed control of the terminal.",
-            }, persist=PersistStrategy.NONE
+            },
+            persist=PersistStrategy.NONE,
         )
 
     async def resize_terminal(self, cols: int, rows: int):
@@ -460,7 +474,8 @@ class InteractiveTerminalAgent(StandardizedAgent):
         async with self._buffer_lock:
             output_lines = len(self.output_buffer)
 
-        await publish_event("global", 
+        await publish_event(
+            "global",
             "terminal_session",
             {
                 "chat_id": self.chat_id,
@@ -468,7 +483,8 @@ class InteractiveTerminalAgent(StandardizedAgent):
                 "exit_code": exit_code,
                 "duration": duration,
                 "output_lines": output_lines,
-            }, persist=PersistStrategy.NONE
+            },
+            persist=PersistStrategy.NONE,
         )
 
         # Cleanup

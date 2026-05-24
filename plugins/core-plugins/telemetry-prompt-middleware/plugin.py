@@ -31,9 +31,7 @@ from extensions.base import Extension, HookContext
 
 logger = logging.getLogger(__name__)
 
-_CPU_PROMQL = (
-    "100 - (avg(rate(node_cpu_seconds_total{mode='idle'}[2m])) * 100)"
-)
+_CPU_PROMQL = "100 - (avg(rate(node_cpu_seconds_total{mode='idle'}[2m])) * 100)"
 _HIGH_LOAD_HINT = (
     "[System note: host CPU is currently under high load. "
     "Please keep your response concise to minimise processing time.]"
@@ -55,10 +53,7 @@ class TelemetryPromptMiddleware(Extension):
                 self._config.get("cpu_threshold_pct", 80),
             )
         )
-        self._prometheus_url = (
-            self._config.get("prometheus_url")
-            or os.getenv("PROMETHEUS_URL", "")
-        ).rstrip("/")
+        self._prometheus_url = (self._config.get("prometheus_url") or os.getenv("PROMETHEUS_URL", "")).rstrip("/")
 
     async def on_full_prompt_ready(self, ctx: HookContext) -> Optional[str]:
         """Append a concise-response hint when CPU load exceeds threshold."""
@@ -73,7 +68,8 @@ class TelemetryPromptMiddleware(Extension):
 
         logger.debug(
             "[#3405] Telemetry plugin: current CPU %.1f%% (threshold %.1f%%)",
-            cpu_pct, self._threshold,
+            cpu_pct,
+            self._threshold,
         )
         if cpu_pct < self._threshold:
             return None

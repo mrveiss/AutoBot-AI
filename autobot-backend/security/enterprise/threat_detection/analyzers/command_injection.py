@@ -10,6 +10,7 @@ Part of Issue #381 - God Class Refactoring
 """
 
 import re
+
 from ..models import AnalysisContext, SecurityEvent, ThreatEvent
 from ..types import ThreatCategory, ThreatLevel, get_max_severity
 from .base import ThreatAnalyzer

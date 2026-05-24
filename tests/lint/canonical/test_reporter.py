@@ -1,4 +1,5 @@
 """Tests for the three reporter formatters."""
+
 import json
 from pathlib import Path
 
@@ -12,16 +13,26 @@ from tools.lint.canonical.reporter import to_json, to_markdown, to_pretty
 def sample_diagnostics() -> list[Diagnostic]:
     return [
         Diagnostic(
-            rule_id="py-print-smoke", issue="#7458", severity="warn",
-            file=Path("autobot-backend/api/foo.py"), line=42, col=4,
+            rule_id="py-print-smoke",
+            issue="#7458",
+            severity="warn",
+            file=Path("autobot-backend/api/foo.py"),
+            line=42,
+            col=4,
             message="print() in production",
             snippet="print('hi')",
             fix_hint="use logger",
         ),
         Diagnostic(
-            rule_id="py-other", issue="#9999", severity="block",
-            file=Path("autobot-backend/api/foo.py"), line=10, col=0,
-            message="bad pattern", snippet="x", fix_hint="",
+            rule_id="py-other",
+            issue="#9999",
+            severity="block",
+            file=Path("autobot-backend/api/foo.py"),
+            line=10,
+            col=0,
+            message="bad pattern",
+            snippet="x",
+            fix_hint="",
         ),
     ]
 
@@ -48,9 +59,14 @@ def test_to_json_is_round_trippable(sample_diagnostics):
 
 
 def test_to_markdown_summary_table(sample_diagnostics):
-    out = to_markdown(sample_diagnostics, scan_meta={
-        "scanned_files": 100, "duration_seconds": 1.2, "rule_count": 2,
-    })
+    out = to_markdown(
+        sample_diagnostics,
+        scan_meta={
+            "scanned_files": 100,
+            "duration_seconds": 1.2,
+            "rule_count": 2,
+        },
+    )
     assert "# Canonical-style audit" in out
     assert "block" in out
     assert "warn" in out

@@ -465,6 +465,6 @@ class TestPromptOptimizerLoop:
         session = await opt.optimize(target, benchmark_fn, max_rounds=1)
 
         assert session.best_variant is not None
-        assert abs(session.best_variant.final_score - 0.7) < 1e-9, (
-            f"Expected final_score=0.7 (average of 0.6+0.8), got {session.best_variant.final_score}"
-        )
+        assert (
+            abs(session.best_variant.final_score - 0.7) < 1e-9
+        ), f"Expected final_score=0.7 (average of 0.6+0.8), got {session.best_variant.final_score}"

@@ -22,6 +22,7 @@ Usage:
   python tools/lint/check_extension_import_boundaries.py [file1.py file2.py ...]
   If no files are given, reads from stdin (pre-commit passes staged files).
 """
+
 from __future__ import annotations
 
 import ast
@@ -50,7 +51,7 @@ _CORE_BACKEND_PACKAGES = {
     "permissions",
     "prompt_manager",
     "secure_command_executor",
-    "skills",   # top-level skills pkg from another extension is a violation
+    "skills",  # top-level skills pkg from another extension is a violation
     "extensions",  # sibling cross-import — covered by dedicated rules below
     "services",
     "tasks",

@@ -142,8 +142,8 @@ class ServiceDiscoveryCache:
 from autobot_shared.tls import (
     _LOOPBACK_HOSTS,
     _is_loopback_target,
-    get_internal_tls_context as _create_permissive_ssl_context,
 )
+from autobot_shared.tls import get_internal_tls_context as _create_permissive_ssl_context
 
 
 class ServiceNotConfiguredError(Exception):

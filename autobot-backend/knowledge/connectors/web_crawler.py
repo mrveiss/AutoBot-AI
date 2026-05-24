@@ -15,8 +15,8 @@ Issue #8152: Added config_version=2 and migrate_config() (v1→v2: max_depth→c
 
 import hashlib
 import os
-from datetime import datetime
 from collections.abc import Awaitable, Callable
+from datetime import datetime
 from typing import List
 from urllib.parse import urlparse
 
@@ -249,9 +249,7 @@ class WebCrawlerConnector(AbstractConnector):
             await self._clear_checkpoint()
 
         already_processed = await self._read_checkpoint()
-        pending_seeds = [
-            url for url in self._seed_urls if _url_to_source_id(url) not in already_processed
-        ]
+        pending_seeds = [url for url in self._seed_urls if _url_to_source_id(url) not in already_processed]
         if already_processed:
             result.resumed_from_checkpoint = True
             self.logger.info(
@@ -261,6 +259,7 @@ class WebCrawlerConnector(AbstractConnector):
             )
 
         try:
+
             async def _on_seed_done(url: str) -> None:
                 await self._write_checkpoint(_url_to_source_id(url))
 

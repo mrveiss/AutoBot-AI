@@ -33,10 +33,7 @@ class OutputCapture:
 
             logs_dir = Path(__file__).parent.parent / "logs" / "debug"
             logs_dir.mkdir(parents=True, exist_ok=True)
-            self.log_file = str(
-                logs_dir
-                / f"autobot_output_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-            )
+            self.log_file = str(logs_dir / f"autobot_output_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
         else:
             self.log_file = log_file
         self.output_queue = queue.Queue()
@@ -46,9 +43,7 @@ class OutputCapture:
         for line in iter(pipe.readline, b""):
             if line:
                 decoded_line = line.decode("utf-8", errors="replace")
-                timestamped_line = (
-                    f"[{datetime.now().strftime('%H:%M:%S')}] {prefix}{decoded_line}"
-                )
+                timestamped_line = f"[{datetime.now().strftime('%H:%M:%S')}] {prefix}{decoded_line}"
 
                 # Print to terminal
                 sys.stdout.write(timestamped_line)
@@ -90,12 +85,8 @@ class OutputCapture:
         )
 
         # Create threads to capture stdout and stderr
-        stdout_thread = threading.Thread(
-            target=self.capture_line, args=(process.stdout, "[STDOUT] "), daemon=True
-        )
-        stderr_thread = threading.Thread(
-            target=self.capture_line, args=(process.stderr, "[STDERR] "), daemon=True
-        )
+        stdout_thread = threading.Thread(target=self.capture_line, args=(process.stdout, "[STDOUT] "), daemon=True)
+        stderr_thread = threading.Thread(target=self.capture_line, args=(process.stderr, "[STDERR] "), daemon=True)
 
         stdout_thread.start()
         stderr_thread.start()
@@ -143,9 +134,7 @@ def capture_autobot_output():
         desc, command = commands[choice]
 
         if command is None:
-            command = safe_input(
-                "Enter custom command: ", default="./run_agent.sh"
-            ).strip()
+            command = safe_input("Enter custom command: ", default="./run_agent.sh").strip()
 
         if command:
             capture.run_command(command)
@@ -160,9 +149,7 @@ def capture_specific_test():
     parser = argparse.ArgumentParser(description="Capture terminal output")
     parser.add_argument("command", nargs="?", help="Command to run")
     parser.add_argument("-o", "--output", help="Output log file")
-    parser.add_argument(
-        "-t", "--tail", action="store_true", help="Tail the log file after"
-    )
+    parser.add_argument("-t", "--tail", action="store_true", help="Tail the log file after")
 
     args = parser.parse_args()
 

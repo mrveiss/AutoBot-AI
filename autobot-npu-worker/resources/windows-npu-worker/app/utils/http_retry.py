@@ -62,9 +62,7 @@ async def aiohttp_with_backoff(
         try:
             timeout = aiohttp.ClientTimeout(total=timeout_s)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with getattr(session, method.lower())(
-                    url, **req_kwargs
-                ) as resp:
+                async with getattr(session, method.lower())(url, **req_kwargs) as resp:
                     resp.raise_for_status()
                     return await resp.json()
         except Exception as exc:

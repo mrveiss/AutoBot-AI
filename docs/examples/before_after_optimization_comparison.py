@@ -31,9 +31,7 @@ async def example_before_optimization():
 
     system_prompt = get_prompt("default.agent.system.main")
 
-    logger.info(
-        f"Prompt length: {len(system_prompt):,} characters (~{len(system_prompt)//4:,} tokens)"
-    )
+    logger.info(f"Prompt length: {len(system_prompt):,} characters (~{len(system_prompt)//4:,} tokens)")
     logger.info("Provider: ollama")
     logger.info("")
 
@@ -100,9 +98,7 @@ async def example_after_optimization():
         # 3. Routes to vLLM provider
 
         if i == 1:
-            logger.info(
-                "  - First request: Processing full 4,845 token prefix + 66 token suffix"
-            )
+            logger.info("  - First request: Processing full 4,845 token prefix + 66 token suffix")
             logger.info("  - Expected time: ~6 seconds (cold cache)")
             logger.info("  - Cache efficiency: 0% (initializing)")
         else:
@@ -131,8 +127,7 @@ async def example_api_usage_comparison():
 
     logger.info("BEFORE (Traditional):")
     logger.info("-" * 70)
-    logger.info(
-        """
+    logger.info("""
 from prompt_manager import get_prompt
 
 system_prompt = get_prompt("default.agent.system.main")
@@ -144,14 +139,12 @@ response = await llm.chat_completion(
     ],
     provider="ollama"
 )
-    """
-    )
+    """)
 
     logger.info("")
     logger.info("AFTER (Optimized):")
     logger.info("-" * 70)
-    logger.info(
-        """
+    logger.info("""
 # Method 1: Using the convenience method (EASIEST)
 response = await llm.chat_completion_optimized(
     agent_type='frontend-engineer',
@@ -179,8 +172,7 @@ response = await llm.chat_completion(
     ],
     provider="vllm"  # Use vLLM for caching
 )
-    """
-    )
+    """)
     logger.info("")
 
 
@@ -232,9 +224,7 @@ async def example_performance_metrics():
     logger.info("=" * 70)
     logger.info("")
 
-    logger.info(
-        f"{'Scenario':<40} {'Tasks':<7} {'Before':<10} {'After':<10} {'Speedup':<10}"
-    )
+    logger.info(f"{'Scenario':<40} {'Tasks':<7} {'Before':<10} {'After':<10} {'Speedup':<10}")
     logger.info("-" * 77)
 
     for scenario in _PERFORMANCE_SCENARIOS:
@@ -281,9 +271,7 @@ async def main():
     logger.info("  4. Monitor cache hit rates and performance improvements")
     logger.info("")
     logger.info("Documentation:")
-    logger.info(
-        "  - Integration Guide: docs/developer/VLLM_PROMPT_OPTIMIZATION_INTEGRATION.md"
-    )
+    logger.info("  - Integration Guide: docs/developer/VLLM_PROMPT_OPTIMIZATION_INTEGRATION.md")
     logger.info("  - Usage Examples: examples/vllm_prefix_caching_usage.py")
     logger.info("  - Setup Guide: docs/guides/VLLM_SETUP_GUIDE.md")
     logger.info("")

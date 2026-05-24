@@ -36,6 +36,7 @@ Exit codes:
 Background: #6558 (decorator order codebase-wide fix), #6633 (stacked
 duplicates), #6638 (this hook), #6787 (--fix mode).
 """
+
 from __future__ import annotations
 
 import argparse

@@ -66,9 +66,7 @@ def _make_pr(tmp_path: Path, files: dict[str, str]) -> tuple[str, str]:
     return base, head
 
 
-def _run_wrapper(
-    tmp_path: Path, hook_name: str, base: str, head: str
-) -> subprocess.CompletedProcess:
+def _run_wrapper(tmp_path: Path, hook_name: str, base: str, head: str) -> subprocess.CompletedProcess:
     """Run the wrapper inside ``tmp_path`` so its `git diff` finds the test repo."""
     return subprocess.run(
         ["bash", str(WRAPPER), hook_name],
@@ -135,9 +133,7 @@ class TestForwardsArgvToHooks:
 
     def test_no_direct_redis_blocks_bare_redis(self, tmp_path: Path) -> None:
         # `redis.Redis()` direct instantiation in production code
-        base, head = _make_pr(
-            tmp_path, {"src/r.py": "import redis\nclient = redis.Redis()\n"}
-        )
+        base, head = _make_pr(tmp_path, {"src/r.py": "import redis\nclient = redis.Redis()\n"})
         result = _run_wrapper(tmp_path, "pre-commit-no-direct-redis", base, head)
         assert result.returncode != 0
 

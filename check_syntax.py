@@ -5,10 +5,10 @@ import py_compile
 import sys
 
 files_to_check = [
-    '/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-4109/autobot_shared/monitoring/metrics/mcp_worker.py',
-    '/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-4109/autobot_shared/monitoring/metrics/__init__.py',
-    '/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-4109/autobot_shared/monitoring/prometheus_metrics.py',
-    '/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-4109/autobot-backend/services/mcp_isolated_runtime.py',
+    "/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-4109/autobot_shared/monitoring/metrics/mcp_worker.py",
+    "/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-4109/autobot_shared/monitoring/metrics/__init__.py",
+    "/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-4109/autobot_shared/monitoring/prometheus_metrics.py",
+    "/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-4109/autobot-backend/services/mcp_isolated_runtime.py",
 ]
 
 all_ok = True

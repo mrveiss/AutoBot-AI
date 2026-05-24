@@ -19,8 +19,8 @@ import pytest
 from llc.models.enums import HeartbeatInvocationSource, HeartbeatRunStatus
 from llc.models.heartbeat_run import LLCHeartbeatRun
 from llc.scheduler.heartbeat_scheduler import (
-    HeartbeatScheduler,
     _SCHEDULE_KEY,
+    HeartbeatScheduler,
     _next_fire,
 )
 

@@ -18,10 +18,9 @@ the model never sees tools it isn't allowed to call in its voice context.
 from dataclasses import dataclass, field
 from typing import Any
 
+from api.redis_mcp.rbac import filter_tools_for_bundle
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
-
-from api.redis_mcp.rbac import filter_tools_for_bundle
 
 logger = get_logger(__name__)
 
@@ -56,9 +55,7 @@ class RealtimeMCPBridge:
     def __init__(self, is_admin: bool = False) -> None:
         self._is_admin = is_admin
         self._bundle = config.voice_toolset_bundle
-        self._disabled = [
-            t.strip() for t in config.voice_disabled_tools.split(",") if t.strip()
-        ]
+        self._disabled = [t.strip() for t in config.voice_disabled_tools.split(",") if t.strip()]
 
     async def list_realtime_tools(self) -> list[RealtimeTool]:
         """Return Realtime-shaped tool schemas filtered by the active bundle.

@@ -19,9 +19,7 @@ from agents.development_speedup_agent import analyze_codebase, development_speed
 from agents.npu_code_search_agent import index_project, npu_code_search, search_codebase
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -87,9 +85,7 @@ async def test_npu_code_search():
     print("\n3. Testing search capabilities...")
     for i, test in enumerate(search_tests, 1):
         try:
-            results = await search_codebase(
-                query=test["query"], search_type=test["type"], max_results=5
-            )
+            results = await search_codebase(query=test["query"], search_type=test["type"], max_results=5)
 
             stats = npu_code_search.get_search_stats()
             print(f"   {i}. {test['name']}")
@@ -128,12 +124,8 @@ async def test_development_speedup():
         potential_savings = duplicates.get("potential_savings", {})
 
         print(f"   🔍 Total duplicates found: {total_duplicates}")
-        print(
-            f"   💾 Potential line savings: {potential_savings.get('lines_of_code', 0)}"
-        )
-        print(
-            f"   📁 Files affected: {potential_savings.get('estimated_files_affected', 0)}"
-        )
+        print(f"   💾 Potential line savings: {potential_savings.get('lines_of_code', 0)}")
+        print(f"   📁 Files affected: {potential_savings.get('estimated_files_affected', 0)}")
 
         # Show examples
         code_duplicates = duplicates.get("code_block_duplicates", [])
@@ -162,9 +154,7 @@ async def test_development_speedup():
         # Show pattern examples
         pattern_list = patterns.get("patterns", [])
         for pattern in pattern_list[:3]:  # Show first 3 patterns
-            print(
-                f"   📊 {pattern['pattern_type']}: {pattern['total_occurrences']} occurrences"
-            )
+            print(f"   📊 {pattern['pattern_type']}: {pattern['total_occurrences']} occurrences")
             print(f"      💡 Suggestion: {pattern['suggestion']}")
 
     except Exception as e:
@@ -173,9 +163,7 @@ async def test_development_speedup():
     # Test 3: Import analysis
     print("\n3. Testing import analysis...")
     try:
-        imports = await development_speedup.analyze_imports_and_dependencies(
-            project_root
-        )
+        imports = await development_speedup.analyze_imports_and_dependencies(project_root)
 
         most_used = imports.get("most_used_modules", [])
         unused = imports.get("potential_unused_imports", [])
@@ -187,9 +175,7 @@ async def test_development_speedup():
         print(f"   🗑️  Potentially unused imports: {len(unused)}")
         if unused:
             for unused_import in unused[:3]:  # Show first 3
-                print(
-                    f"      - {unused_import['file']}:{unused_import['line']} - {unused_import['import']}"
-                )
+                print(f"      - {unused_import['file']}:{unused_import['line']} - {unused_import['import']}")
 
     except Exception as e:
         print(f"   ❌ Import analysis failed: {e}")
@@ -210,15 +196,9 @@ async def test_development_speedup():
             print(f"      {i}. {rec}")
 
         # Show summary stats
-        duplicate_savings = (
-            analysis.get("duplicate_code", {})
-            .get("potential_savings", {})
-            .get("lines_of_code", 0)
-        )
+        duplicate_savings = analysis.get("duplicate_code", {}).get("potential_savings", {}).get("lines_of_code", 0)
         pattern_issues = analysis.get("code_patterns", {}).get("total_patterns", 0)
-        refactoring_ops = analysis.get("refactoring_opportunities", {}).get(
-            "total_opportunities", 0
-        )
+        refactoring_ops = analysis.get("refactoring_opportunities", {}).get("total_opportunities", 0)
 
         print("\n   📊 Summary:")
         print(f"      🔄 Duplicate code savings: {duplicate_savings} lines")
@@ -266,9 +246,7 @@ async def test_performance_comparison():
 
             print(f"   {i}. Query: '{query}' ({search_type})")
             print(f"      Results: {len(results)}, Time: {search_time*1000:.1f}ms")
-            print(
-                f"      NPU: {stats.npu_acceleration_used}, Cache: {stats.redis_cache_hit}"
-            )
+            print(f"      NPU: {stats.npu_acceleration_used}, Cache: {stats.redis_cache_hit}")
 
         except Exception as e:
             print(f"   ❌ Query {i} failed: {e}")
@@ -380,9 +358,7 @@ async def main():
 
         print("\n🚀 Ready for development acceleration!")
     else:
-        print(
-            f"\n⚠️  {total_tests - success_count} test suite(s) failed. Check logs above."
-        )
+        print(f"\n⚠️  {total_tests - success_count} test suite(s) failed. Check logs above.")
         return 1
 
     return 0

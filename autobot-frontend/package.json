@@ -77,6 +77,7 @@
   "overrides": {
     "minimatch": ">=9.0.7",
     "uuid": "^14.0.0",
+    "vega-lite": "5.23.0",
     "openapi-typescript": {
       "typescript": "$typescript"
     },

@@ -22,6 +22,7 @@ Issue #6534); any change there must be reflected here.
 from __future__ import annotations
 
 from enum import Enum
+
 import pytest
 from fastapi import FastAPI, Query
 from fastapi.testclient import TestClient

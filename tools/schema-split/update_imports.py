@@ -19,14 +19,14 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 API_DIR = os.path.join(REPO_ROOT, "autobot-backend", "api")
 
 DOMAIN_MODULE = {
-    "terminal":  "schemas_terminal",
+    "terminal": "schemas_terminal",
     "analytics": "schemas_analytics",
     "knowledge": "schemas_knowledge",
-    "agent":     "schemas_agent",
-    "system":    "schemas_system",
+    "agent": "schemas_agent",
+    "system": "schemas_system",
     "workflows": "schemas_workflows",
-    "code":      "schemas_code",
-    "common":    "schemas_common",
+    "code": "schemas_code",
+    "common": "schemas_common",
 }
 
 DOMAIN_RULES = [
@@ -37,8 +37,14 @@ DOMAIN_RULES = [
     (r"^Knowledge", "knowledge"),
     (r"^(LLM|Memory)", "agent"),
     (r"^(System|NPU|WakeWord|FeatureFlag|AdminFile)", "system"),
-    (r"^(ValidationDashboard|ValidationJudge|ValidationJudgment|Workflow|Registry|RUM|Elevation|AdvancedControl|StateTracking|StructuredThinking)", "workflows"),
-    (r"^(CodeReview|Git|Skills|SkillsDraft|SkillsApproval|SkillsGovernance|SkillsGap|Database|Template|Templates|Log|Voice|AccessControl|FileSandbox|MCP|HTTP)", "code"),
+    (
+        r"^(ValidationDashboard|ValidationJudge|ValidationJudgment|Workflow|Registry|RUM|Elevation|AdvancedControl|StateTracking|StructuredThinking)",
+        "workflows",
+    ),
+    (
+        r"^(CodeReview|Git|Skills|SkillsDraft|SkillsApproval|SkillsGovernance|SkillsGap|Database|Template|Templates|Log|Voice|AccessControl|FileSandbox|MCP|HTTP)",
+        "code",
+    ),
     (r"^(Success|Data|UsageRecord)", "common"),
 ]
 

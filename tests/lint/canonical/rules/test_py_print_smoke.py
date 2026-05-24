@@ -1,4 +1,5 @@
 """Tests for the py-print-smoke rule (Wave 0 smoke-test rule)."""
+
 import ast
 from pathlib import Path
 

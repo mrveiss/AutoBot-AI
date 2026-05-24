@@ -70,9 +70,7 @@ def _schema_files() -> list[str]:
     repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     api_dir = os.path.join(repo_root, "autobot-backend", "api")
     return sorted(
-        os.path.join(api_dir, f)
-        for f in os.listdir(api_dir)
-        if f.startswith("schemas_") and f.endswith(".py")
+        os.path.join(api_dir, f) for f in os.listdir(api_dir) if f.startswith("schemas_") and f.endswith(".py")
     )
 
 

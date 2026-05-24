@@ -9,6 +9,7 @@ Endpoints for managing NPU worker nodes and load balancing.
 
 import logging
 from datetime import datetime, timezone
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select

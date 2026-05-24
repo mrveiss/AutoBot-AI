@@ -12,6 +12,7 @@ Updated in Issue #453 to use real Ollama integration.
 """
 
 import asyncio
+
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants

@@ -10,6 +10,7 @@ HTTP 500 ValidationError at runtime (#5913).
 Extended in #6143: import-order checks — schema name must be imported
 before the decorator line that references it.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -42,8 +43,7 @@ def _write(tmp_path: Path, content: str) -> Path:
 def test_detects_missing_success_in_return_dict(tmp_path: Path) -> None:
     f = _write(
         tmp_path,
-        _DR
-        + """
+        _DR + """
 from fastapi import APIRouter
 router = APIRouter()
 
@@ -63,8 +63,7 @@ async def get_foo():
 def test_detects_plain_dict_return_no_success(tmp_path: Path) -> None:
     f = _write(
         tmp_path,
-        _DR
-        + """
+        _DR + """
 @router.post("/submit", response_model=DataResponse)
 def submit():
     return {"result": 42, "count": 1}
@@ -78,8 +77,7 @@ def submit():
 def test_detects_multiple_violations_in_one_file(tmp_path: Path) -> None:
     f = _write(
         tmp_path,
-        _DR
-        + """
+        _DR + """
 @router.get("/a", response_model=DataResponse)
 async def get_a():
     return {"items": []}
@@ -97,8 +95,7 @@ async def get_b():
 def test_detects_async_def_route(tmp_path: Path) -> None:
     f = _write(
         tmp_path,
-        _DR
-        + """
+        _DR + """
 @router.delete("/item", response_model=DataResponse)
 async def delete_item():
     return {"removed": True}
@@ -117,8 +114,7 @@ async def delete_item():
 def test_safe_with_create_success_response(tmp_path: Path) -> None:
     f = _write(
         tmp_path,
-        _DR
-        + """
+        _DR + """
 @router.get("/ok", response_model=DataResponse)
 async def get_ok():
     return create_success_response(data={"key": "value"})
@@ -130,8 +126,7 @@ async def get_ok():
 def test_safe_with_success_key_in_literal(tmp_path: Path) -> None:
     f = _write(
         tmp_path,
-        _DR
-        + """
+        _DR + """
 @router.post("/manual", response_model=DataResponse)
 def manual():
     return {"success": True, "data": None}
@@ -143,8 +138,7 @@ def manual():
 def test_safe_with_jsonresponse(tmp_path: Path) -> None:
     f = _write(
         tmp_path,
-        _DR
-        + """
+        _DR + """
 from fastapi.responses import JSONResponse
 
 @router.get("/raw", response_model=DataResponse)
@@ -158,8 +152,7 @@ async def raw():
 def test_safe_with_streamingresponse(tmp_path: Path) -> None:
     f = _write(
         tmp_path,
-        _DR
-        + """
+        _DR + """
 @router.get("/stream", response_model=DataResponse)
 async def stream():
     return StreamingResponse(iter([b"data"]))
@@ -208,8 +201,7 @@ async def get_typed():
 def test_safe_create_success_response_via_attribute(tmp_path: Path) -> None:
     f = _write(
         tmp_path,
-        _DR
-        + """
+        _DR + """
 @router.get("/attr", response_model=DataResponse)
 async def get_attr():
     return helpers.create_success_response(data={})
@@ -226,8 +218,7 @@ async def get_attr():
 def test_detects_success_message_response_missing_required_keys(tmp_path: Path) -> None:
     f = _write(
         tmp_path,
-        _SMR
-        + """
+        _SMR + """
 @router.post("/msg", response_model=SuccessMessageResponse)
 async def post_msg():
     return {"success": True}  # missing 'message'
@@ -241,8 +232,7 @@ async def post_msg():
 def test_safe_success_message_response_with_both_keys(tmp_path: Path) -> None:
     f = _write(
         tmp_path,
-        _SMR
-        + """
+        _SMR + """
 @router.post("/msg", response_model=SuccessMessageResponse)
 async def post_msg():
     return {"success": True, "message": "done"}
@@ -254,8 +244,7 @@ async def post_msg():
 def test_detects_success_data_response_missing_message(tmp_path: Path) -> None:
     f = _write(
         tmp_path,
-        _SDR
-        + """
+        _SDR + """
 @router.post("/data", response_model=SuccessDataResponse)
 async def post_data():
     return {"success": True, "data": {}}  # missing 'message'
@@ -268,8 +257,7 @@ async def post_data():
 def test_safe_success_data_response_with_required_keys(tmp_path: Path) -> None:
     f = _write(
         tmp_path,
-        _SDR
-        + """
+        _SDR + """
 @router.post("/data", response_model=SuccessDataResponse)
 async def post_data():
     return {"success": True, "message": "ok", "data": None}
@@ -281,8 +269,7 @@ async def post_data():
 def test_safe_success_message_response_with_bypass(tmp_path: Path) -> None:
     f = _write(
         tmp_path,
-        _SMR
-        + """
+        _SMR + """
 @router.get("/stream", response_model=SuccessMessageResponse)
 async def stream():
     return StreamingResponse(iter([b"x"]))
@@ -299,8 +286,7 @@ async def stream():
 def test_main_returns_0_for_clean_file(tmp_path: Path) -> None:
     f = _write(
         tmp_path,
-        _DR
-        + """
+        _DR + """
 @router.get("/clean", response_model=DataResponse)
 async def clean():
     return create_success_response()
@@ -312,8 +298,7 @@ async def clean():
 def test_main_returns_1_for_violation(tmp_path: Path) -> None:
     f = _write(
         tmp_path,
-        _DR
-        + """
+        _DR + """
 @router.get("/bad", response_model=DataResponse)
 async def bad():
     return {"no_success": True}
@@ -342,8 +327,7 @@ async def clean():
 def test_safe_variable_assigned_dict_with_success(tmp_path: Path) -> None:
     f = _write(
         tmp_path,
-        _DR
-        + """
+        _DR + """
 @router.get("/var", response_model=DataResponse)
 async def get_var():
     result = {"success": True, "data": []}
@@ -356,8 +340,7 @@ async def get_var():
 def test_detects_variable_assigned_dict_missing_success(tmp_path: Path) -> None:
     f = _write(
         tmp_path,
-        _DR
-        + """
+        _DR + """
 @router.get("/var", response_model=DataResponse)
 async def get_var():
     result = {"data": [], "count": 0}
@@ -372,8 +355,7 @@ async def get_var():
 def test_safe_success_message_response_variable_assignment(tmp_path: Path) -> None:
     f = _write(
         tmp_path,
-        _SMR
-        + """
+        _SMR + """
 @router.post("/msg", response_model=SuccessMessageResponse)
 async def post_msg():
     response = {"success": True, "message": "done"}
@@ -386,8 +368,7 @@ async def post_msg():
 def test_detects_success_message_response_variable_missing_message(tmp_path: Path) -> None:
     f = _write(
         tmp_path,
-        _SMR
-        + """
+        _SMR + """
 @router.post("/msg", response_model=SuccessMessageResponse)
 async def post_msg():
     response = {"success": True}
@@ -406,8 +387,7 @@ async def post_msg():
 def test_safe_with_jsonresponse_via_attribute(tmp_path: Path) -> None:
     f = _write(
         tmp_path,
-        _DR
-        + """
+        _DR + """
 @router.get("/raw", response_model=DataResponse)
 async def raw():
     return responses.JSONResponse(content={"key": "val"})
@@ -419,8 +399,7 @@ async def raw():
 def test_safe_with_streamingresponse_via_attribute(tmp_path: Path) -> None:
     f = _write(
         tmp_path,
-        _DR
-        + """
+        _DR + """
 @router.get("/stream", response_model=DataResponse)
 async def stream():
     return some_module.StreamingResponse(iter([b"data"]))
@@ -437,8 +416,7 @@ async def stream():
 def test_detects_violation_when_only_nested_function_has_success_dict(tmp_path: Path) -> None:
     f = _write(
         tmp_path,
-        _DR
-        + """
+        _DR + """
 @router.get("/bad", response_model=DataResponse)
 async def bad_endpoint():
     async def _build():
@@ -568,8 +546,7 @@ def test_return_shape_violation_has_none_detail(tmp_path: Path) -> None:
     """Return-shape violations carry None as the detail (not an import-order message)."""
     f = _write(
         tmp_path,
-        _DR
-        + """
+        _DR + """
 @router.get("/bad", response_model=DataResponse)
 async def get_bad():
     return {"data": "bar"}

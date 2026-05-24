@@ -12,6 +12,7 @@ Issue: #1375
 """
 
 import hashlib
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

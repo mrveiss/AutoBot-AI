@@ -10,6 +10,7 @@ Endpoints for managing per-node and global configuration.
 import json
 import logging
 from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

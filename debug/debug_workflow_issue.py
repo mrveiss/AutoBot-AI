@@ -24,9 +24,7 @@ async def debug_workflow_planning_issue():
     user_message = "I need to scan my network for security vulnerabilities"
 
     logger.info("1. Direct test of plan_workflow_steps:")
-    direct_steps = orchestrator.plan_workflow_steps(
-        user_message, TaskComplexity.COMPLEX
-    )
+    direct_steps = orchestrator.plan_workflow_steps(user_message, TaskComplexity.COMPLEX)
     logger.info("   Direct call returned %s steps", len(direct_steps))
 
     logger.info("2. Test through classify_request_complexity:")
@@ -38,9 +36,7 @@ async def debug_workflow_planning_issue():
     logger.info("   With classified complexity: %s steps", len(classified_steps))
 
     logger.info("4. Test should_use_workflow_orchestration:")
-    should_orchestrate = await orchestrator.should_use_workflow_orchestration(
-        user_message
-    )
+    should_orchestrate = await orchestrator.should_use_workflow_orchestration(user_message)
     logger.info("   Should orchestrate: %s", should_orchestrate)
 
     logger.info("5. Test create_workflow_response (the problematic method):")

@@ -76,17 +76,13 @@ class BaseProvider(ABC):
                 response = await self._chat_completion_impl(request)
                 latency_ms = (time.monotonic() - start) * 1000
                 try:
-                    asyncio.get_running_loop().create_task(
-                        obs_registry.notify_response(response, latency_ms, 0.0)
-                    )
+                    asyncio.get_running_loop().create_task(obs_registry.notify_response(response, latency_ms, 0.0))
                 except RuntimeError:
                     pass
                 return response
             except Exception as exc:
                 try:
-                    asyncio.get_running_loop().create_task(
-                        obs_registry.notify_error(exc, request)
-                    )
+                    asyncio.get_running_loop().create_task(obs_registry.notify_error(exc, request))
                 except RuntimeError:
                     pass
                 raise

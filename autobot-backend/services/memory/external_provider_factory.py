@@ -4,6 +4,7 @@
 """External Provider Factory (Issue #4344)"""
 
 from enum import Enum
+
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 

@@ -27,6 +27,7 @@ Exit:
   0 — clean
   1 — unguarded git command found
 """
+
 from __future__ import annotations
 
 import re
@@ -41,8 +42,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # No \b after the closing `}}` — those aren't word chars so the boundary doesn't match;
 # rely on the literal terminator instead.
 PATTERN = re.compile(
-    r"\bgit\s+(?P<flags>[^\n]*?)-C\s+"
-    r"(?:\{\{\s*git_repo_root\s*\}\}|/opt/autobot/code_source(?=[\s/]))"
+    r"\bgit\s+(?P<flags>[^\n]*?)-C\s+" r"(?:\{\{\s*git_repo_root\s*\}\}|/opt/autobot/code_source(?=[\s/]))"
 )
 SAFE_FLAG = re.compile(r"-c\s+safe\.directory\s*=")
 

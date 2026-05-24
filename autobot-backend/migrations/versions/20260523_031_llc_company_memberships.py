@@ -14,8 +14,8 @@ Revises: 20260523_030
 Create Date: 2026-05-23
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects.postgresql import UUID
 
 revision = "20260523_031"
@@ -25,9 +25,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute(
-        "CREATE TYPE membershiprole AS ENUM ('owner', 'admin', 'member', 'guest')"
-    )
+    op.execute("CREATE TYPE membershiprole AS ENUM ('owner', 'admin', 'member', 'guest')")
 
     op.create_table(
         "llc_company_memberships",
@@ -42,7 +40,10 @@ def upgrade() -> None:
         sa.Column(
             "role",
             sa.Enum(
-                "owner", "admin", "member", "guest",
+                "owner",
+                "admin",
+                "member",
+                "guest",
                 name="membershiprole",
                 create_type=False,
             ),

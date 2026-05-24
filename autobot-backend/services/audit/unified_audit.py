@@ -53,9 +53,9 @@ UNIFIED_KEY = "audit:unified"
 
 
 class AuditCategory(str, Enum):
-    SECURITY = "security"      # session, api_key, user, config (was audit_log)
+    SECURITY = "security"  # session, api_key, user, config (was audit_log)
     COMPLIANCE = "compliance"  # login/logout, agent invoke (was event_log)
-    KNOWLEDGE = "knowledge"    # view, search, share (was knowledge/audit_log)
+    KNOWLEDGE = "knowledge"  # view, search, share (was knowledge/audit_log)
     GOVERNANCE = "governance"  # skill approval, budget breach, agent pause
 
 
@@ -146,7 +146,7 @@ async def query(
             continue
         results.append(ev)
     results.sort(key=lambda e: e.get("occurred_at", 0), reverse=True)
-    return results[offset: offset + limit]
+    return results[offset : offset + limit]
 
 
 # ---------------------------------------------------------------------------
@@ -243,12 +243,14 @@ with _warnings.catch_warnings():
     # Suppress the DeprecationWarnings these modules emit at import time — they
     # are designed to warn external callers, not the canonical migration target.
     _warnings.simplefilter("ignore", DeprecationWarning)
-    from services.event_log import EventType  # noqa: E402
+    from knowledge.audit_log import AuditEventType
+    from knowledge.audit_log import KnowledgeAuditLog as _KnowledgeAuditLog  # noqa: E402
     from services.audit.audit_log import AuditAction  # noqa: E402
-    from knowledge.audit_log import AuditEventType, KnowledgeAuditLog as _KnowledgeAuditLog  # noqa: E402
+    from services.event_log import EventType  # noqa: E402
 
 
 # --- Drop-in replacements for services/event_log.emit() and query_events() -
+
 
 def emit(  # type: ignore[misc]  — intentional override of local name
     event_type: "EventType",
@@ -291,6 +293,7 @@ async def query_events(
 
 # --- Drop-in replacement for services/audit/audit_log.audit_record() -------
 
+
 def audit_record(
     user_id: str,
     action: "AuditAction",
@@ -315,6 +318,7 @@ def audit_record(
 
 
 # --- Drop-in compatibility class for knowledge/audit_log.KnowledgeAuditLog --
+
 
 class KnowledgeAuditLog(_KnowledgeAuditLog):
     """Bridge: subclass of ``KnowledgeAuditLog`` that delegates to unified_audit.

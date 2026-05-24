@@ -19,7 +19,7 @@ import yaml
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.threshold_constants import TimingConstants
-from events.bus import publish_event, PersistStrategy
+from events.bus import PersistStrategy, publish_event
 from models.npu_models import (
     LoadBalancingConfig,
     NPUWorkerConfig,
@@ -576,13 +576,15 @@ class NPUWorkerManager(AsyncInitializable):
         await self._save_workers_to_config()
 
         # Emit worker removed event
-        await publish_event("global", 
+        await publish_event(
+            "global",
             "npu.worker.removed",
             {
                 "event": "worker.removed",
                 "worker_id": worker_id,
                 "data": {"timestamp": utc_timestamp()},
-            }, persist=PersistStrategy.NONE
+            },
+            persist=PersistStrategy.NONE,
         )
 
     async def test_worker_connection(self, worker_config: NPUWorkerConfig) -> WorkerTestResult:

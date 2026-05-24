@@ -15,6 +15,7 @@ Refactoring History:
 """
 
 import threading
+
 from prometheus_client import (
     CollectorRegistry,
     Counter,

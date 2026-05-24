@@ -17,9 +17,9 @@ class ArchitectureFamily(str, Enum):
     """
 
     TRANSFORMER = "transformer"
-    STATE_SPACE = "state_space"        # Mamba / S4 family
+    STATE_SPACE = "state_space"  # Mamba / S4 family
     LINEAR_ATTENTION = "linear_attention"
-    HYBRID = "hybrid"                  # Jamba-style mixed architectures
+    HYBRID = "hybrid"  # Jamba-style mixed architectures
 
 
 class ProviderType(Enum):

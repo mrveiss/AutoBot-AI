@@ -8,10 +8,6 @@ image data for analysis.
 """
 
 import uuid
-
-# Copyright (c) 2025 mrveiss
-# Author: mrveiss
-
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
@@ -26,6 +22,12 @@ from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
+
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+
+
+
 
 logger = get_logger(__name__)
 

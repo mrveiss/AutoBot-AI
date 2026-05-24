@@ -99,9 +99,7 @@ class BackendTelemetryClient:
                 self.service_id,
             )
         else:
-            logger.warning(
-                "Service authentication DISABLED - telemetry may be rejected by backend"
-            )
+            logger.warning("Service authentication DISABLED - telemetry may be rejected by backend")
 
     async def start(self) -> None:
         """Start the telemetry client and heartbeat loop."""
@@ -194,9 +192,7 @@ class BackendTelemetryClient:
         # Generate HMAC-SHA256 signature
         # Format: HMAC-SHA256(service_key, "service_id:method:path:timestamp")
         message = f"{self.service_id}:{method}:{path}:{timestamp}"
-        signature = hmac.new(
-            self.service_key.encode(), message.encode(), hashlib.sha256
-        ).hexdigest()
+        signature = hmac.new(self.service_key.encode(), message.encode(), hashlib.sha256).hexdigest()
 
         return {
             "X-Service-ID": self.service_id,
@@ -219,9 +215,7 @@ class BackendTelemetryClient:
                 else:
                     self._consecutive_failures += 1
                     # Exponential backoff up to max
-                    self._retry_delay = min(
-                        self._retry_delay * 2, self._max_retry_delay
-                    )
+                    self._retry_delay = min(self._retry_delay * 2, self._max_retry_delay)
 
             except asyncio.CancelledError:
                 break
@@ -262,9 +256,7 @@ class BackendTelemetryClient:
             path = "/api/npu/workers/heartbeat"
             url = f"{self.backend_url}{path}"
             auth_headers = self._generate_auth_headers("POST", path)
-            async with self._session.post(
-                url, json=heartbeat_data, headers=auth_headers
-            ) as response:
+            async with self._session.post(url, json=heartbeat_data, headers=auth_headers) as response:
                 if response.status == 200:
                     data = await response.json()
                     logger.debug(
@@ -322,9 +314,7 @@ class BackendTelemetryClient:
             path = "/api/npu/workers"
             url = f"{self.backend_url}{path}"
             auth_headers = self._generate_auth_headers("POST", path)
-            async with self._session.post(
-                url, json=registration_data, headers=auth_headers
-            ) as response:
+            async with self._session.post(url, json=registration_data, headers=auth_headers) as response:
                 if response.status in (200, 201):
                     logger.info("Successfully registered with backend")
                     return True
@@ -547,9 +537,7 @@ async def get_telemetry_client(config: dict) -> BackendTelemetryClient | None:
             worker_id=worker_id,
             worker_url=worker_url,
             platform="windows",
-            heartbeat_interval=backend_config.get(
-                "health_check_interval", DEFAULT_HEARTBEAT_INTERVAL
-            ),
+            heartbeat_interval=backend_config.get("health_check_interval", DEFAULT_HEARTBEAT_INTERVAL),
             service_id=service_id,
             service_key=service_key,
         )

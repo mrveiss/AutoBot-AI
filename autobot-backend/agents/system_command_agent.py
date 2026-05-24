@@ -15,7 +15,7 @@ from agents.interactive_terminal_agent import InteractiveTerminalAgent
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants
-from events.bus import publish_event, PersistStrategy
+from events.bus import PersistStrategy, publish_event
 from security.command_patterns import (
     SENSITIVE_REDIRECT_PATHS,
     UNRESTRICTED_ROOT_COMMANDS,
@@ -458,14 +458,16 @@ class SystemCommandAgent(StandardizedAgent):
 
     async def _request_user_confirmation(self, command: str, chat_id: str) -> bool:
         """Request user confirmation for dangerous commands"""
-        await publish_event("global", 
+        await publish_event(
+            "global",
             "command_confirmation",
             {
                 "chat_id": chat_id,
                 "command": command,
                 "warning": "⚠️ This command may be dangerous. Please confirm execution.",
                 "requires_confirmation": True,
-            }, persist=PersistStrategy.NONE
+            },
+            persist=PersistStrategy.NONE,
         )
 
         # Wait for user response (this would be handled by the frontend)

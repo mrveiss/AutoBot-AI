@@ -110,8 +110,10 @@ jobs:
             done <<< "$merged_branches"
           fi
 
-          echo "deleted=$deleted_count" >> "$GITHUB_OUTPUT"
-          echo "skipped=$skipped_count" >> "$GITHUB_OUTPUT"
+          {
+            echo "deleted=$deleted_count"
+            echo "skipped=$skipped_count"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Delete branches for closed issues
         id: closed_issues
@@ -166,9 +168,11 @@ jobs:
             done <<< "$remote_branches"
           fi
 
-          echo "deleted=$deleted_count" >> "$GITHUB_OUTPUT"
-          echo "skipped=$skipped_count" >> "$GITHUB_OUTPUT"
-          echo "errors=$errors" >> "$GITHUB_OUTPUT"
+          {
+            echo "deleted=$deleted_count"
+            echo "skipped=$skipped_count"
+            echo "errors=$errors"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Run cleanup script
         if: always()
@@ -202,14 +206,16 @@ jobs:
 
           **Merged branches (7+ days old):**
           EOF
-          echo "- Deleted: $MERGED_DELETED" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Skipped: $MERGED_SKIPPED" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Branches for closed issues:**" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Deleted: $CLOSED_DELETED" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Skipped: $CLOSED_SKIPPED" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Errors: $CLOSED_ERRORS" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "- Deleted: $MERGED_DELETED"
+            echo "- Skipped: $MERGED_SKIPPED"
+            echo ""
+            echo "**Branches for closed issues:**"
+            echo "- Deleted: $CLOSED_DELETED"
+            echo "- Skipped: $CLOSED_SKIPPED"
+            echo "- Errors: $CLOSED_ERRORS"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
           if [ "$DRY_RUN_MODE" = "true" ]; then
             echo "**Mode:** Dry-run (no changes)" >> "$GITHUB_STEP_SUMMARY"
           else

@@ -8,7 +8,8 @@ ML model training infrastructure for code completion.
 """
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.missing_dep import MissingDep as _MissingDep, optional_import
+from autobot_shared.missing_dep import MissingDep as _MissingDep
+from autobot_shared.missing_dep import optional_import
 
 logger = get_logger(__name__)
 
@@ -30,5 +31,12 @@ try:
     globals().update(optional_import("training.evaluator", ["CompletionEvaluator"]))
 except RuntimeError as _e:
     logger.warning("ML training dependencies unavailable: %s", _e)
-    for _name in ["CompletionModel", "CompletionTrainer", "PatternDataset", "Tokenizer", "create_dataloaders", "CompletionEvaluator"]:
+    for _name in [
+        "CompletionModel",
+        "CompletionTrainer",
+        "PatternDataset",
+        "Tokenizer",
+        "create_dataloaders",
+        "CompletionEvaluator",
+    ]:
         globals()[_name] = _MissingDep(_name, _e)

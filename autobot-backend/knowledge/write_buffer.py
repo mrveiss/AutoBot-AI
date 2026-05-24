@@ -82,7 +82,9 @@ class VectorWriteBuffer:
         """Start the background flush task."""
         if self._bg_task is None or self._bg_task.done():
             self._bg_task = asyncio.create_task(self._flush_loop(), name="vector-write-buffer-flush")
-            logger.info("VectorWriteBuffer started (flush_size=%d, interval=%.1fs)", self._flush_size, self._flush_interval)
+            logger.info(
+                "VectorWriteBuffer started (flush_size=%d, interval=%.1fs)", self._flush_size, self._flush_interval
+            )
 
     async def stop(self) -> None:
         """Flush remaining entries and stop the background task."""

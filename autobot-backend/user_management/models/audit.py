@@ -9,6 +9,7 @@ Tracks all security-relevant actions for compliance.
 
 import uuid
 from datetime import datetime
+
 from sqlalchemy import DateTime, ForeignKey, Index, String, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -186,7 +187,7 @@ class AuditResourceType:
     ORGANIZATION = "organization"
     ROLE = "role"
     PERMISSION = "permission"
-    API_KEY = "api_key"
+    API_KEY = "api_key"  # nosemgrep: autobot-hardcoded-secret-key
     SSO_PROVIDER = "sso_provider"
     SESSION = "session"
     SETTINGS = "settings"

@@ -83,7 +83,8 @@ from orchestration.orchestrator_stubs import (
     WorkflowStep,
 )
 from orchestration.performance_tracker import PerformanceTracker
-from orchestration.primitives.events import PersistStrategy, publish_event as _publish_event
+from orchestration.primitives.events import PersistStrategy
+from orchestration.primitives.events import publish_event as _publish_event
 from orchestration.primitives.retry import retry_with_backoff  # noqa: F401 — re-exported
 from services.llm_service import get_llm_service
 
@@ -107,9 +108,9 @@ except ImportError:
     logger.warning("KnowledgeBase not available - auto-documentation features disabled")
 
 from agents.agent_client import AgentRegistry as _AgentClientRegistry
-from autobot_types import TaskComplexity
 from autobot_shared.status_enums import Priority as TaskPriority  # #7504 consolidation
 from autobot_shared.status_enums import WorkflowStatus  # #6973 consolidation
+from autobot_types import TaskComplexity
 
 
 class OrchestrationMode(Enum):

@@ -1,4 +1,5 @@
 """Tests for the Diagnostic dataclass — the shared violation record."""
+
 from pathlib import Path
 
 import pytest
@@ -24,8 +25,14 @@ def test_diagnostic_required_fields():
 
 def test_diagnostic_is_frozen():
     d = Diagnostic(
-        rule_id="r", issue="#1", severity="warn",
-        file=Path("a.py"), line=1, col=0, message="m", snippet="s",
+        rule_id="r",
+        issue="#1",
+        severity="warn",
+        file=Path("a.py"),
+        line=1,
+        col=0,
+        message="m",
+        snippet="s",
     )
     with pytest.raises(AttributeError):
         d.line = 2  # type: ignore[misc]
@@ -33,9 +40,16 @@ def test_diagnostic_is_frozen():
 
 def test_diagnostic_to_dict_round_trip():
     d = Diagnostic(
-        rule_id="r", issue="#1", severity="warn",
-        file=Path("a.py"), line=1, col=0, message="m", snippet="s",
-        fix_hint="use foo()", auto_fixable=True,
+        rule_id="r",
+        issue="#1",
+        severity="warn",
+        file=Path("a.py"),
+        line=1,
+        col=0,
+        message="m",
+        snippet="s",
+        fix_hint="use foo()",
+        auto_fixable=True,
     )
     payload = d.to_dict()
     assert payload["file"] == "a.py"  # Path serialized to str
@@ -45,6 +59,12 @@ def test_diagnostic_to_dict_round_trip():
 def test_diagnostic_severity_validated():
     with pytest.raises(ValueError, match="severity"):
         Diagnostic(
-            rule_id="r", issue="#1", severity="catastrophic",  # type: ignore[arg-type]
-            file=Path("a.py"), line=1, col=0, message="m", snippet="s",
+            rule_id="r",
+            issue="#1",
+            severity="catastrophic",  # type: ignore[arg-type]
+            file=Path("a.py"),
+            line=1,
+            col=0,
+            message="m",
+            snippet="s",
         )

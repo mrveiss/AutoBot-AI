@@ -42,10 +42,7 @@ class FAISSIVFPQBuilder:
 
     def _index_path(self) -> Path:
         """Return path to persisted index file."""
-        return (
-            Path(self.index_dir)
-            / f"{self.collection_name}_ivfpq_d{self.dim}_n{IVFPQ_NLIST}.index"
-        )
+        return Path(self.index_dir) / f"{self.collection_name}_ivfpq_d{self.dim}_n{IVFPQ_NLIST}.index"
 
     async def build_or_load(self, vectors: np.ndarray) -> Optional[Any]:
         """Load persisted index or train a new one from vectors."""
@@ -55,9 +52,7 @@ class FAISSIVFPQBuilder:
 
         existing = await self.load()
         if existing is not None:
-            logger.info(
-                "FAISSIVFPQBuilder: loaded persisted index from %s", self._index_path()
-            )
+            logger.info("FAISSIVFPQBuilder: loaded persisted index from %s", self._index_path())
             return existing
 
         return await self.train_and_build(vectors)
@@ -75,9 +70,7 @@ class FAISSIVFPQBuilder:
 
             path = self._index_path()
             await asyncio.to_thread(self._persist_sync, index, path)
-            logger.info(
-                "FAISSIVFPQBuilder: trained and persisted IVFPQ index to %s", path
-            )
+            logger.info("FAISSIVFPQBuilder: trained and persisted IVFPQ index to %s", path)
             return index
         except Exception as exc:
             logger.warning("FAISSIVFPQBuilder: training failed (%s) — no index", exc)
@@ -132,18 +125,12 @@ class FAISSIVFPQBuilder:
             index.nprobe = IVFPQ_NPROBE
             return index
         except Exception as exc:
-            logger.warning(
-                "FAISSIVFPQBuilder: could not load index from %s (%s)", path, exc
-            )
+            logger.warning("FAISSIVFPQBuilder: could not load index from %s (%s)", path, exc)
             return None
 
-    async def search(
-        self, index: Any, query: np.ndarray, k: int
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    async def search(self, index: Any, query: np.ndarray, k: int) -> Tuple[np.ndarray, np.ndarray]:
         """Search index returning (distances, indices)."""
-        query_2d = np.ascontiguousarray(
-            query.reshape(1, -1) if query.ndim == 1 else query, dtype=np.float32
-        )
+        query_2d = np.ascontiguousarray(query.reshape(1, -1) if query.ndim == 1 else query, dtype=np.float32)
         distances, indices = await asyncio.to_thread(index.search, query_2d, k)
         return distances, indices
 

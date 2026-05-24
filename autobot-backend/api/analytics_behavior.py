@@ -16,6 +16,7 @@ Related Issues: #59 (Advanced Analytics & Business Intelligence)
 """
 
 import asyncio
+
 from fastapi import APIRouter, Depends, Query
 
 from api.schemas_analytics import (

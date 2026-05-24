@@ -22,7 +22,6 @@ import pytest
 
 import audit_unwired_trackers as audit
 
-
 # ---------------------------------------------------------------------------
 # extract_tracker_refs / ISSUE_REF_RE — #6928 regex coverage
 # ---------------------------------------------------------------------------
@@ -57,7 +56,7 @@ def test_extract_tracker_refs_only_first_40_lines(tmp_path: Path) -> None:
     """Refs deeper than DOCSTRING_HEAD_LINES are intentionally ignored —
     the audit is a docstring-citation check, not a full-file scan."""
     f = tmp_path / "deep.py"
-    f.write_text("\n" * 100 + 'Issue #4242', encoding="utf-8")
+    f.write_text("\n" * 100 + "Issue #4242", encoding="utf-8")
     assert audit.extract_tracker_refs(f) == []
 
 
@@ -219,9 +218,7 @@ def test_grep_count_handles_timeout() -> None:
         ("self.helper = MyHelper()", "MyHelper", False),
     ],
 )
-def test_grep_count_regex_pattern_shapes(
-    caller_line: str, stem: str, should_match: bool, tmp_path: Path
-) -> None:
+def test_grep_count_regex_pattern_shapes(caller_line: str, stem: str, should_match: bool, tmp_path: Path) -> None:
     """Verify the regex used by grep matches both static and dynamic imports.
 
     Constructs the same regex the script uses and runs it via Python's `re`
@@ -362,18 +359,18 @@ def test_load_router_registry_modules_extracts_dotted_paths(tmp_path: Path) -> N
     fake_registry = tmp_path / "router_registry"
     fake_registry.mkdir()
     (fake_registry / "feature_routers.py").write_text(
-        '''FEATURE_ROUTERS = [
+        """FEATURE_ROUTERS = [
     ("api.captcha", "", ["captcha"], "captcha"),
     ("api.vision", "/vision", ["vision"], "vision"),
 ]
-''',
+""",
         encoding="utf-8",
     )
     (fake_registry / "core_routers.py").write_text(
-        '''CORE_ROUTERS = [
+        """CORE_ROUTERS = [
     ("api.health", "/health", ["health"], "health"),
 ]
-''',
+""",
         encoding="utf-8",
     )
     (fake_registry / "__init__.py").write_text("# excluded by name", encoding="utf-8")
@@ -408,10 +405,12 @@ def test_scan_skips_router_registry_modules(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    with patch.object(audit, "REPO_ROOT", fake_root), \
-         patch.object(audit, "ROUTER_REGISTRY_DIR", registry_dir), \
-         patch.object(audit, "fetch_closed_tracker_set", return_value={206}), \
-         patch.object(audit, "grep_count_production_callers", return_value=0):
+    with (
+        patch.object(audit, "REPO_ROOT", fake_root),
+        patch.object(audit, "ROUTER_REGISTRY_DIR", registry_dir),
+        patch.object(audit, "fetch_closed_tracker_set", return_value={206}),
+        patch.object(audit, "grep_count_production_callers", return_value=0),
+    ):
         findings = audit.scan()
 
     assert findings == [], f"api/captcha.py should be filtered as registry-wired, got {findings}"
@@ -478,10 +477,12 @@ def test_scan_skips_entry_point_runners(tmp_path: Path) -> None:
     registry_dir.mkdir(parents=True)
     (registry_dir / "feature_routers.py").write_text("X = []\n", encoding="utf-8")
 
-    with patch.object(audit, "REPO_ROOT", fake_root), \
-         patch.object(audit, "ROUTER_REGISTRY_DIR", registry_dir), \
-         patch.object(audit, "fetch_closed_tracker_set", return_value={7127}), \
-         patch.object(audit, "grep_count_production_callers", return_value=0):
+    with (
+        patch.object(audit, "REPO_ROOT", fake_root),
+        patch.object(audit, "ROUTER_REGISTRY_DIR", registry_dir),
+        patch.object(audit, "fetch_closed_tracker_set", return_value={7127}),
+        patch.object(audit, "grep_count_production_callers", return_value=0),
+    ):
         findings = audit.scan()
 
     assert findings == [], f"runner script should be skipped as entry-point, got {findings}"
@@ -501,10 +502,12 @@ def test_scan_still_flags_truly_orphaned_module(tmp_path: Path) -> None:
     registry_dir.mkdir(parents=True)
     (registry_dir / "feature_routers.py").write_text("X = []\n", encoding="utf-8")
 
-    with patch.object(audit, "REPO_ROOT", fake_root), \
-         patch.object(audit, "ROUTER_REGISTRY_DIR", registry_dir), \
-         patch.object(audit, "fetch_closed_tracker_set", return_value={4242}), \
-         patch.object(audit, "grep_count_production_callers", return_value=0):
+    with (
+        patch.object(audit, "REPO_ROOT", fake_root),
+        patch.object(audit, "ROUTER_REGISTRY_DIR", registry_dir),
+        patch.object(audit, "fetch_closed_tracker_set", return_value={4242}),
+        patch.object(audit, "grep_count_production_callers", return_value=0),
+    ):
         findings = audit.scan()
 
     assert len(findings) == 1

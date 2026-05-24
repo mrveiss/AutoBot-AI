@@ -15,7 +15,7 @@ from typing import Any, Dict, List
 
 from agents.web_researcher import WebResearcher as WebResearchAssistant
 from autobot_shared.logging_manager import get_logger
-from events.bus import publish_event, PersistStrategy
+from events.bus import PersistStrategy, publish_event
 from knowledge_base import KnowledgeBase
 
 from .formatters import ToolInfoFormatter
@@ -341,13 +341,15 @@ class EnhancedKBLibrarian:
         await self.knowledge_base.store_fact(document_content, metadata=metadata)
         logger.info("Stored knowledge for tool: %s", tool_name)
 
-        await publish_event("global", 
+        await publish_event(
+            "global",
             "knowledge_update",
             {
                 "type": "new_tool",
                 "tool_name": tool_name,
                 "message": f"Added knowledge about {tool_name} to the knowledge base",
-            }, persist=PersistStrategy.NONE
+            },
+            persist=PersistStrategy.NONE,
         )
 
     async def get_tool_instructions(self, tool_name: str) -> Dict[str, Any]:

@@ -3,6 +3,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Tests for check_git_safe_directory (#7219)."""
+
 from __future__ import annotations
 
 import sys

@@ -168,9 +168,7 @@ DEFAULT_MODELS_CONFIG: Dict[str, Any] = {
 }
 
 
-def get_bootstrap_config_section(
-    section: str, default: Dict[str, Any] | None = None
-) -> Dict[str, Any]:
+def get_bootstrap_config_section(section: str, default: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """Return the named section from the cached bootstrap config, or default.
 
     Args:

@@ -15,6 +15,9 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Tuple
 
 import httpx
+
+# Import root cause analyzer for causal failure analysis
+from celery.result import AsyncResult
 from fastapi import (
     APIRouter,
     Depends,
@@ -55,9 +58,6 @@ from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.time_utils import parse_utc_iso
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
-
-# Import root cause analyzer for causal failure analysis
-from celery.result import AsyncResult
 from services.root_cause_analyzer import RootCauseAnalyzer
 from tasks.analytics_tasks import run_dashboard_analysis
 from utils.celery_task_status import celery_result_to_status, store_latest_task_id

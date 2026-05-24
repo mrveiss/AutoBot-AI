@@ -28,10 +28,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Stubs + direct-file module loading
 # ---------------------------------------------------------------------------
+
 
 def _make_stub(name: str, **attrs: Any) -> types.ModuleType:
     mod = types.ModuleType(name)
@@ -64,9 +64,7 @@ def _load_scheduler() -> types.ModuleType:
 
     # models.heartbeat — loaded directly so Column/JSONB work; we swap Base
     backend_root = Path(__file__).parents[3] / "autobot-backend"
-    hb_spec = importlib.util.spec_from_file_location(
-        "models.heartbeat", backend_root / "models" / "heartbeat.py"
-    )
+    hb_spec = importlib.util.spec_from_file_location("models.heartbeat", backend_root / "models" / "heartbeat.py")
     assert hb_spec and hb_spec.loader
     hb_mod = importlib.util.module_from_spec(hb_spec)
     sys.modules["models"] = types.ModuleType("models")
@@ -103,6 +101,7 @@ HeartbeatScheduler = _mod.HeartbeatScheduler
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_req(agent_id: str, task_id: str, priority: int = 0, merged: int = 0) -> MagicMock:
     req = MagicMock()
@@ -170,9 +169,11 @@ async def test_no_coalescing_without_task_id() -> None:
     fake_req = MagicMock()
     fake_req.id = uuid.uuid4()
 
-    with patch.object(_mod, "select", return_value=_chainable_select()), \
-         patch.object(_mod, "AgentWakeupRequest", return_value=fake_req), \
-         patch.object(_mod, "_get_or_create_state", AsyncMock(return_value=state)):
+    with (
+        patch.object(_mod, "select", return_value=_chainable_select()),
+        patch.object(_mod, "AgentWakeupRequest", return_value=fake_req),
+        patch.object(_mod, "_get_or_create_state", AsyncMock(return_value=state)),
+    ):
         id1 = await scheduler.wakeup("agent-1", context={"foo": "bar"}, priority=1)
         fake_req.id = uuid.uuid4()  # different id for second call
         id2 = await scheduler.wakeup("agent-1", context={"foo": "baz"}, priority=2)
@@ -207,9 +208,11 @@ async def test_coalesce_on_same_task_id() -> None:
     new_row = MagicMock()
     new_row.id = uuid.uuid4()
 
-    with patch.object(_mod, "select", return_value=_chainable_select()), \
-         patch.object(_mod, "AgentWakeupRequest", return_value=new_row), \
-         patch.object(_mod, "_get_or_create_state", AsyncMock(return_value=state)):
+    with (
+        patch.object(_mod, "select", return_value=_chainable_select()),
+        patch.object(_mod, "AgentWakeupRequest", return_value=new_row),
+        patch.object(_mod, "_get_or_create_state", AsyncMock(return_value=state)),
+    ):
         await scheduler.wakeup(agent_id, context={"task_id": task_id}, priority=0)
         for i in range(4):
             ret_id = await scheduler.wakeup(agent_id, context={"task_id": task_id}, priority=i)
@@ -229,8 +232,10 @@ async def test_coalesce_takes_max_priority() -> None:
     existing_req = _make_req("agent-p", "task-p", priority=3, merged=0)
     scheduler._session_factory = MagicMock(return_value=_session_returning(existing_req))
 
-    with patch.object(_mod, "select", return_value=_chainable_select()), \
-         patch.object(_mod, "_get_or_create_state", AsyncMock()):
+    with (
+        patch.object(_mod, "select", return_value=_chainable_select()),
+        patch.object(_mod, "_get_or_create_state", AsyncMock()),
+    ):
         await scheduler.wakeup("agent-p", context={"task_id": "task-p"}, priority=10)
 
     assert existing_req.priority == 10
@@ -247,8 +252,10 @@ async def test_coalesce_merges_context() -> None:
     existing_req.context = {"task_id": "task-c", "a": "old", "b": "keep"}
     scheduler._session_factory = MagicMock(return_value=_session_returning(existing_req))
 
-    with patch.object(_mod, "select", return_value=_chainable_select()), \
-         patch.object(_mod, "_get_or_create_state", AsyncMock()):
+    with (
+        patch.object(_mod, "select", return_value=_chainable_select()),
+        patch.object(_mod, "_get_or_create_state", AsyncMock()),
+    ):
         await scheduler.wakeup("agent-c", context={"task_id": "task-c", "a": "new", "c": "added"}, priority=0)
 
     assert existing_req.context["a"] == "new"

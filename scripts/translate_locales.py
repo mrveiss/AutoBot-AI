@@ -14,13 +14,7 @@ from pathlib import Path
 
 from deep_translator import GoogleTranslator
 
-LOCALES_DIR = (
-    Path(__file__).resolve().parent.parent
-    / "autobot-frontend"
-    / "src"
-    / "i18n"
-    / "locales"
-)
+LOCALES_DIR = Path(__file__).resolve().parent.parent / "autobot-frontend" / "src" / "i18n" / "locales"
 EN_FILE = LOCALES_DIR / "en.json"
 
 TARGET_LANGUAGES = {

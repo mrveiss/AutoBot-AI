@@ -67,8 +67,8 @@ _PROVIDER_DEFAULTS: Dict[str, Tuple[int, int]] = {
     "openai": (500, 500),
     "anthropic": (60, 60),
     "groq": (30, 30),
-    "ollama": (600, 600),   # local, generous
-    "vllm": (600, 600),     # local
+    "ollama": (600, 600),  # local, generous
+    "vllm": (600, 600),  # local
     "huggingface": (30, 30),
     "openrouter": (60, 60),
     "custom_openai": (120, 120),
@@ -182,7 +182,9 @@ class LLMCrossWorkerRateLimiter:
         try:
             return await self._redis_try_acquire(provider)
         except Exception:
-            logger.debug("LLM rate limiter: Redis unavailable — allowing request (provider=%s)", provider, exc_info=True)
+            logger.debug(
+                "LLM rate limiter: Redis unavailable — allowing request (provider=%s)", provider, exc_info=True
+            )
             self._redis_available = False
             return True, 0.0
 
@@ -209,6 +211,7 @@ class LLMCrossWorkerRateLimiter:
 
     async def _get_redis(self):
         from autobot_shared.redis_client import get_async_redis_client  # noqa: PLC0415
+
         return await get_async_redis_client()
 
     async def _load_script(self, redis) -> str:
@@ -225,7 +228,7 @@ class LLMCrossWorkerRateLimiter:
 
         result: bytes = await redis.evalsha(
             sha,
-            1,       # numkeys
+            1,  # numkeys
             key,
             str(capacity),
             str(rate),

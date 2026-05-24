@@ -6,8 +6,9 @@
 Issue #7371: each repair is a discrete idempotent function with a unit test.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from cli.doctor import (
     CheckResult,

@@ -12,8 +12,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from knowledge.connectors.models import ConnectorConfig
-from knowledge.connectors.web_crawler import WebCrawlerConnector
 from knowledge.connectors.testing.acceptance import ConnectorAcceptanceTest
+from knowledge.connectors.web_crawler import WebCrawlerConnector
 from web_fetch import FetchResult
 
 
@@ -91,8 +91,14 @@ class TestWebCrawlerConnectorAcceptance(ConnectorAcceptanceTest):
         )
 
         self.patchers = [
-            patcher_fetch, patcher_raw, patcher_kb, patcher_robots,
-            patcher_cp_read, patcher_cp_write, patcher_cp_clear, patcher_job,
+            patcher_fetch,
+            patcher_raw,
+            patcher_kb,
+            patcher_robots,
+            patcher_cp_read,
+            patcher_cp_write,
+            patcher_cp_clear,
+            patcher_job,
         ]
         for p in self.patchers:
             p.start()

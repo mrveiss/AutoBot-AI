@@ -10,6 +10,7 @@ Provides endpoints for scheduling and managing maintenance windows.
 import logging
 import uuid
 from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession

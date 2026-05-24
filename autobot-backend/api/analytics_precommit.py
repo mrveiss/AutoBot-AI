@@ -14,6 +14,7 @@ import subprocess  # nosec B404
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.schemas_analytics import (

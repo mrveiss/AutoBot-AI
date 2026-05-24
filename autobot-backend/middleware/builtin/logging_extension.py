@@ -10,6 +10,7 @@ for debugging and monitoring purposes.
 
 import logging
 import time
+
 from autobot_shared.logging_manager import get_logger
 from middleware.base import Extension, HookContext
 

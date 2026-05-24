@@ -832,15 +832,15 @@ class HybridVectorSearch(AsyncInitializable):
         for coll in collections:
             name = coll.name if hasattr(coll, "name") else str(coll)
             try:
-                collection: BaseCollection = await asyncio.to_thread(
-                    self.chromadb.get_collection, name
-                )
+                collection: BaseCollection = await asyncio.to_thread(self.chromadb.get_collection, name)
                 count = await asyncio.to_thread(collection.count)
 
                 if count < self.config.ivfpq_min_vectors:
                     logger.debug(
                         "IVFPQ startup: skipping %s (%d < %d vectors)",
-                        name, count, self.config.ivfpq_min_vectors,
+                        name,
+                        count,
+                        self.config.ivfpq_min_vectors,
                     )
                     continue
 
@@ -853,9 +853,7 @@ class HybridVectorSearch(AsyncInitializable):
                 # Try to load persisted index first; only fetch vectors when training.
                 index = await builder.load()
                 if index is None:
-                    all_data = await asyncio.to_thread(
-                        collection.get, include=["embeddings"]
-                    )
+                    all_data = await asyncio.to_thread(collection.get, include=["embeddings"])
                     if all_data.get("embeddings"):
                         vectors = np.array(all_data["embeddings"], dtype=np.float32)
                         index = await builder.build_or_load(vectors)
@@ -864,13 +862,12 @@ class HybridVectorSearch(AsyncInitializable):
                     self._ivfpq_indexes[name] = index
                     logger.info(
                         "IVFPQ startup: index ready for collection '%s' (%d vectors)",
-                        name, count,
+                        name,
+                        count,
                     )
 
             except Exception as exc:
-                logger.warning(
-                    "IVFPQ startup: failed for collection '%s' (%s)", name, exc
-                )
+                logger.warning("IVFPQ startup: failed for collection '%s' (%s)", name, exc)
 
     async def add_documents(
         self,

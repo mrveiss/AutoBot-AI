@@ -67,12 +67,8 @@ def _extract_autobot_getenv_names(path: Path) -> list[tuple[int, str]]:
         func = node.func
 
         # Match os.getenv("AUTOBOT_...") and getenv("AUTOBOT_...")
-        is_getenv = (
-            isinstance(func, ast.Attribute)
-            and func.attr == "getenv"
-        ) or (
-            isinstance(func, ast.Name)
-            and func.id == "getenv"
+        is_getenv = (isinstance(func, ast.Attribute) and func.attr == "getenv") or (
+            isinstance(func, ast.Name) and func.id == "getenv"
         )
 
         if not is_getenv:
@@ -116,16 +112,10 @@ def _build_table(registry: dict) -> str:
             default_str = '`""`'
         else:
             default_str = f"`{spec.default!r}`"
-        row = (
-            f"| `{name}` | {spec.component} | {spec.type.__name__} "
-            f"| {default_str} | {desc} |"
-        )
+        row = f"| `{name}` | {spec.component} | {spec.type.__name__} " f"| {default_str} | {desc} |"
         rows.append(row)
 
-    header = (
-        "| Name | Component | Type | Default | Description |\n"
-        "|---|---|---|---|---|"
-    )
+    header = "| Name | Component | Type | Default | Description |\n" "|---|---|---|---|---|"
     table_body = "\n".join(rows)
     count_note = f"\n\n*{len(registry)} variables registered as of last generation.*\n"
     return f"{header}\n{table_body}{count_note}"
@@ -137,7 +127,7 @@ def _extract_autogen_section(text: str) -> str:
     end_idx = text.find(END_MARKER)
     if begin_idx == -1 or end_idx == -1 or begin_idx >= end_idx:
         return ""
-    return text[begin_idx + len(BEGIN_MARKER): end_idx]
+    return text[begin_idx + len(BEGIN_MARKER) : end_idx]
 
 
 def check_docs_freshness() -> list[str]:
@@ -153,8 +143,7 @@ def check_docs_freshness() -> list[str]:
 
     if not current_section:
         violations.append(
-            f"docs: magic markers missing in {DOCS_PATH}. "
-            "Run: python3 pipeline-scripts/generate_env_docs.py"
+            f"docs: magic markers missing in {DOCS_PATH}. " "Run: python3 pipeline-scripts/generate_env_docs.py"
         )
         return violations
 

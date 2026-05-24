@@ -266,6 +266,7 @@ async def test_routine_runs_list() -> None:
 async def test_api_create_routine() -> None:
     import importlib
     import sys
+
     from fastapi import FastAPI
 
     # Import directly from the module file to avoid llc/api/__init__.py
@@ -318,6 +319,7 @@ async def test_api_create_routine() -> None:
 async def test_api_trigger() -> None:
     import importlib
     import sys
+
     from fastapi import FastAPI
 
     spec = importlib.util.spec_from_file_location(

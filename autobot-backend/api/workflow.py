@@ -30,7 +30,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.error_constants import ERR_WORKFLOW_NOT_FOUND
-from events.bus import publish_event, PersistStrategy
+from events.bus import PersistStrategy, publish_event
 from metrics.system_monitor import system_monitor
 from metrics.workflow_metrics import workflow_metrics
 from models.task_context import WorkflowStepContext
@@ -547,14 +547,16 @@ async def approve_workflow_step(
     await _update_step_status_and_metrics(workflow_id, approval)
 
     # Publish approval event
-    await publish_event("global", 
+    await publish_event(
+        "global",
         "workflow_approval",
         {
             "workflow_id": workflow_id,
             "step_id": approval.step_id,
             "approved": approval.approved,
             "user_input": approval.user_input,
-        }, persist=PersistStrategy.NONE
+        },
+        persist=PersistStrategy.NONE,
     )
 
     return {
@@ -637,7 +639,8 @@ async def _wait_for_step_approval(workflow_id: str, workflow: dict, step: dict) 
         pending_approvals[approval_key] = approval_future
 
     # Publish approval request event
-    await publish_event("global", 
+    await publish_event(
+        "global",
         "workflow_approval_required",
         {
             "workflow_id": workflow_id,
@@ -648,7 +651,8 @@ async def _wait_for_step_approval(workflow_id: str, workflow: dict, step: dict) 
                 "agent_type": step["agent_type"],
                 "action": step["action"],
             },
-        }, persist=PersistStrategy.NONE
+        },
+        persist=PersistStrategy.NONE,
     )
 
     try:
@@ -673,7 +677,8 @@ async def _publish_step_started(workflow_id: str, step: Metadata, step_index: in
         step_index: Current step index
         total_steps: Total number of steps
     """
-    await publish_event("global", 
+    await publish_event(
+        "global",
         "workflow_step_started",
         {
             "workflow_id": workflow_id,
@@ -681,7 +686,8 @@ async def _publish_step_started(workflow_id: str, step: Metadata, step_index: in
             "description": step["description"],
             "step_index": step_index,
             "total_steps": total_steps,
-        }, persist=PersistStrategy.NONE
+        },
+        persist=PersistStrategy.NONE,
     )
 
 
@@ -695,14 +701,16 @@ async def _publish_step_completed(workflow_id: str, step: Metadata) -> None:
         workflow_id: Workflow identifier
         step: Step data with result
     """
-    await publish_event("global", 
+    await publish_event(
+        "global",
         "workflow_step_completed",
         {
             "workflow_id": workflow_id,
             "step_id": step["step_id"],
             "description": step["description"],
             "result": step.get("result", "Step completed successfully"),
-        }, persist=PersistStrategy.NONE
+        },
+        persist=PersistStrategy.NONE,
     )
 
 
@@ -820,14 +828,16 @@ async def _finalize_workflow_completed(workflow_id: str, workflow: Metadata, ste
     # Record metrics (Issue #281: uses helper)
     _record_workflow_metrics(workflow_type, workflow_start_time, "success")
 
-    await publish_event("global", 
+    await publish_event(
+        "global",
         "workflow_completed",
         {
             "workflow_id": workflow_id,
             "user_message": workflow["user_message"],
             "total_steps": len(steps),
             "execution_time": "calculated_time_here",
-        }, persist=PersistStrategy.NONE
+        },
+        persist=PersistStrategy.NONE,
     )
 
 
@@ -846,13 +856,15 @@ async def _finalize_workflow_failed(workflow_id: str, workflow: Metadata, error:
     # Record metrics (Issue #281: uses helper)
     _record_workflow_metrics(workflow_type, workflow_start_time, "failed")
 
-    await publish_event("global", 
+    await publish_event(
+        "global",
         "workflow_failed",
         {
             "workflow_id": workflow_id,
             "error": str(error),
             "current_step": workflow.get("current_step", 0),
-        }, persist=PersistStrategy.NONE
+        },
+        persist=PersistStrategy.NONE,
     )
 
 
@@ -964,9 +976,11 @@ async def cancel_workflow(workflow_id: str, admin_check: bool = Depends(check_ad
                 if not future.done():
                     future.cancel()
 
-    await publish_event("global", 
+    await publish_event(
+        "global",
         "workflow_cancelled",
-        {"workflow_id": workflow_id, "user_message": user_message}, persist=PersistStrategy.NONE
+        {"workflow_id": workflow_id, "user_message": user_message},
+        persist=PersistStrategy.NONE,
     )
 
     return {"success": True, "message": "Workflow cancelled successfully"}

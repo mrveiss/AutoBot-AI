@@ -63,9 +63,7 @@ def main():
     try:
         # Enable High DPI scaling for Windows 11
         logger.debug("Setting High DPI scaling policy")
-        QApplication.setHighDpiScaleFactorRoundingPolicy(
-            Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
-        )
+        QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
 
         logger.debug("Creating QApplication")
         app = QApplication(sys.argv)

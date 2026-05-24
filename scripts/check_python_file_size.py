@@ -17,7 +17,7 @@ MAX_LINES = 600
 # Grandfathered files: currently >600 lines but under active decomposition.
 # Remove each entry once the file reaches ≤600 lines.
 KNOWN_LARGE = {
-    "autobot-backend/orchestrator.py",           # 779 lines (#5060 — target <800)
+    "autobot-backend/orchestrator.py",  # 779 lines (#5060 — target <800)
     "autobot-backend/chat_workflow/manager.py",
     "autobot-backend/chat_workflow/tool_handler.py",
 }

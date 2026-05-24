@@ -119,9 +119,7 @@ async def research_and_document(topic: str, output_path: str) -> Dict[str, Any]:
     return workflow.to_dict()
 
 
-def generate_thought_for_stage(
-    stage: str, topic: str, search_results: Dict[str, Any]
-) -> str:
+def generate_thought_for_stage(stage: str, topic: str, search_results: Dict[str, Any]) -> str:
     """Generate appropriate thought content for each thinking stage"""
     num_results = len(search_results.get("results", []))
 

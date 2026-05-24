@@ -41,7 +41,7 @@ from autobot_shared.redis_client import get_redis_client
 
 # Import the centralized ConfigManager and Redis client utility
 from config import config as global_config_manager
-from events.bus import publish_event, PersistStrategy
+from events.bus import PersistStrategy, publish_event
 from knowledge_base import KnowledgeBase
 from security_layer import SecurityLayer
 from services.llm_service import get_llm_service
@@ -361,9 +361,11 @@ class WorkerNode:
 
     async def _publish_task_start(self, task_id: str, task_type: str, user_role: str) -> None:
         """Publish task start event and log execution start. Issue #620."""
-        await publish_event("global", 
+        await publish_event(
+            "global",
             "worker_task_start",
-            {"worker_id": self.worker_id, "task_id": task_id, "type": task_type}, persist=PersistStrategy.NONE
+            {"worker_id": self.worker_id, "task_id": task_id, "type": task_type},
+            persist=PersistStrategy.NONE,
         )
         logger.info(
             "Worker %s executing task %s of type '%s' for role '%s'",
@@ -375,9 +377,11 @@ class WorkerNode:
 
     async def _publish_task_completion(self, task_id: str, result: Dict[str, Any]) -> None:
         """Publish task completion event and log result. Issue #620."""
-        await publish_event("global", 
+        await publish_event(
+            "global",
             "worker_task_end",
-            {"worker_id": self.worker_id, "task_id": task_id, "result": result}, persist=PersistStrategy.NONE
+            {"worker_id": self.worker_id, "task_id": task_id, "result": result},
+            persist=PersistStrategy.NONE,
         )
         logger.info(
             "Worker %s finished task %s with status: %s",

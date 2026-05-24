@@ -31,7 +31,7 @@ from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import RetryConfig, TimingConstants
-from events.bus import publish_event, PersistStrategy
+from events.bus import PersistStrategy, publish_event
 from npu_integration import NPUWorkerClient
 from type_defs.common import Metadata
 
@@ -644,9 +644,8 @@ class NPULoadBalancer:
             reason: Reason for status change
         """
         try:
-            await publish_event("global", 
-                "npu_worker_status_change",
-                worker.to_status_event_dict(reason), persist=PersistStrategy.NONE
+            await publish_event(
+                "global", "npu_worker_status_change", worker.to_status_event_dict(reason), persist=PersistStrategy.NONE
             )
         except Exception as e:
             logger.error("Failed to emit worker status change event: %s", e)

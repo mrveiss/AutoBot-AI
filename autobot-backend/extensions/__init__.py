@@ -16,9 +16,9 @@ New code should import from middleware instead:
 
 # Re-export everything from middleware for backwards compat
 from middleware import (
+    HOOK_METADATA,
     Extension,
     ExtensionManager,
-    HOOK_METADATA,
     HookContext,
     HookInvocationConfig,
     HookInvoker,
