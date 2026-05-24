@@ -247,6 +247,7 @@ class UnifiedLLMInterface:
         # Claude escalation (#8171): attempt top-tier routing before local providers.
         # Returns None when disabled, score too low, or Claude errors — safe fallthrough.
         from llm_shared.tiered_routing.complexity_router import ComplexityRouter
+
         _escalation_result = await ComplexityRouter().route_with_escalation(request)
         if _escalation_result is not None:
             return _escalation_result
