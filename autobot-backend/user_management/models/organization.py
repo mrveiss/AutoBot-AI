@@ -164,6 +164,21 @@ class Organization(Base):
         nullable=True,
     )
 
+    # ------------------------------------------------------------------ #
+    # External PM sync config (GH#8257)                                   #
+    # ------------------------------------------------------------------ #
+
+    external_pm_type: Mapped[Optional[str]] = mapped_column(
+        String(32),
+        nullable=True,
+    )
+
+    # AES-256-encrypted JSON blob — never store plaintext credentials
+    external_pm_config: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
     # Self-referential relationships for sub-company tree
     children: Mapped[list["Organization"]] = relationship(
         "Organization",

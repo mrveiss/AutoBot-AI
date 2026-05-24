@@ -685,6 +685,21 @@ async def _init_log_forwarding():
         logger.warning("Log forwarding initialization failed: %s", log_fwd_error)
 
 
+async def _init_llc_outbound_sync(app: FastAPI) -> None:
+    """Start the LLC outbound PM sync subscriber (GH#8257)."""
+    logger.info("LLC Outbound Sync: Starting...")
+    try:
+        from llc.sync.outbound_sync import get_outbound_sync_service
+
+        svc = get_outbound_sync_service()
+        await svc.start()
+        app.state.llc_outbound_sync = svc
+        logger.info("LLC Outbound Sync: Started")
+    except Exception as exc:
+        logger.warning("LLC outbound sync startup failed (non-fatal): %s", exc)
+        app.state.llc_outbound_sync = None
+
+
 async def _init_llc_routine_scheduler(app: FastAPI) -> None:
     """Start the LLC RoutineScheduler that fires cron-based routines (GH#8229)."""
     logger.info("LLC Routine Scheduler: Starting...")
@@ -1474,6 +1489,7 @@ async def initialize_background_services(app: FastAPI):
         await _init_log_forwarding()
         await _init_heartbeat_scheduler(app)
         await _init_llc_routine_scheduler(app)
+        await _init_llc_outbound_sync(app)
         await _start_connector_scheduler()
         await _init_trigger_service(app)
         await _init_slm_reconciler(app)
@@ -1583,6 +1599,11 @@ async def cleanup_services(app: FastAPI):
         # REMOVED as part of Issue #729 - SLM moved to slm-server
         # SLM server manages its own reconciler lifecycle
         pass  # SLM reconciler now in slm-server
+
+        # GH#8257: Stop LLC outbound sync service
+        if hasattr(app.state, "llc_outbound_sync") and app.state.llc_outbound_sync:
+            await app.state.llc_outbound_sync.stop()
+            logger.info("✅ LLC outbound sync service stopped")
 
         # GH#8229: Stop LLC routine scheduler
         if hasattr(app.state, "llc_routine_scheduler") and app.state.llc_routine_scheduler:
