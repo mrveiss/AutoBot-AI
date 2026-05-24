@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
@@ -177,6 +177,13 @@ class Organization(Base):
     external_pm_config: Mapped[Optional[str]] = mapped_column(
         Text,
         nullable=True,
+    )
+
+    # KB inheritance weight multiplier (GH#8241)
+    kb_inheritance_weight: Mapped[float] = mapped_column(
+        Float,
+        default=0.6,
+        nullable=False,
     )
 
     # Self-referential relationships for sub-company tree
