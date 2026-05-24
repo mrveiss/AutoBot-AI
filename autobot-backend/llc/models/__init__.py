@@ -35,6 +35,7 @@ from .goal import GoalLevel, GoalStatus, LLCGoal
 from .membership import LLCCompanyMembership
 from .secret import LLCSecret
 from .sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint
+from .ceo_chat import LLCCeoChatMessage, LLCCeoChatThread
 from .work_item import LLCWorkItem, LLCWorkItemComment
 
 __all__ = [
@@ -60,6 +61,8 @@ __all__ = [
     "LLCApproval",
     "LLCBase",
     "LLCBoard",
+    "LLCCeoChatMessage",
+    "LLCCeoChatThread",
     "LLCBoardColumn",
     "LLCCompanyMembership",
     "LLCCompanyStatus",
