@@ -50,32 +50,6 @@
           <strong>Snapshot</strong> — full backup including all work items and sprint history.
         </p>
 
-        <!-- Recent exports -->
-        <div v-if="recentExports.length > 0" class="recent-exports">
-          <h4 class="subsection-title">Recent Exports</h4>
-          <table class="export-table">
-            <thead>
-              <tr>
-                <th>Type</th>
-                <th>Created</th>
-                <th>Download</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="exp in recentExports" :key="exp.id">
-                <td>{{ exp.export_type }}</td>
-                <td>{{ formatDate(exp.created_at) }}</td>
-                <td>
-                  <a
-                    class="download-link"
-                    :href="exp.download_url"
-                    :download="exp.filename"
-                  >Download</a>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
       </section>
 
       <!-- ═══════════════════════════════════════════════════
@@ -209,7 +183,7 @@
         <div v-if="importResult" class="import-result" :class="importResult.ok ? 'result-success' : 'result-error'">
           <template v-if="importResult.ok">
             ✅ Import successful — company ID: <strong>{{ importResult.company_id }}</strong>
-            <ul class="result-counts">
+            <ul v-if="importResult.created_entities" class="result-counts">
               <li v-for="(v, k) in importResult.created_entities" :key="k">{{ k }}: {{ v }}</li>
             </ul>
             <div v-if="importResult.warnings.length > 0">
@@ -227,7 +201,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { getApiBase } from '@/config/ssot-config'
 import { useNotificationBus } from '@/composables/useNotificationBus'
@@ -237,7 +211,8 @@ const logger = createLogger('CompanyPortabilityView')
 const { showToast } = useNotificationBus()
 
 // ── props ────────────────────────────────────────────────────────────────────
-const props = defineProps<{ companyId: string }>()
+const props = defineProps<{ companyId?: string }>()
+const effectiveCompanyId = computed(() => props.companyId ?? '00000000-0000-0000-0000-000000000000')
 
 // ── state ────────────────────────────────────────────────────────────────────
 const globalError = ref<string | null>(null)
@@ -245,7 +220,6 @@ const globalError = ref<string | null>(null)
 // Export
 const exportingTemplate = ref(false)
 const exportingSnapshot = ref(false)
-const recentExports = ref<ExportArtifact[]>([])
 
 // Import
 const fileInputRef = ref<HTMLInputElement | null>(null)
@@ -258,14 +232,6 @@ const executingImport = ref(false)
 const importResult = ref<ImportResultDisplay | null>(null)
 
 // ── types ─────────────────────────────────────────────────────────────────────
-interface ExportArtifact {
-  id: string
-  export_type: 'template' | 'snapshot'
-  created_at: string
-  filename: string
-  download_url: string
-}
-
 interface Collision {
   type: string
   name: string
@@ -301,10 +267,6 @@ const secretMappingIncomplete = computed(() =>
 )
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString()
-}
-
 async function triggerDownload(res: Response, defaultFilename: string): Promise<void> {
   const disposition = res.headers.get('content-disposition') ?? ''
   const match = disposition.match(/filename="?([^";\n]+)"?/)
@@ -324,34 +286,17 @@ function extractSecretPlaceholders(json: unknown): string[] {
   return [...new Set(matches.map(m => m.replace(/^\{\{|\}\}$/g, '')))]
 }
 
-// ── lifecycle ─────────────────────────────────────────────────────────────────
-onMounted(() => loadRecentExports())
-
 // ── export ────────────────────────────────────────────────────────────────────
-async function loadRecentExports(): Promise<void> {
-  try {
-    const res = await fetchWithAuth(
-      `${getApiBase()}/llc/companies/${props.companyId}/exports`
-    )
-    if (!res.ok) return
-    const data = await res.json() as ExportArtifact[]
-    recentExports.value = data
-  } catch (e) {
-    logger.error('Failed to load recent exports:', e)
-  }
-}
-
 async function exportTemplate(): Promise<void> {
   exportingTemplate.value = true
   try {
     const res = await fetchWithAuth(
-      `${getApiBase()}/llc/companies/${props.companyId}/export/template`,
+      `${getApiBase()}/llc/companies/${effectiveCompanyId.value}/export/template`,
       { method: 'POST' }
     )
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-    await triggerDownload(res, `company_${props.companyId}_template.json`)
+    await triggerDownload(res, `company_${effectiveCompanyId.value}_template.json`)
     showToast('Template exported successfully', 'success')
-    void loadRecentExports()
   } catch (e) {
     logger.error('Template export failed:', e)
     showToast('Template export failed', 'error')
@@ -364,13 +309,12 @@ async function exportSnapshot(): Promise<void> {
   exportingSnapshot.value = true
   try {
     const res = await fetchWithAuth(
-      `${getApiBase()}/llc/companies/${props.companyId}/export/snapshot`,
+      `${getApiBase()}/llc/companies/${effectiveCompanyId.value}/export/snapshot`,
       { method: 'POST' }
     )
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-    await triggerDownload(res, `company_${props.companyId}_snapshot.json`)
+    await triggerDownload(res, `company_${effectiveCompanyId.value}_snapshot.json`)
     showToast('Snapshot exported successfully', 'success')
-    void loadRecentExports()
   } catch (e) {
     logger.error('Snapshot export failed:', e)
     showToast('Snapshot export failed', 'error')
@@ -392,7 +336,7 @@ function onFileChange(e: Event): void {
 }
 
 function loadFile(file: File): void {
-  if (!file.name.endsWith('.json') && file.type !== 'application/json') {
+  if (!file.name.endsWith('.json') || file.type !== 'application/json') {
     showToast('Only JSON files are supported', 'error')
     return
   }
@@ -434,7 +378,9 @@ async function runPreview(): Promise<void> {
     // Populate placeholder state before showing preview so the guard is ready
     const placeholders = extractSecretPlaceholders(parsed)
     secretPlaceholders.value = placeholders
-    secretMapping.value = Object.fromEntries(placeholders.map(p => [p, '']))
+    for (const p of placeholders) {
+      if (!secretMapping.value[p]) secretMapping.value[p] = ''
+    }
     importPreview.value = preview
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Preview failed'
@@ -464,16 +410,17 @@ async function executeImport(): Promise<void> {
         },
       }),
     })
-    const body = await res.json() as Record<string, unknown>
     if (!res.ok) {
+      const errBody = await res.json().catch(() => ({})) as Record<string, unknown>
       importResult.value = {
         ok: false,
         warnings: [],
-        error: (body.detail as string) ?? `${res.status} ${res.statusText}`,
+        error: (errBody.detail as string) ?? `${res.status} ${res.statusText}`,
       }
       showToast('Import failed', 'error')
       return
     }
+    const body = await res.json() as Record<string, unknown>
     importResult.value = {
       ok: true,
       company_id: body.company_id as string,

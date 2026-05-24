@@ -860,6 +860,13 @@ export const routes: RouteRecordRaw[] = [
     path: '/marketplace',
     redirect: '/plugins/marketplace'
   },
+  // GH#8250: LLC Company Portability — export template/snapshot, import preview + execute
+  {
+    path: '/llc/portability',
+    name: 'llc-portability',
+    component: () => import('@/views/llc/CompanyPortabilityView.vue'),
+    meta: { title: 'Company Portability', requiresAuth: true },
+  },
   // Issue #729: Secrets stays in autobot-vue - user functionality for chat/agent credentials
   {
     path: '/secrets',
