@@ -1,4 +1,5 @@
 """LLC work items API routes (GH#8213, GH#8223, GH#8231, GH#8232).
+"""LLC work items API routes (GH#8213, GH#8223, GH#8231, GH#8232, GH#8252).
 Routes:
   POST   /api/llc/work-items
   GET    /api/llc/work-items
@@ -34,6 +35,8 @@ from ..kb.collections import KbCollectionManager
 from ..models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
 from ..services.handoff import HandoffAttachment, HandoffNotAllowed, HandoffNotAuthorized, HandoffService
 from ..services.work_item_service import CheckoutConflict, InvalidTransition, WorkItemService
+from ..models.enums import WorkItemPriority, WorkItemRelationType, WorkItemStatus, WorkItemType
+from ..services.work_item_relations import RelationConflict, WorkItemRelationService
 from ..services.work_item_service import (
     CheckoutConflict,
     CoWorkingPermissionError,
@@ -73,6 +76,7 @@ _get_service = lazy_singleton(WorkItemService)
 _get_product_service = lazy_singleton(WorkProductService)
 _get_handoff_service = lazy_singleton(HandoffService)
 _kb_manager = KbCollectionManager()
+_get_relation_service = lazy_singleton(WorkItemRelationService)
 
 
 def _service() -> WorkItemService:
@@ -83,6 +87,8 @@ def _handoff_service() -> HandoffService:
     return _get_handoff_service()
 
 
+def _relation_service() -> WorkItemRelationService:
+    return _get_relation_service()
 async def get_session() -> AsyncSession:
     factory = get_async_session_factory()
     async with factory() as session:
@@ -182,6 +188,15 @@ class ReviewChangesRequest(BaseModel):
     return_to_agent_id: Optional[str] = None
 
 
+class RelationCreate(BaseModel):
+    company_id: str
+    target_id: str
+    relation_type: WorkItemRelationType
+    created_by_agent_id: Optional[str] = None
+    created_by_user_id: Optional[str] = None
+class RelationDelete(BaseModel):
+    actor_agent_id: Optional[str] = None
+    actor_user_id: Optional[str] = None
 def _assignee_display(item: Any) -> Optional[Dict[str, Any]]:
     """Return structured assignee display info (GH#8223).
 
@@ -205,6 +220,36 @@ def _assignee_display(item: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _coworker_display(item: Any) -> Optional[Dict[str, Any]]:
+    """Return structured co-worker display info (GH#8230)."""
+    if not item.co_working_enabled:
+        return None
+    if item.co_worker_type == "human" and item.co_worker_user_id:
+        return {
+            "type": "human",
+            "id": str(item.co_worker_user_id),
+            "display_name": None,
+            "name": None,
+        }
+    if item.co_worker_type == "agent" and item.co_worker_agent_id:
+            "type": "agent",
+            "id": str(item.co_worker_agent_id),
+def _relations_to_list(item: Any) -> List[Dict[str, Any]]:
+    """Serialize outgoing + incoming relations for GET response (GH#8252)."""
+    rows = []
+    for rel in getattr(item, "outgoing_relations", []) or []:
+        tgt = rel.target
+        rows.append(
+            {
+                "id": str(rel.id),
+                "type": rel.relation_type,
+                "target_id": str(rel.target_id),
+                "target_identifier": tgt.identifier if tgt else None,
+                "target_title": tgt.title if tgt else None,
+                "target_status": tgt.status if tgt else None,
+            }
+        )
+    return rows
 def _item_to_dict(item: Any) -> Dict[str, Any]:
     return {
         "id": str(item.id),
@@ -241,6 +286,7 @@ def _item_to_dict(item: Any) -> Dict[str, Any]:
         "has_human_handoff_context": bool(getattr(item, "review_brief", None)),
         "created_at": item.created_at.isoformat() if item.created_at else None,
         "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+        "relations": _relations_to_list(item),
     }
 
 
@@ -628,4 +674,41 @@ async def list_work_products(
             for p in products
         ],
         "total": len(products),
-    }
+# ------------------------------------------------------------------
+# Relation endpoints (GH#8252)
+@router.post("/{work_item_id}/relations", status_code=201)
+async def add_relation(
+    body: RelationCreate,
+    try:
+        rel = await _relation_service().add(
+            company_id=body.company_id,
+            source_id=work_item_id,
+            target_id=body.target_id,
+            relation_type=body.relation_type,
+            created_by_agent_id=body.created_by_agent_id,
+            created_by_user_id=body.created_by_user_id,
+        await session.commit()
+            "id": str(rel.id),
+            "source_id": work_item_id,
+            "target_id": body.target_id,
+            "relation_type": rel.relation_type,
+    except RelationConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+@router.delete("/{work_item_id}/relations/{relation_id}", status_code=204)
+async def remove_relation(
+    relation_id: str,
+    company_id: str = Query(...),
+    actor_agent_id: Optional[str] = Query(None),
+    actor_user_id: Optional[str] = Query(None),
+) -> None:
+        await _relation_service().remove(
+            company_id=company_id,
+            relation_id=relation_id,
+            actor_agent_id=actor_agent_id,
+            actor_user_id=actor_user_id,
+        )
+        await session.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))

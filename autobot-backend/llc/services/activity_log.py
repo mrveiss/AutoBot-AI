@@ -58,6 +58,8 @@ class ActivityEventType(str, Enum):
     WORK_ITEM_REVIEW_CHANGES_REQUESTED = "work_item.review_changes_requested"
     WORK_ITEM_COWORKER_SET = "work_item.coworker_set"
     WORK_ITEM_COWORKER_CLEARED = "work_item.coworker_cleared"
+    WORK_ITEM_RELATION_ADDED = "work_item.relation_added"
+    WORK_ITEM_RELATION_REMOVED = "work_item.relation_removed"
 
     # Sprint lifecycle
     SPRINT_CREATED = "sprint.created"
