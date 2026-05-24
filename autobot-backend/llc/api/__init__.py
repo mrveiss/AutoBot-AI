@@ -10,7 +10,6 @@ from .approvals import router as approvals_router
 from .backlog import router as backlog_router
 from .boards import router as boards_router
 from .budget import router as budget_router
-from .ceo_chat import router as ceo_chat_router
 from .companies import router as companies_router
 from .context import router as context_router
 from .goals import router as goals_router
@@ -21,6 +20,9 @@ from .routines import router as routines_router
 from .runs import router as runs_router
 from .secrets import router as secrets_router
 from .sprints import router as sprints_router
+from .ceo_chat import router as ceo_chat_router
+from .review_gate_policies import router as review_gate_router
+from .templates import router as templates_router
 from .work_items import router as work_items_router
 
 router = APIRouter(prefix="/llc", tags=["llc"])
@@ -44,6 +46,7 @@ router.include_router(portability_router)
 router.include_router(review_gate_router)
 router.include_router(context_router)
 router.include_router(labels_router)
+router.include_router(templates_router)
 
 
 @router.get("/health")

@@ -89,6 +89,11 @@ class ActivityEventType(str, Enum):
     NOTIFICATION_SENT = "notification.sent"
     NOTIFICATION_FAILED = "notification.failed"
 
+    # Template library (GH#8260)
+    TEMPLATE_PUBLISHED = "template.published"
+    TEMPLATE_IMPORTED = "template.imported"
+    TEMPLATE_DELETED = "template.deleted"
+
 
 class ActivityLogQuery:
     """Filter + pagination parameters for LLCActivityLogService.query()."""
