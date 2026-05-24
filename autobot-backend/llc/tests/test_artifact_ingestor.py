@@ -12,7 +12,6 @@ from llc.kb.artifact_ingestor import ArtifactIngestor, _is_text_path, _split_tex
 from llc.models.enums import WorkProductType
 from llc.models.work_product import LLCWorkProduct
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

@@ -58,6 +58,7 @@ class CoworkerRequest(BaseModel):
     To clear the co-worker, omit co_worker_type (or send null).
     caller_role must be 'owner', 'admin', or 'lead' to mutate co-working state.
     """
+
     company_id: str
     co_worker_type: Optional[str] = None
     co_worker_agent_id: Optional[str] = None
@@ -65,6 +66,8 @@ class CoworkerRequest(BaseModel):
     actor_agent_id: Optional[str] = None
     actor_user_id: Optional[str] = None
     caller_role: str = "member"
+
+
 router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
 _get_service = lazy_singleton(WorkItemService)
 _get_product_service = lazy_singleton(WorkProductService)
@@ -177,6 +180,7 @@ class ReviewChangesRequest(BaseModel):
     company_id: str
     change_request: str
     return_to_agent_id: Optional[str] = None
+
 
 def _assignee_display(item: Any) -> Optional[Dict[str, Any]]:
     """Return structured assignee display info (GH#8223).
@@ -501,6 +505,8 @@ async def handoff_to_agent(
         raise HTTPException(status_code=403, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+
+
 # ------------------------------------------------------------------
 # Handoff routes (GH#8231)
 # ------------------------------------------------------------------
@@ -583,6 +589,7 @@ async def get_handoff_brief(
         return {"work_item_id": work_item_id, "brief": brief}
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+
 
 @router.get("/{work_item_id}/products")
 async def list_work_products(

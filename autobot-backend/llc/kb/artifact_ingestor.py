@@ -29,9 +29,29 @@ _CHUNK_OVERLAP = 200
 
 # Extensions treated as plain text (match WorkItemKB._TEXT_EXTENSIONS).
 _TEXT_EXTENSIONS = {
-    ".md", ".txt", ".py", ".js", ".ts", ".go", ".rs", ".java",
-    ".c", ".cpp", ".h", ".rb", ".sh", ".yaml", ".yml", ".toml",
-    ".ini", ".cfg", ".sql", ".html", ".css", ".jsx", ".tsx",
+    ".md",
+    ".txt",
+    ".py",
+    ".js",
+    ".ts",
+    ".go",
+    ".rs",
+    ".java",
+    ".c",
+    ".cpp",
+    ".h",
+    ".rb",
+    ".sh",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".ini",
+    ".cfg",
+    ".sql",
+    ".html",
+    ".css",
+    ".jsx",
+    ".tsx",
 }
 
 
@@ -78,9 +98,7 @@ class ArtifactIngestor:
         """
         from sqlalchemy import select
 
-        result = await session.execute(
-            select(LLCWorkProduct).where(LLCWorkProduct.id == uuid.UUID(work_product_id))
-        )
+        result = await session.execute(select(LLCWorkProduct).where(LLCWorkProduct.id == uuid.UUID(work_product_id)))
         product = result.scalar_one_or_none()
         if product is None:
             logger.warning("ArtifactIngestor: work product %s not found", work_product_id)

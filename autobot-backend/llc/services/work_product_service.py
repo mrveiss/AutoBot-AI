@@ -97,10 +97,7 @@ class WorkProductService(LLCServiceBase):
             ids = results.get("ids", [])
             docs = results.get("documents", [])
             metas = results.get("metadatas", [])
-            return [
-                {"id": doc_id, "document": doc, "metadata": meta}
-                for doc_id, doc, meta in zip(ids, docs, metas)
-            ]
+            return [{"id": doc_id, "document": doc, "metadata": meta} for doc_id, doc, meta in zip(ids, docs, metas)]
         except Exception:
             import logging
 

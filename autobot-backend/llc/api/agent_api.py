@@ -92,10 +92,11 @@ class WorkProduct(BaseModel):
 @router.post("/products")
 async def upload_work_product(body: WorkProduct, request: Request) -> Dict[str, Any]:
     agent_id, company_id = _agent_context(request)
-    from ..models.enums import WorkProductType
-    from ..services.work_product_service import WorkProductService
     from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
+
+    from ..models.enums import WorkProductType
+    from ..services.work_product_service import WorkProductService
 
     try:
         product_type = WorkProductType(body.type)

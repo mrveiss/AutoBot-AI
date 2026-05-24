@@ -573,8 +573,9 @@ async def get_project_knowledge(
     Queries the ``project:{project_id}`` ChromaDB collection — available
     once ArtifactIngestor has indexed at least one work product.
     """
-    from ..services.work_product_service import WorkProductService
     from autobot_shared.singleton_factory import lazy_singleton
+
+    from ..services.work_product_service import WorkProductService
 
     svc = lazy_singleton(WorkProductService)()
     artifacts = await svc.list_indexed_by_project(
