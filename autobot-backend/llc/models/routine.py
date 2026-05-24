@@ -75,7 +75,7 @@ class LLCRoutine(Base):
         "LLCRoutineRun",
         back_populates="routine",
         cascade="all, delete-orphan",
-        lazy="raise",
+        lazy="noload",
     )
 
     def __repr__(self) -> str:
