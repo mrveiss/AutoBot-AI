@@ -1,16 +1,15 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""LLC heartbeat run model (GH#8228).
+"""LLC heartbeat run model (GH#8225/GH#8228).
 
-Minimal table definition required by LivenessMonitor to detect and mark stuck
-runs. The full HeartbeatScheduler (GH#8225) populates this table; this module
-defines the schema shared by both issues.
+Defines the schema shared by HeartbeatScheduler (GH#8225) and LivenessMonitor
+(GH#8228). Both issues read and write this table.
 """
 
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -18,9 +17,16 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from user_management.models.base import Base
 
+from .enums import HeartbeatInvocationSource, HeartbeatRunStatus
+
 
 class LLCHeartbeatRun(Base):
-    """One scheduler-dispatched or manually-triggered heartbeat run."""
+    """Persisted record of a single heartbeat invocation.
+
+    company_id matches the UUID PK of the organizations table (GH#8225 note:
+    PR #8481 creates this column as UUID NOT NULL — callers must resolve a
+    valid org UUID before inserting).
+    """
 
     __tablename__ = "llc_heartbeat_runs"
 
@@ -33,13 +39,17 @@ class LLCHeartbeatRun(Base):
     agent_id: Mapped[str] = mapped_column(sa.String(255), nullable=False, index=True)
 
     invocation_source: Mapped[str] = mapped_column(
-        sa.String(32), nullable=False, server_default="scheduler"
+        sa.String(32),
+        nullable=False,
+        server_default=HeartbeatInvocationSource.SCHEDULER.value,
     )
     status: Mapped[str] = mapped_column(
-        sa.String(32), nullable=False, server_default="queued", index=True
+        sa.String(32),
+        nullable=False,
+        server_default=HeartbeatRunStatus.QUEUED.value,
+        index=True,
     )
 
-    # FK to the work item that was checked out during this run (nullable)
     work_item_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         sa.ForeignKey("llc_work_items.id", ondelete="SET NULL"),
@@ -49,12 +59,13 @@ class LLCHeartbeatRun(Base):
 
     started_at: Mapped[Optional[datetime]] = mapped_column(sa.DateTime(timezone=True), nullable=True, index=True)
     finished_at: Mapped[Optional[datetime]] = mapped_column(sa.DateTime(timezone=True), nullable=True)
-    error: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
-    external_run_id: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
-    context_snapshot: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    error: Mapped[Optional[str]] = mapped_column(sa.Text(), nullable=True)
+    external_run_id: Mapped[Optional[str]] = mapped_column(sa.Text(), nullable=True)
+    context_snapshot: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True),
         nullable=False,
         server_default=sa.func.now(),
+        index=True,
     )

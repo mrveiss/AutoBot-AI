@@ -210,6 +210,24 @@ def _log_initialization_result(failed_services: list):
         log_initialization_step("Background Init", "All services initialized successfully", 100, True)
 
 
+async def _init_heartbeat_scheduler(app: FastAPI, update_status_fn, append_error_fn):
+    """Start the LLC HeartbeatScheduler (GH#8225)."""
+    try:
+        from autobot_shared.singleton_factory import lazy_singleton
+        from llc.scheduler.heartbeat_scheduler import HeartbeatScheduler
+
+        get_scheduler = lazy_singleton(HeartbeatScheduler)
+        scheduler = get_scheduler()
+        await scheduler.start()
+        app.state.heartbeat_scheduler = scheduler
+        await update_status_fn("heartbeat_scheduler", "ready")
+        log_initialization_step("Heartbeat Scheduler", "LLC heartbeat scheduler started", 90, True)
+    except Exception as exc:
+        logger.warning("Heartbeat scheduler init failed (non-fatal): %s", exc)
+        await update_status_fn("heartbeat_scheduler", "degraded")
+        await append_error_fn(f"Heartbeat scheduler: {exc}")
+
+
 async def _init_retrieval_learner_consolidation(update_status_fn, append_error_fn):
     """Schedule a one-shot consolidation pass for the retrieval learner. Issue #2095.
 
@@ -299,7 +317,6 @@ async def enhanced_background_init(app: FastAPI, update_status_fn, append_error_
             _init_distributed_tracing(app, update_status_fn),
             _init_retrieval_learner_consolidation(update_status_fn, append_error_fn),
             _init_llc_monitors(app, update_status_fn),
-            _init_llc_routine_scheduler(app, update_status_fn, append_error_fn),
         ]
 
         await asyncio.gather(*tasks, return_exceptions=True)

@@ -17,7 +17,6 @@ from llc.adapters.http_adapter import HttpAdapter
 from llc.adapters.process_adapter import ProcessAdapter
 from llc.models.enums import LLCRunStatus
 
-
 # ---------------------------------------------------------------------------
 # Base / protocol
 # ---------------------------------------------------------------------------
@@ -68,9 +67,7 @@ class TestProcessAdapter:
         fake_proc.pid = 12345
 
         with patch("asyncio.create_subprocess_shell", new_callable=AsyncMock, return_value=fake_proc):
-            run_id = await adapter.invoke(
-                {"command": "echo hello"}, {"key": "value"}
-            )
+            run_id = await adapter.invoke({"command": "echo hello"}, {"key": "value"})
 
         assert run_id == "12345"
 
@@ -89,6 +86,7 @@ class TestProcessAdapter:
             await adapter.invoke({"command": "x"}, {"task_id": "t1"})
 
         import json
+
         ctx = json.loads(captured_env["LLC_INVOKE_CONTEXT"])
         assert ctx["task_id"] == "t1"
 
@@ -184,9 +182,7 @@ class TestHttpAdapter:
         resp = _mock_response(200, {"run_id": "abc-123"})
 
         with patch("aiohttp.ClientSession", return_value=_mock_session([resp])):
-            run_id = await adapter.invoke(
-                {"url": "http://agent.local"}, {"task": "t1"}
-            )
+            run_id = await adapter.invoke({"url": "http://agent.local"}, {"task": "t1"})
 
         assert run_id == "abc-123"
 

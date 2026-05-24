@@ -17,19 +17,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.redis_client import get_async_redis_client
-from user_management.database import get_async_session_factory
+from user_management.database import get_async_session
+from user_management.services import TenantContext
 
 from ..adapters import get_adapter_for_agent
 from ..models.heartbeat_run import LLCHeartbeatRun
 
 router = APIRouter(prefix="/agents", tags=["llc-runs"])
-
-
-async def get_session() -> AsyncSession:
-    factory = get_async_session_factory()
-    async with factory() as session:
-        yield session
 
 
 def _run_to_dict(run: LLCHeartbeatRun) -> Dict[str, Any]:
@@ -54,10 +50,15 @@ async def list_runs(
     status: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[Dict[str, Any]]:
     """List heartbeat runs for an agent, newest first."""
-    q = select(LLCHeartbeatRun).where(LLCHeartbeatRun.agent_id == agent_id)
+    q = select(LLCHeartbeatRun).where(
+        LLCHeartbeatRun.agent_id == agent_id,
+        LLCHeartbeatRun.company_id == ctx.org_id,
+    )
     if status:
         q = q.where(LLCHeartbeatRun.status == status)
     q = q.order_by(LLCHeartbeatRun.created_at.desc()).limit(limit).offset(offset)
@@ -69,13 +70,16 @@ async def list_runs(
 async def get_run(
     agent_id: str,
     run_id: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
     """Get a single heartbeat run with context snapshot."""
     result = await session.execute(
         select(LLCHeartbeatRun).where(
             LLCHeartbeatRun.agent_id == agent_id,
             LLCHeartbeatRun.id == run_id,
+            LLCHeartbeatRun.company_id == ctx.org_id,
         )
     )
     run = result.scalar_one_or_none()
@@ -90,7 +94,9 @@ async def get_run(
 async def cancel_run(
     agent_id: str,
     run_id: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
     """Manual run cancel (board only).
 
@@ -101,6 +107,7 @@ async def cancel_run(
         select(LLCHeartbeatRun).where(
             LLCHeartbeatRun.agent_id == agent_id,
             LLCHeartbeatRun.id == run_id,
+            LLCHeartbeatRun.company_id == ctx.org_id,
         )
     )
     run = result.scalar_one_or_none()

@@ -166,6 +166,7 @@ async def create_routine(
         redis = await get_async_redis_client()
         if redis is not None:
             from datetime import timezone
+
             next_ts: float = croniter(body.cron_schedule, datetime.now(tz=timezone.utc)).get_next(float)
             await redis.zadd(_SCHEDULE_KEY, {f"routine:{routine.id}": next_ts}, nx=True)
     except Exception:
@@ -218,6 +219,7 @@ async def update_routine(
                 # Re-activated or cron changed — re-insert with updated next fire time
                 cron_expr = new_cron or routine.cron_schedule
                 from datetime import timezone
+
                 next_ts: float = croniter(cron_expr, datetime.now(tz=timezone.utc)).get_next(float)
                 await redis.zadd(_SCHEDULE_KEY, {f"routine:{routine_id}": next_ts}, nx=False)
     except Exception:

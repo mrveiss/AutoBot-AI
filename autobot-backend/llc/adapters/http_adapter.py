@@ -50,9 +50,7 @@ class HttpAdapter:
             body = context
 
         async with aiohttp.ClientSession(timeout=_DEFAULT_TIMEOUT) as session:
-            async with session.request(
-                method, url, json=body, headers=headers
-            ) as resp:
+            async with session.request(method, url, json=body, headers=headers) as resp:
                 resp.raise_for_status()
                 data = await resp.json()
 

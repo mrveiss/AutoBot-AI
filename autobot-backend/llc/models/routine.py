@@ -38,15 +38,11 @@ class LLCRoutine(Base):
         primary_key=True,
         server_default=sa.text("gen_random_uuid()"),
     )
-    company_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False, index=True
-    )
+    company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     name: Mapped[str] = mapped_column(sa.String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
     cron_schedule: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    assignee_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), nullable=True, index=True
-    )
+    assignee_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
     status: Mapped[str] = mapped_column(
         sa.String(32),
         nullable=False,
@@ -58,17 +54,13 @@ class LLCRoutine(Base):
         nullable=False,
         server_default=RoutineProduces.NEW_WORK_ITEM.value,
     )
-    work_item_template: Mapped[Optional[Dict[str, Any]]] = mapped_column(
-        JSONB, nullable=True
-    )
+    work_item_template: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
     recurring_work_item_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         sa.ForeignKey("llc_work_items.id", ondelete="SET NULL"),
         nullable=True,
     )
-    last_fired_at: Mapped[Optional[datetime]] = mapped_column(
-        sa.DateTime(timezone=True), nullable=True
-    )
+    last_fired_at: Mapped[Optional[datetime]] = mapped_column(sa.DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
     )
@@ -116,15 +108,9 @@ class LLCRoutineRun(Base):
         sa.ForeignKey("llc_work_items.id", ondelete="SET NULL"),
         nullable=True,
     )
-    status: Mapped[str] = mapped_column(
-        sa.String(32), nullable=False, server_default="queued"
-    )
-    started_at: Mapped[Optional[datetime]] = mapped_column(
-        sa.DateTime(timezone=True), nullable=True
-    )
-    finished_at: Mapped[Optional[datetime]] = mapped_column(
-        sa.DateTime(timezone=True), nullable=True
-    )
+    status: Mapped[str] = mapped_column(sa.String(32), nullable=False, server_default="queued")
+    started_at: Mapped[Optional[datetime]] = mapped_column(sa.DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(sa.DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
     )

@@ -122,6 +122,32 @@ class LLCRunStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+class HeartbeatInvocationSource(str, Enum):
+    """What triggered a heartbeat run (GH#8225)."""
+
+    SCHEDULER = "scheduler"
+    MANUAL = "manual"
+    CALLBACK = "callback"
+
+
+class HeartbeatRunStatus(str, Enum):
+    """Lifecycle status of a single heartbeat run (GH#8225)."""
+
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    TIMED_OUT = "timed_out"
+
+
+class ContextMode(str, Enum):
+    """How much context to include in heartbeat invocations (GH#8225)."""
+
+    THIN = "thin"
+    FAT = "fat"
+
+
 class AssignmentType(str, Enum):
     """How a work item was assigned to an agent (GH#8230)."""
 

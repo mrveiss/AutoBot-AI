@@ -483,6 +483,7 @@ async def _init_knowledge_base(app: FastAPI):
         try:
             from knowledge.tiering import get_tier_manager
             from autobot_shared.redis_client import get_redis_client as _get_sync_redis
+
             _tier_redis = _get_sync_redis(database="knowledge")
             await get_tier_manager(redis_client=_tier_redis).start()
             app.state.tier_manager = get_tier_manager()
@@ -688,7 +689,7 @@ async def _init_llc_routine_scheduler(app: FastAPI) -> None:
     """Start the LLC RoutineScheduler that fires cron-based routines (GH#8229)."""
     logger.info("LLC Routine Scheduler: Starting...")
     try:
-        from llc.scheduler import RoutineScheduler
+        from llc.scheduler.routine_scheduler import RoutineScheduler
 
         scheduler = RoutineScheduler()
         await scheduler.startup()
@@ -704,8 +705,24 @@ async def _init_heartbeat_scheduler(app: FastAPI) -> None:
     Start heartbeat scheduler for scheduled agent wakeups (NON-CRITICAL).
 
     Issue #1407: Loads enabled agents from DB and spawns their asyncio loops.
+    GH#8225: Prefers the LLC HeartbeatScheduler; falls back to legacy when
+    the LLC package is unavailable, preventing duplicate sorted-set writes.
     """
-    logger.info("Heartbeat: Starting heartbeat scheduler...")
+    # GH#8225: Try LLC scheduler first; it owns llc:heartbeat:schedule.
+    # Use get_heartbeat_scheduler() — same lazy_singleton instance used by API routes —
+    # so cleanup_services.stop() drains tasks from both startup-fired and API-triggered runs.
+    try:
+        from llc.scheduler.heartbeat_scheduler import get_heartbeat_scheduler
+
+        llc_scheduler = get_heartbeat_scheduler()
+        await llc_scheduler.start()
+        app.state.heartbeat_scheduler = llc_scheduler
+        logger.info("Heartbeat: LLC HeartbeatScheduler started")
+        return
+    except Exception as llc_error:
+        logger.warning("LLC heartbeat scheduler unavailable, falling back to legacy: %s", llc_error)
+
+    logger.info("Heartbeat: Starting legacy heartbeat scheduler...")
     try:
         from api.heartbeat import configure_scheduler
         from services.heartbeat_scheduler import HeartbeatScheduler
@@ -715,7 +732,7 @@ async def _init_heartbeat_scheduler(app: FastAPI) -> None:
         await scheduler.start()
         app.state.heartbeat_scheduler = scheduler
         configure_scheduler(scheduler)
-        logger.info("Heartbeat: Scheduler started")
+        logger.info("Heartbeat: Legacy scheduler started")
     except Exception as hb_error:
         logger.warning("Heartbeat scheduler initialization failed: %s", hb_error)
         app.state.heartbeat_scheduler = None
@@ -1571,6 +1588,11 @@ async def cleanup_services(app: FastAPI):
         if hasattr(app.state, "llc_routine_scheduler") and app.state.llc_routine_scheduler:
             await app.state.llc_routine_scheduler.shutdown()
             logger.info("✅ LLC routine scheduler stopped")
+
+        # GH#8225: Stop LLC heartbeat scheduler before other schedulers
+        if hasattr(app.state, "heartbeat_scheduler") and app.state.heartbeat_scheduler:
+            await app.state.heartbeat_scheduler.stop()
+            logger.info("✅ LLC heartbeat scheduler stopped")
 
         # Issue #3294: Stop backup scheduler
         if hasattr(app.state, "backup_scheduler") and app.state.backup_scheduler:

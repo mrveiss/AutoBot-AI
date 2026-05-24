@@ -130,7 +130,7 @@ class RoutineScheduler:
                 continue  # another worker already claimed it
 
             if member_str.startswith("routine:"):
-                routine_id_str = member_str[len("routine:"):]
+                routine_id_str = member_str[len("routine:") :]
                 await self._dispatch_routine(routine_id_str)
 
     async def _dispatch_routine(self, routine_id_str: str) -> None:
@@ -165,9 +165,7 @@ class RoutineScheduler:
             # Re-insert next fire time (outside session — session already committed)
             redis = await get_async_redis_client()
             if redis is not None and cron_schedule is not None:
-                next_ts: float = croniter(
-                    cron_schedule, datetime.now(tz=timezone.utc)
-                ).get_next(float)
+                next_ts: float = croniter(cron_schedule, datetime.now(tz=timezone.utc)).get_next(float)
                 await redis.zadd(_SCHEDULE_KEY, {f"routine:{routine_id}": next_ts})
 
         except Exception as exc:

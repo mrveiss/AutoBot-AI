@@ -63,9 +63,7 @@ def upgrade() -> None:
             server_default=sa.func.now(),
         ),
     )
-    op.create_index(
-        "ix_llc_routine_runs_routine_id", "llc_routine_runs", ["routine_id"]
-    )
+    op.create_index("ix_llc_routine_runs_routine_id", "llc_routine_runs", ["routine_id"])
 
 
 def downgrade() -> None:
