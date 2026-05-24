@@ -30,3 +30,25 @@ def _make_knowledge_stub() -> types.ModuleType:
 # Unconditionally replace with a stub so every lazy ``from knowledge import X``
 # receives our mock instead of triggering the broken chain.
 sys.modules["knowledge"] = _make_knowledge_stub()
+
+
+def _make_services_stub() -> types.ModuleType:
+    """Return a thin stub for the ``services`` package hierarchy."""
+    services_mod = types.ModuleType("services")
+    services_mod.__path__ = []  # type: ignore[attr-defined]
+    services_mod.__package__ = "services"
+
+    llm_mod = types.ModuleType("services.llm_service")
+    llm_mod.__package__ = "services"
+    llm_mod.get_llm_service = MagicMock(return_value=MagicMock())  # type: ignore[attr-defined]
+
+    services_mod.llm_service = llm_mod  # type: ignore[attr-defined]
+    sys.modules["services"] = services_mod
+    sys.modules["services.llm_service"] = llm_mod
+    return services_mod
+
+
+# ``services.llm_service`` is imported at module level by llc/kb/handoff_brief.py
+# (merged to Dev_new_gui after issue-8238).  Stub it so the test collection
+# phase does not fail when the full service stack is absent.
+_make_services_stub()

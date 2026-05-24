@@ -590,6 +590,8 @@ async def get_project_knowledge(
         "artifacts": artifacts,
         "total": len(artifacts),
     }
+
+
 class SprintSummaryResponse(BaseModel):
     sprint_id: uuid.UUID
     sprint_name: str
