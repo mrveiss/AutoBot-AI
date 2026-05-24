@@ -15,8 +15,8 @@ from .companies import router as companies_router
 from .context import router as context_router
 from .decisions import router as decisions_router
 from .goals import router as goals_router
-from .portability import router as portability_router
 from .labels import router as labels_router
+from .portability import router as portability_router
 from .review_gate_policies import router as review_gate_router
 from .routines import router as routines_router
 from .runs import router as runs_router

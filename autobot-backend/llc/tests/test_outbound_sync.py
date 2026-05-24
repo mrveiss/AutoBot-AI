@@ -299,9 +299,7 @@ async def test_non_leader_skips_dispatch():
 
     message = {
         "channel": b"llc:work_item:created",
-        "data": json.dumps(
-            {"company_id": "00000000-0000-0000-0000-000000000099", "work_item_id": "wi_x"}
-        ).encode(),
+        "data": json.dumps({"company_id": "00000000-0000-0000-0000-000000000099", "work_item_id": "wi_x"}).encode(),
     }
 
     with patch("llc.sync.outbound_sync._DISPATCHER") as mock_dispatcher:
@@ -328,9 +326,7 @@ async def test_resolve_jira_transition_id_maps_name_to_numeric_id():
     result = await _resolve_jira_transition_id(integration, "PROJ-42", "In Progress")
     assert result == "21"
 
-    integration.execute_action.assert_called_once_with(
-        "list_transitions", {"issue_key": "PROJ-42"}
-    )
+    integration.execute_action.assert_called_once_with("list_transitions", {"issue_key": "PROJ-42"})
 
 
 @pytest.mark.asyncio
@@ -339,9 +335,7 @@ async def test_resolve_jira_transition_id_case_insensitive():
     from llc.sync.outbound_sync import _resolve_jira_transition_id
 
     integration = AsyncMock()
-    integration.execute_action = AsyncMock(
-        return_value={"transitions": [{"id": "31", "name": "Done"}]}
-    )
+    integration.execute_action = AsyncMock(return_value={"transitions": [{"id": "31", "name": "Done"}]})
 
     assert await _resolve_jira_transition_id(integration, "PROJ-1", "done") == "31"
     assert await _resolve_jira_transition_id(integration, "PROJ-1", "DONE") == "31"
@@ -353,9 +347,7 @@ async def test_resolve_jira_transition_id_returns_none_when_not_found():
     from llc.sync.outbound_sync import _resolve_jira_transition_id
 
     integration = AsyncMock()
-    integration.execute_action = AsyncMock(
-        return_value={"transitions": [{"id": "11", "name": "Backlog"}]}
-    )
+    integration.execute_action = AsyncMock(return_value={"transitions": [{"id": "11", "name": "Backlog"}]})
 
     result = await _resolve_jira_transition_id(integration, "PROJ-1", "NonExistent")
     assert result is None

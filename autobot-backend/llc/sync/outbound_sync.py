@@ -156,9 +156,7 @@ def _decrypt_pm_config(encrypted_blob: str) -> Dict[str, Any]:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-async def _resolve_jira_transition_id(
-    integration: Any, issue_key: str, transition_name: str
-) -> Optional[str]:
+async def _resolve_jira_transition_id(integration: Any, issue_key: str, transition_name: str) -> Optional[str]:
     """Fetch available transitions and map a human-readable name to its numeric ID.
 
     Jira's POST /transitions endpoint requires a numeric ID (e.g. "31"), not
@@ -202,9 +200,7 @@ async def _dispatch_to_jira(pm_config: Dict[str, Any], event: str, payload: Dict
             transition_name = map_status(pm_config, payload.get("status", ""))
             transition_id = await _resolve_jira_transition_id(integration, issue_key, transition_name)
             if transition_id is None:
-                raise ValueError(
-                    f"No Jira transition found matching '{transition_name}' on {issue_key}"
-                )
+                raise ValueError(f"No Jira transition found matching '{transition_name}' on {issue_key}")
             await integration.execute_action(
                 "update_issue_status",
                 {"issue_key": issue_key, "transition_id": transition_id},
@@ -330,9 +326,7 @@ class LLCOutboundSyncService:
     async def start(self) -> None:
         """Start the background subscriber task and leader election loop."""
         self._stop_event.clear()
-        self._leader_task = asyncio.create_task(
-            self._leader_loop(), name="llc-outbound-sync-leader"
-        )
+        self._leader_task = asyncio.create_task(self._leader_loop(), name="llc-outbound-sync-leader")
         self._task = asyncio.create_task(self._run(), name="llc-outbound-sync")
         logger.info("LLCOutboundSyncService started (worker=%s)", self._worker_id)
 
@@ -358,16 +352,12 @@ class LLCOutboundSyncService:
                     logger.info("LLCOutboundSyncService: became leader (%s)", self._worker_id)
                     self._is_leader = True
                 elif not won and self._is_leader:
-                    logger.warning(
-                        "LLCOutboundSyncService: lost leadership (%s)", self._worker_id
-                    )
+                    logger.warning("LLCOutboundSyncService: lost leadership (%s)", self._worker_id)
                     self._is_leader = False
 
                 sleep_s = _LEADER_REFRESH_S if self._is_leader else _LEADER_POLL_S
                 try:
-                    await asyncio.wait_for(
-                        asyncio.shield(self._stop_event.wait()), timeout=sleep_s
-                    )
+                    await asyncio.wait_for(asyncio.shield(self._stop_event.wait()), timeout=sleep_s)
                     return  # stop_event fired — exit gracefully
                 except asyncio.TimeoutError:
                     pass  # normal: sleep interval elapsed, loop again

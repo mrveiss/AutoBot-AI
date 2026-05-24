@@ -17,8 +17,8 @@ from typing import Any, Dict, Optional
 logger = logging.getLogger(__name__)
 
 try:
-    from live_event_manager import get_live_event_manager
     from event_manager import get_event_manager
+    from live_event_manager import get_live_event_manager
 except ImportError:
     get_live_event_manager = None  # type: ignore[assignment]
     get_event_manager = None  # type: ignore[assignment]

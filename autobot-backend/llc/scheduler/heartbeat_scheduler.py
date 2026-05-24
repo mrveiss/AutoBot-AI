@@ -282,9 +282,7 @@ class HeartbeatScheduler:
                 if agent.get("context_mode") == "fat":
                     company_id_val = agent.get("company_id")
                     if company_id_val:
-                        context["recent_decisions"] = await _fetch_recent_decisions(
-                            str(company_id_val)
-                        )
+                        context["recent_decisions"] = await _fetch_recent_decisions(str(company_id_val))
 
             await session.commit()
 
