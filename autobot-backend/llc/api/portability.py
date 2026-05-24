@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from llc.services.portability import ImportError as LLCImportError
+from llc.services.portability import TemplateImportError as LLCImportError
 from llc.services.portability import PortabilityService
 from user_management.database import get_async_session
 
@@ -29,6 +29,7 @@ router = APIRouter(prefix="/import", tags=["llc-import"])
 
 class ImportPreviewRequest(BaseModel):
     template: Dict[str, Any]
+    target_company_id: Optional[uuid.UUID] = None
 
 
 class ImportPreviewResponse(BaseModel):
@@ -71,7 +72,7 @@ async def preview_import(
 ) -> ImportPreviewResponse:
     svc = PortabilityService(session=session)
     try:
-        result = await svc.preview_import(body.template)
+        result = await svc.preview_import(body.template, target_company_id=body.target_company_id)
     except LLCImportError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     return ImportPreviewResponse(**result)

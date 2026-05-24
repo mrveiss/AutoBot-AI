@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from llc.services.portability import ImportError as LLCImportError
+from llc.services.portability import TemplateImportError as LLCImportError
 from llc.services.portability import PortabilityService
 
 # ---------------------------------------------------------------------------
