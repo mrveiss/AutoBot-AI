@@ -3,12 +3,14 @@
 # Author: mrveiss
 """LLC HandoffService — bi-directional work item handoff (GH#8231, GH#8232)."""
 
+import asyncio
 import json
 import logging
+import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 _CHECKOUT_REDIS_PREFIX = "llc:checkout:"
 _NOTIFICATION_CHANNEL_PREFIX = "llc:notifications:"
+_LLC_H2A_BRIEF_CACHE_TTL = int(os.getenv("AUTOBOT_LLC_H2A_BRIEF_CACHE_TTL", "86400"))
 
 
 class HandoffNotAuthorized(Exception):
@@ -51,6 +54,10 @@ class HandoffResult:
 
 class HandoffService(LLCServiceBase):
     """Bi-directional work item handoff (human↔agent)."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._background_tasks: Set[asyncio.Task[Any]] = set()
 
     async def human_to_agent(
         self,
@@ -83,6 +90,18 @@ class HandoffService(LLCServiceBase):
         await self._release_redis_key(work_item_id, user_id)
         await self._publish_h2a_notification(company_id, target_agent_id, work_item_id)
         await self._record_h2a_activity(session, company_id, user_id, work_item_id, target_agent_id)
+        task = asyncio.create_task(
+            self._generate_and_update_h2a_brief_async(
+                work_item_id=work_item_id,
+                target_agent_id=target_agent_id,
+                company_id=company_id,
+                project_id=str(item.project_id) if item.project_id else None,
+                work_item_title=item.title,
+                human_notes=human_notes,
+            )
+        )
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
         return HandoffResult(
             work_item_id=work_item_id, target_agent_id=target_agent_id, kb_doc_ids=kb_doc_ids, review_brief=review_brief
         )
@@ -104,6 +123,7 @@ class HandoffService(LLCServiceBase):
             raise ValueError(f"Work item {work_item_id} not found")
         if item.assignee_agent_id is None or str(item.assignee_agent_id) != agent_id:
             raise HandoffNotAllowed(f"Agent {agent_id} does not hold checkout for work item {work_item_id}")
+
         brief = self._generate_brief(item, agent_notes)
         item.status = WorkItemStatus.IN_REVIEW
         item.reviewer_user_id = uuid.UUID(reviewer_user_id)
@@ -137,6 +157,21 @@ class HandoffService(LLCServiceBase):
                 )
             except Exception:
                 logger.warning("Activity log failed for agent_to_human %s", work_item_id)
+
+        task = asyncio.create_task(
+            self._generate_and_update_brief_async(
+                work_item_id=work_item_id,
+                agent_id=agent_id,
+                company_id=company_id,
+                project_id=str(item.project_id) if item.project_id else None,
+                work_item_title=item.title,
+                work_item_description=item.description or "",
+                agent_notes=agent_notes,
+            )
+        )
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+
         return item
 
     async def approve(
@@ -352,6 +387,111 @@ class HandoffService(LLCServiceBase):
             )
         except Exception:
             logger.warning("Activity log failed for h2a handoff work_item=%s", work_item_id)
+
+    async def _generate_and_update_brief_async(
+        self,
+        work_item_id: str,
+        agent_id: str,
+        company_id: str,
+        project_id: Optional[str],
+        work_item_title: str,
+        work_item_description: str,
+        agent_notes: Optional[str],
+    ) -> None:
+        """Background task: generate KB-powered brief and persist it (GH#8239)."""
+        try:
+            from ..kb.handoff_brief import HandoffBriefGenerator
+
+            generator = HandoffBriefGenerator()
+            brief = await generator.generate_agent_to_human_brief(
+                work_item_id=work_item_id,
+                agent_id=agent_id,
+                company_id=company_id,
+                project_id=project_id,
+                work_item_title=work_item_title,
+                work_item_description=work_item_description,
+            )
+            if agent_notes:
+                brief["agent_notes"] = agent_notes
+            from user_management.database import get_async_session_factory
+
+            async with get_async_session_factory()() as session:
+                result = await session.execute(
+                    select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
+                )
+                item = result.scalar_one_or_none()
+                if item is not None and item.status == WorkItemStatus.IN_REVIEW:
+                    item.review_brief = brief
+                    item.version += 1
+                    await session.commit()
+                    logger.debug("KB brief updated for work_item %s", work_item_id)
+                elif item is not None:
+                    logger.debug(
+                        "Skipping brief update for work_item %s: status changed to %s (not IN_REVIEW)",
+                        work_item_id,
+                        item.status,
+                    )
+        except Exception:
+            logger.exception("Background brief generation failed for work_item %s (non-fatal)", work_item_id)
+
+    async def _generate_and_update_h2a_brief_async(
+        self,
+        work_item_id: str,
+        target_agent_id: str,
+        company_id: str,
+        project_id: Optional[str],
+        work_item_title: str,
+        human_notes: str,
+    ) -> None:
+        """Background task: generate KB-powered H2A brief, persist to DB and cache in Redis (GH#8239).
+
+        Writes the KB-enhanced brief to work_items.review_brief so it is returned
+        by GET /api/llc/work-items/{id}/handoff-brief when the assigned agent reads it.
+        Also caches in Redis for low-latency repeated reads.
+        """
+        try:
+            from ..kb.handoff_brief import HandoffBriefGenerator
+            from user_management.database import get_async_session_factory
+
+            generator = HandoffBriefGenerator()
+            brief = await generator.generate_human_to_agent_brief(
+                work_item_id=work_item_id,
+                agent_id=target_agent_id,
+                human_notes=human_notes,
+                company_id=company_id,
+                project_id=project_id,
+                work_item_title=work_item_title,
+            )
+
+            # Persist to DB so the agent receives the KB-enhanced brief (not just the sync stub)
+            async with get_async_session_factory()() as session:
+                result = await session.execute(
+                    select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
+                )
+                item = result.scalar_one_or_none()
+                if item is not None and item.status == WorkItemStatus.READY and str(item.assignee_agent_id) == target_agent_id:
+                    item.review_brief = brief
+                    item.version += 1
+                    await session.commit()
+                    logger.debug("H2A KB brief persisted for work_item %s (agent %s)", work_item_id, target_agent_id)
+                elif item is not None:
+                    logger.debug(
+                        "Skipping H2A brief DB update for work_item %s: status=%s assignee=%s",
+                        work_item_id,
+                        item.status,
+                        item.assignee_agent_id,
+                    )
+
+            # Also cache in Redis for fast repeated access
+            redis = await get_async_redis_client()
+            if redis is not None:
+                import json as _json
+
+                key = f"llc:h2a_brief:{work_item_id}:{target_agent_id}"
+                await redis.set(key, _json.dumps(brief), ex=_LLC_H2A_BRIEF_CACHE_TTL)
+                logger.debug("H2A brief cached in Redis for work_item %s (agent %s)", work_item_id, target_agent_id)
+        except Exception:
+            logger.exception("Background H2A brief generation failed for work_item %s (non-fatal)", work_item_id)
 
     def _generate_brief(self, item: LLCWorkItem, agent_notes: Optional[str]) -> Dict[str, Any]:
         comment_excerpts = [
