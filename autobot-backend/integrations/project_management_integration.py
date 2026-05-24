@@ -143,7 +143,6 @@ class JiraIntegration(BaseIntegration):
             "list_issues": self._list_issues,
             "create_issue": self._create_issue,
             "update_issue_status": self._update_issue_status,
-            "list_transitions": self._list_transitions,
             "search_jql": self._search_jql,
         }
 
@@ -224,21 +223,6 @@ class JiraIntegration(BaseIntegration):
 
         if result.get("status_code") == 204:
             return {"success": True, "message": "Transition completed"}
-        return {"error": f"HTTP {result.get('status_code')}"}
-
-    async def _list_transitions(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """List available workflow transitions for an issue.
-
-        Returns transition objects with numeric ``id`` and display ``name``,
-        which callers use to resolve a human-readable status name to the
-        numeric ID required by POST /rest/api/3/issue/{key}/transitions.
-        """
-        issue_key = params.get("issue_key")
-        if not issue_key:
-            return {"error": "issue_key required"}
-        result = await self._jira_request("GET", f"/rest/api/3/issue/{issue_key}/transitions")
-        if result.get("status_code") == 200:
-            return {"transitions": result.get("body", {}).get("transitions", [])}
         return {"error": f"HTTP {result.get('status_code')}"}
 
     async def _search_jql(self, params: Dict[str, Any]) -> Dict[str, Any]:

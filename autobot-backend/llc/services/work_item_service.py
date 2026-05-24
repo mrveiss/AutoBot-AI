@@ -34,9 +34,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.redis_client import get_async_redis_client
 
 from ..models.enums import CoWorkerType, WorkItemPriority, WorkItemStatus, WorkItemType
-from ..models.label import LLCWorkItemLabel
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
-from .base import LLCServiceBase
+from . import LLCServiceBase
 
 logger = logging.getLogger(__name__)
 
@@ -180,7 +179,6 @@ class WorkItemService(LLCServiceBase):
         top_level_only: bool = False,
         co_worker_agent_id: Optional[str] = None,
         co_worker_user_id: Optional[str] = None,
-        label_ids: Optional[List[str]] = None,
         limit: int = 100,
         offset: int = 0,
     ) -> Sequence[LLCWorkItem]:
@@ -203,13 +201,6 @@ class WorkItemService(LLCServiceBase):
             q = q.where(LLCWorkItem.co_worker_agent_id == uuid.UUID(co_worker_agent_id))
         if co_worker_user_id:
             q = q.where(LLCWorkItem.co_worker_user_id == uuid.UUID(co_worker_user_id))
-        if label_ids:
-            label_uuids = [uuid.UUID(lid) for lid in label_ids]
-            q = q.where(
-                LLCWorkItem.id.in_(
-                    select(LLCWorkItemLabel.work_item_id).where(LLCWorkItemLabel.label_id.in_(label_uuids))
-                )
-            )
         q = q.order_by(LLCWorkItem.created_at.desc()).limit(limit).offset(offset)
         result = await session.execute(q)
         return result.scalars().all()
@@ -574,8 +565,6 @@ class WorkItemService(LLCServiceBase):
         session: AsyncSession,
         work_item_id: str,
         new_status: WorkItemStatus,
-        company_id: Optional[str] = None,
-        relation_svc: Optional[Any] = None,
     ) -> LLCWorkItem:
         """Transition a work item to a new status, enforcing the state machine."""
         result = await session.execute(
@@ -593,17 +582,6 @@ class WorkItemService(LLCServiceBase):
                 f"Allowed: {[s.value for s in allowed]}"
             )
 
-        # GH#8252: block BLOCKED→IN_PROGRESS while unresolved blockers remain
-        if (
-            current == WorkItemStatus.BLOCKED
-            and new_status == WorkItemStatus.IN_PROGRESS
-            and relation_svc is not None
-            and company_id is not None
-        ):
-            cid = company_id or str(item.company_id)
-            if await relation_svc.has_unresolved_blockers(session, work_item_id, cid):
-                raise InvalidTransition("Cannot move to in_progress: item has unresolved blocked_by relations")
-
         item.status = new_status
         now = datetime.now(timezone.utc)
         if new_status == WorkItemStatus.IN_PROGRESS and item.started_at is None:
@@ -616,10 +594,6 @@ class WorkItemService(LLCServiceBase):
             item.cancelled_at = now
         item.version += 1
         await session.flush()
-
-        if new_status == WorkItemStatus.DONE:
-            await self._trigger_artifact_ingest(session, item)
-
         return item
 
     # ------------------------------------------------------------------
@@ -693,8 +667,6 @@ class WorkItemService(LLCServiceBase):
         item.checkout_locked_at = None
         item.version += 1
         await session.flush()
-
-        await self._trigger_artifact_ingest(session, item)
 
         if self.activity_log:
             try:
@@ -779,27 +751,3 @@ class WorkItemService(LLCServiceBase):
                     exc_info=True,
                 )
         return f"WI-{uuid.uuid4().hex[:8].upper()}"
-
-    async def _trigger_artifact_ingest(
-        self,
-        session: AsyncSession,
-        item: LLCWorkItem,
-    ) -> None:
-        """Non-fatally call ArtifactIngestor for all pending products on this item."""
-        try:
-            from ..kb.artifact_ingestor import ArtifactIngestor
-
-            ingestor = ArtifactIngestor()
-            await ingestor.ingest_all_pending(
-                session,
-                work_item_id=str(item.id),
-                project_id=str(item.project_id) if item.project_id else None,
-                work_item_identifier=item.identifier,
-                completed_at=item.completed_at,
-            )
-        except Exception:
-            logger.warning(
-                "ArtifactIngestor failed for work item %s — transition still succeeds",
-                item.id,
-                exc_info=True,
-            )

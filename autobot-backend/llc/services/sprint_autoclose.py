@@ -29,7 +29,7 @@ from ..models.sprint import LLCSprint
 from ..models.work_item import LLCWorkItem
 from ..services.activity_log import ActivityEventType
 from ..services.approval import ApprovalService
-from .base import LLCServiceBase
+from . import LLCServiceBase
 
 logger = logging.getLogger(__name__)
 
@@ -207,7 +207,7 @@ class SprintAutoCloseService(LLCServiceBase):
         await session.flush()
 
         # -- KB summarization (Phase 2 stub) --
-        await self._summarizer.summarize_and_merge(sprint_id, project_id=sprint.project_id)
+        await self._summarizer.summarize_and_merge(sprint_id)
 
         # -- Roll over incomplete items --
         auto_rollover = await self._resolve_auto_rollover(session, sprint)

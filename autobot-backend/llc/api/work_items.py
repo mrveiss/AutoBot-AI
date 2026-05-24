@@ -1,5 +1,5 @@
 """LLC work items API routes (GH#8213, GH#8223, GH#8231, GH#8232).
-"""LLC work items API routes (GH#8213, GH#8223, GH#8231, GH#8232, GH#8252).
+
 Routes:
   POST   /api/llc/work-items
   GET    /api/llc/work-items
@@ -31,19 +31,14 @@ from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
 
-from ..kb.collections import KbCollectionManager
 from ..models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
 from ..services.handoff import HandoffAttachment, HandoffNotAllowed, HandoffNotAuthorized, HandoffService
-from ..services.work_item_service import CheckoutConflict, InvalidTransition, WorkItemService
-from ..models.enums import WorkItemPriority, WorkItemRelationType, WorkItemStatus, WorkItemType
-from ..services.work_item_relations import RelationConflict, WorkItemRelationService
 from ..services.work_item_service import (
     CheckoutConflict,
     CoWorkingPermissionError,
     InvalidTransition,
     WorkItemService,
 )
-from ..services.work_product_service import WorkProductService
 
 
 class HumanClaimRequest(BaseModel):
@@ -73,10 +68,7 @@ class CoworkerRequest(BaseModel):
 
 router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
 _get_service = lazy_singleton(WorkItemService)
-_get_product_service = lazy_singleton(WorkProductService)
 _get_handoff_service = lazy_singleton(HandoffService)
-_kb_manager = KbCollectionManager()
-_get_relation_service = lazy_singleton(WorkItemRelationService)
 
 
 def _service() -> WorkItemService:
@@ -87,8 +79,6 @@ def _handoff_service() -> HandoffService:
     return _get_handoff_service()
 
 
-def _relation_service() -> WorkItemRelationService:
-    return _get_relation_service()
 async def get_session() -> AsyncSession:
     factory = get_async_session_factory()
     async with factory() as session:
@@ -188,17 +178,8 @@ class ReviewChangesRequest(BaseModel):
     return_to_agent_id: Optional[str] = None
 
 
-class RelationCreate(BaseModel):
-    company_id: str
-    target_id: str
-    relation_type: WorkItemRelationType
-    created_by_agent_id: Optional[str] = None
-    created_by_user_id: Optional[str] = None
-class RelationDelete(BaseModel):
-    actor_agent_id: Optional[str] = None
-    actor_user_id: Optional[str] = None
 def _assignee_display(item: Any) -> Optional[Dict[str, Any]]:
-    """Return structured assignee display info (GH#8223).
+    """Return structured primary assignee display info (GH#8223).
 
     display_name and name are None until user_management JOIN is implemented
     (see discovery issue filed in GH#8223 implementation).
@@ -232,24 +213,15 @@ def _coworker_display(item: Any) -> Optional[Dict[str, Any]]:
             "name": None,
         }
     if item.co_worker_type == "agent" and item.co_worker_agent_id:
+        return {
             "type": "agent",
             "id": str(item.co_worker_agent_id),
-def _relations_to_list(item: Any) -> List[Dict[str, Any]]:
-    """Serialize outgoing + incoming relations for GET response (GH#8252)."""
-    rows = []
-    for rel in getattr(item, "outgoing_relations", []) or []:
-        tgt = rel.target
-        rows.append(
-            {
-                "id": str(rel.id),
-                "type": rel.relation_type,
-                "target_id": str(rel.target_id),
-                "target_identifier": tgt.identifier if tgt else None,
-                "target_title": tgt.title if tgt else None,
-                "target_status": tgt.status if tgt else None,
-            }
-        )
-    return rows
+            "display_name": None,
+            "name": None,
+        }
+    return None
+
+
 def _item_to_dict(item: Any) -> Dict[str, Any]:
     return {
         "id": str(item.id),
@@ -271,6 +243,11 @@ def _item_to_dict(item: Any) -> Dict[str, Any]:
         "assignee_user_id": str(item.assignee_user_id) if item.assignee_user_id else None,
         "assignee_type": item.assignee_type,
         "assignee_display": _assignee_display(item),
+        "co_working_enabled": item.co_working_enabled,
+        "co_worker_type": item.co_worker_type,
+        "co_worker_agent_id": str(item.co_worker_agent_id) if item.co_worker_agent_id else None,
+        "co_worker_user_id": str(item.co_worker_user_id) if item.co_worker_user_id else None,
+        "co_worker_display": _coworker_display(item),
         "checkout_run_id": item.checkout_run_id,
         "checkout_locked_at": item.checkout_locked_at.isoformat() if item.checkout_locked_at else None,
         "version": item.version,
@@ -286,7 +263,6 @@ def _item_to_dict(item: Any) -> Dict[str, Any]:
         "has_human_handoff_context": bool(getattr(item, "review_brief", None)),
         "created_at": item.created_at.isoformat() if item.created_at else None,
         "updated_at": item.updated_at.isoformat() if item.updated_at else None,
-        "relations": _relations_to_list(item),
     }
 
 
@@ -320,7 +296,6 @@ async def create_work_item(
         labels=body.labels,
     )
     await session.commit()
-    await _kb_manager.ensure_collection(KbCollectionManager.WORK_ITEM_PREFIX, item.id)
     return _item_to_dict(item)
 
 
@@ -336,7 +311,6 @@ async def list_work_items(
     top_level_only: bool = Query(False),
     co_worker_agent_id: Optional[str] = Query(None),
     co_worker_user_id: Optional[str] = Query(None),
-    label_ids: Optional[List[str]] = Query(None),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
@@ -353,7 +327,6 @@ async def list_work_items(
         top_level_only=top_level_only,
         co_worker_agent_id=co_worker_agent_id,
         co_worker_user_id=co_worker_user_id,
-        label_ids=label_ids,
         limit=limit,
         offset=offset,
     )
@@ -444,8 +417,6 @@ async def transition_work_item(
     try:
         item = await _service().transition_status(session, work_item_id, body.status)
         await session.commit()
-        if item.status == WorkItemStatus.DONE:
-            await _kb_manager.archive_collection(KbCollectionManager.WORK_ITEM_PREFIX, item.id)
         return _item_to_dict(item)
     except InvalidTransition as exc:
         raise HTTPException(status_code=422, detail=str(exc))
@@ -491,6 +462,48 @@ async def unclaim_work_item(
         return _item_to_dict(item)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/{work_item_id}/coworker")
+async def set_coworker(
+    work_item_id: str,
+    body: CoworkerRequest,
+    session: AsyncSession = Depends(get_session),
+) -> Dict[str, Any]:
+    """Set or clear the co-worker on a work item (GH#8230).
+
+    Send co_worker_type=null (or omit) to disable co-working and clear the co-worker.
+    Caller must have owner/admin/lead role (pass in caller_role).
+    """
+    svc = _service()
+    try:
+        if body.co_worker_type is None:
+            item = await svc.disable_coworking(
+                session,
+                work_item_id=work_item_id,
+                company_id=body.company_id,
+                actor_id=body.actor_agent_id or body.actor_user_id,
+                actor_type="agent" if body.actor_agent_id else "user",
+                caller_role=body.caller_role,
+            )
+        else:
+            item = await svc.enable_coworking(
+                session,
+                work_item_id=work_item_id,
+                co_worker_type=body.co_worker_type,
+                company_id=body.company_id,
+                co_worker_agent_id=body.co_worker_agent_id,
+                co_worker_user_id=body.co_worker_user_id,
+                actor_id=body.actor_agent_id or body.actor_user_id,
+                actor_type="agent" if body.actor_agent_id else "user",
+                caller_role=body.caller_role,
+            )
+        await session.commit()
+        return _item_to_dict(item)
+    except CoWorkingPermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
 
 
 @router.post("/{work_item_id}/comments", status_code=201)
@@ -639,76 +652,5 @@ async def get_handoff_brief(
     try:
         brief = await _handoff_service().get_brief(session, work_item_id)
         return {"work_item_id": work_item_id, "brief": brief}
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
-
-
-@router.get("/{work_item_id}/products")
-async def list_work_products(
-    work_item_id: str,
-    limit: int = Query(100, ge=1, le=200),
-    offset: int = Query(0, ge=0),
-    session: AsyncSession = Depends(get_session),
-) -> Dict[str, Any]:
-    """List all work products for a work item (GH#8242)."""
-    products = await _get_product_service().list_by_work_item(
-        session,
-        work_item_id=work_item_id,
-        limit=limit,
-        offset=offset,
-    )
-    return {
-        "work_item_id": work_item_id,
-        "products": [
-            {
-                "id": str(p.id),
-                "type": p.type if isinstance(p.type, str) else p.type.value,
-                "title": p.title,
-                "content_text": p.content_text,
-                "storage_path": p.storage_path,
-                "url": p.url,
-                "kb_indexed": p.kb_indexed,
-                "heartbeat_run_id": str(p.heartbeat_run_id) if p.heartbeat_run_id else None,
-                "created_at": p.created_at.isoformat() if p.created_at else None,
-            }
-            for p in products
-        ],
-        "total": len(products),
-# ------------------------------------------------------------------
-# Relation endpoints (GH#8252)
-@router.post("/{work_item_id}/relations", status_code=201)
-async def add_relation(
-    body: RelationCreate,
-    try:
-        rel = await _relation_service().add(
-            company_id=body.company_id,
-            source_id=work_item_id,
-            target_id=body.target_id,
-            relation_type=body.relation_type,
-            created_by_agent_id=body.created_by_agent_id,
-            created_by_user_id=body.created_by_user_id,
-        await session.commit()
-            "id": str(rel.id),
-            "source_id": work_item_id,
-            "target_id": body.target_id,
-            "relation_type": rel.relation_type,
-    except RelationConflict as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
-@router.delete("/{work_item_id}/relations/{relation_id}", status_code=204)
-async def remove_relation(
-    relation_id: str,
-    company_id: str = Query(...),
-    actor_agent_id: Optional[str] = Query(None),
-    actor_user_id: Optional[str] = Query(None),
-) -> None:
-        await _relation_service().remove(
-            company_id=company_id,
-            relation_id=relation_id,
-            actor_agent_id=actor_agent_id,
-            actor_user_id=actor_user_id,
-        )
-        await session.commit()
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

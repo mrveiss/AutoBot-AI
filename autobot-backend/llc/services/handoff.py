@@ -17,7 +17,7 @@ from autobot_shared.redis_client import get_async_redis_client
 
 from ..models.enums import WorkItemStatus
 from ..models.work_item import LLCWorkItem
-from .base import LLCServiceBase
+from . import LLCServiceBase
 
 logger = logging.getLogger(__name__)
 

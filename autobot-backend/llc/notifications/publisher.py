@@ -1,32 +1,24 @@
-# AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
-# Author: mrveiss
-"""LLC WebSocket publisher (GH#8255).
+"""LLC WebSocket publisher interface (GH#8261).
 
-Publishes LLC events to WebSocket clients filtered by company_id using both
-the LiveEventManager (company:{id} channel) and the EventManager broadcast.
+GH#8255 (notification router) and GH#8221 (Kanban board real-time) both push
+LLC events to WebSocket clients filtered by company_id. This publisher ensures
+both callers use the same typed event envelope and company_id filter, and that
+events reach both the RedisEventStreamManager and the LiveEventManager.
+
+Concrete implementation in GH#8255. This file provides the interface stub.
 """
 
-from __future__ import annotations
-
-import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from typing import Any, Dict, Optional
-
-logger = logging.getLogger(__name__)
-
-try:
-    from live_event_manager import get_live_event_manager
-    from event_manager import get_event_manager
-except ImportError:
-    get_live_event_manager = None  # type: ignore[assignment]
-    get_event_manager = None  # type: ignore[assignment]
 
 
 @dataclass
 class LLCEvent:
-    """Typed event envelope for LLC WebSocket messages."""
+    """Typed event envelope for LLC WebSocket messages.
+
+    Both WebSocket buses (RedisEventStreamManager and LiveEventManager) receive
+    this envelope so subscribers on either bus get consistent payloads.
+    """
 
     company_id: str
     event_type: str
@@ -39,11 +31,11 @@ class LLCEvent:
 class LLCWebSocketPublisher:
     """Publishes LLC events to connected WebSocket clients.
 
-    Uses the LiveEventManager channel ``company:{company_id}`` so only clients
-    subscribed to that company receive the event (multi-tenant isolation).
+    Multi-tenant safety: company_id filter is applied before push so a client
+    subscribed to company A never receives events from company B.
 
-    Also fans out via EventManager for clients using the broadcast path.
-    Never raises — failures are logged but must not break the caller.
+    Both GH#8255 (notification router) and GH#8221 (Kanban real-time) inject
+    this rather than calling the WebSocket manager directly.
     """
 
     async def publish(
@@ -55,24 +47,19 @@ class LLCWebSocketPublisher:
         payload: Dict[str, Any],
         actor_id: Optional[str] = None,
     ) -> None:
-        channel = f"company:{company_id}"
-        envelope: Dict[str, Any] = {
-            "event_type": event_type,
-            "company_id": company_id,
-            "entity_type": entity_type,
-            "entity_id": entity_id,
-            "payload": payload,
-            "actor_id": actor_id,
-            "ts": datetime.now(timezone.utc).isoformat(),
-        }
-        try:
-            if get_live_event_manager is not None:
-                await get_live_event_manager().publish(channel, event_type, envelope)
-        except Exception as exc:
-            logger.warning("LLC publisher: LiveEventManager push failed: %s", exc)
+        """Publish an LLC event to all matching WebSocket subscribers.
 
-        try:
-            if get_event_manager is not None:
-                await get_event_manager().publish_event(f"llc:{event_type}", envelope)
-        except Exception as exc:
-            logger.warning("LLC publisher: EventManager push failed: %s", exc)
+        Pushes to both RedisEventStreamManager and LiveEventManager with the
+        company_id filter applied. Never raises — publishing failures are
+        logged but must not break the calling operation.
+
+        Args:
+            company_id: Tenant scope — only subscribers for this company receive
+                the event.
+            event_type: Logical event kind (use ActivityEventType string values).
+            entity_type: Resource type name (e.g. "work_item", "sprint").
+            entity_id: PK of the affected resource.
+            payload: Serializable event data.
+            actor_id: Optional agent/user that triggered the event.
+        """
+        raise NotImplementedError("LLCWebSocketPublisher.publish() — concrete impl in GH#8255")
