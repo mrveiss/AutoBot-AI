@@ -181,3 +181,45 @@ class RoutineScheduler:
                     )
             except Exception:
                 pass
+
+    async def on_run_complete(
+        self,
+        run_id: str,
+        agent_id: str,
+        status: str,
+        work_item_id: Optional[str] = None,
+        context_snapshot: Optional[dict] = None,
+    ) -> None:
+        """Post-heartbeat hook — write diary entry to KB when a run terminates.
+
+        Called by the adapter layer (or test harness) after a heartbeat run
+        reaches ``succeeded`` or ``failed``.  Delegates to
+        ``AgentDiaryKbWriter`` which is best-effort and will not propagate
+        exceptions.
+
+        Args:
+            run_id: Heartbeat run identifier.
+            agent_id: Agent that completed the run.
+            status: Terminal status string (``"succeeded"`` or ``"failed"``).
+            work_item_id: Optional work item checked out during the run.
+            context_snapshot: JSONB context snapshot from ``LLCHeartbeatRun``.
+        """
+        if status not in ("succeeded", "failed", "completed"):
+            return
+        try:
+            from ..kb.diary_writer import AgentDiaryKbWriter
+
+            writer = AgentDiaryKbWriter()
+            await writer.write_from_run(
+                run_id=run_id,
+                agent_id=agent_id,
+                status=status,
+                work_item_id=work_item_id,
+                context_snapshot=context_snapshot,
+            )
+        except Exception:
+            logger.warning(
+                "RoutineScheduler.on_run_complete: diary write failed for run_id=%s",
+                run_id,
+                exc_info=True,
+            )
