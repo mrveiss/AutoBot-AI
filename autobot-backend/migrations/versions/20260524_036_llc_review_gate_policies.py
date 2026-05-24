@@ -24,12 +24,24 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     op.create_table(
         "llc_review_gate_policies",
-        sa.Column("id", sa.dialects.postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column(
+            "id",
+            sa.dialects.postgresql.UUID(as_uuid=True),
+            primary_key=True,
+            server_default=sa.text("gen_random_uuid()"),
+        ),
         sa.Column("company_id", sa.dialects.postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column(
             "item_type",
             sa.Enum(
-                "epic", "feature", "pbi", "task", "bug", "subtask", "spike", "risk",
+                "epic",
+                "feature",
+                "pbi",
+                "task",
+                "bug",
+                "subtask",
+                "spike",
+                "risk",
                 name="workitemtype",
                 create_type=False,
             ),

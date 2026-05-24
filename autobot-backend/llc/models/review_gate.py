@@ -24,9 +24,7 @@ class LLCReviewGatePolicy(Base):
     """Per-company, per-item-type review gate configuration."""
 
     __tablename__ = "llc_review_gate_policies"
-    __table_args__ = (
-        sa.UniqueConstraint("company_id", "item_type", name="uq_review_gate_company_item_type"),
-    )
+    __table_args__ = (sa.UniqueConstraint("company_id", "item_type", name="uq_review_gate_company_item_type"),)
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -38,13 +36,9 @@ class LLCReviewGatePolicy(Base):
         sa.Enum(WorkItemType, name="workitemtype", create_type=False),
         nullable=False,
     )
-    requires_human_review: Mapped[bool] = mapped_column(
-        sa.Boolean, nullable=False, server_default="false"
-    )
+    requires_human_review: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, server_default="false")
     reviewer_role: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=sa.func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

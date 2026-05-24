@@ -50,7 +50,7 @@ _SCHEDULE_KEY = "llc:heartbeat:schedule"
 _POLL_INTERVAL = 5.0  # seconds between sorted-set polls
 
 # Rate-limit backoff: delay = min(_RL_BASE_SECONDS * 2**retry_count, _RL_MAX_SECONDS)
-_RL_BASE_SECONDS = 300   # 5 minutes for the first retry
+_RL_BASE_SECONDS = 300  # 5 minutes for the first retry
 _RL_MAX_SECONDS = 14400  # cap at 4 hours
 _MAX_RATE_LIMIT_RETRIES = 10  # demote to failed after this many consecutive retries
 
@@ -164,9 +164,7 @@ class HeartbeatScheduler:
 
         if mapping:
             await redis.zadd(_SCHEDULE_KEY, mapping, nx=True)
-            logger.info(
-                "Re-queued %d rate-limited agents after restart", len(mapping)
-            )
+            logger.info("Re-queued %d rate-limited agents after restart", len(mapping))
 
     async def _load_enabled_agents(self) -> list[Dict[str, Any]]:
         """SELECT heartbeat-enabled agents from agent_org_nodes.
@@ -275,9 +273,7 @@ class HeartbeatScheduler:
                         source=HeartbeatInvocationSource.SCHEDULER,
                     )
                 except ValueError as exc:
-                    logger.warning(
-                        "Skipping heartbeat for agent %s (no organization): %s", agent_id, exc
-                    )
+                    logger.warning("Skipping heartbeat for agent %s (no organization): %s", agent_id, exc)
                     retry_ts = datetime.now(tz=timezone.utc).timestamp() + _POLL_INTERVAL * 6
                     await redis.zadd(_SCHEDULE_KEY, {agent_id: retry_ts})
                     return
@@ -306,9 +302,7 @@ class HeartbeatScheduler:
             next_ts,
         )
 
-    async def _find_rate_limited_run(
-        self, session: AsyncSession, agent_id: str
-    ) -> Optional[LLCHeartbeatRun]:
+    async def _find_rate_limited_run(self, session: AsyncSession, agent_id: str) -> Optional[LLCHeartbeatRun]:
         """Return the most recent ``rate_limited`` run for *agent_id*, or None."""
         result = await session.execute(
             select(LLCHeartbeatRun)
@@ -349,9 +343,7 @@ class HeartbeatScheduler:
         await session.flush()
         return run, agent
 
-    def dispatch_run(
-        self, agent: Dict[str, Any], run_id: uuid.UUID, context: Optional[Dict[str, Any]] = None
-    ) -> None:
+    def dispatch_run(self, agent: Dict[str, Any], run_id: uuid.UUID, context: Optional[Dict[str, Any]] = None) -> None:
         """Schedule adapter execution as a fire-and-forget task.
 
         Must be called after the DB session containing the run INSERT has been
@@ -391,14 +383,8 @@ class HeartbeatScheduler:
     ) -> LLCHeartbeatRun:
         company_id_raw = agent.get("company_id")
         if company_id_raw is None:
-            raise ValueError(
-                f"Agent {agent['agent_id']!r} has no organization — cannot create heartbeat run"
-            )
-        company_id = (
-            company_id_raw
-            if isinstance(company_id_raw, uuid.UUID)
-            else uuid.UUID(str(company_id_raw))
-        )
+            raise ValueError(f"Agent {agent['agent_id']!r} has no organization — cannot create heartbeat run")
+        company_id = company_id_raw if isinstance(company_id_raw, uuid.UUID) else uuid.UUID(str(company_id_raw))
         run = LLCHeartbeatRun(
             id=uuid.uuid4(),
             company_id=company_id,
@@ -409,9 +395,7 @@ class HeartbeatScheduler:
         session.add(run)
         return run
 
-    async def _run_adapter(
-        self, agent: Dict[str, Any], run_id: uuid.UUID, context: Dict[str, Any]
-    ) -> None:
+    async def _run_adapter(self, agent: Dict[str, Any], run_id: uuid.UUID, context: Dict[str, Any]) -> None:
         """Execute adapter, update run status on completion/failure.
 
         ProviderRateLimited is handled specially: the run is marked
@@ -424,9 +408,7 @@ class HeartbeatScheduler:
         # Fetch current retry_count before marking RUNNING so backoff is correct.
         try:
             async with factory() as session:
-                result = await session.execute(
-                    select(LLCHeartbeatRun.retry_count).where(LLCHeartbeatRun.id == run_id)
-                )
+                result = await session.execute(select(LLCHeartbeatRun.retry_count).where(LLCHeartbeatRun.id == run_id))
                 retry_count: int = result.scalar_one_or_none() or 0
                 await session.execute(
                     update(LLCHeartbeatRun)
@@ -485,10 +467,7 @@ class HeartbeatScheduler:
                 )
                 if final_status == HeartbeatRunStatus.SUCCEEDED.value:
                     await session.execute(
-                        text(
-                            "UPDATE agent_org_nodes SET last_heartbeat_at = now()"
-                            " WHERE agent_id = :aid"
-                        ),
+                        text("UPDATE agent_org_nodes SET last_heartbeat_at = now()" " WHERE agent_id = :aid"),
                         {"aid": agent["agent_id"]},
                     )
                 await session.commit()
@@ -542,7 +521,7 @@ class HeartbeatScheduler:
         if exc.retry_after_seconds > 0:
             delay_seconds = exc.retry_after_seconds
         else:
-            delay_seconds = min(_RL_BASE_SECONDS * (2 ** retry_count), _RL_MAX_SECONDS)
+            delay_seconds = min(_RL_BASE_SECONDS * (2**retry_count), _RL_MAX_SECONDS)
 
         retry_after_dt = datetime.now(tz=timezone.utc) + timedelta(seconds=delay_seconds)
 
@@ -586,9 +565,7 @@ class HeartbeatScheduler:
                 if existing_score is None or retry_ts < float(existing_score):
                     await redis.zadd(_SCHEDULE_KEY, {agent_id: retry_ts})
         except Exception:
-            logger.exception(
-                "Could not re-queue rate-limited agent %s in Redis for run %s", agent_id, run_id
-            )
+            logger.exception("Could not re-queue rate-limited agent %s in Redis for run %s", agent_id, run_id)
 
 
 # ------------------------------------------------------------------

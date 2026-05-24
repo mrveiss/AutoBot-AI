@@ -38,7 +38,6 @@ from autobot_shared.ssot_config import config
 # Author: mrveiss
 
 
-
 logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------

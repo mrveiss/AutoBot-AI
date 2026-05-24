@@ -18,6 +18,7 @@ Routes:
   POST   /api/llc/work-items/{work_item_id}/review/request-changes (GH#8231)
   GET    /api/llc/work-items/{work_item_id}/handoff-brief       (GH#8231)
   POST   /api/llc/work-items/{work_item_id}/coworker   (set/clear co-worker — GH#8230)
+  POST   /api/llc/work-items/suggest-ac               (GH#8240)
 """
 
 import uuid
@@ -31,9 +32,9 @@ from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
 
+from ..kb.ac_suggester import AcSuggester
 from ..models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
 from ..services.handoff import HandoffAttachment, HandoffNotAllowed, HandoffNotAuthorized, HandoffService
-from ..services.work_item_service import CheckoutConflict, InvalidTransition, WorkItemService
 from ..services.work_item_service import (
     CheckoutConflict,
     CoWorkingPermissionError,
@@ -52,12 +53,12 @@ class HumanUnclaimRequest(BaseModel):
     company_id: str
 
 
-
 class CoworkerRequest(BaseModel):
     """Set or clear a co-worker on a work item (GH#8230).
     To clear the co-worker, omit co_worker_type (or send null).
     caller_role must be 'owner', 'admin', or 'lead' to mutate co-working state.
     """
+
     company_id: str
     co_worker_type: Optional[str] = None
     co_worker_agent_id: Optional[str] = None
@@ -65,9 +66,12 @@ class CoworkerRequest(BaseModel):
     actor_agent_id: Optional[str] = None
     actor_user_id: Optional[str] = None
     caller_role: str = "member"
+
+
 router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
 _get_service = lazy_singleton(WorkItemService)
 _get_handoff_service = lazy_singleton(HandoffService)
+_get_ac_suggester = lazy_singleton(AcSuggester)
 
 
 def _service() -> WorkItemService:
@@ -76,6 +80,10 @@ def _service() -> WorkItemService:
 
 def _handoff_service() -> HandoffService:
     return _get_handoff_service()
+
+
+def _ac_suggester() -> AcSuggester:
+    return _get_ac_suggester()
 
 
 async def get_session() -> AsyncSession:
@@ -175,6 +183,14 @@ class ReviewChangesRequest(BaseModel):
     company_id: str
     change_request: str
     return_to_agent_id: Optional[str] = None
+
+
+class SuggestAcRequest(BaseModel):
+    company_id: str
+    project_id: str
+    title: str
+    description: str = ""
+
 
 def _assignee_display(item: Any) -> Optional[Dict[str, Any]]:
     """Return structured primary assignee display info (GH#8223).
@@ -329,6 +345,23 @@ async def list_work_items(
         offset=offset,
     )
     return [_item_to_dict(i) for i in items]
+
+
+@router.post("/suggest-ac")
+async def suggest_ac(body: SuggestAcRequest) -> Dict[str, Any]:
+    """Propose draft acceptance criteria for a new work item (GH#8240).
+
+    RAG-queries company policy/standards and similar completed PBIs, then
+    asks the LLM to synthesise 3-6 testable ACs. Results are cached 5 min
+    per unique title+description pair. Suggestions are advisory.
+    """
+    result = await _ac_suggester().suggest(
+        company_id=body.company_id,
+        project_id=body.project_id,
+        item_title=body.title,
+        item_description=body.description,
+    )
+    return result
 
 
 @router.get("/{work_item_id}")
@@ -568,6 +601,8 @@ async def handoff_to_agent(
         raise HTTPException(status_code=403, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+
+
 # ------------------------------------------------------------------
 # Handoff routes (GH#8231)
 # ------------------------------------------------------------------

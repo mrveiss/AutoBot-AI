@@ -26,8 +26,8 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import LLCServiceBase
 from ..models.ceo_chat import LLCCeoChatMessage, LLCCeoChatThread
+from . import LLCServiceBase
 
 logger = logging.getLogger(__name__)
 
@@ -71,9 +71,7 @@ class CeoChatService(LLCServiceBase):
         session: AsyncSession,
         thread_id: str,
     ) -> Optional[LLCCeoChatThread]:
-        result = await session.execute(
-            select(LLCCeoChatThread).where(LLCCeoChatThread.id == thread_id)
-        )
+        result = await session.execute(select(LLCCeoChatThread).where(LLCCeoChatThread.id == thread_id))
         return result.scalar_one_or_none()
 
     async def list_threads(
@@ -201,8 +199,8 @@ class CeoChatService(LLCServiceBase):
     ) -> Dict[str, Any]:
         """Call the LLM and return parsed resolution dict."""
         try:
-            from services.llm_service import get_llm_service
             from llm_shared.types import LLMType
+            from services.llm_service import get_llm_service
 
             svc = get_llm_service()
             context = "\n".join(kb_chunks) if kb_chunks else ""
@@ -244,8 +242,8 @@ class CeoChatService(LLCServiceBase):
 
         try:
             if intent == "create_task":
+                from ..models.enums import WorkItemPriority, WorkItemType
                 from .work_item_service import WorkItemService
-                from ..models.enums import WorkItemType, WorkItemPriority
 
                 item_svc = WorkItemService()
                 item = await item_svc.create(
@@ -269,8 +267,8 @@ class CeoChatService(LLCServiceBase):
                     return "goal", uuid.UUID(goal_id)
 
             if intent == "request_approval":
+                from ..models.enums import ApprovalStatus, ApprovalType
                 from .approval import ApprovalService
-                from ..models.enums import ApprovalType, ApprovalStatus
 
                 appr_svc = ApprovalService()
                 appr = await appr_svc.create(

@@ -18,7 +18,31 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 _TEXT_MIME_PREFIXES = ("text/", "application/json", "application/xml")
-_TEXT_EXTENSIONS = {".md", ".txt", ".py", ".js", ".ts", ".go", ".rs", ".java", ".c", ".cpp", ".h", ".rb", ".sh", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".sql", ".html", ".css", ".jsx", ".tsx"}
+_TEXT_EXTENSIONS = {
+    ".md",
+    ".txt",
+    ".py",
+    ".js",
+    ".ts",
+    ".go",
+    ".rs",
+    ".java",
+    ".c",
+    ".cpp",
+    ".h",
+    ".rb",
+    ".sh",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".ini",
+    ".cfg",
+    ".sql",
+    ".html",
+    ".css",
+    ".jsx",
+    ".tsx",
+}
 
 
 def _collection_name(work_item_id: str) -> str:
@@ -33,6 +57,7 @@ def _is_text_indexable(filename: Optional[str], mime_type: Optional[str]) -> boo
                 return True
     if filename:
         import os
+
         ext = os.path.splitext(filename)[1].lower()
         if ext in _TEXT_EXTENSIONS:
             return True
@@ -145,10 +170,7 @@ class WorkItemKB:
                 docs = results.get("documents", [])
                 metas = results.get("metadatas", [])
 
-            return [
-                {"id": doc_id, "document": doc, "metadata": meta}
-                for doc_id, doc, meta in zip(ids, docs, metas)
-            ]
+            return [{"id": doc_id, "document": doc, "metadata": meta} for doc_id, doc, meta in zip(ids, docs, metas)]
         except Exception:
             logger.exception(
                 "Failed to retrieve KB context for work_item %s — returning empty",

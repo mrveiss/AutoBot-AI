@@ -26,10 +26,10 @@ from llc.exceptions import ProviderRateLimited
 from llc.models.enums import HeartbeatRunStatus
 from llc.models.heartbeat_run import LLCHeartbeatRun
 from llc.scheduler.heartbeat_scheduler import (
-    HeartbeatScheduler,
     _MAX_RATE_LIMIT_RETRIES,
     _RL_BASE_SECONDS,
     _RL_MAX_SECONDS,
+    HeartbeatScheduler,
 )
 
 # ---------------------------------------------------------------------------
@@ -235,9 +235,7 @@ async def test_handle_rate_limited_demotes_after_max_retries():
         patch("llc.scheduler.heartbeat_scheduler.get_async_session_factory", return_value=lambda: ctx_mgr),
         patch("llc.scheduler.heartbeat_scheduler.get_async_redis_client", AsyncMock(return_value=redis)),
     ):
-        await scheduler._handle_rate_limited(
-            agent, _RUN_ID, retry_count=_MAX_RATE_LIMIT_RETRIES, exc=exc
-        )
+        await scheduler._handle_rate_limited(agent, _RUN_ID, retry_count=_MAX_RATE_LIMIT_RETRIES, exc=exc)
 
     # FAILED written, not re-queued
     compiled = str(session_mock.execute.call_args[0][0].compile(compile_kwargs={"literal_binds": True}))

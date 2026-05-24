@@ -200,9 +200,7 @@ class AnthropicProvider(BaseProvider):
             # request metadata the system message is sent as a content-block
             # list so Anthropic can cache it across repeated requests.
             if request.metadata.get("enable_prompt_cache"):
-                kwargs["system"] = [
-                    {"type": "text", "text": system_content, "cache_control": {"type": "ephemeral"}}
-                ]
+                kwargs["system"] = [{"type": "text", "text": system_content, "cache_control": {"type": "ephemeral"}}]
             else:
                 kwargs["system"] = system_content
 

@@ -268,8 +268,6 @@ from services.command_execution_queue import get_command_queue
 # Author: mrveiss
 
 
-
-
 logger = get_logger(__name__)
 
 # Create router

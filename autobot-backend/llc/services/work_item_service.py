@@ -637,17 +637,14 @@ class WorkItemService(LLCServiceBase):
         allowed = _ALLOWED_TRANSITIONS.get(current, set())
         if WorkItemStatus.DONE not in allowed:
             raise InvalidTransition(
-                f"Cannot transition from {current.value!r} to 'done'. "
-                f"Allowed: {[s.value for s in allowed]}"
+                f"Cannot transition from {current.value!r} to 'done'. " f"Allowed: {[s.value for s in allowed]}"
             )
 
         actor_is_agent = actor_agent_id is not None and actor_user_id is None
 
         if not is_board_override and actor_is_agent and review_gate_svc is not None:
             item_type = WorkItemType(item.type)
-            requires, reviewer_role = await review_gate_svc.requires_review(
-                session, company_id, item_type
-            )
+            requires, reviewer_role = await review_gate_svc.requires_review(session, company_id, item_type)
             if requires:
                 if handoff_svc is not None:
                     return await handoff_svc.agent_to_human(
