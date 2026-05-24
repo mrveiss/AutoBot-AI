@@ -67,6 +67,10 @@ class HeartbeatScheduler:
         self._running = False
         self._tasks: set = set()
 
+    @property
+    def is_running(self) -> bool:
+        return self._running and self._task is not None and not self._task.done()
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------

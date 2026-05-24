@@ -48,6 +48,7 @@ class KnownProbes(str, enum.Enum):
     KNOWLEDGE = "knowledge"
     ERROR_RESILIENCE = "error_resilience"
     INTELLIGENT_AGENT = "intelligent_agent"
+    LLC = "llc"
 
 
 # Per-probe timeout. Probes slower than this become ``status="down"`` so a slow
