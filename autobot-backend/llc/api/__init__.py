@@ -16,6 +16,7 @@ from .context import router as context_router
 from .controls import router as controls_router
 from .decisions import router as decisions_router
 from .goals import router as goals_router
+from .health import router as health_router
 from .labels import router as labels_router
 from .portability import router as portability_router
 from .review_gate_policies import router as review_gate_router
@@ -34,6 +35,7 @@ router.include_router(backlog_router)
 router.include_router(budget_router)
 router.include_router(companies_router)
 router.include_router(goals_router)
+router.include_router(health_router)
 router.include_router(secrets_router)
 router.include_router(sprints_router)
 router.include_router(work_items_router)
