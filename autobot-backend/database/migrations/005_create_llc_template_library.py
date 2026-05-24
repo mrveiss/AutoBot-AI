@@ -21,7 +21,10 @@ branch_labels = None
 depends_on = None
 
 _TEMPLATE_CATEGORY_ENUM = postgresql.ENUM(
-    "company", "project", "agent_role", "workflow",
+    "company",
+    "project",
+    "agent_role",
+    "workflow",
     name="llc_template_category",
 )
 

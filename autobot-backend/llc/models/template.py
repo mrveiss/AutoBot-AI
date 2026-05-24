@@ -30,9 +30,7 @@ class TemplatePublishRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=256)
     description: Optional[str] = None
     category: TemplateCategory
-    template_json: Dict[str, Any] = Field(
-        ..., description="Scrubbed company export JSON"
-    )
+    template_json: Dict[str, Any] = Field(..., description="Scrubbed company export JSON")
     tags: List[str] = Field(default_factory=list, max_length=20)
     is_public: bool = False
 

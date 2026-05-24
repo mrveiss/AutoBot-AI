@@ -80,16 +80,14 @@ class TemplateService:
         template_id = uuid.uuid4()
 
         await self.session.execute(
-            sa.text(
-                """
+            sa.text("""
                 INSERT INTO llc_template_library
                     (id, name, description, category, template_json,
                      created_by_company_id, is_public)
                 VALUES
                     (:id, :name, :description, :category, :template_json::jsonb,
                      :company_id, :is_public)
-                """
-            ),
+                """),
             {
                 "id": str(template_id),
                 "name": req.name,
@@ -129,8 +127,7 @@ class TemplateService:
         """Return templates visible to ``requesting_company_id``."""
         filters, bind = _build_list_filters(params, requesting_company_id)
         rows = await self.session.execute(
-            sa.text(
-                f"""
+            sa.text(f"""
                 SELECT t.id, t.name, t.description, t.category,
                        t.created_by_company_id, t.is_public, t.usage_count,
                        t.created_at, t.updated_at,
@@ -141,8 +138,7 @@ class TemplateService:
                 GROUP BY t.id
                 ORDER BY t.created_at DESC
                 LIMIT :page_size OFFSET :offset
-                """
-            ),
+                """),
             {
                 **bind,
                 "page_size": params.page_size,
@@ -187,9 +183,7 @@ class TemplateService:
         entities_created = _apply_template(resolved_json)
 
         await self.session.execute(
-            sa.text(
-                "UPDATE llc_template_library SET usage_count = usage_count + 1 WHERE id = :id"
-            ),
+            sa.text("UPDATE llc_template_library SET usage_count = usage_count + 1 WHERE id = :id"),
             {"id": str(template_id)},
         )
 
@@ -284,9 +278,7 @@ def _replace_in_structure(data: Any, secrets: Dict[str, str]) -> Any:
     if isinstance(data, list):
         return [_replace_in_structure(item, secrets) for item in data]
     if isinstance(data, str):
-        return _SECRET_PLACEHOLDER_RE.sub(
-            lambda m: secrets.get(m.group(1), m.group(0)), data
-        )
+        return _SECRET_PLACEHOLDER_RE.sub(lambda m: secrets.get(m.group(1), m.group(0)), data)
     return data
 
 
@@ -312,11 +304,7 @@ def _apply_template(template_json: Dict[str, Any]) -> Dict[str, int]:
     Returns counts of recognized top-level entity keys for audit.
     """
     entity_keys = ("agents", "projects", "work_items", "goals", "routines")
-    return {
-        key: len(template_json[key])
-        for key in entity_keys
-        if isinstance(template_json.get(key), list)
-    }
+    return {key: len(template_json[key]) for key in entity_keys if isinstance(template_json.get(key), list)}
 
 
 async def _upsert_tags(
@@ -327,13 +315,11 @@ async def _upsert_tags(
     """Insert tags for template; idempotent via ON CONFLICT DO NOTHING."""
     for tag in tags:
         await session.execute(
-            sa.text(
-                """
+            sa.text("""
                 INSERT INTO llc_template_tags (template_id, tag)
                 VALUES (:template_id, :tag)
                 ON CONFLICT DO NOTHING
-                """
-            ),
+                """),
             {"template_id": str(template_id), "tag": tag.lower().strip()},
         )
 
@@ -341,22 +327,16 @@ async def _upsert_tags(
 async def _fetch_row(session: AsyncSession, template_id: uuid.UUID):
     """Fetch a single template row as a mapping."""
     result = await session.execute(
-        sa.text(
-            "SELECT * FROM llc_template_library WHERE id = :id"
-        ),
+        sa.text("SELECT * FROM llc_template_library WHERE id = :id"),
         {"id": str(template_id)},
     )
     return result.mappings().first()
 
 
-async def _fetch_tags(
-    session: AsyncSession, template_id: uuid.UUID
-) -> List[str]:
+async def _fetch_tags(session: AsyncSession, template_id: uuid.UUID) -> List[str]:
     """Fetch sorted tags for a template."""
     result = await session.execute(
-        sa.text(
-            "SELECT tag FROM llc_template_tags WHERE template_id = :id ORDER BY tag"
-        ),
+        sa.text("SELECT tag FROM llc_template_tags WHERE template_id = :id ORDER BY tag"),
         {"id": str(template_id)},
     )
     return [r["tag"] for r in result.mappings()]
@@ -380,9 +360,7 @@ def _build_list_filters(
     bind: Dict[str, Any] = {}
 
     if company_id:
-        clauses.append(
-            "(t.is_public = true OR t.created_by_company_id = :company_id)"
-        )
+        clauses.append("(t.is_public = true OR t.created_by_company_id = :company_id)")
         bind["company_id"] = str(company_id)
     else:
         clauses.append("t.is_public = true")
@@ -397,8 +375,7 @@ def _build_list_filters(
 
     if params.tag:
         clauses.append(
-            "EXISTS (SELECT 1 FROM llc_template_tags tt2 "
-            "WHERE tt2.template_id = t.id AND tt2.tag = :tag)"
+            "EXISTS (SELECT 1 FROM llc_template_tags tt2 " "WHERE tt2.template_id = t.id AND tt2.tag = :tag)"
         )
         bind["tag"] = params.tag.lower().strip()
 
@@ -442,6 +419,7 @@ def _row_to_template_detail(row, tags: List[str]) -> TemplateDetail:
 def _dump_json(data: Dict[str, Any]) -> str:
     """Serialize dict to JSON string for parameterized insert."""
     import json
+
     return json.dumps(data, ensure_ascii=False)
 
 
@@ -485,9 +463,7 @@ async def _remove_template_from_kb(template_id: uuid.UUID) -> None:
         from knowledge import get_knowledge_base
 
         kb = await get_knowledge_base()
-        collection = await kb._async_chroma_client.get_collection(
-            _PLATFORM_TEMPLATE_COLLECTION
-        )
+        collection = await kb._async_chroma_client.get_collection(_PLATFORM_TEMPLATE_COLLECTION)
         await collection.delete(ids=[str(template_id)])
         logger.info("Removed template %s from %s", template_id, _PLATFORM_TEMPLATE_COLLECTION)
     except Exception:

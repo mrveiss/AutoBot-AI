@@ -38,7 +38,6 @@ from llc.services.template import (
     _validate_no_secrets,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -286,9 +285,7 @@ async def test_import_raises_on_unresolved_placeholder():
 async def test_publish_calls_kb_indexing():
     session = AsyncMock()
     execute_result = MagicMock()
-    execute_result.mappings.return_value.first.return_value = _template_row(
-        uuid.uuid4(), is_public=True
-    )
+    execute_result.mappings.return_value.first.return_value = _template_row(uuid.uuid4(), is_public=True)
     session.execute.return_value = execute_result
 
     req = TemplatePublishRequest(
