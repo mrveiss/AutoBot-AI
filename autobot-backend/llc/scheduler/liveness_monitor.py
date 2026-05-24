@@ -105,11 +105,27 @@ class LivenessMonitor:
         )
         return list(result.scalars().all())
 
+    async def _agent_deliberately_paused(self, agent_id: str) -> bool:
+        """Return True if a FR-GOV-05 pause/terminate flag is set for this agent."""
+        redis = await get_async_redis_client()
+        if redis is None:
+            return False
+        return bool(await redis.exists(f"llc:agent:{agent_id}:paused"))
+
     async def _recover(self, session: AsyncSession, run: LLCHeartbeatRun) -> None:
         """Perform the six-step recovery protocol for a single stuck run."""
         run_id = str(run.id)
         agent_id = run.agent_id
         company_id = str(run.company_id)
+
+        # FR-GOV-05: skip recovery for deliberately paused/terminated agents
+        if await self._agent_deliberately_paused(str(agent_id)):
+            logger.info(
+                "LivenessMonitor: skipping recovery for run %s — agent %s is deliberately paused",
+                run_id,
+                agent_id,
+            )
+            return
 
         logger.warning(
             "LivenessMonitor: run %s for agent %s is stuck (started_at=%s) — recovering",

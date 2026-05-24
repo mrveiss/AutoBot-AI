@@ -75,6 +75,8 @@ class LLCAgentStatus(str, Enum):
     ONBOARDING = "onboarding"
     OFFBOARDING = "offboarding"
     INACTIVE = "inactive"
+    PAUSED = "paused"
+    TERMINATED = "terminated"
 
 
 class SprintStatus(str, Enum):

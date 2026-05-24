@@ -13,6 +13,7 @@ from .budget import router as budget_router
 from .ceo_chat import router as ceo_chat_router
 from .companies import router as companies_router
 from .context import router as context_router
+from .controls import router as controls_router
 from .decisions import router as decisions_router
 from .goals import router as goals_router
 from .portability import router as portability_router
@@ -46,6 +47,7 @@ router.include_router(routines_router)
 router.include_router(portability_router)
 router.include_router(review_gate_router)
 router.include_router(context_router)
+router.include_router(controls_router)
 router.include_router(labels_router)
 router.include_router(templates_router)
 
