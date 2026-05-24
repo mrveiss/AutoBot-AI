@@ -108,18 +108,40 @@ class ApprovalStatus(str, Enum):
 
 
 class LLCRunStatus(str, Enum):
-    """Unified run status for heartbeat and adapter runs (GH#8261).
-
-    Replaces the originally separate HeartbeatRunStatus (#8225) and
-    AdapterRunStatus (#8226) — both had identical values so they are collapsed
-    into a single enum to avoid enum-drift.
-    """
+    """Unified run status for heartbeat and adapter runs (GH#8261)."""
 
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
     TIMEOUT = "timeout"
     CANCELLED = "cancelled"
+
+
+class HeartbeatInvocationSource(str, Enum):
+    """How a heartbeat run was triggered (GH#8225)."""
+
+    SCHEDULER = "scheduler"
+    MANUAL = "manual"
+    CALLBACK = "callback"
+
+
+class HeartbeatRunStatus(str, Enum):
+    """Lifecycle status of a heartbeat run (GH#8225)."""
+
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    TIMED_OUT = "timed_out"
+    RATE_LIMITED = "rate_limited"
+
+
+class ContextMode(str, Enum):
+    """Context window loading mode for heartbeat runs."""
+
+    THIN = "thin"
+    FAT = "fat"
 
 
 class AssignmentType(str, Enum):
