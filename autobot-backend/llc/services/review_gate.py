@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.enums import WorkItemType
 from ..models.review_gate import LLCReviewGatePolicy
-from . import LLCServiceBase
+from .base import LLCServiceBase
 
 logger = logging.getLogger(__name__)
 

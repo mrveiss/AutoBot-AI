@@ -12,6 +12,7 @@ from .boards import router as boards_router
 from .budget import router as budget_router
 from .ceo_chat import router as ceo_chat_router
 from .companies import router as companies_router
+from .context import router as context_router
 from .goals import router as goals_router
 from .review_gate_policies import router as review_gate_router
 from .routines import router as routines_router
@@ -38,6 +39,7 @@ router.include_router(runs_router)
 router.include_router(ceo_chat_router)
 router.include_router(routines_router)
 router.include_router(review_gate_router)
+router.include_router(context_router)
 
 
 @router.get("/health")

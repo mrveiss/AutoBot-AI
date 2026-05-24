@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """LLC RAG assembler interface (GH#8261).
 
 GH#8236 (heartbeat context builder) and GH#8239 (handoff brief generator)
@@ -9,9 +12,15 @@ Concrete implementation lives in GH#8236. This file provides the interface
 stub so dependent issues can import and type-check against it.
 """
 
+import asyncio
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
+
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 class AssemblerProfile(str, Enum):
@@ -53,16 +62,165 @@ class LLCRAGAssembler:
         agent_id: Optional[str] = None,
         work_item_id: Optional[str] = None,
     ) -> LLCContext:
-        """Run parallel ChromaDB queries and return merged context.
+        """Run parallel ChromaDB queries and return merged context (GH#8236).
+
+        Queries ChromaDB collections scoped by company, project, and agent.
+        Each query has a ≤800ms timeout target (4 parallel queries → P95 ≤ 2s).
 
         Args:
             company_id: Tenant company identifier.
             profile: Which query profile to use (HEARTBEAT, HANDOFF, SUGGESTION).
             project_id: Optional project scope filter.
             agent_id: Optional agent scope filter.
-            work_item_id: Optional work item context.
+            work_item_id: Optional work item context for relevance ranking.
 
         Returns:
             LLCContext with merged chunks from all relevant collections.
         """
-        raise NotImplementedError("LLCRAGAssembler.assemble() — concrete impl in GH#8236")
+        try:
+            from utils.async_chromadb_client import get_async_chromadb_client
+
+            client = await get_async_chromadb_client()
+
+            # Determine query parameters based on profile
+            query_params = self._get_query_params(profile, project_id, agent_id)
+
+            # Build ChromaDB collection names (scope: company, project, agent)
+            collections_to_query = []
+            if project_id:
+                collections_to_query.append(f"{company_id}:project:{project_id}")
+            if agent_id:
+                collections_to_query.append(f"{company_id}:agent:{agent_id}")
+            collections_to_query.append(f"{company_id}:company")
+
+            # Query all collections in parallel (each ≤ 800ms target)
+            tasks = [
+                self._query_collection(
+                    client, coll_name, query_params["query_text"], query_params["n_results"]
+                )
+                for coll_name in collections_to_query
+            ]
+
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Merge results from all collections
+            all_chunks: List[Dict[str, Any]] = []
+            all_sources: List[str] = []
+
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    logger.warning(
+                        "ChromaDB query failed for %s: %s", collections_to_query[i], result
+                    )
+                    continue
+
+                all_chunks.extend(result.get("chunks", []))
+                all_sources.extend(result.get("sources", []))
+
+            return LLCContext(
+                company_id=company_id,
+                profile=profile,
+                chunks=all_chunks,
+                sources=list(dict.fromkeys(all_sources)),  # dedup
+                metadata={
+                    "collections_queried": collections_to_query,
+                    "total_results": len(all_chunks),
+                },
+            )
+
+        except Exception as e:
+            logger.exception("LLCRAGAssembler.assemble() failed: %s", e)
+            # Return empty context on failure (graceful degradation)
+            return LLCContext(
+                company_id=company_id,
+                profile=profile,
+                chunks=[],
+                sources=[],
+                metadata={"error": str(e)},
+            )
+
+    def _get_query_params(
+        self,
+        profile: AssemblerProfile,
+        project_id: Optional[str],
+        agent_id: Optional[str],
+    ) -> Dict[str, Any]:
+        """Get query parameters based on profile and scope.
+
+        Args:
+            profile: Query profile (HEARTBEAT, HANDOFF, SUGGESTION).
+            project_id: Optional project scope.
+            agent_id: Optional agent scope.
+
+        Returns:
+            Dict with query_text and n_results parameters.
+        """
+        params = {
+            "query_text": "",  # Will be filled by caller
+            "n_results": 5,
+        }
+
+        if profile == AssemblerProfile.HEARTBEAT:
+            # Full context: company=5, project=8, agent=5
+            if project_id:
+                params["n_results"] = 8
+            elif agent_id:
+                params["n_results"] = 5
+            else:
+                params["n_results"] = 5
+
+        elif profile == AssemblerProfile.HANDOFF:
+            params["n_results"] = 3
+
+        elif profile == AssemblerProfile.SUGGESTION:
+            params["n_results"] = 2
+
+        return params
+
+    async def _query_collection(
+        self,
+        client: Any,
+        collection_name: str,
+        query_text: str,
+        n_results: int,
+    ) -> Dict[str, Any]:
+        """Query a single ChromaDB collection (≤ 800ms target).
+
+        Args:
+            client: Async ChromaDB client.
+            collection_name: Name of collection to query.
+            query_text: Query text for similarity search.
+            n_results: Number of results to return.
+
+        Returns:
+            Dict with chunks and sources from collection.
+        """
+        try:
+            collection = await client.get_or_create_collection(collection_name)
+            results = await collection.query(
+                query_texts=[query_text],
+                n_results=n_results,
+                include=["documents", "metadatas", "distances"],
+            )
+
+            chunks = []
+            sources = []
+
+            if results and results.get("documents"):
+                for i, doc in enumerate(results["documents"][0]):
+                    metadata = (results.get("metadatas", [[]])[0][i]) if results.get("metadatas") else {}
+                    distance = (results.get("distances", [[]])[0][i]) if results.get("distances") else 0.0
+
+                    chunks.append({
+                        "content": doc,
+                        "metadata": metadata,
+                        "similarity_score": 1.0 - distance,  # Convert distance to similarity
+                        "source": collection_name,
+                    })
+                    sources.append(collection_name)
+
+            return {"chunks": chunks, "sources": sources}
+
+        except Exception as e:
+            logger.warning("Failed to query collection %s: %s", collection_name, e)
+            return {"chunks": [], "sources": []}

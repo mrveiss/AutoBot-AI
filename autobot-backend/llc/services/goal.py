@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.logging_manager import get_logger
 
 from ..models.goal import GoalLevel, GoalStatus, LLCGoal
-from . import LLCServiceBase
+from .base import LLCServiceBase
 
 logger = get_logger(__name__)
 
