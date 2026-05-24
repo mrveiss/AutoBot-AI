@@ -182,8 +182,11 @@ class RoutineScheduler:
                         routine.cron_schedule, datetime.now(tz=timezone.utc)
                     ).get_next(float)
                     redis = await get_async_redis_client()
-                    if redis is not None:
-                        await redis.zadd(_SCHEDULE_KEY, {f"routine:{routine_id}": next_ts_skip})
+                    if redis is None:
+                        raise RuntimeError(
+                            f"Redis unavailable — cannot re-queue paused routine {routine_id_str}"
+                        )
+                    await redis.zadd(_SCHEDULE_KEY, {f"routine:{routine_id}": next_ts_skip})
                     return
 
                 cron_schedule = routine.cron_schedule

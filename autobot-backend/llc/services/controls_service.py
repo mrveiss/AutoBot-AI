@@ -74,14 +74,16 @@ class ControlsService:
 
         await session.execute(
             text(
-                "UPDATE agent_org_nodes SET status = :status, pause_reason = :reason,"
-                " paused_at = :now"
+                "UPDATE agent_org_nodes"
+                " SET status = :status, pause_reason = :reason, paused_at = :now,"
+                " pre_pause_status = :before_status"
                 " WHERE company_id = :company_id AND agent_id = :agent_id"
             ),
             {
                 "status": LLCAgentStatus.PAUSED.value,
                 "reason": reason,
                 "now": datetime.now(tz=timezone.utc),
+                "before_status": before_status,
                 "company_id": company_id,
                 "agent_id": agent_id,
             },
@@ -116,14 +118,21 @@ class ControlsService:
             raise AgentNotFoundError(agent_id)
         before_status = row["status"]
 
+        restore_status = (
+            LLCAgentStatus(row["pre_pause_status"]).value
+            if row.get("pre_pause_status")
+            else LLCAgentStatus.AVAILABLE.value
+        )
+
         await session.execute(
             text(
-                "UPDATE agent_org_nodes SET status = :status, pause_reason = NULL,"
-                " paused_at = NULL"
+                "UPDATE agent_org_nodes"
+                " SET status = :status, pause_reason = NULL, paused_at = NULL,"
+                " pre_pause_status = NULL"
                 " WHERE company_id = :company_id AND agent_id = :agent_id"
             ),
             {
-                "status": LLCAgentStatus.AVAILABLE.value,
+                "status": restore_status,
                 "company_id": company_id,
                 "agent_id": agent_id,
             },
@@ -140,10 +149,10 @@ class ControlsService:
             entity_type="agent",
             entity_id=agent_id,
             before={"status": before_status},
-            after={"status": LLCAgentStatus.AVAILABLE.value},
+            after={"status": restore_status},
         )
 
-        return {"agent_id": agent_id, "status": LLCAgentStatus.AVAILABLE.value}
+        return {"agent_id": agent_id, "status": restore_status}
 
     async def terminate_agent(
         self,
@@ -270,6 +279,8 @@ class ControlsService:
         reason: Optional[str] = None,
     ) -> dict:
         """Set company-wide Redis pause flag — blocks all new heartbeat runs."""
+        if await self._get_company_row(session, company_id) is None:
+            raise CompanyNotFoundError(company_id)
         await self._set_redis_flag(
             _COMPANY_PAUSED_KEY.format(company_id=company_id), reason or "1"
         )
@@ -294,6 +305,8 @@ class ControlsService:
         actor_user_id: str,
     ) -> dict:
         """Lift company-wide pause flag."""
+        if await self._get_company_row(session, company_id) is None:
+            raise CompanyNotFoundError(company_id)
         await self._del_redis_flag(_COMPANY_PAUSED_KEY.format(company_id=company_id))
 
         await self._activity_log.record(
@@ -316,13 +329,21 @@ class ControlsService:
     async def _get_agent_row(self, session: AsyncSession, company_id: str, agent_id: str) -> Optional[dict]:
         result = await session.execute(
             text(
-                "SELECT status FROM agent_org_nodes"
+                "SELECT status, pre_pause_status FROM agent_org_nodes"
                 " WHERE company_id = :company_id AND agent_id = :agent_id LIMIT 1"
             ),
             {"company_id": company_id, "agent_id": agent_id},
         )
         row = result.fetchone()
-        return {"status": row[0]} if row else None
+        return {"status": row[0], "pre_pause_status": row[1]} if row else None
+
+    async def _get_company_row(self, session: AsyncSession, company_id: str) -> Optional[dict]:
+        result = await session.execute(
+            text("SELECT id FROM llc_companies WHERE id = :id LIMIT 1"),
+            {"id": company_id},
+        )
+        row = result.fetchone()
+        return {"id": str(row[0])} if row else None
 
     async def _get_sprint(self, session: AsyncSession, company_id: str, sprint_id: str) -> Optional[dict]:
         result = await session.execute(

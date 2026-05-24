@@ -218,11 +218,14 @@ async def pause_all(
     current_user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     actor_id = await _require_board_role(company_id, current_user, _membership_svc(), session)
-    result = await _controls_svc().pause_company(
-        session, str(company_id), actor_id, reason=body.reason
-    )
-    await session.commit()
-    return result
+    try:
+        result = await _controls_svc().pause_company(
+            session, str(company_id), actor_id, reason=body.reason
+        )
+        await session.commit()
+        return result
+    except CompanyNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Company {company_id} not found")
 
 
 @router.post("/companies/{company_id}/controls/resume-all")
@@ -232,9 +235,12 @@ async def resume_all(
     current_user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     actor_id = await _require_board_role(company_id, current_user, _membership_svc(), session)
-    result = await _controls_svc().resume_company(session, str(company_id), actor_id)
-    await session.commit()
-    return result
+    try:
+        result = await _controls_svc().resume_company(session, str(company_id), actor_id)
+        await session.commit()
+        return result
+    except CompanyNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Company {company_id} not found")
 
 
 __all__ = ["router"]

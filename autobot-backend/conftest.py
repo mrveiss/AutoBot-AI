@@ -151,6 +151,7 @@ for _svc_mod in [
     "services",
     "services.llm_api_key_service",
     "services.llm_cost_tracker",
+    "services.llm_service",
     "services.tool_output_filter",
     "services.personality_service",
 ]:
