@@ -41,10 +41,10 @@ from user_management.database import get_async_session_factory
 from ..kb.collections import KbCollectionManager
 from ..models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
 from ..services.attachment_service import (
+    LLC_ATTACHMENT_MAX_BYTES,
     AttachmentNotFound,
     AttachmentService,
     AttachmentTooLarge,
-    LLC_ATTACHMENT_MAX_BYTES,
 )
 from ..services.handoff import HandoffAttachment, HandoffNotAllowed, HandoffNotAuthorized, HandoffService
 from ..services.work_item_service import CheckoutConflict, InvalidTransition, WorkItemService
