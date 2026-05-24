@@ -560,3 +560,31 @@ async def get_sprint_burndown(
         return await _planning_svc.get_burndown(session, sprint_id)
     except SprintNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/projects/{project_id}/knowledge")
+async def get_project_knowledge(
+    project_id: uuid.UUID,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> dict:
+    """Return recently indexed work product artifacts for a project (GH#8242).
+
+    Queries the ``project:{project_id}`` ChromaDB collection — available
+    once ArtifactIngestor has indexed at least one work product.
+    """
+    from ..services.work_product_service import WorkProductService
+    from autobot_shared.singleton_factory import lazy_singleton
+
+    svc = lazy_singleton(WorkProductService)()
+    artifacts = await svc.list_indexed_by_project(
+        session=None,  # type: ignore[arg-type]  — no DB needed, reads ChromaDB directly
+        project_id=str(project_id),
+        limit=limit,
+        offset=offset,
+    )
+    return {
+        "project_id": str(project_id),
+        "artifacts": artifacts,
+        "total": len(artifacts),
+    }

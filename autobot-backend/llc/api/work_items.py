@@ -34,6 +34,13 @@ from ..kb.collections import KbCollectionManager
 from ..models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
 from ..services.handoff import HandoffAttachment, HandoffNotAllowed, HandoffNotAuthorized, HandoffService
 from ..services.work_item_service import CheckoutConflict, InvalidTransition, WorkItemService
+from ..services.work_item_service import (
+    CheckoutConflict,
+    CoWorkingPermissionError,
+    InvalidTransition,
+    WorkItemService,
+)
+from ..services.work_product_service import WorkProductService
 
 
 class HumanClaimRequest(BaseModel):
@@ -46,8 +53,21 @@ class HumanUnclaimRequest(BaseModel):
     company_id: str
 
 
+class CoworkerRequest(BaseModel):
+    """Set or clear a co-worker on a work item (GH#8230).
+    To clear the co-worker, omit co_worker_type (or send null).
+    caller_role must be 'owner', 'admin', or 'lead' to mutate co-working state.
+    """
+    company_id: str
+    co_worker_type: Optional[str] = None
+    co_worker_agent_id: Optional[str] = None
+    co_worker_user_id: Optional[str] = None
+    actor_agent_id: Optional[str] = None
+    actor_user_id: Optional[str] = None
+    caller_role: str = "member"
 router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
 _get_service = lazy_singleton(WorkItemService)
+_get_product_service = lazy_singleton(WorkProductService)
 _get_handoff_service = lazy_singleton(HandoffService)
 _kb_manager = KbCollectionManager()
 
@@ -157,7 +177,6 @@ class ReviewChangesRequest(BaseModel):
     company_id: str
     change_request: str
     return_to_agent_id: Optional[str] = None
-
 
 def _assignee_display(item: Any) -> Optional[Dict[str, Any]]:
     """Return structured assignee display info (GH#8223).
@@ -482,8 +501,6 @@ async def handoff_to_agent(
         raise HTTPException(status_code=403, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
-
-
 # ------------------------------------------------------------------
 # Handoff routes (GH#8231)
 # ------------------------------------------------------------------
@@ -566,3 +583,36 @@ async def get_handoff_brief(
         return {"work_item_id": work_item_id, "brief": brief}
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+
+@router.get("/{work_item_id}/products")
+async def list_work_products(
+    work_item_id: str,
+    limit: int = Query(100, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    session: AsyncSession = Depends(get_session),
+) -> Dict[str, Any]:
+    """List all work products for a work item (GH#8242)."""
+    products = await _get_product_service().list_by_work_item(
+        session,
+        work_item_id=work_item_id,
+        limit=limit,
+        offset=offset,
+    )
+    return {
+        "work_item_id": work_item_id,
+        "products": [
+            {
+                "id": str(p.id),
+                "type": p.type if isinstance(p.type, str) else p.type.value,
+                "title": p.title,
+                "content_text": p.content_text,
+                "storage_path": p.storage_path,
+                "url": p.url,
+                "kb_indexed": p.kb_indexed,
+                "heartbeat_run_id": str(p.heartbeat_run_id) if p.heartbeat_run_id else None,
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+            }
+            for p in products
+        ],
+        "total": len(products),
+    }

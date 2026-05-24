@@ -81,16 +81,45 @@ async def post_comment(body: CommentBody, request: Request) -> Dict[str, Any]:
 
 class WorkProduct(BaseModel):
     work_item_id: str
-    artifact_type: str
-    content: str
-    metadata: Optional[Dict[str, Any]] = None
+    type: str
+    title: str
+    content_text: Optional[str] = None
+    storage_path: Optional[str] = None
+    url: Optional[str] = None
+    heartbeat_run_id: Optional[str] = None
 
 
 @router.post("/products")
 async def upload_work_product(body: WorkProduct, request: Request) -> Dict[str, Any]:
     agent_id, company_id = _agent_context(request)
-    # Phase 5: KB storage + RAG indexing
-    return {"artifact_id": None, "recorded": True}
+    from ..models.enums import WorkProductType
+    from ..services.work_product_service import WorkProductService
+    from autobot_shared.singleton_factory import lazy_singleton
+    from user_management.database import get_async_session_factory
+
+    try:
+        product_type = WorkProductType(body.type)
+    except ValueError:
+        from fastapi import HTTPException as _HTTPException
+
+        raise _HTTPException(status_code=422, detail=f"Unknown product type: {body.type!r}")
+
+    svc = lazy_singleton(WorkProductService)()
+    factory = get_async_session_factory()
+    async with factory() as session:
+        async with session.begin():
+            product = await svc.create(
+                session,
+                company_id=company_id,
+                work_item_id=body.work_item_id,
+                type=product_type,
+                title=body.title,
+                content_text=body.content_text,
+                storage_path=body.storage_path,
+                url=body.url,
+                heartbeat_run_id=body.heartbeat_run_id,
+            )
+    return {"artifact_id": str(product.id), "recorded": True}
 
 
 class HeartbeatReport(BaseModel):

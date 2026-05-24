@@ -594,6 +594,10 @@ class WorkItemService(LLCServiceBase):
             item.cancelled_at = now
         item.version += 1
         await session.flush()
+
+        if new_status == WorkItemStatus.DONE:
+            await self._trigger_artifact_ingest(session, item)
+
         return item
 
     # ------------------------------------------------------------------
@@ -667,6 +671,8 @@ class WorkItemService(LLCServiceBase):
         item.checkout_locked_at = None
         item.version += 1
         await session.flush()
+
+        await self._trigger_artifact_ingest(session, item)
 
         if self.activity_log:
             try:
@@ -751,3 +757,27 @@ class WorkItemService(LLCServiceBase):
                     exc_info=True,
                 )
         return f"WI-{uuid.uuid4().hex[:8].upper()}"
+
+    async def _trigger_artifact_ingest(
+        self,
+        session: AsyncSession,
+        item: LLCWorkItem,
+    ) -> None:
+        """Non-fatally call ArtifactIngestor for all pending products on this item."""
+        try:
+            from ..kb.artifact_ingestor import ArtifactIngestor
+
+            ingestor = ArtifactIngestor()
+            await ingestor.ingest_all_pending(
+                session,
+                work_item_id=str(item.id),
+                project_id=str(item.project_id) if item.project_id else None,
+                work_item_identifier=item.identifier,
+                completed_at=item.completed_at,
+            )
+        except Exception:
+            logger.warning(
+                "ArtifactIngestor failed for work item %s — transition still succeeds",
+                item.id,
+                exc_info=True,
+            )
