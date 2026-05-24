@@ -18,7 +18,7 @@ from datetime import date, datetime
 from typing import Optional
 
 import sqlalchemy as sa
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -180,6 +180,9 @@ class LLCSprint(Base):
     )
     committed_points: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     actual_points: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    # GH#8474: sprint planning analytics columns (added by migration 007)
+    velocity_actual: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    capacity_points: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # Stores the approval_id once a sprint_close gate is requested.
     pending_close_approval_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
     # LLM-generated KB summary stored on sprint close (GH#8238).

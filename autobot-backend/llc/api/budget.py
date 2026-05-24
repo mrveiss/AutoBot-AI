@@ -63,13 +63,20 @@ async def get_budget(
     agent_id: str,
     session: AsyncSession = Depends(get_async_session),
 ) -> BudgetResponse:
-    svc = BudgetService()
-    remaining, is_over, alert = await svc.check_budget(session, agent_id)
-
+    # GH#8461: single SELECT — fetch the row directly and compute derived fields
+    # here rather than calling check_budget() (which does its own SELECT) then
+    # re-fetching the same row.
     result = await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id))
     row = result.scalar_one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail=f"No budget row for agent {agent_id}")
+
+    spent = Decimal(str(row.budget_spent))
+    limit = Decimal(str(row.budget_limit))
+    threshold = Decimal(str(row.alert_threshold))
+    remaining = limit - spent
+    is_over = spent > limit
+    alert = limit > Decimal("0") and spent / limit >= threshold
 
     return _build_response(row, remaining, is_over, alert)
 
@@ -99,7 +106,9 @@ async def update_limit(
     if row is None:
         raise HTTPException(status_code=404, detail=f"No budget row for agent {agent_id}")
 
-    values: dict = {"budget_limit": str(body.budget_limit)}
+    # GH#8462: pass Decimal directly — Pydantic already validates it as Decimal,
+    # no str() conversion needed (which would silently coerce to TEXT in the ORM).
+    values: dict = {"budget_limit": body.budget_limit}
     if body.alert_threshold is not None:
         values["alert_threshold"] = body.alert_threshold
 
