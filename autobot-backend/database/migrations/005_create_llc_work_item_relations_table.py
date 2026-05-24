@@ -5,12 +5,7 @@ from sqlalchemy import text
 
 
 def upgrade(op) -> None:
-    op.execute(
-        text(
-            "CREATE TYPE workitemrelationtype AS ENUM "
-            "('blocks', 'blocked_by', 'duplicates', 'relates_to')"
-        )
-    )
+    op.execute(text("CREATE TYPE workitemrelationtype AS ENUM " "('blocks', 'blocked_by', 'duplicates', 'relates_to')"))
 
     op.create_table(
         "llc_work_item_relations",

@@ -216,9 +216,7 @@ class WorkItemRelationService(LLCServiceBase):
             )
         )
         if existing.scalar_one_or_none() is not None:
-            raise RelationConflict(
-                f"Relation {relation_type.value} from {source_id} to {target_id} already exists"
-            )
+            raise RelationConflict(f"Relation {relation_type.value} from {source_id} to {target_id} already exists")
         rel = LLCWorkItemRelation(
             id=uuid.uuid4(),
             company_id=company_id,

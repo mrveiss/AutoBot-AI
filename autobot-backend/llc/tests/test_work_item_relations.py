@@ -11,7 +11,6 @@ from llc.models.work_item import LLCWorkItem, LLCWorkItemRelation
 from llc.services.work_item_relations import RelationConflict, WorkItemRelationService
 from llc.services.work_item_service import InvalidTransition, WorkItemService
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -213,9 +212,7 @@ async def test_has_unresolved_blockers_true(svc):
         return r
 
     session.execute = _execute
-    result = await svc.has_unresolved_blockers(
-        session, work_item_id=str(uuid.uuid4()), company_id=str(uuid.uuid4())
-    )
+    result = await svc.has_unresolved_blockers(session, work_item_id=str(uuid.uuid4()), company_id=str(uuid.uuid4()))
     assert result is True
 
 
@@ -229,9 +226,7 @@ async def test_has_unresolved_blockers_false_when_done(svc):
         return r
 
     session.execute = _execute
-    result = await svc.has_unresolved_blockers(
-        session, work_item_id=str(uuid.uuid4()), company_id=str(uuid.uuid4())
-    )
+    result = await svc.has_unresolved_blockers(session, work_item_id=str(uuid.uuid4()), company_id=str(uuid.uuid4()))
     assert result is False
 
 

@@ -56,12 +56,12 @@ class HumanUnclaimRequest(BaseModel):
     company_id: str
 
 
-
 class CoworkerRequest(BaseModel):
     """Set or clear a co-worker on a work item (GH#8230).
     To clear the co-worker, omit co_worker_type (or send null).
     caller_role must be 'owner', 'admin', or 'lead' to mutate co-working state.
     """
+
     company_id: str
     co_worker_type: Optional[str] = None
     co_worker_agent_id: Optional[str] = None
@@ -69,6 +69,8 @@ class CoworkerRequest(BaseModel):
     actor_agent_id: Optional[str] = None
     actor_user_id: Optional[str] = None
     caller_role: str = "member"
+
+
 router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
 _get_service = lazy_singleton(WorkItemService)
 _get_product_service = lazy_singleton(WorkProductService)
@@ -237,14 +239,16 @@ def _relations_to_list(item: Any) -> List[Dict[str, Any]]:
     rows = []
     for rel in getattr(item, "outgoing_relations", []) or []:
         tgt = rel.target
-        rows.append({
-            "id": str(rel.id),
-            "type": rel.relation_type,
-            "target_id": str(rel.target_id),
-            "target_identifier": tgt.identifier if tgt else None,
-            "target_title": tgt.title if tgt else None,
-            "target_status": tgt.status if tgt else None,
-        })
+        rows.append(
+            {
+                "id": str(rel.id),
+                "type": rel.relation_type,
+                "target_id": str(rel.target_id),
+                "target_identifier": tgt.identifier if tgt else None,
+                "target_title": tgt.title if tgt else None,
+                "target_status": tgt.status if tgt else None,
+            }
+        )
     return rows
 def _item_to_dict(item: Any) -> Dict[str, Any]:
     return {
@@ -553,6 +557,8 @@ async def handoff_to_agent(
         raise HTTPException(status_code=403, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+
+
 # ------------------------------------------------------------------
 # Handoff routes (GH#8231)
 # ------------------------------------------------------------------
@@ -702,3 +708,7 @@ async def remove_relation(
             relation_id=relation_id,
             actor_agent_id=actor_agent_id,
             actor_user_id=actor_user_id,
+        )
+        await session.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))

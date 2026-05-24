@@ -602,9 +602,7 @@ class WorkItemService(LLCServiceBase):
         ):
             cid = company_id or str(item.company_id)
             if await relation_svc.has_unresolved_blockers(session, work_item_id, cid):
-                raise InvalidTransition(
-                    "Cannot move to in_progress: item has unresolved blocked_by relations"
-                )
+                raise InvalidTransition("Cannot move to in_progress: item has unresolved blocked_by relations")
 
         item.status = new_status
         now = datetime.now(timezone.utc)
