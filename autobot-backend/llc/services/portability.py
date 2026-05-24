@@ -675,6 +675,14 @@ class PortabilityService(LLCServiceBase):
                 context_mode=agent.get("context_mode", "thin"),
             )
         )
+
+        # Index capabilities into company KB (GH#8244)
+        try:
+            from llc.kb import AgentCapabilityIndexer
+
+            await AgentCapabilityIndexer().index_from_db(new_agent_id, str(company_id))
+        except Exception:
+            logger.exception("Capability index failed for imported agent %s (non-fatal)", new_agent_id)
         return new_agent_id
 
     def _resolve_secrets(

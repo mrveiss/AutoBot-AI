@@ -178,11 +178,13 @@ class AgentOrgService:
         org_role: str | None = None,
         title: str | None = None,
         capabilities: str | None = None,
+        company_id: str | None = None,
     ) -> AgentOrgNode:
         """
         Update reporting line with cycle detection (#1405).
 
         Raises ValueError on cycle or unknown agent.
+        Triggers capability re-indexing into company KB when company_id is provided (#8244).
         """
         node = await self.get_node(agent_id)
         if node is None:
@@ -201,6 +203,8 @@ class AgentOrgService:
             node.title = title
         if capabilities is not None:
             node.capabilities = capabilities
+        if company_id is not None:
+            node.company_id = company_id
 
         await self.session.flush()
         logger.info(
@@ -209,6 +213,15 @@ class AgentOrgService:
             node.reports_to,
             node.org_role,
         )
+
+        effective_company_id = company_id or (str(node.company_id) if node.company_id else None)
+        if effective_company_id:
+            try:
+                from llc.kb import AgentCapabilityIndexer
+                await AgentCapabilityIndexer().index_from_db(agent_id, effective_company_id)
+            except Exception:
+                logger.exception("Capability re-index failed for agent %s (non-fatal)", agent_id)
+
         return node
 
     # -- Role defaults -----------------------------------------------------
@@ -227,11 +240,13 @@ class AgentOrgService:
         reports_to: str | None = None,
         title: str | None = None,
         capabilities: str | None = None,
+        company_id: str | None = None,
     ) -> AgentOrgNode:
         """
         Create or update an agent_org_nodes record (#1405).
 
         Used to register agents in the hierarchy on demand.
+        Triggers capability indexing into company KB when company_id is provided (#8244).
         """
         node = await self.get_node(agent_id)
         if node is None:
@@ -243,6 +258,7 @@ class AgentOrgService:
                 reports_to=reports_to,
                 title=title,
                 capabilities=capabilities,
+                company_id=company_id,
             )
             self.session.add(node)
             logger.info(
@@ -259,7 +275,18 @@ class AgentOrgService:
                 node.title = title
             if capabilities is not None:
                 node.capabilities = capabilities
+            if company_id is not None:
+                node.company_id = company_id
             logger.info("Updated org node agent_id=%s", agent_id)
 
         await self.session.flush()
+
+        effective_company_id = company_id or (str(node.company_id) if node.company_id else None)
+        if effective_company_id:
+            try:
+                from llc.kb import AgentCapabilityIndexer
+                await AgentCapabilityIndexer().index_from_db(agent_id, effective_company_id)
+            except Exception:
+                logger.exception("Capability index failed for agent %s (non-fatal)", agent_id)
+
         return node
