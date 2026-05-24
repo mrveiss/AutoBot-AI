@@ -29,7 +29,7 @@ from ..models.sprint import LLCSprint
 from ..models.work_item import LLCWorkItem
 from ..services.activity_log import ActivityEventType
 from ..services.approval import ApprovalService
-from . import LLCServiceBase
+from .base import LLCServiceBase
 
 logger = logging.getLogger(__name__)
 
