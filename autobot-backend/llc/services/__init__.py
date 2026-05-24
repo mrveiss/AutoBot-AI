@@ -13,6 +13,7 @@ from .budget import BudgetService
 from .ceo_chat import CeoChatService
 from .goal import GoalService
 from .handoff import HandoffError, HandoffService
+from .portability import PortabilityService
 from .review_gate import (
     ReviewGatePolicyConflictError,
     ReviewGatePolicyNotFoundError,
@@ -20,7 +21,6 @@ from .review_gate import (
 )
 from .routine_service import RoutineService
 from .sprint_autoclose import SprintAutoCloseService
-from .portability import PortabilityService
 from .sprint_planning import SprintNotFound, SprintPlanningService
 from .work_product_service import WorkProductService
 
