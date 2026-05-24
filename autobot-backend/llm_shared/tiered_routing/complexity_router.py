@@ -9,10 +9,12 @@ alongside CostRouter and LatencyRouter.  tier_router.py retains backward-compat
 aliases pointing here.
 """
 
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config as ssot_config
 
+from ..models import LLMRequest, LLMResponse
 from ..optimization.model_inspector import inspect_model
 from .complexity_scorer import TaskComplexityScorer
 from .tier_config import ComplexityResult, TierConfig, TierMetrics
@@ -57,6 +59,80 @@ class ComplexityRouter:
             self._log_decision(requested_model, selected_model, result)
 
         return selected_model, result
+
+    async def route_with_escalation(
+        self,
+        request: LLMRequest,
+    ) -> Optional[LLMResponse]:
+        """Attempt Claude escalation when complexity_score >= threshold (#8171).
+
+        Returns an LLMResponse if Claude was used, or None if the request
+        should fall through to the local provider.  Claude errors are caught
+        and logged so the caller can always fall back safely.
+
+        Args:
+            request: The incoming LLM request.
+
+        Returns:
+            LLMResponse from Claude on success, None otherwise.
+        """
+        if not ssot_config.llm.claude_escalation_enabled:
+            return None
+
+        result = self.scorer.score(request.messages)
+        if result.score < ssot_config.llm.claude_escalation_threshold:
+            return None
+
+        logger.info(
+            "ComplexityRouter: escalating to Claude (score=%.1f >= threshold=%.1f)",
+            result.score,
+            ssot_config.llm.claude_escalation_threshold,
+        )
+
+        try:
+            # Enable prompt caching when a system message is present.
+            escalation_request = LLMRequest(
+                messages=request.messages,
+                llm_type=request.llm_type,
+                provider=request.provider,
+                model_name=request.model_name,
+                temperature=request.temperature,
+                max_tokens=request.max_tokens,
+                top_p=request.top_p,
+                frequency_penalty=request.frequency_penalty,
+                presence_penalty=request.presence_penalty,
+                stop=request.stop,
+                stream=request.stream,
+                structured_output=request.structured_output,
+                timeout=request.timeout,
+                retry_count=request.retry_count,
+                fallback_enabled=False,
+                metadata=dict(request.metadata),
+                request_id=request.request_id,
+                tools=request.tools,
+                tool_choice=request.tool_choice,
+            )
+            has_system = any(m.get("role") == "system" for m in request.messages)
+            if has_system:
+                escalation_request.metadata["enable_prompt_cache"] = True
+
+            from ..providers.anthropic import AnthropicProvider
+
+            claude = AnthropicProvider()
+            response = await claude._chat_completion_impl(escalation_request)
+            if response.error:
+                logger.warning(
+                    "ComplexityRouter: Claude escalation returned error=%s; falling through",
+                    response.error,
+                )
+                return None
+            return response
+        except Exception as exc:
+            logger.warning(
+                "ComplexityRouter: Claude escalation failed (%s); falling through",
+                exc,
+            )
+            return None
 
     def _log_decision(
         self,
