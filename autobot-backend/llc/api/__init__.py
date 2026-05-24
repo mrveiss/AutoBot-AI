@@ -15,6 +15,7 @@ from .companies import router as companies_router
 from .context import router as context_router
 from .goals import router as goals_router
 from .portability import router as portability_router
+from .labels import router as labels_router
 from .review_gate_policies import router as review_gate_router
 from .routines import router as routines_router
 from .runs import router as runs_router
@@ -42,6 +43,7 @@ router.include_router(routines_router)
 router.include_router(portability_router)
 router.include_router(review_gate_router)
 router.include_router(context_router)
+router.include_router(labels_router)
 
 
 @router.get("/health")

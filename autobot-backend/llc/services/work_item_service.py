@@ -34,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.redis_client import get_async_redis_client
 
 from ..models.enums import CoWorkerType, WorkItemPriority, WorkItemStatus, WorkItemType
+from ..models.label import LLCWorkItemLabel
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
 from .base import LLCServiceBase
 
@@ -179,6 +180,7 @@ class WorkItemService(LLCServiceBase):
         top_level_only: bool = False,
         co_worker_agent_id: Optional[str] = None,
         co_worker_user_id: Optional[str] = None,
+        label_ids: Optional[List[str]] = None,
         limit: int = 100,
         offset: int = 0,
     ) -> Sequence[LLCWorkItem]:
@@ -201,6 +203,15 @@ class WorkItemService(LLCServiceBase):
             q = q.where(LLCWorkItem.co_worker_agent_id == uuid.UUID(co_worker_agent_id))
         if co_worker_user_id:
             q = q.where(LLCWorkItem.co_worker_user_id == uuid.UUID(co_worker_user_id))
+        if label_ids:
+            label_uuids = [uuid.UUID(lid) for lid in label_ids]
+            q = q.where(
+                LLCWorkItem.id.in_(
+                    select(LLCWorkItemLabel.work_item_id).where(
+                        LLCWorkItemLabel.label_id.in_(label_uuids)
+                    )
+                )
+            )
         q = q.order_by(LLCWorkItem.created_at.desc()).limit(limit).offset(offset)
         result = await session.execute(q)
         return result.scalars().all()
