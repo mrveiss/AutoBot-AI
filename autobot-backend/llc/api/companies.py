@@ -30,10 +30,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
-
 from llc.kb.collections import KbCollectionManager
-
-logger = get_logger(__name__)
 from llc.models.company import (
     CompanyAncestor,
     CompanyCreate,
@@ -59,6 +56,8 @@ from llc.services.membership_service import (
 from llc.services.portability import PortabilityService
 from user_management.database import get_async_session
 from user_management.models.organization import Organization
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/companies", tags=["llc-companies"])
 
@@ -502,13 +501,14 @@ async def search_agents(
 
         agents = []
         if results.get("ids") and len(results["ids"]) > 0:
-            for doc_id, metadata in zip(results["ids"][0], results.get("metadatas", [[]])[0]):
+            docs = results.get("documents", [[]])[0] if results.get("documents") else []
+            for idx, (doc_id, metadata) in enumerate(zip(results["ids"][0], results.get("metadatas", [[]])[0])):
                 agents.append(AgentSearchResult(
                     agent_id=metadata.get("agent_id", ""),
                     agent_name=metadata.get("agent_name", ""),
                     title=metadata.get("title", ""),
                     role=metadata.get("role", ""),
-                    capabilities=results.get("documents", [[]])[0][len(agents)] if len(agents) < len(results.get("documents", [[]])[0]) else "",
+                    capabilities=docs[idx] if idx < len(docs) else "",
                     manager_name=metadata.get("manager_name"),
                 ))
 

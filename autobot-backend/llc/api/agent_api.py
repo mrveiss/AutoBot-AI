@@ -247,7 +247,8 @@ async def search_peer_agents(
         agents = []
         if results.get("ids") and len(results["ids"]) > 0:
             docs = results.get("documents", [[]])[0] if results.get("documents") else []
-            for idx, (doc_id, metadata) in enumerate(zip(results["ids"][0], results.get("metadatas", [[]])[0])):
+            metadatas = results.get("metadatas", [[]])[0] if results.get("metadatas") else []
+            for idx, (doc_id, metadata) in enumerate(zip(results["ids"][0], metadatas)):
                 agents.append(PeerAgent(
                     agent_id=metadata.get("agent_id", ""),
                     agent_name=metadata.get("agent_name", ""),
