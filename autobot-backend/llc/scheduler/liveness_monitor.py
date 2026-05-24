@@ -19,7 +19,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import select, text, update
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
@@ -49,6 +49,10 @@ class LivenessMonitor:
         self._poll_interval = poll_interval
         self._running = False
         self._task: Optional[asyncio.Task] = None  # type: ignore[type-arg]
+
+    @property
+    def is_running(self) -> bool:
+        return self._running and self._task is not None and not self._task.done()
 
     def start(self) -> None:
         """Start the background polling loop."""

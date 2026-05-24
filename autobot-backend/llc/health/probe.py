@@ -32,9 +32,17 @@ from ..models.approval import LLCApproval
 from ..models.budget import LLCAgentBudget
 from ..models.enums import ApprovalStatus
 
-# Scheduler imports are lazy (inside functions) to avoid circular-import chains
-# when the probe module is loaded in test environments (llc.services.__init__
-# ordering bug filed as discovery issue GH#8259-disc).
+# HeartbeatScheduler import is lazy (inside _collect_metrics) to avoid circular-import
+# chains when the probe module is loaded in test environments.
+# LivenessMonitor singleton wrapper is created once at module level inside a try/except
+# so it is cached for the process lifetime without forcing an import at module load in
+# environments where the scheduler package is not yet available.
+try:
+    from autobot_shared.singleton_factory import lazy_singleton as _lazy_singleton
+    from ..scheduler.liveness_monitor import LivenessMonitor as _LivenessMonitor
+    _get_lm = _lazy_singleton(_LivenessMonitor)
+except ImportError:
+    _get_lm = None
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +95,7 @@ async def _collect_metrics() -> dict:
     heartbeat_scheduler_running = _is_scheduler_running(scheduler)
     liveness_monitor_running = _is_liveness_monitor_running(liveness_monitor)
     scheduler_last_tick_age_seconds = await _scheduler_tick_age()
-    agents_overdue_heartbeat = await _count_overdue_agents()
+    agents_overdue_degraded, agents_overdue_critical = await _count_overdue_agents()
     budget_warning_companies, budget_exhausted_companies = await _budget_counts()
     pending_approvals_critical = await _pending_approvals_critical()
 
@@ -95,7 +103,8 @@ async def _collect_metrics() -> dict:
         "heartbeat_scheduler_running": heartbeat_scheduler_running,
         "liveness_monitor_running": liveness_monitor_running,
         "scheduler_last_tick_age_seconds": scheduler_last_tick_age_seconds,
-        "agents_overdue_heartbeat": agents_overdue_heartbeat,
+        "agents_overdue_degraded": agents_overdue_degraded,
+        "agents_overdue_critical": agents_overdue_critical,
         "budget_warning_companies": budget_warning_companies,
         "budget_exhausted_companies": budget_exhausted_companies,
         "pending_approvals_critical": pending_approvals_critical,
@@ -107,10 +116,11 @@ def _compute_status(metrics: dict) -> str:
     # Issue #8259 calls for "critical" (scheduler down, overdue > 3× interval) → mapped to "down"
     if not metrics["heartbeat_scheduler_running"]:
         return "down"
-    if metrics["agents_overdue_heartbeat"] > 0:
+    if metrics["agents_overdue_critical"] > 0:
         return "down"
     if (
-        metrics["budget_exhausted_companies"] > 0
+        metrics["agents_overdue_degraded"] > 0
+        or metrics["budget_exhausted_companies"] > 0
         or not metrics["liveness_monitor_running"]
         or metrics["pending_approvals_critical"] > 0
         or metrics["budget_warning_companies"] > 0
@@ -121,35 +131,21 @@ def _compute_status(metrics: dict) -> str:
 
 def _is_scheduler_running(scheduler: object) -> bool:
     """Check whether the HeartbeatScheduler background task is alive."""
-    if not scheduler._running:
-        return False
-    task = scheduler._task
-    if task is None or task.done():
-        return False
-    return True
+    return bool(getattr(scheduler, "is_running", False))
 
 
 def _get_liveness_monitor() -> object | None:
     """Return the singleton LivenessMonitor if it exists, else None."""
+    if _get_lm is None:
+        return None
     try:
-        from autobot_shared.singleton_factory import lazy_singleton
-        from ..scheduler.liveness_monitor import LivenessMonitor
-
-        get_lm = lazy_singleton(LivenessMonitor)
-        return get_lm()
+        return _get_lm()
     except Exception:
         return None
 
 
 def _is_liveness_monitor_running(monitor: object | None) -> bool:
-    if monitor is None:
-        return False
-    if not monitor._running:
-        return False
-    task = monitor._task
-    if task is None or task.done():
-        return False
-    return True
+    return monitor is not None and bool(getattr(monitor, "is_running", False))
 
 
 async def _scheduler_tick_age() -> float | None:
@@ -172,34 +168,46 @@ async def _scheduler_tick_age() -> float | None:
         return None
 
 
-async def _count_overdue_agents() -> int:
-    """Count enabled agents whose last_heartbeat_at is > 3× their cron interval.
+async def _count_overdue_agents() -> tuple[int, int]:
+    """Return (degraded_count, critical_count) of enabled agents with stale heartbeats.
 
-    Uses a pure-SQL approach for efficiency — one query, no Python-side cron parsing.
-    Falls back to 0 on any error to prevent the probe from crashing.
+    degraded = lag > _DEGRADED_MULTIPLIER * _DEFAULT_CRON_INTERVAL_SECONDS
+               and lag <= _CRITICAL_MULTIPLIER * _DEFAULT_CRON_INTERVAL_SECONDS
+    critical = lag > _CRITICAL_MULTIPLIER * _DEFAULT_CRON_INTERVAL_SECONDS
+    Falls back to (0, 0) on any error to prevent the probe from crashing.
     """
     try:
         factory = get_async_session_factory()
         async with factory() as session:
-            # Parse the cron expression's period from the schedule string.
-            # We approximate by using the schedule_interval column if available,
-            # otherwise fall back to a 1-hour default.
-            # Agents are overdue when now() - last_heartbeat_at > 3 * interval.
             result = await session.execute(
                 text("""
-                    SELECT COUNT(*) FROM agent_org_nodes
+                    SELECT
+                        COUNT(*) FILTER (
+                            WHERE EXTRACT(EPOCH FROM (NOW() - last_heartbeat_at)) >
+                                  :degraded_threshold
+                              AND EXTRACT(EPOCH FROM (NOW() - last_heartbeat_at)) <=
+                                  :critical_threshold
+                        ) AS degraded_count,
+                        COUNT(*) FILTER (
+                            WHERE EXTRACT(EPOCH FROM (NOW() - last_heartbeat_at)) >
+                                  :critical_threshold
+                        ) AS critical_count
+                    FROM agent_org_nodes
                     WHERE heartbeat_enabled = true
                       AND heartbeat_cron IS NOT NULL
                       AND last_heartbeat_at IS NOT NULL
-                      AND EXTRACT(EPOCH FROM (NOW() - last_heartbeat_at)) >
-                          3 * COALESCE(heartbeat_interval_seconds, 3600)
-                """)
+                """).bindparams(
+                    degraded_threshold=_DEGRADED_MULTIPLIER * _DEFAULT_CRON_INTERVAL_SECONDS,
+                    critical_threshold=_CRITICAL_MULTIPLIER * _DEFAULT_CRON_INTERVAL_SECONDS,
+                )
             )
             row = result.fetchone()
-            return int(row[0]) if row else 0
+            if row:
+                return int(row[0]), int(row[1])
+            return 0, 0
     except Exception:
         logger.debug("Could not query overdue agents", exc_info=True)
-        return 0
+        return 0, 0
 
 
 async def _budget_counts() -> tuple[int, int]:
