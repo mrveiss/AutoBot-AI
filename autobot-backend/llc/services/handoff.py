@@ -121,8 +121,8 @@ class HandoffService(LLCServiceBase):
         await self._publish_a2h_notification(company_id, work_item_id, reviewer_user_id, brief)
         if self.activity_log:
             try:
-                from ..models.activity import ActorType
                 from .activity_log import ActivityEventType
+                from ..models.activity import ActorType
 
                 await self.activity_log.record(
                     session,
@@ -161,8 +161,8 @@ class HandoffService(LLCServiceBase):
         await session.flush()
         if self.activity_log:
             try:
-                from ..models.activity import ActorType
                 from .activity_log import ActivityEventType
+                from ..models.activity import ActorType
 
                 await self.activity_log.record(
                     session,
@@ -215,8 +215,8 @@ class HandoffService(LLCServiceBase):
         await session.flush()
         if self.activity_log:
             try:
-                from ..models.activity import ActorType
                 from .activity_log import ActivityEventType
+                from ..models.activity import ActorType
 
                 await self.activity_log.record(
                     session,
