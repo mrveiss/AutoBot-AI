@@ -22,6 +22,7 @@ import pytest_asyncio
 from llc.models.enums import LLCAgentStatus
 from llc.services.activity_log import ActivityEventType, LLCActivityLogService
 from llc.services.controls_service import (
+    AgentNotFoundError,
     ControlsService,
     SprintNotFoundError,
 )
@@ -124,6 +125,39 @@ async def test_terminate_agent_is_permanent():
     redis.set.assert_called_once()
     call_kwargs = log.record.call_args.kwargs
     assert call_kwargs["event_type"] == ActivityEventType.CONTROL_AGENT_TERMINATED
+
+
+@pytest.mark.asyncio
+async def test_pause_agent_raises_if_not_found():
+    company_id = str(uuid.uuid4())
+    agent_id = str(uuid.uuid4())
+    actor_id = str(uuid.uuid4())
+    session = _mock_session(rows=[])
+    svc = ControlsService(activity_log=_activity_log_mock())
+    with pytest.raises(AgentNotFoundError):
+        await svc.pause_agent(session, company_id, agent_id, actor_id)
+
+
+@pytest.mark.asyncio
+async def test_resume_agent_raises_if_not_found():
+    company_id = str(uuid.uuid4())
+    agent_id = str(uuid.uuid4())
+    actor_id = str(uuid.uuid4())
+    session = _mock_session(rows=[])
+    svc = ControlsService(activity_log=_activity_log_mock())
+    with pytest.raises(AgentNotFoundError):
+        await svc.resume_agent(session, company_id, agent_id, actor_id)
+
+
+@pytest.mark.asyncio
+async def test_terminate_agent_raises_if_not_found():
+    company_id = str(uuid.uuid4())
+    agent_id = str(uuid.uuid4())
+    actor_id = str(uuid.uuid4())
+    session = _mock_session(rows=[])
+    svc = ControlsService(activity_log=_activity_log_mock())
+    with pytest.raises(AgentNotFoundError):
+        await svc.terminate_agent(session, company_id, agent_id, actor_id)
 
 
 # ---------------------------------------------------------------------------

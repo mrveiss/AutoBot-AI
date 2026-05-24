@@ -68,7 +68,9 @@ class ControlsService:
     ) -> dict:
         """Set agent status=paused and set Redis pause flag."""
         row = await self._get_agent_row(session, company_id, agent_id)
-        before_status = row["status"] if row else None
+        if row is None:
+            raise AgentNotFoundError(agent_id)
+        before_status = row["status"]
 
         await session.execute(
             text(
@@ -110,7 +112,9 @@ class ControlsService:
     ) -> dict:
         """Clear agent pause, re-enable heartbeat."""
         row = await self._get_agent_row(session, company_id, agent_id)
-        before_status = row["status"] if row else None
+        if row is None:
+            raise AgentNotFoundError(agent_id)
+        before_status = row["status"]
 
         await session.execute(
             text(
@@ -151,7 +155,9 @@ class ControlsService:
     ) -> dict:
         """Set agent status=terminated — no recovery path."""
         row = await self._get_agent_row(session, company_id, agent_id)
-        before_status = row["status"] if row else None
+        if row is None:
+            raise AgentNotFoundError(agent_id)
+        before_status = row["status"]
 
         await session.execute(
             text(
