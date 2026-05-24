@@ -24,7 +24,7 @@ from autobot_shared.redis_client import get_async_redis_client
 
 from ..models.approval import LLCApproval
 from ..models.enums import ApprovalStatus, ApprovalType
-from .base import LLCServiceBase
+from . import LLCServiceBase
 
 logger = logging.getLogger(__name__)
 

@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.enums import MembershipRole
 from ..models.membership import LLCCompanyMembership
-from .base import LLCServiceBase
+from . import LLCServiceBase
 
 logger = logging.getLogger(__name__)
 

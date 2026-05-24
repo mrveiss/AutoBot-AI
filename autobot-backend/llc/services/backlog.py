@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
 from ..models.work_item import LLCWorkItem
-from .base import LLCServiceBase
+from . import LLCServiceBase
 
 logger = logging.getLogger(__name__)
 

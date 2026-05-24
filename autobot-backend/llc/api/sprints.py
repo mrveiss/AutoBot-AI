@@ -40,7 +40,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from user_management.database import get_async_session
 
-from ..kb.collections import KbCollectionManager
 from ..models.enums import ApprovalStatus, ApprovalType, SprintStatus
 from ..models.sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint
 from ..services.approval import ApprovalNotFoundError, ApprovalService, ApprovalStateError
@@ -51,7 +50,6 @@ router = APIRouter(tags=["llc-sprints"])
 
 _approval_svc = ApprovalService()
 _autoclose_svc = SprintAutoCloseService(approval_service=_approval_svc)
-_kb_manager = KbCollectionManager()
 
 
 # ------------------------------------------------------------------ Schemas
@@ -367,7 +365,6 @@ async def create_project(
     session.add(project)
     await session.commit()
     await session.refresh(project)
-    await _kb_manager.ensure_collection(KbCollectionManager.PROJECT_PREFIX, project.id)
     return project
 
 
@@ -447,7 +444,6 @@ async def create_sprint(
     session.add(sprint)
     await session.commit()
     await session.refresh(sprint)
-    await _kb_manager.ensure_collection(KbCollectionManager.SPRINT_PREFIX, sprint.id)
     return sprint
 
 
@@ -560,32 +556,3 @@ async def get_sprint_burndown(
         return await _planning_svc.get_burndown(session, sprint_id)
     except SprintNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-
-@router.get("/projects/{project_id}/knowledge")
-async def get_project_knowledge(
-    project_id: uuid.UUID,
-    limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0),
-) -> dict:
-    """Return recently indexed work product artifacts for a project (GH#8242).
-
-    Queries the ``project:{project_id}`` ChromaDB collection — available
-    once ArtifactIngestor has indexed at least one work product.
-    """
-    from autobot_shared.singleton_factory import lazy_singleton
-
-    from ..services.work_product_service import WorkProductService
-
-    svc = lazy_singleton(WorkProductService)()
-    artifacts = await svc.list_indexed_by_project(
-        session=None,  # type: ignore[arg-type]  — no DB needed, reads ChromaDB directly
-        project_id=str(project_id),
-        limit=limit,
-        offset=offset,
-    )
-    return {
-        "project_id": str(project_id),
-        "artifacts": artifacts,
-        "total": len(artifacts),
-    }

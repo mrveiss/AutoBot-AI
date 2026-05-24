@@ -25,7 +25,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from user_management.models.base import Base
 
-from .enums import WorkItemPriority, WorkItemRelationType, WorkItemStatus, WorkItemType
+from .enums import WorkItemPriority, WorkItemStatus, WorkItemType
 
 
 class LLCWorkItem(Base):
@@ -136,27 +136,6 @@ class LLCWorkItem(Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
-    work_products: Mapped[List["LLCWorkProduct"]] = relationship(  # type: ignore[name-defined]
-        "LLCWorkProduct",
-        back_populates="work_item",
-        cascade="all, delete-orphan",
-        lazy="selectin",
-    )
-
-    outgoing_relations: Mapped[List["LLCWorkItemRelation"]] = relationship(
-        "LLCWorkItemRelation",
-        foreign_keys="LLCWorkItemRelation.source_id",
-        back_populates="source",
-        cascade="all, delete-orphan",
-        lazy="selectin",
-    )
-    incoming_relations: Mapped[List["LLCWorkItemRelation"]] = relationship(
-        "LLCWorkItemRelation",
-        foreign_keys="LLCWorkItemRelation.target_id",
-        back_populates="target",
-        cascade="all, delete-orphan",
-        lazy="selectin",
-    )
 
 
 class LLCWorkItemComment(Base):
@@ -181,54 +160,3 @@ class LLCWorkItemComment(Base):
     body: Mapped[str] = mapped_column(Text, nullable=False)
 
     work_item: Mapped["LLCWorkItem"] = relationship("LLCWorkItem", back_populates="comments")
-
-
-class LLCWorkItemRelation(Base):
-    """Directed relation between two LLC work items (GH#8252).
-
-    Service layer ensures ``blocks`` A→B always creates a mirror ``blocked_by`` B→A.
-    Removing either leg removes both.
-    """
-
-    __tablename__ = "llc_work_item_relations"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        server_default=sa.text("gen_random_uuid()"),
-    )
-    company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
-    source_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("llc_work_items.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    target_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("llc_work_items.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    relation_type: Mapped[str] = mapped_column(
-        sa.Enum(WorkItemRelationType, name="workitemrelationtype", create_type=False),
-        nullable=False,
-    )
-    created_by_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
-    created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
-
-    source: Mapped["LLCWorkItem"] = relationship(
-        "LLCWorkItem",
-        foreign_keys=[source_id],
-        back_populates="outgoing_relations",
-    )
-    target: Mapped["LLCWorkItem"] = relationship(
-        "LLCWorkItem",
-        foreign_keys=[target_id],
-        back_populates="incoming_relations",
-    )
-
-    __table_args__ = (
-        sa.UniqueConstraint("source_id", "target_id", "relation_type", name="uq_work_item_relation"),
-        sa.CheckConstraint("source_id != target_id", name="ck_work_item_relation_no_self"),
-    )

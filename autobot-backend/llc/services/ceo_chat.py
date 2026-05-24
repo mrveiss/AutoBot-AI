@@ -27,7 +27,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.ceo_chat import LLCCeoChatMessage, LLCCeoChatThread
-from .base import LLCServiceBase
+from . import LLCServiceBase
 
 logger = logging.getLogger(__name__)
 

@@ -81,46 +81,16 @@ async def post_comment(body: CommentBody, request: Request) -> Dict[str, Any]:
 
 class WorkProduct(BaseModel):
     work_item_id: str
-    type: str
-    title: str
-    content_text: Optional[str] = None
-    storage_path: Optional[str] = None
-    url: Optional[str] = None
-    heartbeat_run_id: Optional[str] = None
+    artifact_type: str
+    content: str
+    metadata: Optional[Dict[str, Any]] = None
 
 
 @router.post("/products")
 async def upload_work_product(body: WorkProduct, request: Request) -> Dict[str, Any]:
     agent_id, company_id = _agent_context(request)
-    from autobot_shared.singleton_factory import lazy_singleton
-    from user_management.database import get_async_session_factory
-
-    from ..models.enums import WorkProductType
-    from ..services.work_product_service import WorkProductService
-
-    try:
-        product_type = WorkProductType(body.type)
-    except ValueError:
-        from fastapi import HTTPException as _HTTPException
-
-        raise _HTTPException(status_code=422, detail=f"Unknown product type: {body.type!r}")
-
-    svc = lazy_singleton(WorkProductService)()
-    factory = get_async_session_factory()
-    async with factory() as session:
-        async with session.begin():
-            product = await svc.create(
-                session,
-                company_id=company_id,
-                work_item_id=body.work_item_id,
-                type=product_type,
-                title=body.title,
-                content_text=body.content_text,
-                storage_path=body.storage_path,
-                url=body.url,
-                heartbeat_run_id=body.heartbeat_run_id,
-            )
-    return {"artifact_id": str(product.id), "recorded": True}
+    # Phase 5: KB storage + RAG indexing
+    return {"artifact_id": None, "recorded": True}
 
 
 class HeartbeatReport(BaseModel):
@@ -138,6 +108,23 @@ async def report_heartbeat(body: HeartbeatReport, request: Request) -> Dict[str,
     agent_id, company_id = _agent_context(request)
     # Phase 3+: full heartbeat recording
     return {"recorded": True, "run_id": body.run_id}
+
+
+@router.get("/context/{item_id}")
+async def get_item_context(item_id: uuid.UUID, request: Request) -> Dict[str, Any]:
+    """Return agent context for a work item, including any human handoff KB notes (GH#8232)."""
+    agent_id, company_id = _agent_context(request)
+    from ..kb.work_item_kb import WorkItemKB
+
+    kb = WorkItemKB()
+    handoff_chunks = await kb.get_context(str(item_id))
+    return {
+        "item_id": str(item_id),
+        "handoff_notes": handoff_chunks,
+        "has_human_handoff_context": bool(handoff_chunks),
+        "context": {},
+        "message": "Handoff KB notes included; full RAG context available in Phase 5",
+    }
 
 
 __all__ = ["router"]
