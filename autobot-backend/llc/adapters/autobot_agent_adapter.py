@@ -315,8 +315,10 @@ class AutoBotAgentAdapter:
             return
 
         metadata = getattr(response, "metadata", None) or {}
-        tokens_in: int = metadata.get("prompt_tokens", 0) or metadata.get("input_tokens", 0)
-        tokens_out: int = metadata.get("completion_tokens", 0) or metadata.get("output_tokens", 0)
+        _pt = metadata.get("prompt_tokens")
+        tokens_in: int = _pt if _pt is not None else metadata.get("input_tokens", 0)
+        _ct = metadata.get("completion_tokens")
+        tokens_out: int = _ct if _ct is not None else metadata.get("output_tokens", 0)
         model: str = metadata.get("model", "")
 
         if not model or (tokens_in == 0 and tokens_out == 0):
