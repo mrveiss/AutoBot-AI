@@ -7,6 +7,7 @@ receive a typed ``activity_log`` reference at construction time.
 
 from .base import LLCServiceBase
 from .activity_log import LLCActivityLogService
+from .ceo_chat import CeoChatService
 from .approval import ApprovalService
 from .board import BoardService
 from .budget import BudgetService
@@ -17,6 +18,7 @@ from .sprint_planning import SprintNotFound, SprintPlanningService
 
 __all__ = [
     "ApprovalService",
+    "CeoChatService",
     "BoardService",
     "BudgetService",
     "GoalService",

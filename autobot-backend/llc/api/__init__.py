@@ -14,6 +14,7 @@ from .companies import router as companies_router
 from .goals import router as goals_router
 from .secrets import router as secrets_router
 from .sprints import router as sprints_router
+from .ceo_chat import router as ceo_chat_router
 from .routines import router as routines_router
 from .work_items import router as work_items_router
 
@@ -31,6 +32,7 @@ router.include_router(work_items_router)
 router.include_router(api_keys_router)
 router.include_router(agent_router)
 router.include_router(runs_router)
+router.include_router(ceo_chat_router)
 router.include_router(routines_router)
 
 
