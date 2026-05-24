@@ -12,7 +12,6 @@ import pytest
 from llc.kb.context_builder import HeartbeatContextBuilder
 from llc.kb.rag_assembler import AssemblerProfile, LLCContext, LLCRAGAssembler
 
-
 # ----------------------------------------------------------------- Helpers
 
 
@@ -76,14 +75,21 @@ async def test_assemble_returns_empty_on_chromadb_failure(assembler: LLCRAGAssem
 async def test_assemble_merges_chunks_from_collections(assembler: LLCRAGAssembler) -> None:
     async def fake_query(client, coll_name, query_text, n_results):
         return {
-            "chunks": [{"content": f"doc from {coll_name}", "metadata": {}, "similarity_score": 0.9, "source": coll_name}],
+            "chunks": [
+                {"content": f"doc from {coll_name}", "metadata": {}, "similarity_score": 0.9, "source": coll_name}
+            ],
             "sources": [coll_name],
         }
 
-    with patch.object(assembler, "_query_collection", new=fake_query), \
-         patch("builtins.__import__", side_effect=lambda name, *a, **kw: (
-             MagicMock() if name == "utils.async_chromadb_client" else __import__(name, *a, **kw)
-         )):
+    with (
+        patch.object(assembler, "_query_collection", new=fake_query),
+        patch(
+            "builtins.__import__",
+            side_effect=lambda name, *a, **kw: (
+                MagicMock() if name == "utils.async_chromadb_client" else __import__(name, *a, **kw)
+            ),
+        ),
+    ):
         ctx = await assembler.assemble(
             company_id="co1",
             profile=AssemblerProfile.HEARTBEAT,

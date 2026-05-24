@@ -1,5 +1,4 @@
 """LLC work items API routes (GH#8213, GH#8223, GH#8231, GH#8232).
-
 Routes:
   POST   /api/llc/work-items
   GET    /api/llc/work-items
@@ -16,10 +15,7 @@ Routes:
   POST   /api/llc/work-items/{work_item_id}/handoff/to-human   (GH#8231)
   POST   /api/llc/work-items/{work_item_id}/review/approve     (GH#8231)
   POST   /api/llc/work-items/{work_item_id}/review/request-changes (GH#8231)
-  GET    /api/llc/work-items/{work_item_id}/handoff-brief       (GH#8231)
-  POST   /api/llc/work-items/{work_item_id}/coworker   (set/clear co-worker — GH#8230)
-  POST   /api/llc/work-items/suggest-ac               (GH#8240)
-"""
+  GET    /api/llc/work-items/{work_item_id}/handoff-brief       (GH#8231)"""
 
 import uuid
 from typing import Any, Dict, List, Optional
@@ -32,15 +28,9 @@ from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
 
-from ..kb.ac_suggester import AcSuggester
 from ..models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
 from ..services.handoff import HandoffAttachment, HandoffNotAllowed, HandoffNotAuthorized, HandoffService
-from ..services.work_item_service import (
-    CheckoutConflict,
-    CoWorkingPermissionError,
-    InvalidTransition,
-    WorkItemService,
-)
+from ..services.work_item_service import CheckoutConflict, InvalidTransition, WorkItemService
 
 
 class HumanClaimRequest(BaseModel):
@@ -53,25 +43,9 @@ class HumanUnclaimRequest(BaseModel):
     company_id: str
 
 
-class CoworkerRequest(BaseModel):
-    """Set or clear a co-worker on a work item (GH#8230).
-    To clear the co-worker, omit co_worker_type (or send null).
-    caller_role must be 'owner', 'admin', or 'lead' to mutate co-working state.
-    """
-
-    company_id: str
-    co_worker_type: Optional[str] = None
-    co_worker_agent_id: Optional[str] = None
-    co_worker_user_id: Optional[str] = None
-    actor_agent_id: Optional[str] = None
-    actor_user_id: Optional[str] = None
-    caller_role: str = "member"
-
-
 router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
 _get_service = lazy_singleton(WorkItemService)
 _get_handoff_service = lazy_singleton(HandoffService)
-_get_ac_suggester = lazy_singleton(AcSuggester)
 
 
 def _service() -> WorkItemService:
@@ -80,10 +54,6 @@ def _service() -> WorkItemService:
 
 def _handoff_service() -> HandoffService:
     return _get_handoff_service()
-
-
-def _ac_suggester() -> AcSuggester:
-    return _get_ac_suggester()
 
 
 async def get_session() -> AsyncSession:
@@ -185,15 +155,8 @@ class ReviewChangesRequest(BaseModel):
     return_to_agent_id: Optional[str] = None
 
 
-class SuggestAcRequest(BaseModel):
-    company_id: str
-    project_id: str
-    title: str
-    description: str = ""
-
-
 def _assignee_display(item: Any) -> Optional[Dict[str, Any]]:
-    """Return structured primary assignee display info (GH#8223).
+    """Return structured assignee display info (GH#8223).
 
     display_name and name are None until user_management JOIN is implemented
     (see discovery issue filed in GH#8223 implementation).
@@ -209,27 +172,6 @@ def _assignee_display(item: Any) -> Optional[Dict[str, Any]]:
         return {
             "type": "agent",
             "id": str(item.assignee_agent_id),
-            "display_name": None,
-            "name": None,
-        }
-    return None
-
-
-def _coworker_display(item: Any) -> Optional[Dict[str, Any]]:
-    """Return structured co-worker display info (GH#8230)."""
-    if not item.co_working_enabled:
-        return None
-    if item.co_worker_type == "human" and item.co_worker_user_id:
-        return {
-            "type": "human",
-            "id": str(item.co_worker_user_id),
-            "display_name": None,
-            "name": None,
-        }
-    if item.co_worker_type == "agent" and item.co_worker_agent_id:
-        return {
-            "type": "agent",
-            "id": str(item.co_worker_agent_id),
             "display_name": None,
             "name": None,
         }
@@ -257,11 +199,6 @@ def _item_to_dict(item: Any) -> Dict[str, Any]:
         "assignee_user_id": str(item.assignee_user_id) if item.assignee_user_id else None,
         "assignee_type": item.assignee_type,
         "assignee_display": _assignee_display(item),
-        "co_working_enabled": item.co_working_enabled,
-        "co_worker_type": item.co_worker_type,
-        "co_worker_agent_id": str(item.co_worker_agent_id) if item.co_worker_agent_id else None,
-        "co_worker_user_id": str(item.co_worker_user_id) if item.co_worker_user_id else None,
-        "co_worker_display": _coworker_display(item),
         "checkout_run_id": item.checkout_run_id,
         "checkout_locked_at": item.checkout_locked_at.isoformat() if item.checkout_locked_at else None,
         "version": item.version,
@@ -323,8 +260,6 @@ async def list_work_items(
     sprint_id: Optional[str] = Query(None),
     parent_id: Optional[str] = Query(None),
     top_level_only: bool = Query(False),
-    co_worker_agent_id: Optional[str] = Query(None),
-    co_worker_user_id: Optional[str] = Query(None),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
@@ -339,29 +274,10 @@ async def list_work_items(
         sprint_id=sprint_id,
         parent_id=parent_id,
         top_level_only=top_level_only,
-        co_worker_agent_id=co_worker_agent_id,
-        co_worker_user_id=co_worker_user_id,
         limit=limit,
         offset=offset,
     )
     return [_item_to_dict(i) for i in items]
-
-
-@router.post("/suggest-ac")
-async def suggest_ac(body: SuggestAcRequest) -> Dict[str, Any]:
-    """Propose draft acceptance criteria for a new work item (GH#8240).
-
-    RAG-queries company policy/standards and similar completed PBIs, then
-    asks the LLM to synthesise 3-6 testable ACs. Results are cached 5 min
-    per unique title+description pair. Suggestions are advisory.
-    """
-    result = await _ac_suggester().suggest(
-        company_id=body.company_id,
-        project_id=body.project_id,
-        item_title=body.title,
-        item_description=body.description,
-    )
-    return result
 
 
 @router.get("/{work_item_id}")
@@ -493,48 +409,6 @@ async def unclaim_work_item(
         return _item_to_dict(item)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-
-
-@router.post("/{work_item_id}/coworker")
-async def set_coworker(
-    work_item_id: str,
-    body: CoworkerRequest,
-    session: AsyncSession = Depends(get_session),
-) -> Dict[str, Any]:
-    """Set or clear the co-worker on a work item (GH#8230).
-
-    Send co_worker_type=null (or omit) to disable co-working and clear the co-worker.
-    Caller must have owner/admin/lead role (pass in caller_role).
-    """
-    svc = _service()
-    try:
-        if body.co_worker_type is None:
-            item = await svc.disable_coworking(
-                session,
-                work_item_id=work_item_id,
-                company_id=body.company_id,
-                actor_id=body.actor_agent_id or body.actor_user_id,
-                actor_type="agent" if body.actor_agent_id else "user",
-                caller_role=body.caller_role,
-            )
-        else:
-            item = await svc.enable_coworking(
-                session,
-                work_item_id=work_item_id,
-                co_worker_type=body.co_worker_type,
-                company_id=body.company_id,
-                co_worker_agent_id=body.co_worker_agent_id,
-                co_worker_user_id=body.co_worker_user_id,
-                actor_id=body.actor_agent_id or body.actor_user_id,
-                actor_type="agent" if body.actor_agent_id else "user",
-                caller_role=body.caller_role,
-            )
-        await session.commit()
-        return _item_to_dict(item)
-    except CoWorkingPermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc))
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
 
 
 @router.post("/{work_item_id}/comments", status_code=201)

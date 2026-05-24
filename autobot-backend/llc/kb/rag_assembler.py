@@ -95,9 +95,7 @@ class LLCRAGAssembler:
 
             # Query all collections in parallel (each ≤ 800ms target)
             tasks = [
-                self._query_collection(
-                    client, coll_name, query_params["query_text"], query_params["n_results"]
-                )
+                self._query_collection(client, coll_name, query_params["query_text"], query_params["n_results"])
                 for coll_name in collections_to_query
             ]
 
@@ -109,9 +107,7 @@ class LLCRAGAssembler:
 
             for i, result in enumerate(results):
                 if isinstance(result, Exception):
-                    logger.warning(
-                        "ChromaDB query failed for %s: %s", collections_to_query[i], result
-                    )
+                    logger.warning("ChromaDB query failed for %s: %s", collections_to_query[i], result)
                     continue
 
                 all_chunks.extend(result.get("chunks", []))
@@ -211,12 +207,14 @@ class LLCRAGAssembler:
                     metadata = (results.get("metadatas", [[]])[0][i]) if results.get("metadatas") else {}
                     distance = (results.get("distances", [[]])[0][i]) if results.get("distances") else 0.0
 
-                    chunks.append({
-                        "content": doc,
-                        "metadata": metadata,
-                        "similarity_score": 1.0 - distance,  # Convert distance to similarity
-                        "source": collection_name,
-                    })
+                    chunks.append(
+                        {
+                            "content": doc,
+                            "metadata": metadata,
+                            "similarity_score": 1.0 - distance,  # Convert distance to similarity
+                            "source": collection_name,
+                        }
+                    )
                     sources.append(collection_name)
 
             return {"chunks": chunks, "sources": sources}

@@ -128,13 +128,17 @@ class HeartbeatContextBuilder:
         query_text = f"{work_item.title}\n{work_item.description or ''}"
 
         # Task 1: Company context (top 5)
-        company_task = self.rag_assembler.assemble(
-            company_id=company_id,
-            profile=AssemblerProfile.HEARTBEAT,
-            project_id=None,
-            agent_id=None,
-            work_item_id=work_item_id,
-        ) if hasattr(self.rag_assembler, 'assemble') else asyncio.sleep(0)
+        company_task = (
+            self.rag_assembler.assemble(
+                company_id=company_id,
+                profile=AssemblerProfile.HEARTBEAT,
+                project_id=None,
+                agent_id=None,
+                work_item_id=work_item_id,
+            )
+            if hasattr(self.rag_assembler, "assemble")
+            else asyncio.sleep(0)
+        )
 
         # Task 2: Project context (top 8) — optional if no project
         project_task = (
@@ -144,22 +148,26 @@ class HeartbeatContextBuilder:
                 project_id=project_id,
                 agent_id=None,
                 work_item_id=work_item_id,
-            ) if project_id else asyncio.sleep(0)
+            )
+            if project_id
+            else asyncio.sleep(0)
         )
 
         # Task 3: Agent memory (top 5)
-        agent_task = self.rag_assembler.assemble(
-            company_id=company_id,
-            profile=AssemblerProfile.HEARTBEAT,
-            project_id=None,
-            agent_id=agent_id,
-            work_item_id=work_item_id,
-        ) if hasattr(self.rag_assembler, 'assemble') else asyncio.sleep(0)
+        agent_task = (
+            self.rag_assembler.assemble(
+                company_id=company_id,
+                profile=AssemblerProfile.HEARTBEAT,
+                project_id=None,
+                agent_id=agent_id,
+                work_item_id=work_item_id,
+            )
+            if hasattr(self.rag_assembler, "assemble")
+            else asyncio.sleep(0)
+        )
 
         # Task 4: Similar past work (top 3, status=done)
-        past_work_task = self._get_similar_completed_items(
-            session, project_id, query_text, max_results=3
-        )
+        past_work_task = self._get_similar_completed_items(session, project_id, query_text, max_results=3)
 
         # Run all queries in parallel
         results = await asyncio.gather(
@@ -181,10 +189,7 @@ class HeartbeatContextBuilder:
             goal = await self.goal_service.get(session, work_item.goal_id)
             if goal:
                 ancestors = await self.goal_service.get_ancestors(session, work_item.goal_id)
-                goal_ancestry = [
-                    {"id": str(g.id), "title": g.title, "level": g.level}
-                    for g in ancestors + [goal]
-                ]
+                goal_ancestry = [{"id": str(g.id), "title": g.title, "level": g.level} for g in ancestors + [goal]]
 
         return {
             "work_item_id": str(work_item_id),
@@ -227,6 +232,7 @@ class HeartbeatContextBuilder:
 
         try:
             from sqlalchemy import select
+
             from ..models.work_item import LLCWorkItem, WorkItemStatus
 
             stmt = (
