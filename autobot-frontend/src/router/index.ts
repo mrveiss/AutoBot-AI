@@ -883,6 +883,31 @@ export const routes: RouteRecordRaw[] = [
       }
     ]
   },
+  // Issue #8247: LLC Phase 6 — Company Dashboard, Org Chart, Goal Tree, Sub-Company Tree
+  {
+    path: '/llc/dashboard',
+    name: 'llc-dashboard',
+    component: () => import('@/views/llc/CompanyDashboard.vue'),
+    meta: { title: 'Company Dashboard', requiresAuth: true, llcScope: true },
+  },
+  {
+    path: '/llc/org-chart',
+    name: 'llc-org-chart',
+    component: () => import('@/views/llc/OrgChart.vue'),
+    meta: { title: 'Org Chart', requiresAuth: true, llcScope: true },
+  },
+  {
+    path: '/llc/goals',
+    name: 'llc-goals',
+    component: () => import('@/views/llc/GoalTree.vue'),
+    meta: { title: 'Goal Tree', requiresAuth: true, llcScope: true },
+  },
+  {
+    path: '/llc/companies',
+    name: 'llc-companies',
+    component: () => import('@/views/llc/SubCompanyTree.vue'),
+    meta: { title: 'Company Hierarchy', requiresAuth: true, llcScope: true },
+  },
   // Issue #4465: Usage moved under /analytics/usage
   { path: '/usage', redirect: '/analytics/usage' },
   {

@@ -754,10 +754,6 @@ async def upload_attachment(
 async def list_attachments(
     rows = await _attachment_service().list_attachments(
         session, work_item_id=work_item_id, company_id=company_id
-    work_item_id: str,
-    company_id: str = Query(...),
-    session: AsyncSession = Depends(get_session),
-) -> Dict[str, Any]:
     rows = await _attachment_service().list_attachments(session, work_item_id=work_item_id, company_id=company_id)
     return {"attachments": [_attachment_to_dict(r) for r in rows]}
 @router.get("/{work_item_id}/attachments/{attachment_id}/download")
@@ -778,10 +774,3 @@ async def get_attachment_text(
 @router.delete("/{work_item_id}/attachments/{attachment_id}", status_code=204)
 async def delete_attachment(
         await _attachment_service().delete(
-            session,
-            attachment_id=attachment_id,
-            work_item_id=work_item_id,
-            company_id=company_id,
-        )
-    except AttachmentNotFound:
-        raise HTTPException(status_code=404, detail="Attachment not found")
