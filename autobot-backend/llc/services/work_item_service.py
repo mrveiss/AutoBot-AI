@@ -434,6 +434,105 @@ class WorkItemService(LLCServiceBase):
         return item
 
     # ------------------------------------------------------------------
+    # Gated done transition (GH#8234)
+    # ------------------------------------------------------------------
+
+    async def transition_to_done(
+        self,
+        session: AsyncSession,
+        work_item_id: str,
+        company_id: str,
+        *,
+        actor_agent_id: Optional[str] = None,
+        actor_user_id: Optional[str] = None,
+        is_board_override: bool = False,
+        review_gate_svc: Optional[Any] = None,
+        handoff_svc: Optional[Any] = None,
+        reviewer_user_id: Optional[str] = None,
+    ) -> "LLCWorkItem":
+        """Transition a work item to DONE, enforcing human review gate policy.
+
+        If the gate requires human review and actor is an agent:
+        - Blocks the DONE transition.
+        - Calls HandoffService.agent_to_human to move item to IN_REVIEW.
+        - Returns the item in IN_REVIEW state (not DONE).
+
+        If actor is human (actor_user_id set) or is_board_override is True:
+        - Allows DONE transition directly.
+        - Board override is logged in the activity log.
+
+        Raises InvalidTransition if the current state does not permit DONE.
+        """
+        result = await session.execute(
+            select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
+        )
+        item = result.scalar_one_or_none()
+        if item is None:
+            raise ValueError(f"Work item {work_item_id} not found")
+
+        current = WorkItemStatus(item.status)
+        allowed = _ALLOWED_TRANSITIONS.get(current, set())
+        if WorkItemStatus.DONE not in allowed:
+            raise InvalidTransition(
+                f"Cannot transition from {current.value!r} to 'done'. "
+                f"Allowed: {[s.value for s in allowed]}"
+            )
+
+        actor_is_agent = actor_agent_id is not None and actor_user_id is None
+
+        if not is_board_override and actor_is_agent and review_gate_svc is not None:
+            item_type = WorkItemType(item.type)
+            requires, reviewer_role = await review_gate_svc.requires_review(
+                session, company_id, item_type
+            )
+            if requires:
+                if handoff_svc is not None:
+                    return await handoff_svc.agent_to_human(
+                        session,
+                        work_item_id,
+                        company_id,
+                        reviewer_user_id=reviewer_user_id,
+                        agent_notes=None,
+                        actor_agent_id=actor_agent_id,
+                    )
+                raise InvalidTransition(
+                    f"Work item {work_item_id} requires human review before it can be marked done. "
+                    "No HandoffService available to initiate handoff."
+                )
+
+        now = datetime.now(timezone.utc)
+        item.status = WorkItemStatus.DONE
+        item.completed_at = now
+        item.checkout_run_id = None
+        item.checkout_locked_at = None
+        item.version += 1
+        await session.flush()
+
+        if self.activity_log:
+            try:
+                from .activity_log import ActivityEventType
+
+                meta: dict = {}
+                if is_board_override:
+                    meta["board_override"] = True
+                    meta["actor_user_id"] = actor_user_id
+
+                await self.activity_log.record(
+                    session,
+                    company_id=company_id,
+                    actor_id=actor_user_id or actor_agent_id or work_item_id,
+                    event_type=ActivityEventType.WORK_ITEM_COMPLETED,
+                    entity_type="work_item",
+                    entity_id=work_item_id,
+                    before={"status": current.value},
+                    after={"status": WorkItemStatus.DONE.value, **meta},
+                )
+            except Exception:
+                logger.warning("Activity log failed for transition_to_done %s", work_item_id)
+
+        return item
+
+    # ------------------------------------------------------------------
     # Comment helpers
     # ------------------------------------------------------------------
 
