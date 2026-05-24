@@ -1,63 +1,252 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Sprint KB summarizer — Phase 5 implementation (GH#8235).
+"""Sprint KB summarizer — LLM-summarize and merge into project KB on close (GH#8238).
 
-Replaces the Phase 2 stub. On sprint close, merges the sprint KB collection
-into the parent project KB (with summarize=True for LLM condensation, deferred
-to GH#8238) then archives the sprint collection.
+On sprint close:
+  1. Fetch all documents from ``sprint:{sprint_id}`` ChromaDB collection.
+  2. ≤ 10 docs  → merge directly into ``project:{project_id}`` (no LLM call).
+  3. > 10 docs  → LLM-summarize then index the summary into ``project:{project_id}``.
+  4. Store the summary text on the sprint row (``kb_summary`` column).
+  5. Archive the sprint collection via KbCollectionManager.
 """
 
 import uuid
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from .collections import KbCollectionManager
+from ..kb.collections import KbCollectionManager
+from ..models.sprint import LLCSprint
 
 logger = get_logger(__name__)
 
-_kb_manager = KbCollectionManager()
+_SUMMARIZE_THRESHOLD = 10
+
+_SUMMARIZE_PROMPT = (
+    "You are summarizing a software sprint knowledge base for long-term archival.\n"
+    "Below are the raw sprint artifacts separated by '---'.\n"
+    "Summarize them into four concise sections:\n"
+    "1. Accomplishments\n"
+    "2. Key Decisions\n"
+    "3. Learnings\n"
+    "4. Unresolved Items\n"
+    "Be concise. Use bullet points per section. Do not repeat obvious facts.\n\n"
+    "{documents}"
+)
 
 
 class SprintKbSummarizer:
-    """Merges and archives a closed sprint KB collection.
+    """Summarizes a closed sprint's KB into the project KB.
 
-    Phase 5 implementation — calls KbCollectionManager instead of logging a stub.
+    Accepts an optional ``AsyncSession``; if provided, the sprint row is
+    updated with the generated summary text (``kb_summary`` column).
+    The session is NOT committed here — the caller is responsible.
     """
 
-    def __init__(self, manager: KbCollectionManager | None = None) -> None:
-        self._manager = manager or _kb_manager
+    def __init__(
+        self,
+        kb_collection_manager: Optional[KbCollectionManager] = None,
+    ) -> None:
+        self._km = kb_collection_manager or KbCollectionManager()
 
     async def summarize_and_merge(
         self,
         sprint_id: uuid.UUID,
-        project_id: uuid.UUID | None = None,
-    ) -> None:
-        """Merge sprint KB into project KB then archive the sprint collection.
+        *,
+        session: Optional[AsyncSession] = None,
+    ) -> Optional[str]:
+        """Summarize sprint KB and merge into project KB.
 
         Args:
             sprint_id: UUID of the sprint that just closed.
-            project_id: Parent project ID for merge destination.
-                        If None, skips merge and only archives.
+            session: Optional SQLAlchemy session to persist summary text on sprint row.
+
+        Returns:
+            Summary text if LLM summarization occurred, else None.
         """
-        if project_id is not None:
-            await self._manager.merge_collection(
-                src_entity_type=KbCollectionManager.SPRINT_PREFIX,
-                src_entity_id=sprint_id,
-                dst_entity_type=KbCollectionManager.PROJECT_PREFIX,
-                dst_entity_id=project_id,
-                summarize=True,
+        sprint_collection = KbCollectionManager.collection_name(
+            KbCollectionManager.SPRINT_PREFIX, sprint_id
+        )
+        sprint, project_id = await self._load_sprint_context(sprint_id, session)
+
+        if project_id is None:
+            logger.warning(
+                "Cannot resolve project_id for sprint %s; skipping KB merge",
+                sprint_id,
+            )
+            return None
+
+        project_collection = KbCollectionManager.collection_name(
+            KbCollectionManager.PROJECT_PREFIX, project_id
+        )
+
+        docs = await self._fetch_documents(sprint_collection)
+        doc_count = len(docs)
+
+        summary_text: Optional[str] = None
+
+        if doc_count == 0:
+            logger.info("Sprint %s KB collection is empty; nothing to merge", sprint_id)
+        elif doc_count <= _SUMMARIZE_THRESHOLD:
+            await self._direct_merge(docs, project_collection, sprint_id, project_id)
+        else:
+            summary_text = await self._llm_summarize_and_index(
+                docs, project_collection, sprint_id, project_id, sprint=sprint
             )
 
-        await self._manager.archive_collection(
-            entity_type=KbCollectionManager.SPRINT_PREFIX,
-            entity_id=sprint_id,
+        await self._km.archive_collection(
+            KbCollectionManager.SPRINT_PREFIX, sprint_id
         )
+
+        if summary_text and session is not None and sprint is not None:
+            sprint.kb_summary = summary_text  # type: ignore[attr-defined]
+            await session.flush()
+
+        return summary_text
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    async def _load_sprint_context(
+        self,
+        sprint_id: uuid.UUID,
+        session: Optional[AsyncSession],
+    ) -> tuple[Optional[LLCSprint], Optional[uuid.UUID]]:
+        """Return (sprint_row, project_id). Falls back to None if no session."""
+        if session is None:
+            return None, None
+        from sqlalchemy import select
+
+        result = await session.execute(select(LLCSprint).where(LLCSprint.id == sprint_id))
+        sprint = result.scalar_one_or_none()
+        if sprint is None:
+            return None, None
+        return sprint, sprint.project_id
+
+    async def _fetch_documents(self, collection_name: str) -> List[Dict[str, Any]]:
+        """Return all documents from a ChromaDB collection as a list of dicts."""
+        from knowledge import get_knowledge_base  # lazy — avoids chromadb at import time
+
+        try:
+            kb = await get_knowledge_base()
+            col = await kb._async_chroma_client.get_collection(collection_name)
+            raw = await col.get(include=["documents", "metadatas", "embeddings"])
+        except Exception:
+            logger.warning(
+                "Collection %s not found or empty; returning []", collection_name
+            )
+            return []
+
+        ids = raw.get("ids") or []
+        documents = raw.get("documents") or []
+        metadatas = raw.get("metadatas") or []
+        embeddings = raw.get("embeddings") or []
+
+        return [
+            {
+                "id": ids[i],
+                "document": documents[i] if i < len(documents) else "",
+                "metadata": metadatas[i] if i < len(metadatas) else {},
+                "embedding": embeddings[i] if i < len(embeddings) else None,
+            }
+            for i in range(len(ids))
+        ]
+
+    async def _direct_merge(
+        self,
+        docs: List[Dict[str, Any]],
+        dst_collection: str,
+        sprint_id: uuid.UUID,
+        project_id: uuid.UUID,
+    ) -> None:
+        """Copy documents as-is into the destination collection."""
+        from knowledge import get_knowledge_base  # lazy
+
+        kb = await get_knowledge_base()
+        dst = await kb._async_chroma_client.get_or_create_collection(
+            name=dst_collection,
+            metadata={"entity_type": "project", "entity_id": str(project_id)},
+        )
+        ids = [d["id"] for d in docs]
+        texts = [d["document"] for d in docs]
+        metadatas = [d["metadata"] for d in docs]
+        embeddings = [d["embedding"] for d in docs]
+
+        if any(e is not None for e in embeddings):
+            await dst.add(ids=ids, documents=texts, metadatas=metadatas, embeddings=embeddings)
+        else:
+            await dst.add(ids=ids, documents=texts, metadatas=metadatas)
+
         logger.info(
-            "Sprint KB merged and archived: sprint_id=%s project_id=%s",
-            sprint_id,
-            project_id,
+            "Direct-merged %d docs from sprint:%s into %s", len(docs), sprint_id, dst_collection
         )
+
+    async def _llm_summarize_and_index(
+        self,
+        docs: List[Dict[str, Any]],
+        dst_collection: str,
+        sprint_id: uuid.UUID,
+        project_id: uuid.UUID,
+        sprint: Optional[LLCSprint] = None,
+    ) -> str:
+        """LLM-summarize docs and index the result into the destination collection."""
+        combined = "\n---\n".join(d["document"] for d in docs if d["document"])
+        prompt = _SUMMARIZE_PROMPT.format(documents=combined)
+
+        from services.llm_service import get_llm_service  # lazy
+
+        llm = get_llm_service()
+        response = await llm.chat(
+            [{"role": "user", "content": prompt}],
+            llm_type="summarization",
+            max_tokens=1024,
+        )
+
+        if response.error:
+            logger.error(
+                "LLM summarization failed for sprint %s: %s", sprint_id, response.error
+            )
+            # Fall back to direct merge on LLM failure
+            await self._direct_merge(docs, dst_collection, sprint_id, project_id)
+            return ""
+
+        summary_text: str = response.content or ""
+        closed_at = datetime.now(timezone.utc).isoformat()
+        sprint_name = sprint.name if sprint else str(sprint_id)
+
+        from knowledge import get_knowledge_base  # lazy
+
+        kb = await get_knowledge_base()
+        dst = await kb._async_chroma_client.get_or_create_collection(
+            name=dst_collection,
+            metadata={"entity_type": "project", "entity_id": str(project_id)},
+        )
+        doc_id = f"sprint_summary:{sprint_id}"
+        await dst.add(
+            ids=[doc_id],
+            documents=[summary_text],
+            metadatas=[
+                {
+                    "type": "sprint_summary",
+                    "sprint_id": str(sprint_id),
+                    "sprint_name": sprint_name,
+                    "closed_at": closed_at,
+                }
+            ],
+        )
+
+        logger.info(
+            "LLM-summarized %d docs from sprint:%s into %s (id=%s)",
+            len(docs),
+            sprint_id,
+            dst_collection,
+            doc_id,
+        )
+        return summary_text
 
 
 __all__ = ["SprintKbSummarizer"]

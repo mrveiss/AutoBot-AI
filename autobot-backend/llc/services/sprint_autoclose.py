@@ -206,8 +206,8 @@ class SprintAutoCloseService(LLCServiceBase):
         sprint.pending_close_approval_id = None
         await session.flush()
 
-        # -- KB summarization (Phase 2 stub) --
-        await self._summarizer.summarize_and_merge(sprint_id, project_id=sprint.project_id)
+        # -- KB summarization (GH#8238) --
+        kb_summary = await self._summarizer.summarize_and_merge(sprint_id, session=session)
 
         # -- Roll over incomplete items --
         auto_rollover = await self._resolve_auto_rollover(session, sprint)
@@ -227,6 +227,7 @@ class SprintAutoCloseService(LLCServiceBase):
                     "actual_points": actual_points,
                     "rolled_over_items": rolled_count,
                     "decided_by": str(decided_by),
+                    "kb_summary_generated": bool(kb_summary),
                 },
             )
 
