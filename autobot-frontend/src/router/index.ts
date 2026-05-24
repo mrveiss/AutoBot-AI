@@ -896,6 +896,37 @@ export const routes: RouteRecordRaw[] = [
       isPublic: true
     }
   },
+  // GH#8248: LLC Frontend — Backlog, Sprint Board, Kanban Board, Work Item Detail
+  {
+    path: '/llc/companies/:companyId/backlog',
+    name: 'llc-backlog',
+    component: () => import('@/views/llc/BacklogView.vue'),
+    meta: {
+      title: 'Backlog',
+      requiresAuth: true,
+      hideInNav: true,
+    }
+  },
+  {
+    path: '/llc/companies/:companyId/boards/:boardId/sprint',
+    name: 'llc-sprint-board',
+    component: () => import('@/views/llc/SprintBoardView.vue'),
+    meta: {
+      title: 'Sprint Board',
+      requiresAuth: true,
+      hideInNav: true,
+    }
+  },
+  {
+    path: '/llc/companies/:companyId/boards/:boardId/kanban',
+    name: 'llc-kanban-board',
+    component: () => import('@/views/llc/KanbanBoardView.vue'),
+    meta: {
+      title: 'Kanban Board',
+      requiresAuth: true,
+      hideInNav: true,
+    }
+  },
   {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
