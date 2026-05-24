@@ -1,4 +1,4 @@
-"""LLC work item SQLAlchemy models (GH#8213).
+"""LLC work item SQLAlchemy models (GH#8213, GH#8230).
 
 Covers the full work item hierarchy: Epic → Feature → PBI → Task/Bug/Subtask/Spike/Risk.
 A single ``llc_work_items`` table with a ``type`` discriminator column avoids
@@ -7,6 +7,11 @@ hierarchy-specific tables and simplifies queries across the entire backlog.
 Atomic checkout uses ``checkout_run_id`` / ``checkout_locked_at`` at the DB layer
 (SELECT … FOR UPDATE) combined with a Redis SET NX EX 1800 fence to prevent
 double-assignment across workers.
+
+Co-working (GH#8230): any work item may have a secondary co-worker alongside the
+primary assignee. The co_working_enabled flag gates the feature; co_worker_type /
+co_worker_agent_id / co_worker_user_id identify the co-worker. Primary checkout
+invariants are unchanged — only the primary assignee holds the checkout lock.
 """
 
 import uuid
@@ -79,10 +84,16 @@ class LLCWorkItem(Base):
     backlog_position: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     needs_triage: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, server_default="false")
 
-    # Assignment
+    # Assignment — primary
     assignee_type: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
     assignee_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
     assignee_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+
+    # Co-working — secondary (GH#8230)
+    co_worker_type: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    co_worker_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    co_worker_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    co_working_enabled: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, server_default="false")
 
     # Atomic checkout lock fields
     checkout_run_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

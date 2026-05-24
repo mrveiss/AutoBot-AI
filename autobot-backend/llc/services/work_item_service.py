@@ -1,4 +1,4 @@
-"""LLC WorkItemService — CRUD, atomic checkout, and status transitions (GH#8213).
+"""LLC WorkItemService — CRUD, atomic checkout, and status transitions (GH#8213, GH#8230).
 
 Checkout strategy:
   1. Redis SET NX EX 1800 as fast-path fence (prevents DB round-trips for obvious conflicts).
@@ -14,6 +14,12 @@ Identifier generation:
   UPDATE to ``llc_companies.issue_counter`` — producing ``<prefix>-<counter>``.
   Falls back to a UUID-based placeholder when the companies table is absent
   (unit-test environments without full schema).
+
+Co-working (GH#8230):
+  enable_coworking / disable_coworking manage the secondary co-worker slot.
+  Callers must hold board-level or lead permission (owner/admin/lead role).
+  Atomic checkout invariants are unchanged — only the primary assignee holds
+  the checkout lock. Co-workers may read, comment, and create subtasks freely.
 """
 
 import logging
@@ -27,7 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
 
-from ..models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
+from ..models.enums import CoWorkerType, WorkItemPriority, WorkItemStatus, WorkItemType
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
 from . import LLCServiceBase
 
@@ -63,6 +69,13 @@ class CheckoutConflict(Exception):
 
 class InvalidTransition(Exception):
     """Raised when a status transition is not permitted."""
+
+
+class CoWorkingPermissionError(Exception):
+    """Raised when the caller lacks board or lead permission for co-working ops."""
+
+
+_COWORKING_ALLOWED_ROLES: frozenset = frozenset({"owner", "admin", "lead"})
 
 
 class WorkItemService(LLCServiceBase):
@@ -164,6 +177,8 @@ class WorkItemService(LLCServiceBase):
         sprint_id: Optional[str] = None,
         parent_id: Optional[str] = None,
         top_level_only: bool = False,
+        co_worker_agent_id: Optional[str] = None,
+        co_worker_user_id: Optional[str] = None,
         limit: int = 100,
         offset: int = 0,
     ) -> Sequence[LLCWorkItem]:
@@ -182,6 +197,10 @@ class WorkItemService(LLCServiceBase):
             q = q.where(LLCWorkItem.parent_id.is_(None))
         elif parent_id:
             q = q.where(LLCWorkItem.parent_id == uuid.UUID(parent_id))
+        if co_worker_agent_id:
+            q = q.where(LLCWorkItem.co_worker_agent_id == uuid.UUID(co_worker_agent_id))
+        if co_worker_user_id:
+            q = q.where(LLCWorkItem.co_worker_user_id == uuid.UUID(co_worker_user_id))
         q = q.order_by(LLCWorkItem.created_at.desc()).limit(limit).offset(offset)
         result = await session.execute(q)
         return result.scalars().all()
@@ -390,6 +409,150 @@ class WorkItemService(LLCServiceBase):
                 )
             except Exception:
                 logger.warning("Activity log failed for unclaim_human %s", work_item_id)
+
+        return item
+
+    # ------------------------------------------------------------------
+    # Co-working (GH#8230)
+    # ------------------------------------------------------------------
+
+    async def enable_coworking(
+        self,
+        session: AsyncSession,
+        work_item_id: str,
+        co_worker_type: str,
+        company_id: str,
+        *,
+        co_worker_agent_id: Optional[str] = None,
+        co_worker_user_id: Optional[str] = None,
+        actor_id: Optional[str] = None,
+        actor_type: str = "agent",
+        caller_role: str = "member",
+    ) -> LLCWorkItem:
+        """Set co-worker fields and enable co-working mode.
+
+        Requires board or lead permission (caller_role must be owner/admin/lead).
+        Primary assignee checkout invariants are not changed.
+
+        Raises CoWorkingPermissionError if caller_role is insufficient.
+        Raises ValueError if work_item_id not found or co-worker identity is missing.
+        """
+        if caller_role not in _COWORKING_ALLOWED_ROLES:
+            raise CoWorkingPermissionError(
+                f"Role {caller_role!r} does not have permission to manage co-working. "
+                f"Required: {sorted(_COWORKING_ALLOWED_ROLES)}"
+            )
+        co_type = CoWorkerType(co_worker_type)
+        if co_type == CoWorkerType.AGENT and not co_worker_agent_id:
+            raise ValueError("co_worker_agent_id required when co_worker_type is 'agent'")
+        if co_type == CoWorkerType.HUMAN and not co_worker_user_id:
+            raise ValueError("co_worker_user_id required when co_worker_type is 'human'")
+
+        result = await session.execute(
+            select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
+        )
+        item = result.scalar_one_or_none()
+        if item is None:
+            raise ValueError(f"Work item {work_item_id} not found")
+
+        before = {
+            "co_worker_type": item.co_worker_type,
+            "co_worker_agent_id": str(item.co_worker_agent_id) if item.co_worker_agent_id else None,
+            "co_worker_user_id": str(item.co_worker_user_id) if item.co_worker_user_id else None,
+            "co_working_enabled": item.co_working_enabled,
+        }
+
+        item.co_worker_type = co_type.value
+        item.co_worker_agent_id = uuid.UUID(co_worker_agent_id) if co_worker_agent_id else None
+        item.co_worker_user_id = uuid.UUID(co_worker_user_id) if co_worker_user_id else None
+        item.co_working_enabled = True
+        item.version += 1
+        await session.flush()
+
+        if self.activity_log:
+            try:
+                from .activity_log import ActivityEventType
+
+                await self.activity_log.record(
+                    session,
+                    company_id=company_id,
+                    actor_type=actor_type,
+                    actor_id=actor_id,
+                    event_type=ActivityEventType.WORK_ITEM_COWORKER_SET,
+                    entity_type="work_item",
+                    entity_id=work_item_id,
+                    before=before,
+                    after={
+                        "co_worker_type": item.co_worker_type,
+                        "co_worker_agent_id": str(item.co_worker_agent_id) if item.co_worker_agent_id else None,
+                        "co_worker_user_id": str(item.co_worker_user_id) if item.co_worker_user_id else None,
+                        "co_working_enabled": True,
+                    },
+                )
+            except Exception:
+                logger.warning("Activity log failed for enable_coworking %s", work_item_id)
+
+        return item
+
+    async def disable_coworking(
+        self,
+        session: AsyncSession,
+        work_item_id: str,
+        company_id: str,
+        *,
+        actor_id: Optional[str] = None,
+        actor_type: str = "agent",
+        caller_role: str = "member",
+    ) -> LLCWorkItem:
+        """Clear co-worker fields and disable co-working mode.
+
+        Raises CoWorkingPermissionError if caller_role is insufficient.
+        Raises ValueError if work_item_id not found.
+        """
+        if caller_role not in _COWORKING_ALLOWED_ROLES:
+            raise CoWorkingPermissionError(
+                f"Role {caller_role!r} does not have permission to manage co-working. "
+                f"Required: {sorted(_COWORKING_ALLOWED_ROLES)}"
+            )
+
+        result = await session.execute(
+            select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
+        )
+        item = result.scalar_one_or_none()
+        if item is None:
+            raise ValueError(f"Work item {work_item_id} not found")
+
+        before = {
+            "co_worker_type": item.co_worker_type,
+            "co_worker_agent_id": str(item.co_worker_agent_id) if item.co_worker_agent_id else None,
+            "co_worker_user_id": str(item.co_worker_user_id) if item.co_worker_user_id else None,
+            "co_working_enabled": item.co_working_enabled,
+        }
+
+        item.co_worker_type = None
+        item.co_worker_agent_id = None
+        item.co_worker_user_id = None
+        item.co_working_enabled = False
+        item.version += 1
+        await session.flush()
+
+        if self.activity_log:
+            try:
+                from .activity_log import ActivityEventType
+
+                await self.activity_log.record(
+                    session,
+                    company_id=company_id,
+                    actor_type=actor_type,
+                    actor_id=actor_id,
+                    event_type=ActivityEventType.WORK_ITEM_COWORKER_CLEARED,
+                    entity_type="work_item",
+                    entity_id=work_item_id,
+                    before=before,
+                    after={"co_working_enabled": False},
+                )
+            except Exception:
+                logger.warning("Activity log failed for disable_coworking %s", work_item_id)
 
         return item
 

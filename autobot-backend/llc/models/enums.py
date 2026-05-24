@@ -159,6 +159,13 @@ class AssignmentType(str, Enum):
     INHERITED = "inherited"
 
 
+class CoWorkerType(str, Enum):
+    """Identifies whether the co-worker is an agent or human (GH#8230)."""
+
+    AGENT = "agent"
+    HUMAN = "human"
+
+
 class BoardType(str, Enum):
     """Type of LLC board (GH#8221)."""
 
