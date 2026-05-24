@@ -13,6 +13,7 @@ from .budget import BudgetService
 from .ceo_chat import CeoChatService
 from .goal import GoalService
 from .handoff import HandoffError, HandoffService
+from .portability import PortabilityService
 from .review_gate import (
     ReviewGatePolicyConflictError,
     ReviewGatePolicyNotFoundError,
@@ -38,6 +39,7 @@ __all__ = [
     "ReviewGatePolicyService",
     "RoutineService",
     "SprintAutoCloseService",
+    "PortabilityService",
     "SprintNotFound",
     "SprintPlanningService",
     "WorkProductService",
