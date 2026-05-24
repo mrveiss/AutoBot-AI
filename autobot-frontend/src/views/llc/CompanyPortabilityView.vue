@@ -227,7 +227,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { getApiBase } from '@/config/ssot-config'
 import { useNotificationBus } from '@/composables/useNotificationBus'
@@ -294,10 +294,7 @@ interface ImportResultDisplay {
 }
 
 // ── computed ──────────────────────────────────────────────────────────────────
-const secretPlaceholders = computed<string[]>(() => {
-  if (!importPreview.value) return []
-  return Object.keys(secretMapping.value)
-})
+const secretPlaceholders = ref<string[]>([])
 
 const secretMappingIncomplete = computed(() =>
   secretPlaceholders.value.some((p: string) => !secretMapping.value[p]?.trim())
@@ -318,7 +315,7 @@ async function triggerDownload(res: Response, defaultFilename: string): Promise<
   a.href = url
   a.download = filename
   a.click()
-  URL.revokeObjectURL(url)
+  setTimeout(() => URL.revokeObjectURL(url), 100)
 }
 
 function extractSecretPlaceholders(json: unknown): string[] {
@@ -327,7 +324,23 @@ function extractSecretPlaceholders(json: unknown): string[] {
   return [...new Set(matches.map(m => m.replace(/^\{\{|\}\}$/g, '')))]
 }
 
+// ── lifecycle ─────────────────────────────────────────────────────────────────
+onMounted(() => loadRecentExports())
+
 // ── export ────────────────────────────────────────────────────────────────────
+async function loadRecentExports(): Promise<void> {
+  try {
+    const res = await fetchWithAuth(
+      `${getApiBase()}/llc/companies/${props.companyId}/exports`
+    )
+    if (!res.ok) return
+    const data = await res.json() as ExportArtifact[]
+    recentExports.value = data
+  } catch (e) {
+    logger.error('Failed to load recent exports:', e)
+  }
+}
+
 async function exportTemplate(): Promise<void> {
   exportingTemplate.value = true
   try {
@@ -338,6 +351,7 @@ async function exportTemplate(): Promise<void> {
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
     await triggerDownload(res, `company_${props.companyId}_template.json`)
     showToast('Template exported successfully', 'success')
+    void loadRecentExports()
   } catch (e) {
     logger.error('Template export failed:', e)
     showToast('Template export failed', 'error')
@@ -356,6 +370,7 @@ async function exportSnapshot(): Promise<void> {
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
     await triggerDownload(res, `company_${props.companyId}_snapshot.json`)
     showToast('Snapshot exported successfully', 'success')
+    void loadRecentExports()
   } catch (e) {
     logger.error('Snapshot export failed:', e)
     showToast('Snapshot export failed', 'error')
@@ -385,6 +400,7 @@ function loadFile(file: File): void {
   importPreview.value = null
   importResult.value = null
   secretMapping.value = {}
+  secretPlaceholders.value = []
 }
 
 function clearFile(): void {
@@ -392,6 +408,7 @@ function clearFile(): void {
   importPreview.value = null
   importResult.value = null
   secretMapping.value = {}
+  secretPlaceholders.value = []
   if (fileInputRef.value) fileInputRef.value.value = ''
 }
 
@@ -414,10 +431,11 @@ async function runPreview(): Promise<void> {
       throw new Error((body.detail as string) ?? `${res.status} ${res.statusText}`)
     }
     const preview = await res.json() as ImportPreview
-    importPreview.value = preview
-    // Build secret mapping from placeholders in the raw JSON
+    // Populate placeholder state before showing preview so the guard is ready
     const placeholders = extractSecretPlaceholders(parsed)
+    secretPlaceholders.value = placeholders
     secretMapping.value = Object.fromEntries(placeholders.map(p => [p, '']))
+    importPreview.value = preview
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Preview failed'
     logger.error('Import preview failed:', e)
