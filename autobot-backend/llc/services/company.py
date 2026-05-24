@@ -160,13 +160,9 @@ class CompanyService(LLCServiceBase):
     # ------------------------------------------------------------------
 
     # Valid states from which suspend() is allowed
-    _SUSPEND_FROM: frozenset[str] = frozenset(
-        {LLCCompanyStatus.ONBOARDING.value, LLCCompanyStatus.ACTIVE.value}
-    )
+    _SUSPEND_FROM: frozenset[str] = frozenset({LLCCompanyStatus.ONBOARDING.value, LLCCompanyStatus.ACTIVE.value})
     # Valid states from which archive() is allowed
-    _ARCHIVE_FROM: frozenset[str] = frozenset(
-        {LLCCompanyStatus.PAUSED.value, LLCCompanyStatus.OFFBOARDING.value}
-    )
+    _ARCHIVE_FROM: frozenset[str] = frozenset({LLCCompanyStatus.PAUSED.value, LLCCompanyStatus.OFFBOARDING.value})
 
     async def suspend(self, company_id: uuid.UUID, reason: Optional[str] = None) -> Organization:
         """Transition company to PAUSED status.
@@ -246,9 +242,7 @@ class CompanyService(LLCServiceBase):
         if prefix is None:
             return
         result = await self.session.execute(
-            select(Organization.id)
-            .where(Organization.issue_prefix == prefix)
-            .where(Organization.deleted_at.is_(None))
+            select(Organization.id).where(Organization.issue_prefix == prefix).where(Organization.deleted_at.is_(None))
         )
         if result.scalar_one_or_none() is not None:
             raise CompanyIssuePrefixConflictError(f"issue_prefix '{prefix}' is already taken")
@@ -299,9 +293,7 @@ class CompanyService(LLCServiceBase):
             raise CompanyCycleError(f"Cycle detected in company tree at id={org.id}")
         current_visited = visited | {org.id}
         children_orgs = await self.list_children(org.id)
-        children_nodes = list(
-            await asyncio.gather(*[self._build_tree_node(c, current_visited) for c in children_orgs])
-        )
+        children_nodes = list(await asyncio.gather(*[self._build_tree_node(c, current_visited) for c in children_orgs]))
         return CompanyTreeNode(
             id=org.id,
             name=org.name,

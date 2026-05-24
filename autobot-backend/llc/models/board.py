@@ -35,10 +35,8 @@ class LLCBoard(Base):
 
     __tablename__ = "llc_boards"
     __table_args__ = (
-        sa.UniqueConstraint("company_id", "project_id", "type",
-                            name="uq_llc_boards_company_project_type"),
-        sa.UniqueConstraint("company_id", "sprint_id", "type",
-                            name="uq_llc_boards_company_sprint_type"),
+        sa.UniqueConstraint("company_id", "project_id", "type", name="uq_llc_boards_company_project_type"),
+        sa.UniqueConstraint("company_id", "sprint_id", "type", name="uq_llc_boards_company_sprint_type"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

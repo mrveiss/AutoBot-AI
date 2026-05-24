@@ -14,7 +14,6 @@ from llc.models.sprint import LLCSprint
 from llc.models.work_item import LLCWorkItem
 from llc.services.sprint_planning import SprintNotFound, SprintPlanningService
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -195,10 +194,14 @@ class TestGetVelocityHistory:
                 r.scalars.return_value.all.return_value = [s1, s2]
             else:
                 # GROUP BY result — iterable rows with sprint_id + velocity
-                r.__iter__ = MagicMock(return_value=iter([
-                    _make_velocity_row(s1.id, 30),
-                    _make_velocity_row(s2.id, 20),
-                ]))
+                r.__iter__ = MagicMock(
+                    return_value=iter(
+                        [
+                            _make_velocity_row(s1.id, 30),
+                            _make_velocity_row(s2.id, 20),
+                        ]
+                    )
+                )
             call_count += 1
             return r
 

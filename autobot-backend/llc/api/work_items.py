@@ -38,6 +38,7 @@ class HumanUnclaimRequest(BaseModel):
     user_id: str
     company_id: str
 
+
 router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
 _get_service = lazy_singleton(WorkItemService)
 

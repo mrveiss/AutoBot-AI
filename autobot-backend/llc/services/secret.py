@@ -52,9 +52,7 @@ class SecretAccessDenied(Exception):
     """Raised when an agent attempts to access a secret outside its company."""
 
     def __init__(self, agent_company_id: str, secret_company_id: str) -> None:
-        super().__init__(
-            f"Agent company {agent_company_id} cannot access secrets of {secret_company_id}"
-        )
+        super().__init__(f"Agent company {agent_company_id} cannot access secrets of {secret_company_id}")
 
 
 def _derive_fernet_key(master_key_bytes: bytes, company_id: str) -> Fernet:
@@ -83,8 +81,7 @@ class SecretService(LLCServiceBase):
         raw = os.environ.get(_ENV_MASTER_KEY)
         if not raw:
             raise RuntimeError(
-                f"Environment variable {_ENV_MASTER_KEY} is not set. "
-                "Secret operations require a master key."
+                f"Environment variable {_ENV_MASTER_KEY} is not set. " "Secret operations require a master key."
             )
         return raw.encode("utf-8")
 

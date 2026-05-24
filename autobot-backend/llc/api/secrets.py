@@ -163,9 +163,7 @@ async def revoke_secret(
 ) -> None:
     """Revoke a secret.  The value becomes permanently inaccessible."""
     try:
-        await svc.revoke(
-            session=session, company_id=company_id, name=name, actor=actor
-        )
+        await svc.revoke(session=session, company_id=company_id, name=name, actor=actor)
     except SecretNotFound as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     await session.commit()

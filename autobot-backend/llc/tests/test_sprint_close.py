@@ -19,7 +19,6 @@ from llc.models.enums import ApprovalStatus, ApprovalType, SprintStatus, WorkIte
 from llc.models.sprint import LLCSprint
 from llc.services.sprint_autoclose import SprintAutoCloseService
 
-
 # ------------------------------------------------------------------ Helpers
 
 

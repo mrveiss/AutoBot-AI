@@ -26,9 +26,7 @@ class LLCSecret(Base):
 
     __tablename__ = "llc_secrets"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        sa.Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     company_id: Mapped[str] = mapped_column(sa.String(255), nullable=False, index=True)
     name: Mapped[str] = mapped_column(sa.String(255), nullable=False)
     value: Mapped[bytes] = mapped_column(sa.LargeBinary, nullable=False)
@@ -43,9 +41,7 @@ class LLCSecret(Base):
         server_default=sa.func.now(),
         onupdate=sa.func.now(),
     )
-    revoked_at: Mapped[Optional[datetime]] = mapped_column(
-        sa.DateTime(timezone=True), nullable=True, default=None
-    )
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(sa.DateTime(timezone=True), nullable=True, default=None)
 
     __table_args__ = (
         UniqueConstraint("company_id", "name", name="uq_llc_secrets_company_name"),

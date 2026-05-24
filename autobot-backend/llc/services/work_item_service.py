@@ -294,9 +294,7 @@ class WorkItemService(LLCServiceBase):
             if not acquired:
                 existing = await redis.get(redis_key)
                 if existing and existing != redis_value:
-                    raise CheckoutConflict(
-                        f"Work item {work_item_id} is already claimed (held by {existing})"
-                    )
+                    raise CheckoutConflict(f"Work item {work_item_id} is already claimed (held by {existing})")
 
         result = await session.execute(
             select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
@@ -311,9 +309,7 @@ class WorkItemService(LLCServiceBase):
         if item.assignee_user_id is not None and str(item.assignee_user_id) != user_id:
             if redis is not None:
                 await redis.delete(redis_key)
-            raise CheckoutConflict(
-                f"Work item {work_item_id} is already claimed by user {item.assignee_user_id}"
-            )
+            raise CheckoutConflict(f"Work item {work_item_id} is already claimed by user {item.assignee_user_id}")
 
         item.assignee_user_id = uuid.UUID(user_id)
         item.assignee_agent_id = None
@@ -364,9 +360,7 @@ class WorkItemService(LLCServiceBase):
         if item is None:
             raise ValueError(f"Work item {work_item_id} not found")
         if item.assignee_user_id is None or str(item.assignee_user_id) != user_id:
-            raise ValueError(
-                f"User {user_id} does not hold claim for work item {work_item_id}"
-            )
+            raise ValueError(f"User {user_id} does not hold claim for work item {work_item_id}")
 
         item.assignee_user_id = None
         item.assignee_type = None

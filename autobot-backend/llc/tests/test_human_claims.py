@@ -92,9 +92,7 @@ class TestHumanClaim:
         assert result.assignee_type == "user"
         assert result.status == WorkItemStatus.IN_PROGRESS
         assert result.version == 2
-        mock_redis.set.assert_called_once_with(
-            f"llc:checkout:{item.id}", f"user:{user_id}", nx=True, ex=1800
-        )
+        mock_redis.set.assert_called_once_with(f"llc:checkout:{item.id}", f"user:{user_id}", nx=True, ex=1800)
 
     async def test_claim_conflict_redis_held_by_another(self, service, mock_session, mock_redis):
         user_id = str(uuid.uuid4())
@@ -144,9 +142,7 @@ class TestHumanClaim:
             new=AsyncMock(return_value=mock_redis),
         ):
             with pytest.raises(ValueError, match="not found"):
-                await service.claim_human(
-                    mock_session, str(uuid.uuid4()), str(uuid.uuid4()), str(uuid.uuid4())
-                )
+                await service.claim_human(mock_session, str(uuid.uuid4()), str(uuid.uuid4()), str(uuid.uuid4()))
         mock_redis.delete.assert_called_once()
 
     async def test_claim_idempotent_same_user(self, service, mock_session, mock_redis):
@@ -208,6 +204,4 @@ class TestHumanUnclaim:
             new=AsyncMock(return_value=None),
         ):
             with pytest.raises(ValueError, match="not found"):
-                await service.unclaim_human(
-                    mock_session, str(uuid.uuid4()), str(uuid.uuid4()), str(uuid.uuid4())
-                )
+                await service.unclaim_human(mock_session, str(uuid.uuid4()), str(uuid.uuid4()), str(uuid.uuid4()))

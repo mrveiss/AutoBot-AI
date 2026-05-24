@@ -66,8 +66,5 @@ def get_adapter(adapter_type: str) -> LLCAdapter:
     missing-adapter errors from runtime errors inside adapters.
     """
     if adapter_type not in _registry:
-        raise KeyError(
-            f"No LLC adapter registered for type {adapter_type!r}. "
-            f"Known types: {sorted(_registry)}"
-        )
+        raise KeyError(f"No LLC adapter registered for type {adapter_type!r}. " f"Known types: {sorted(_registry)}")
     return _registry[adapter_type]

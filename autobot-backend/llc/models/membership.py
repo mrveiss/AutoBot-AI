@@ -48,6 +48,4 @@ class LLCCompanyMembership(Base):
         server_default=sa.text("now()"),
     )
 
-    __table_args__ = (
-        sa.UniqueConstraint("company_id", "user_id", name="uq_llc_membership_company_user"),
-    )
+    __table_args__ = (sa.UniqueConstraint("company_id", "user_id", name="uq_llc_membership_company_user"),)

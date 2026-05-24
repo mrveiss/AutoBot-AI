@@ -44,9 +44,7 @@ logger = logging.getLogger(__name__)
 # ContextVar value.  _run_agent sets this to a fresh StringIO for its task;
 # _TaskCapturingHandler routes log records there without touching sys.stdout.
 
-_task_log_buf: contextvars.ContextVar[Optional[io.StringIO]] = contextvars.ContextVar(
-    "_task_log_buf", default=None
-)
+_task_log_buf: contextvars.ContextVar[Optional[io.StringIO]] = contextvars.ContextVar("_task_log_buf", default=None)
 
 
 class _TaskCapturingHandler(logging.Handler):
@@ -76,9 +74,7 @@ def _get_capturing_handler() -> _TaskCapturingHandler:
     global _capturing_handler
     if _capturing_handler is None:
         _capturing_handler = _TaskCapturingHandler()
-        _capturing_handler.setFormatter(
-            logging.Formatter("%(levelname)s %(name)s: %(message)s")
-        )
+        _capturing_handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
         logging.root.addHandler(_capturing_handler)
     return _capturing_handler
 
@@ -105,9 +101,7 @@ def _import_agent_class(dotted_path: str) -> type:
     """
     module_path, _, class_name = dotted_path.rpartition(".")
     if not module_path:
-        raise ImportError(
-            f"Invalid agent class path {dotted_path!r} — must be <module>.<ClassName>"
-        )
+        raise ImportError(f"Invalid agent class path {dotted_path!r} — must be <module>.<ClassName>")
     module = importlib.import_module(module_path)
     cls = getattr(module, class_name)
     return cls
@@ -270,9 +264,7 @@ class AutoBotAgentAdapter:
         log_buf = io.StringIO()
         token = _task_log_buf.set(log_buf)
 
-        final_status: AdapterRunStatus = AdapterRunStatus(
-            status=LLCRunStatus.FAILED, error="unexpected exit"
-        )
+        final_status: AdapterRunStatus = AdapterRunStatus(status=LLCRunStatus.FAILED, error="unexpected exit")
         try:
             response = await agent.process_request(request)
             await self._forward_cost(run_id, response, context)
@@ -284,14 +276,8 @@ class AutoBotAgentAdapter:
                 else getattr(response, "status", "success")
             )
             if _resp_status == "error":
-                _err = (
-                    response.get("error")
-                    if isinstance(response, dict)
-                    else getattr(response, "error", None)
-                )
-                final_status = AdapterRunStatus(
-                    status=LLCRunStatus.FAILED, exit_code=1, error=_err
-                )
+                _err = response.get("error") if isinstance(response, dict) else getattr(response, "error", None)
+                final_status = AdapterRunStatus(status=LLCRunStatus.FAILED, exit_code=1, error=_err)
             else:
                 final_status = AdapterRunStatus(status=LLCRunStatus.COMPLETED, exit_code=0)
             return response
@@ -299,9 +285,7 @@ class AutoBotAgentAdapter:
             final_status = AdapterRunStatus(status=LLCRunStatus.CANCELLED)
             raise
         except Exception as exc:
-            final_status = AdapterRunStatus(
-                status=LLCRunStatus.FAILED, error=str(exc)
-            )
+            final_status = AdapterRunStatus(status=LLCRunStatus.FAILED, error=str(exc))
             raise
         finally:
             _task_log_buf.reset(token)
@@ -320,9 +304,7 @@ class AutoBotAgentAdapter:
 
             await self._persist_run_status(run_id, final_status)
 
-    async def _forward_cost(
-        self, run_id: str, response: Any, context: Dict[str, Any]
-    ) -> None:
+    async def _forward_cost(self, run_id: str, response: Any, context: Dict[str, Any]) -> None:
         """Forward token-usage from *response.metadata* to BudgetService.
 
         ``BudgetExhausted`` is re-raised so the GH#8215 hard-stop propagates
@@ -348,9 +330,7 @@ class AutoBotAgentAdapter:
             from llc.services.budget import BudgetService
 
             async with self._budget_session_factory() as session:
-                await BudgetService().ingest_cost_event(
-                    session, agent_id, tokens_in, tokens_out, model
-                )
+                await BudgetService().ingest_cost_event(session, agent_id, tokens_in, tokens_out, model)
         except BudgetExhausted:
             raise  # Hard-stop from GH#8215: propagate so run is marked FAILED
         except Exception:
@@ -361,22 +341,20 @@ class AutoBotAgentAdapter:
                 exc_info=True,
             )
 
-    async def _persist_run_status(
-        self, run_id: str, final_status: AdapterRunStatus
-    ) -> None:
+    async def _persist_run_status(self, run_id: str, final_status: AdapterRunStatus) -> None:
         """Write terminal run status to Redis for cross-worker visibility."""
         try:
             redis = await get_async_redis_client()
             if redis is None:
                 return
-            payload = json.dumps({
-                "status": final_status.status.value,
-                "error": final_status.error,
-                "exit_code": final_status.exit_code,
-            })
-            await redis.setex(
-                f"{_REDIS_KEY_PREFIX}{run_id}", _REDIS_STATUS_TTL, payload
+            payload = json.dumps(
+                {
+                    "status": final_status.status.value,
+                    "error": final_status.error,
+                    "exit_code": final_status.exit_code,
+                }
             )
+            await redis.setex(f"{_REDIS_KEY_PREFIX}{run_id}", _REDIS_STATUS_TTL, payload)
         except Exception:
             logger.warning(
                 "AutoBotAgentAdapter: Redis status persist failed for run_id=%s",
@@ -429,9 +407,7 @@ def _task_to_status(task: asyncio.Task) -> AdapterRunStatus:
         status_val = getattr(result, "status", "success")
 
     if status_val == "error":
-        error_msg = (
-            result.get("error") if isinstance(result, dict) else getattr(result, "error", None)
-        )
+        error_msg = result.get("error") if isinstance(result, dict) else getattr(result, "error", None)
         return AdapterRunStatus(
             status=LLCRunStatus.FAILED,
             exit_code=1,
@@ -464,7 +440,15 @@ def _build_agent_request(run_id: str, context: Dict[str, Any]) -> AgentRequest:
     }
     # Merge any extra keys the caller wants to pass through.
     for k, v in context.items():
-        if k not in ("title", "description", "acceptance_criteria", "goal_ancestry", "kb_context", "agent_id", "action"):
+        if k not in (
+            "title",
+            "description",
+            "acceptance_criteria",
+            "goal_ancestry",
+            "kb_context",
+            "agent_id",
+            "action",
+        ):
             payload[k] = v
 
     return AgentRequest(

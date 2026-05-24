@@ -54,26 +54,15 @@ class BudgetService(LLCServiceBase):
             )
             cost = Decimal("0")
         else:
-            cost = Decimal(
-                str(
-                    (tokens_in * pricing["input"] + tokens_out * pricing["output"])
-                    / 1_000_000
-                )
-            )
+            cost = Decimal(str((tokens_in * pricing["input"] + tokens_out * pricing["output"]) / 1_000_000))
 
         # Atomic increment — prevents lost-update across concurrent workers
         await session.execute(
-            text(
-                "UPDATE llc_agent_budgets"
-                " SET budget_spent = budget_spent + :cost"
-                " WHERE agent_id = :agent_id"
-            ),
+            text("UPDATE llc_agent_budgets" " SET budget_spent = budget_spent + :cost" " WHERE agent_id = :agent_id"),
             {"cost": str(cost), "agent_id": agent_id},
         )
 
-        result = await session.execute(
-            select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id)
-        )
+        result = await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id))
         row = result.scalar_one_or_none()
 
         if row is None:
@@ -88,25 +77,19 @@ class BudgetService(LLCServiceBase):
         threshold = Decimal(str(row.alert_threshold))
 
         if spent > limit:
-            raise BudgetExhausted(
-                agent_id=agent_id, spent=float(spent), limit=float(limit)
-            )
+            raise BudgetExhausted(agent_id=agent_id, spent=float(spent), limit=float(limit))
 
         if limit > Decimal("0") and spent / limit >= threshold:
             await self._emit_alert(agent_id, float(spent), float(limit))
 
         return cost
 
-    async def check_budget(
-        self, session: AsyncSession, agent_id: str
-    ) -> Tuple[Decimal, bool, bool]:
+    async def check_budget(self, session: AsyncSession, agent_id: str) -> Tuple[Decimal, bool, bool]:
         """Return (remaining, is_over_limit, alert_triggered) for an agent.
 
         remaining can be negative when spent exceeds limit.
         """
-        result = await session.execute(
-            select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id)
-        )
+        result = await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id))
         row = result.scalar_one_or_none()
 
         if row is None:
@@ -122,9 +105,7 @@ class BudgetService(LLCServiceBase):
 
         return remaining, is_over_limit, alert_triggered
 
-    async def _emit_alert(
-        self, agent_id: str, spent: float, limit: float
-    ) -> None:
+    async def _emit_alert(self, agent_id: str, spent: float, limit: float) -> None:
         """Publish llc:budget_alert to Redis.
 
         Swallows all exceptions — Redis failure must NOT roll back the budget
@@ -132,9 +113,7 @@ class BudgetService(LLCServiceBase):
         """
         redis = await get_async_redis_client()
         if redis is None:
-            logger.warning(
-                "Redis unavailable — skipping llc:budget_alert for %s", agent_id
-            )
+            logger.warning("Redis unavailable — skipping llc:budget_alert for %s", agent_id)
             return
         try:
             await redis.publish(
@@ -148,6 +127,4 @@ class BudgetService(LLCServiceBase):
                 ),
             )
         except Exception:
-            logger.exception(
-                "Failed to emit llc:budget_alert for %s", agent_id
-            )
+            logger.exception("Failed to emit llc:budget_alert for %s", agent_id)

@@ -11,9 +11,7 @@ class BudgetExhausted(Exception):
         self.agent_id = agent_id
         self.spent = spent
         self.limit = limit
-        super().__init__(
-            f"Agent {agent_id} budget exhausted: spent={spent:.6f} limit={limit:.6f}"
-        )
+        super().__init__(f"Agent {agent_id} budget exhausted: spent={spent:.6f} limit={limit:.6f}")
 
 
 class ApiKeyNotFound(Exception):
@@ -28,6 +26,5 @@ class WipLimitExceeded(Exception):
         self.wip_limit = wip_limit
         self.current_count = current_count
         super().__init__(
-            f"Column '{column_name}' is at WIP limit ({wip_limit}); "
-            f"currently has {current_count} item(s)."
+            f"Column '{column_name}' is at WIP limit ({wip_limit}); " f"currently has {current_count} item(s)."
         )

@@ -13,7 +13,6 @@ from httpx import AsyncClient
 from llc.models.goal import GoalLevel, GoalStatus, LLCGoal
 from llc.services.goal import GoalService
 
-
 # ----------------------------------------------------------------- Fixtures
 
 
@@ -72,8 +71,7 @@ async def test_create_goal_with_parent(svc: GoalService) -> None:
     session = AsyncMock()
     session.flush = AsyncMock()
 
-    with patch.object(svc, "get", new=AsyncMock(return_value=parent)), \
-         patch.object(svc, "_schedule_post_commit_index"):
+    with patch.object(svc, "get", new=AsyncMock(return_value=parent)), patch.object(svc, "_schedule_post_commit_index"):
         goal = await svc.create(
             session,
             company_id="co1",
@@ -136,8 +134,7 @@ async def test_update_goal(svc: GoalService) -> None:
     session = AsyncMock()
     session.flush = AsyncMock()
 
-    with patch.object(svc, "get", new=AsyncMock(return_value=goal)), \
-         patch.object(svc, "_schedule_post_commit_index"):
+    with patch.object(svc, "get", new=AsyncMock(return_value=goal)), patch.object(svc, "_schedule_post_commit_index"):
         updated = await svc.update(session, goal.id, title="New Title")
 
     assert updated is goal
@@ -208,8 +205,10 @@ async def test_delete_goal_found(svc: GoalService) -> None:
     mock_result.rowcount = 1
     session.execute = AsyncMock(return_value=mock_result)
 
-    with patch.object(svc, "get_subtree", new=AsyncMock(return_value=[goal])), \
-         patch.object(svc, "_schedule_post_commit_chromadb_delete"):
+    with (
+        patch.object(svc, "get_subtree", new=AsyncMock(return_value=[goal])),
+        patch.object(svc, "_schedule_post_commit_chromadb_delete"),
+    ):
         deleted = await svc.delete(session, goal.id)
 
     assert deleted is True
@@ -238,8 +237,10 @@ async def test_delete_goal_schedules_chromadb_cleanup(svc: GoalService) -> None:
     session.execute = AsyncMock(return_value=mock_result)
 
     mock_schedule = MagicMock()
-    with patch.object(svc, "get_subtree", new=AsyncMock(return_value=subtree)), \
-         patch.object(svc, "_schedule_post_commit_chromadb_delete", mock_schedule):
+    with (
+        patch.object(svc, "get_subtree", new=AsyncMock(return_value=subtree)),
+        patch.object(svc, "_schedule_post_commit_chromadb_delete", mock_schedule),
+    ):
         deleted = await svc.delete(session, root.id)
 
     assert deleted is True
@@ -363,9 +364,7 @@ async def test_index_goal_swallows_chroma_error(svc: GoalService) -> None:
 
     goal = _make_goal()
     mock_chroma_module = MagicMock()
-    mock_chroma_module.get_async_chromadb_client = AsyncMock(
-        side_effect=RuntimeError("chroma down")
-    )
+    mock_chroma_module.get_async_chromadb_client = AsyncMock(side_effect=RuntimeError("chroma down"))
 
     with patch.dict(sys.modules, {"utils.async_chromadb_client": mock_chroma_module}):
         await svc._index_goal(goal)
@@ -376,9 +375,7 @@ async def test_delete_from_chromadb_swallows_error(svc: GoalService) -> None:
     import sys
 
     mock_chroma_module = MagicMock()
-    mock_chroma_module.get_async_chromadb_client = AsyncMock(
-        side_effect=RuntimeError("chroma down")
-    )
+    mock_chroma_module.get_async_chromadb_client = AsyncMock(side_effect=RuntimeError("chroma down"))
 
     with patch.dict(sys.modules, {"utils.async_chromadb_client": mock_chroma_module}):
         await svc._delete_from_chromadb("co1", ["id-1", "id-2"])

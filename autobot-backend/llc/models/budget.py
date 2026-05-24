@@ -21,17 +21,9 @@ class LLCAgentBudget(Base):
 
     __tablename__ = "llc_agent_budgets"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     company_id: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
-    agent_id: Mapped[str] = mapped_column(
-        String(255), unique=True, index=True, nullable=False
-    )
+    agent_id: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     budget_limit: Mapped[Decimal] = mapped_column(Numeric(15, 6), nullable=False)
-    budget_spent: Mapped[Decimal] = mapped_column(
-        Numeric(15, 6), nullable=False, default=Decimal("0")
-    )
-    alert_threshold: Mapped[float] = mapped_column(
-        Float, nullable=False, default=0.8
-    )
+    budget_spent: Mapped[Decimal] = mapped_column(Numeric(15, 6), nullable=False, default=Decimal("0"))
+    alert_threshold: Mapped[float] = mapped_column(Float, nullable=False, default=0.8)

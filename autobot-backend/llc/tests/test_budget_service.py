@@ -36,9 +36,7 @@ async def test_ingest_accumulates_cost() -> None:
     session = _make_session(row)
 
     svc = BudgetService()
-    with patch(
-        "llc.services.budget.get_async_redis_client", new_callable=AsyncMock
-    ) as mock_redis:
+    with patch("llc.services.budget.get_async_redis_client", new_callable=AsyncMock) as mock_redis:
         mock_redis.return_value = None
         await svc.ingest_cost_event(session, "agent-001", 100, 50, "claude-sonnet-4-6")
         await svc.ingest_cost_event(session, "agent-001", 100, 50, "claude-sonnet-4-6")
@@ -53,13 +51,9 @@ async def test_hard_stop_raises_budget_exhausted() -> None:
     session = _make_session(row)
 
     svc = BudgetService()
-    with patch(
-        "llc.services.budget.get_async_redis_client", new_callable=AsyncMock
-    ):
+    with patch("llc.services.budget.get_async_redis_client", new_callable=AsyncMock):
         with pytest.raises(BudgetExhausted) as exc_info:
-            await svc.ingest_cost_event(
-                session, "agent-001", 1000, 500, "claude-sonnet-4-6"
-            )
+            await svc.ingest_cost_event(session, "agent-001", 1000, 500, "claude-sonnet-4-6")
 
     assert exc_info.value.agent_id == "agent-001"
     assert exc_info.value.spent > exc_info.value.limit
@@ -127,13 +121,9 @@ async def test_unknown_model_zero_cost() -> None:
     session = _make_session(row)
 
     svc = BudgetService()
-    with patch(
-        "llc.services.budget.get_async_redis_client", new_callable=AsyncMock
-    ) as mock_redis:
+    with patch("llc.services.budget.get_async_redis_client", new_callable=AsyncMock) as mock_redis:
         mock_redis.return_value = None
-        cost = await svc.ingest_cost_event(
-            session, "agent-001", 1000, 500, "unknown-model-xyz"
-        )
+        cost = await svc.ingest_cost_event(session, "agent-001", 1000, 500, "unknown-model-xyz")
 
     assert cost == Decimal("0")
     # UPDATE was still called (with cost=0)

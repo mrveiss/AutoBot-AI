@@ -65,6 +65,4 @@ class LLCRAGAssembler:
         Returns:
             LLCContext with merged chunks from all relevant collections.
         """
-        raise NotImplementedError(
-            "LLCRAGAssembler.assemble() — concrete impl in GH#8236"
-        )
+        raise NotImplementedError("LLCRAGAssembler.assemble() — concrete impl in GH#8236")

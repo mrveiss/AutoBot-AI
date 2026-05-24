@@ -62,6 +62,4 @@ class LLCWebSocketPublisher:
             payload: Serializable event data.
             actor_id: Optional agent/user that triggered the event.
         """
-        raise NotImplementedError(
-            "LLCWebSocketPublisher.publish() — concrete impl in GH#8255"
-        )
+        raise NotImplementedError("LLCWebSocketPublisher.publish() — concrete impl in GH#8255")

@@ -82,11 +82,7 @@ class BudgetWatchdog:
 
     async def _check_agent_budgets(self, session: AsyncSession) -> None:
         """Check all agent budget rows for threshold violations."""
-        result = await session.execute(
-            select(LLCAgentBudget).where(
-                LLCAgentBudget.budget_limit > 0
-            )
-        )
+        result = await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.budget_limit > 0))
         rows = list(result.scalars().all())
 
         for row in rows:
@@ -158,9 +154,7 @@ class BudgetWatchdog:
     async def _check_company_budgets(self, session: AsyncSession) -> None:
         """Check organization-level monthly budget thresholds."""
         try:
-            result = await session.execute(
-                select(Organization).where(Organization.budget_monthly_cents > 0)
-            )
+            result = await session.execute(select(Organization).where(Organization.budget_monthly_cents > 0))
             orgs = list(result.scalars().all())
         except Exception:
             logger.debug("_check_company_budgets org query failed (swallowed)")

@@ -10,7 +10,6 @@ from llc.models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
 from llc.models.work_item import LLCWorkItem
 from llc.services.backlog import BacklogService
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
