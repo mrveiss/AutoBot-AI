@@ -207,7 +207,7 @@ class SprintAutoCloseService(LLCServiceBase):
         await session.flush()
 
         # -- KB summarization (Phase 2 stub) --
-        await self._summarizer.summarize_and_merge(sprint_id)
+        await self._summarizer.summarize_and_merge(sprint_id, project_id=sprint.project_id)
 
         # -- Roll over incomplete items --
         auto_rollover = await self._resolve_auto_rollover(session, sprint)
