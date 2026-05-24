@@ -40,6 +40,7 @@ from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
 
+from ..adapters import AutoBotAgentAdapter
 from ..exceptions import ProviderRateLimited
 from ..models.enums import HeartbeatInvocationSource, HeartbeatRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
@@ -63,13 +64,14 @@ class HeartbeatScheduler:
     """
 
     def __init__(self) -> None:
-        self._task: Optional[asyncio.Task] = None
+        # GH#8494: store poll task as a named instance attribute to prevent GC
+        self._poll_task: Optional[asyncio.Task] = None
         self._running = False
         self._tasks: set = set()
 
     @property
     def is_running(self) -> bool:
-        return self._running and self._task is not None and not self._task.done()
+        return self._running and self._poll_task is not None and not self._poll_task.done()
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -81,16 +83,18 @@ class HeartbeatScheduler:
             return
         self._running = True
         await self._repopulate_schedule()
-        self._task = asyncio.create_task(self._poll_loop(), name="heartbeat-scheduler")
+        # GH#8494: assign to self._poll_task so the reference is held and GC cannot
+        # collect the task while the scheduler is running.
+        self._poll_task = asyncio.create_task(self._poll_loop(), name="heartbeat-scheduler")
         logger.info("HeartbeatScheduler started")
 
     async def stop(self) -> None:
         """Cancel polling loop, drain in-flight adapter tasks, and exit cleanly."""
         self._running = False
-        if self._task and not self._task.done():
-            self._task.cancel()
+        if self._poll_task and not self._poll_task.done():
+            self._poll_task.cancel()
             try:
-                await self._task
+                await self._poll_task
             except asyncio.CancelledError:
                 pass
         if self._tasks:
@@ -136,8 +140,11 @@ class HeartbeatScheduler:
             mapping[agent_id] = next_ts
 
         if mapping:
-            # NX = add only when member does not exist (skip existing schedules)
-            await redis.zadd(_SCHEDULE_KEY, mapping, nx=True)
+            # GH#8498: use GT flag so existing scores are updated when the agent's
+            # cron expression changes (next fire is later than the current score).
+            # NX was previously used but prevented cron expression updates from
+            # taking effect — an updated schedule would be silently ignored.
+            await redis.zadd(_SCHEDULE_KEY, mapping, gt=True)
             logger.info("Scheduled %d agents in sorted set", len(mapping))
 
         # Re-queue any rate-limited agents whose retry_after is still in the
@@ -283,10 +290,20 @@ class HeartbeatScheduler:
                     return
 
                 # Enrich context with recent decisions when context_mode=fat (GH#8243)
-                if agent.get("context_mode") == "fat":
+                context_mode = agent.get("context_mode") or "slim"
+                if context_mode == "fat":
                     company_id_val = agent.get("company_id")
                     if company_id_val:
                         context["recent_decisions"] = await _fetch_recent_decisions(str(company_id_val))
+
+                # GH#8499: write context_snapshot so the field is never NULL.
+                # For fat context include a generated_at timestamp; for slim/other
+                # modes write the mode so diagnostics can confirm what was used.
+                utc_now_iso = datetime.now(tz=timezone.utc).isoformat()
+                if context_mode == "fat":
+                    run.context_snapshot = {"mode": "fat", "generated_at": utc_now_iso}
+                else:
+                    run.context_snapshot = {"mode": context_mode}
 
             await session.commit()
 
@@ -606,24 +623,41 @@ def _next_fire(cron_expr: str, base_ts: float) -> float:
 
 
 async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> None:
-    """Invoke the configured adapter for this agent.
+    """Invoke the configured adapter for this agent via AutoBotAgentAdapter.
 
-    Currently a no-op placeholder — the adapter dispatch layer
-    (GH#8226) will inject its implementation here.
+    GH#8490: replaces the no-op stub with a real dispatch through
+    ``AutoBotAgentAdapter`` so heartbeat runs actually execute agents.
+
+    The adapter is instantiated per-call using the agent's ``adapter_config``
+    (a JSON dict stored in ``agent_org_nodes.adapter_config``).  For agents
+    without an explicit ``adapter_config`` or ``adapter_type`` we fall back to
+    a minimal noop so existing rows are not broken during rollout.
 
     Adapters should raise ``ProviderRateLimited`` when the LLM provider
     rejects the request due to quota or rate limits so the scheduler can
     schedule an automatic retry rather than marking the run as failed.
     """
-    adapter_type = agent.get("adapter_type") or "noop"
+    adapter_type = agent.get("adapter_type") or "autobot_agent"
+    adapter_config = agent.get("adapter_config") or {}
+
     logger.debug(
         "Dispatching adapter=%s for agent=%s context_keys=%s",
         adapter_type,
         agent["agent_id"],
         sorted(context.keys()),
     )
-    # Adapter framework (GH#8226) will replace this stub.
-    await asyncio.sleep(0)
+
+    if not adapter_config.get("agent_class"):
+        # No agent_class configured — log and return (graceful degradation).
+        logger.warning(
+            "agent %s has no adapter_config.agent_class — skipping dispatch (configure agent_class to enable)",
+            agent["agent_id"],
+        )
+        return
+
+    # GH#8490: instantiate AutoBotAgentAdapter and invoke through the protocol.
+    adapter = AutoBotAgentAdapter(agent_config=adapter_config)
+    await adapter.invoke(agent_config=adapter_config, context=dict(context, agent_id=agent["agent_id"]))
 
 
 async def _fetch_recent_decisions(company_id: str, n: int = 5) -> list[Dict[str, Any]]:
