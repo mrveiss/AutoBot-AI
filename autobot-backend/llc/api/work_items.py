@@ -15,7 +15,9 @@ Routes:
   POST   /api/llc/work-items/{work_item_id}/handoff/to-human   (GH#8231)
   POST   /api/llc/work-items/{work_item_id}/review/approve     (GH#8231)
   POST   /api/llc/work-items/{work_item_id}/review/request-changes (GH#8231)
-  GET    /api/llc/work-items/{work_item_id}/handoff-brief       (GH#8231)"""
+  GET    /api/llc/work-items/{work_item_id}/handoff-brief       (GH#8231)
+  POST   /api/llc/work-items/{work_item_id}/coworker   (set/clear co-worker — GH#8230)
+"""
 
 import uuid
 from typing import Any, Dict, List, Optional
@@ -28,6 +30,7 @@ from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
 
+from ..kb.collections import KbCollectionManager
 from ..models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
 from ..services.handoff import HandoffAttachment, HandoffNotAllowed, HandoffNotAuthorized, HandoffService
 from ..services.work_item_service import CheckoutConflict, InvalidTransition, WorkItemService
@@ -46,6 +49,7 @@ class HumanUnclaimRequest(BaseModel):
 router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
 _get_service = lazy_singleton(WorkItemService)
 _get_handoff_service = lazy_singleton(HandoffService)
+_kb_manager = KbCollectionManager()
 
 
 def _service() -> WorkItemService:
@@ -247,6 +251,7 @@ async def create_work_item(
         labels=body.labels,
     )
     await session.commit()
+    await _kb_manager.ensure_collection(KbCollectionManager.WORK_ITEM_PREFIX, item.id)
     return _item_to_dict(item)
 
 
@@ -364,6 +369,8 @@ async def transition_work_item(
     try:
         item = await _service().transition_status(session, work_item_id, body.status)
         await session.commit()
+        if item.status == WorkItemStatus.DONE:
+            await _kb_manager.archive_collection(KbCollectionManager.WORK_ITEM_PREFIX, item.id)
         return _item_to_dict(item)
     except InvalidTransition as exc:
         raise HTTPException(status_code=422, detail=str(exc))

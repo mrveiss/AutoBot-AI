@@ -26,6 +26,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from llc.kb.collections import KbCollectionManager
 from llc.models.company import (
     CompanyAncestor,
     CompanyCreate,
@@ -52,6 +53,8 @@ from user_management.database import get_async_session
 from user_management.models.organization import Organization
 
 router = APIRouter(prefix="/companies", tags=["llc-companies"])
+
+_kb_manager = KbCollectionManager()
 
 
 # ------------------------------------------------------------------
@@ -128,6 +131,8 @@ async def create_company(
     try:
         org = await svc.create(body)
         await svc.session.commit()
+        for suffix in (None, KbCollectionManager.AGENTS_SUFFIX, KbCollectionManager.DECISIONS_SUFFIX):
+            await _kb_manager.ensure_collection(KbCollectionManager.COMPANY_PREFIX, org.id, suffix)
         return _to_read(org)
     except CompanyIssuePrefixConflictError as exc:
         await svc.session.rollback()

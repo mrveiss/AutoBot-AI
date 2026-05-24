@@ -40,6 +40,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from user_management.database import get_async_session
 
+from ..kb.collections import KbCollectionManager
 from ..models.enums import ApprovalStatus, ApprovalType, SprintStatus
 from ..models.sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint
 from ..services.approval import ApprovalNotFoundError, ApprovalService, ApprovalStateError
@@ -50,6 +51,7 @@ router = APIRouter(tags=["llc-sprints"])
 
 _approval_svc = ApprovalService()
 _autoclose_svc = SprintAutoCloseService(approval_service=_approval_svc)
+_kb_manager = KbCollectionManager()
 
 
 # ------------------------------------------------------------------ Schemas
@@ -365,6 +367,7 @@ async def create_project(
     session.add(project)
     await session.commit()
     await session.refresh(project)
+    await _kb_manager.ensure_collection(KbCollectionManager.PROJECT_PREFIX, project.id)
     return project
 
 
@@ -444,6 +447,7 @@ async def create_sprint(
     session.add(sprint)
     await session.commit()
     await session.refresh(sprint)
+    await _kb_manager.ensure_collection(KbCollectionManager.SPRINT_PREFIX, sprint.id)
     return sprint
 
 
