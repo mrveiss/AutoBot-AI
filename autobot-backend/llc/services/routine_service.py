@@ -122,9 +122,7 @@ class RoutineService(LLCServiceBase):
             if redis is not None:
                 await redis.zrem(_SCHEDULE_KEY, f"routine:{routine_id}")
         except Exception as exc:
-            logger.warning(
-                "Failed to remove routine %s from Redis schedule: %s", routine_id, exc
-            )
+            logger.warning("Failed to remove routine %s from Redis schedule: %s", routine_id, exc)
 
     # ------------------------------------------------------------------
     # Run recording
@@ -211,9 +209,7 @@ class RoutineService(LLCServiceBase):
                         )
                         continue
                     try:
-                        resolved[key] = await secret_service.get(
-                            session, company_id_str, secret_name
-                        )
+                        resolved[key] = await secret_service.get(session, company_id_str, secret_name)
                     except SecretNotFound:
                         logger.warning(
                             "Secret '%s' not found for company %s (env key '%s') — skipping",

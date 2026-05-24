@@ -166,12 +166,14 @@ _svc_key_stub.LLMApiKeyRecord = MagicMock()  # type: ignore[attr-defined]
 _svc_key_stub.get_llm_api_key_service = MagicMock()  # type: ignore[attr-defined]
 _svc_cost_stub = sys.modules["services.llm_cost_tracker"]
 
+
 # Provide a minimal cost-tracker stub whose calculate_cost() returns 0.0 so
 # that the ``response_cost > 0`` guard in openai_compat.py works correctly in
 # tests that don't patch get_cost_tracker themselves.
 class _StubCostTracker:
     def calculate_cost(self, *_a, **_k) -> float:
         return 0.0
+
 
 _svc_cost_stub.get_cost_tracker = lambda: _StubCostTracker()  # type: ignore[attr-defined]
 
@@ -348,13 +350,17 @@ for _causal_mod in [
 # Ensure CausalErrorRecovery / RecoveryPlan / get_recovery_recommender are
 # resolvable from the stub so orchestration/__init__.py's wildcard import
 # (`from .causal_error_recovery import CausalErrorRecovery, ...`) succeeds.
-_cer_stub = sys.modules.get("orchestration.causal_error_recovery") or _make_pkg_stub("orchestration.causal_error_recovery")
+_cer_stub = sys.modules.get("orchestration.causal_error_recovery") or _make_pkg_stub(
+    "orchestration.causal_error_recovery"
+)
 _cer_stub.CausalErrorRecovery = MagicMock()  # type: ignore[attr-defined]
 _cer_stub.RecoveryPlan = MagicMock()  # type: ignore[attr-defined]
 _cer_stub.get_recovery_recommender = MagicMock()  # type: ignore[attr-defined]
 sys.modules["orchestration.causal_error_recovery"] = _cer_stub
 
-_cea_stub = sys.modules.get("orchestration.causal_error_analyzer") or _make_pkg_stub("orchestration.causal_error_analyzer")
+_cea_stub = sys.modules.get("orchestration.causal_error_analyzer") or _make_pkg_stub(
+    "orchestration.causal_error_analyzer"
+)
 _cea_stub.CausalErrorAnalysis = MagicMock()  # type: ignore[attr-defined]
 sys.modules["orchestration.causal_error_analyzer"] = _cea_stub
 

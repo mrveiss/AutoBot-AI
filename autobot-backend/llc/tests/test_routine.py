@@ -30,7 +30,6 @@ from llc.models.enums import RoutineProduces, RoutineStatus
 from llc.models.routine import LLCRoutine, LLCRoutineRun
 from llc.services.routine_service import RoutineService
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -214,13 +213,9 @@ async def test_secret_ref_resolution() -> None:
     mock_secret_service.get.return_value = "supersecret"
 
     svc = RoutineService()
-    merged = await svc.resolve_env(
-        session, routine, secret_service=mock_secret_service
-    )
+    merged = await svc.resolve_env(session, routine, secret_service=mock_secret_service)
 
-    mock_secret_service.get.assert_awaited_once_with(
-        session, str(_COMPANY_ID), "db_password"
-    )
+    mock_secret_service.get.assert_awaited_once_with(session, str(_COMPANY_ID), "db_password")
     assert merged["DB_PASS"] == "supersecret"
 
 

@@ -69,9 +69,7 @@ def upgrade() -> None:
         ),
     )
     op.create_index("ix_llc_routines_company_id", "llc_routines", ["company_id"])
-    op.create_index(
-        "ix_llc_routines_assignee_agent_id", "llc_routines", ["assignee_agent_id"]
-    )
+    op.create_index("ix_llc_routines_assignee_agent_id", "llc_routines", ["assignee_agent_id"])
 
 
 def downgrade() -> None:

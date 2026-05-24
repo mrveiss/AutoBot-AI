@@ -15,6 +15,7 @@ __version__ = "0.1.0"
 def __getattr__(name: str):  # noqa: ANN001
     if name == "router":
         from .api import router  # noqa: PLC0415
+
         return router
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 

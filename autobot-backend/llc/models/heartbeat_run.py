@@ -57,9 +57,7 @@ class LLCHeartbeatRun(Base):
         index=True,
     )
 
-    started_at: Mapped[Optional[datetime]] = mapped_column(
-        sa.DateTime(timezone=True), nullable=True, index=True
-    )
+    started_at: Mapped[Optional[datetime]] = mapped_column(sa.DateTime(timezone=True), nullable=True, index=True)
     finished_at: Mapped[Optional[datetime]] = mapped_column(sa.DateTime(timezone=True), nullable=True)
     error: Mapped[Optional[str]] = mapped_column(sa.Text(), nullable=True)
     external_run_id: Mapped[Optional[str]] = mapped_column(sa.Text(), nullable=True)

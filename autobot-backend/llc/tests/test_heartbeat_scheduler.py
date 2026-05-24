@@ -24,7 +24,6 @@ from llc.scheduler.heartbeat_scheduler import (
     _next_fire,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -156,9 +155,7 @@ class TestDispatchDue:
                 "llc.scheduler.heartbeat_scheduler.get_async_redis_client",
                 new=AsyncMock(return_value=mock_redis),
             ),
-            patch.object(
-                scheduler, "_handle_due_agent", new=AsyncMock()
-            ) as mock_handle,
+            patch.object(scheduler, "_handle_due_agent", new=AsyncMock()) as mock_handle,
         ):
             await scheduler._dispatch_due()
 
