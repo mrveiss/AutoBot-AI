@@ -155,12 +155,15 @@ class KbCollectionManager:
             # Copy all documents from original to archived
             documents = await original.get()
             if documents and documents.get("ids"):
-                await archived.add(
-                    ids=documents["ids"],
-                    embeddings=documents.get("embeddings"),
-                    metadatas=documents.get("metadatas"),
-                    documents=documents.get("documents"),
-                )
+                embeddings = documents.get("embeddings")
+                add_kwargs: dict = {
+                    "ids": documents["ids"],
+                    "metadatas": documents.get("metadatas"),
+                    "documents": documents.get("documents"),
+                }
+                if embeddings is not None:
+                    add_kwargs["embeddings"] = embeddings
+                await archived.add(**add_kwargs)
 
             # Delete original collection
             await kb._async_chroma_client.delete_collection(original_name)

@@ -77,6 +77,9 @@ class SprintKbSummarizer:
                 "Cannot resolve project_id for sprint %s; skipping KB merge",
                 sprint_id,
             )
+            await self._km.archive_collection(
+                KbCollectionManager.SPRINT_PREFIX, sprint_id
+            )
             return None
 
         project_collection = KbCollectionManager.collection_name(
@@ -212,7 +215,7 @@ class SprintKbSummarizer:
             )
             # Fall back to direct merge on LLM failure
             await self._direct_merge(docs, dst_collection, sprint_id, project_id)
-            return ""
+            return "[direct-merged: LLM summarization failed]"
 
         summary_text: str = response.content or ""
         closed_at = datetime.now(timezone.utc).isoformat()
