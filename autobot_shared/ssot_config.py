@@ -204,6 +204,11 @@ class LLMConfig(BaseSettings):
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
     anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
 
+    # Claude escalation feature flag (#8171): disabled by default so local LLM
+    # path is unchanged unless AUTOBOT_CLAUDE_ESCALATION_ENABLED=true is set.
+    claude_escalation_enabled: bool = Field(default=False, alias="AUTOBOT_CLAUDE_ESCALATION_ENABLED")
+    claude_escalation_threshold: float = Field(default=7.0, alias="AUTOBOT_CLAUDE_ESCALATION_THRESHOLD")
+
     # LlamaIndex-specific configuration for RAG/vectorization
     # These are explicit settings - no fallbacks. Must be configured correctly.
     llamaindex_llm_provider: str = Field(default="ollama", alias="AUTOBOT_LLAMAINDEX_LLM_PROVIDER")
