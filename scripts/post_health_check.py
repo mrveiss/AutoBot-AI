@@ -9,17 +9,18 @@ import logging
 from pathlib import Path
 from datetime import datetime
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
 
 def post_to_github(issue_number, comment_body):
     """Post comment to GitHub issue"""
     try:
         result = subprocess.run(
-            ['gh', 'issue', 'comment', str(issue_number), '--body', comment_body],
+            ["gh", "issue", "comment", str(issue_number), "--body", comment_body],
             capture_output=True,
             text=True,
-            timeout=30
+            timeout=30,
         )
         if result.returncode == 0:
             logger.info(f"Posted comment to issue #{issue_number}")
@@ -31,10 +32,11 @@ def post_to_github(issue_number, comment_body):
         logger.error(f"Error posting to GitHub: {e}")
         return False
 
+
 def file_issue(title, body):
     """File a new GitHub issue"""
     try:
-        cmd = ['gh', 'issue', 'create', '--title', title, '--body', body]
+        cmd = ["gh", "issue", "create", "--title", title, "--body", body]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         if result.returncode == 0:
             logger.info(f"Filed issue: {title}")
@@ -46,9 +48,10 @@ def file_issue(title, body):
         logger.error(f"Error filing issue: {e}")
         return False
 
+
 def main():
     # Read the health check report
-    report_file = Path('/tmp/autobot-health-check.md')
+    report_file = Path("/tmp/autobot-health-check.md")
     if not report_file.exists():
         logger.error("Health check report not found")
         return 1
@@ -57,25 +60,20 @@ def main():
 
     # Parse the report to extract issues
     issues = []
-    has_failures = '❌' in report
-    if 'Issues Found' in report:
-        lines = report.split('Issues Found')[1].split('\n')
+    has_failures = "❌" in report
+    if "Issues Found" in report:
+        lines = report.split("Issues Found")[1].split("\n")
         for line in lines:
-            if line.startswith('- '):
+            if line.startswith("- "):
                 issues.append(line[2:].strip())
 
     # Try to post to MVA-12 if it exists, otherwise to a discovery issue
     # First check if MVA-12 exists
-    check_mva12 = subprocess.run(
-        ['gh', 'issue', 'view', '12'],
-        capture_output=True,
-        text=True,
-        timeout=10
-    )
+    check_mva12 = subprocess.run(["gh", "issue", "view", "12"], capture_output=True, text=True, timeout=10)
 
     if check_mva12.returncode == 0:
         # MVA-12 exists, post to it
-        mva_issue = '12'
+        mva_issue = "12"
         success = post_to_github(mva_issue, report)
         if success:
             logger.info(f"Posted health check report to issue #{mva_issue}")
@@ -100,5 +98,6 @@ def main():
 
     return 0
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     exit(main())

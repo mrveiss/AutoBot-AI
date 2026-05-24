@@ -7,11 +7,23 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
-_EXCLUDED_DIRS: frozenset[str] = frozenset({
-    "__pycache__", "node_modules", ".venv", "venv", ".git",
-    "dist", "build", ".tox", ".pytest_cache", ".mypy_cache",
-    ".ruff_cache", ".worktrees", "htmlcov",
-})
+_EXCLUDED_DIRS: frozenset[str] = frozenset(
+    {
+        "__pycache__",
+        "node_modules",
+        ".venv",
+        "venv",
+        ".git",
+        "dist",
+        "build",
+        ".tox",
+        ".pytest_cache",
+        ".mypy_cache",
+        ".ruff_cache",
+        ".worktrees",
+        "htmlcov",
+    }
+)
 
 
 @dataclass
@@ -31,9 +43,7 @@ class Context:
         self._ast_cache[file_path] = tree
         return tree
 
-    def iter_targets(
-        self, targets: list[str], *, suffixes: set[str]
-    ) -> Iterator[Path]:
+    def iter_targets(self, targets: list[str], *, suffixes: set[str]) -> Iterator[Path]:
         for target in targets:
             base = self.repo_root / target
             if not base.exists():
@@ -56,9 +66,7 @@ def _walk(base: Path, suffixes: set[str]) -> Iterator[Path]:
         yield path
 
 
-def file_in_targets(
-    file_path: Path, targets: list[str], *, repo_root: Path
-) -> bool:
+def file_in_targets(file_path: Path, targets: list[str], *, repo_root: Path) -> bool:
     try:
         rel = file_path.resolve().relative_to(repo_root.resolve())
     except ValueError:

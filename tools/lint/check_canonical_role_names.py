@@ -25,6 +25,7 @@ Exit code:
   0 — clean
   1 — banned patterns found (commit blocked)
 """
+
 from __future__ import annotations
 
 import re

@@ -37,9 +37,7 @@ class OTELObserver:
             "llm.completion_tokens": (response.usage or {}).get("completion_tokens", 0),
             "llm.total_tokens": (response.usage or {}).get("total_tokens", 0),
         }
-        with _tracer.start_as_current_span(
-            "llm.inference", kind=SpanKind.CLIENT, attributes=span_attrs
-        ) as span:
+        with _tracer.start_as_current_span("llm.inference", kind=SpanKind.CLIENT, attributes=span_attrs) as span:
             if response.error:
                 span.set_status(Status(StatusCode.ERROR, response.error))
                 span.set_attribute("llm.error", True)
@@ -53,8 +51,6 @@ class OTELObserver:
             "llm.request_id": request.request_id or "",
             "llm.error": True,
         }
-        with _tracer.start_as_current_span(
-            "llm.inference.error", kind=SpanKind.CLIENT, attributes=span_attrs
-        ) as span:
+        with _tracer.start_as_current_span("llm.inference.error", kind=SpanKind.CLIENT, attributes=span_attrs) as span:
             span.set_status(Status(StatusCode.ERROR, str(exc)))
             span.record_exception(exc)

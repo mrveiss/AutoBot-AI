@@ -9,6 +9,7 @@ identical ``_iter_target_files`` implementations drifted independently
 (``.worktrees`` exclusion fixed in one, then the other). A single source
 of truth prevents a third such drift.
 """
+
 from __future__ import annotations
 
 from pathlib import Path

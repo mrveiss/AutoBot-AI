@@ -431,13 +431,9 @@ class TestSync:
         """GH#8296: errors from _ingest_content must appear in SyncResult.errors."""
         cfg = _make_config(["https://example.com"])
         connector = WebCrawlerConnector(cfg)
-        fetch_result = _make_fetch_result(
-            "https://example.com", markdown="# Some content here for ingest."
-        )
+        fetch_result = _make_fetch_result("https://example.com", markdown="# Some content here for ingest.")
         with patch.object(WebCrawlerConnector, "crawl", new=AsyncMock(return_value=[fetch_result])):
-            with patch.object(
-                connector, "_ingest_content", new=AsyncMock(side_effect=RuntimeError("ingest boom"))
-            ):
+            with patch.object(connector, "_ingest_content", new=AsyncMock(side_effect=RuntimeError("ingest boom"))):
                 result = await connector.sync(incremental=True)
         assert any("ingest boom" in e for e in result.errors)
         assert result.status == "partial"
@@ -457,9 +453,7 @@ class TestSync:
 
         with patch.object(connector, "_crawl_seed", new=AsyncMock(return_value=[fetch_a])):
             with patch.object(connector, "_write_checkpoint", new=AsyncMock(side_effect=_capture)):
-                with patch(
-                    "knowledge.connectors.web_crawler._ingest_results_to_kb", new=AsyncMock()
-                ):
+                with patch("knowledge.connectors.web_crawler._ingest_results_to_kb", new=AsyncMock()):
                     await connector.sync(incremental=True)
 
         assert _url_to_source_id("https://c.com") not in written

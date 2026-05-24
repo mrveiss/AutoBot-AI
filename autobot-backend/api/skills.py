@@ -237,7 +237,11 @@ async def list_catalog(
     return {"catalog_url": catalog_url, "page": page, "page_size": page_size, "skills": entries, "total": len(entries)}
 
 
-@router.post("/catalog/{name}/install", summary="Install a skill from an HTTP catalog", response_model=DataResponse[SkillCatalogInstallData])
+@router.post(
+    "/catalog/{name}/install",
+    summary="Install a skill from an HTTP catalog",
+    response_model=DataResponse[SkillCatalogInstallData],
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="install_catalog_skill",

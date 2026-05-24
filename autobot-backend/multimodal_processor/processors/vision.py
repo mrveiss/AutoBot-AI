@@ -102,13 +102,19 @@ class VisionProcessor(BaseModalProcessor):
         try:
             # Load CLIP model for image embeddings and classification
             self.logger.info("Loading CLIP model...")
-            self.clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32", resume_download=True).to(self.device)
-            self.clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32", use_fast=True, resume_download=True)
+            self.clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32", resume_download=True).to(
+                self.device
+            )
+            self.clip_processor = CLIPProcessor.from_pretrained(
+                "openai/clip-vit-base-patch32", use_fast=True, resume_download=True
+            )
 
             # Load BLIP-2 model for image captioning and VQA
             # Using smaller model for memory efficiency
             self.logger.info("Loading BLIP-2 model...")
-            self.blip_processor = Blip2Processor.from_pretrained("Salesforce/blip2-opt-2.7b", use_fast=True, resume_download=True)
+            self.blip_processor = Blip2Processor.from_pretrained(
+                "Salesforce/blip2-opt-2.7b", use_fast=True, resume_download=True
+            )
 
             # Check if accelerate is available for device_map
             try:

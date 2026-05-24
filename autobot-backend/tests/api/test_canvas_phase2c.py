@@ -149,7 +149,7 @@ class TestCanvasCSPHeader:
         }
 
         with TestClient(app) as client:
-                resp = client.get(f"/api/canvas/{_CANVAS_ID}")
+            resp = client.get(f"/api/canvas/{_CANVAS_ID}")
 
         assert resp.status_code == 200
         csp = resp.headers.get("content-security-policy", "")
@@ -198,10 +198,10 @@ class TestValidChartSpecAccepted:
         }
 
         with TestClient(app) as client:
-                resp = client.post(
-                    f"/api/canvas/{_CANVAS_ID}/cells",
-                    json={"type": "chart", "content": "", "position": 0, "rich_payload": _VALID_CHART_PAYLOAD},
-                )
+            resp = client.post(
+                f"/api/canvas/{_CANVAS_ID}/cells",
+                json={"type": "chart", "content": "", "position": 0, "rich_payload": _VALID_CHART_PAYLOAD},
+            )
 
         assert resp.status_code == 201
         body = resp.json()
@@ -232,9 +232,9 @@ class TestDataUrlSpecRejected:
 
         with TestClient(app) as client:
             resp = client.post(
-                    f"/api/canvas/{_CANVAS_ID}/cells",
-                    json={"type": "chart", "content": "", "position": 0, "rich_payload": payload},
-                )
+                f"/api/canvas/{_CANVAS_ID}/cells",
+                json={"type": "chart", "content": "", "position": 0, "rich_payload": payload},
+            )
 
         assert resp.status_code == 422
         assert "data.url" in resp.json()["detail"]
@@ -256,9 +256,9 @@ class TestDataUrlSpecRejected:
 
         with TestClient(app) as client:
             resp = client.post(
-                    f"/api/canvas/{_CANVAS_ID}/cells",
-                    json={"type": "chart", "content": "", "position": 0, "rich_payload": payload},
-                )
+                f"/api/canvas/{_CANVAS_ID}/cells",
+                json={"type": "chart", "content": "", "position": 0, "rich_payload": payload},
+            )
 
         assert resp.status_code == 422
 
@@ -285,9 +285,9 @@ class TestExecutableRejected:
 
         with TestClient(app) as client:
             resp = client.post(
-                    f"/api/canvas/{_CANVAS_ID}/cells",
-                    json={"type": "chart", "content": "", "position": 0, "rich_payload": payload},
-                )
+                f"/api/canvas/{_CANVAS_ID}/cells",
+                json={"type": "chart", "content": "", "position": 0, "rich_payload": payload},
+            )
 
         assert resp.status_code == 422
         assert "executable" in resp.json()["detail"]
@@ -308,9 +308,9 @@ class TestExecutableRejected:
 
         with TestClient(app) as client:
             resp = client.post(
-                    f"/api/canvas/{_CANVAS_ID}/cells",
-                    json={"type": "code", "content": "", "position": 0, "rich_payload": payload},
-                )
+                f"/api/canvas/{_CANVAS_ID}/cells",
+                json={"type": "code", "content": "", "position": 0, "rich_payload": payload},
+            )
 
         assert resp.status_code == 422
 
@@ -346,10 +346,10 @@ class TestCodeCellCopyAffordance:
         }
 
         with TestClient(app) as client:
-                resp = client.post(
-                    f"/api/canvas/{_CANVAS_ID}/cells",
-                    json={"type": "code", "content": "", "position": 0, "rich_payload": _VALID_CODE_PAYLOAD},
-                )
+            resp = client.post(
+                f"/api/canvas/{_CANVAS_ID}/cells",
+                json={"type": "code", "content": "", "position": 0, "rich_payload": _VALID_CODE_PAYLOAD},
+            )
 
         assert resp.status_code == 201
         body = resp.json()
@@ -383,10 +383,10 @@ class TestCodeCellCopyAffordance:
         }
 
         with TestClient(app) as client:
-                resp = client.post(
-                    f"/api/canvas/{_CANVAS_ID}/cells",
-                    json={"type": "code", "content": "", "position": 0, "rich_payload": _VALID_CODE_PAYLOAD},
-                )
+            resp = client.post(
+                f"/api/canvas/{_CANVAS_ID}/cells",
+                json={"type": "code", "content": "", "position": 0, "rich_payload": _VALID_CODE_PAYLOAD},
+            )
 
         assert resp.status_code == 201
         assert resp.json()["rich_payload"]["executable"] is False
@@ -423,10 +423,10 @@ class TestChartCellAccessibleDataTable:
         }
 
         with TestClient(app) as client:
-                resp = client.post(
-                    f"/api/canvas/{_CANVAS_ID}/cells",
-                    json={"type": "chart", "content": "", "position": 0, "rich_payload": _VALID_CHART_PAYLOAD},
-                )
+            resp = client.post(
+                f"/api/canvas/{_CANVAS_ID}/cells",
+                json={"type": "chart", "content": "", "position": 0, "rich_payload": _VALID_CHART_PAYLOAD},
+            )
 
         assert resp.status_code == 201
         body = resp.json()

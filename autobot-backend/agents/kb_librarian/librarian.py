@@ -341,13 +341,15 @@ class EnhancedKBLibrarian:
         await self.knowledge_base.store_fact(document_content, metadata=metadata)
         logger.info("Stored knowledge for tool: %s", tool_name)
 
-        await publish_event("global", 
+        await publish_event(
+            "global",
             "knowledge_update",
             {
                 "type": "new_tool",
                 "tool_name": tool_name,
                 "message": f"Added knowledge about {tool_name} to the knowledge base",
-            }, persist=PersistStrategy.NONE
+            },
+            persist=PersistStrategy.NONE,
         )
 
     async def get_tool_instructions(self, tool_name: str) -> Dict[str, Any]:

@@ -71,9 +71,7 @@ async def test_terminal_websocket(session_id):
             logger.info(f"✅ WebSocket connected to {uri}")
 
             # Send a simple command
-            command_msg = json.dumps(
-                {"type": "input", "text": "echo 'Hello from terminal test'\n"}
-            )
+            command_msg = json.dumps({"type": "input", "text": "echo 'Hello from terminal test'\n"})
 
             await websocket.send(command_msg)
             logger.info("📤 Sent command: echo 'Hello from terminal test'")
@@ -87,9 +85,7 @@ async def test_terminal_websocket(session_id):
                 try:
                     data = json.loads(response)
                     if data.get("type") == "output":
-                        logger.info(
-                            f"✅ Terminal output received: {data.get('content', '')}"
-                        )
+                        logger.info(f"✅ Terminal output received: {data.get('content', '')}")
                     else:
                         logger.info(f"📊 Terminal response type: {data.get('type')}")
                 except json.JSONDecodeError:
@@ -124,15 +120,11 @@ async def test_workflow_api():
 
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{BASE_URL}/api/workflow/workflows", timeout=5.0
-            )
+            response = await client.get(f"{BASE_URL}/api/workflow/workflows", timeout=5.0)
             if response.status_code == 200:
                 workflow_data = response.json()
                 workflow_count = len(workflow_data.get("workflows", []))
-                logger.info(
-                    f"✅ Workflow API working: {workflow_count} active workflows"
-                )
+                logger.info(f"✅ Workflow API working: {workflow_count} active workflows")
             else:
                 logger.info(f"❌ Workflow API failed: {response.status_code}")
     except Exception as e:
@@ -162,15 +154,11 @@ async def main():
         # Clean up session
         try:
             async with httpx.AsyncClient() as client:
-                delete_response = await client.delete(
-                    f"{BASE_URL}/api/terminal/sessions/{session_id}", timeout=5.0
-                )
+                delete_response = await client.delete(f"{BASE_URL}/api/terminal/sessions/{session_id}", timeout=5.0)
                 if delete_response.status_code == 200:
                     logger.info(f"🧹 Session {session_id} cleaned up successfully")
                 else:
-                    logger.info(
-                        f"⚠️ Session cleanup warning: {delete_response.status_code}"
-                    )
+                    logger.info(f"⚠️ Session cleanup warning: {delete_response.status_code}")
         except Exception as e:
             logger.info(f"⚠️ Session cleanup error: {e}")
 
@@ -180,13 +168,9 @@ async def main():
     logger.info("If you see '❌' errors, there's a configuration or connection issue.")
     logger.info()
     logger.info("📝 COMMON ISSUES:")
-    logger.info(
-        "1. Frontend not connecting - Check browser console for WebSocket errors"
-    )
+    logger.info("1. Frontend not connecting - Check browser console for WebSocket errors")
     logger.info("2. Commands not executing - Verify PTY support and permissions")
-    logger.info(
-        "3. Session not found - Check session ID passing between frontend/backend"
-    )
+    logger.info("3. Session not found - Check session ID passing between frontend/backend")
     logger.info()
     logger.info("🔧 FRONTEND DEBUGGING:")
     logger.info("1. Open browser DevTools (F12)")

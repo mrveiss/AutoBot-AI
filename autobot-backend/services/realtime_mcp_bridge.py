@@ -56,9 +56,7 @@ class RealtimeMCPBridge:
     def __init__(self, is_admin: bool = False) -> None:
         self._is_admin = is_admin
         self._bundle = config.voice_toolset_bundle
-        self._disabled = [
-            t.strip() for t in config.voice_disabled_tools.split(",") if t.strip()
-        ]
+        self._disabled = [t.strip() for t in config.voice_disabled_tools.split(",") if t.strip()]
 
     async def list_realtime_tools(self) -> list[RealtimeTool]:
         """Return Realtime-shaped tool schemas filtered by the active bundle.

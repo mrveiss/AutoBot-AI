@@ -576,13 +576,15 @@ class NPUWorkerManager(AsyncInitializable):
         await self._save_workers_to_config()
 
         # Emit worker removed event
-        await publish_event("global", 
+        await publish_event(
+            "global",
             "npu.worker.removed",
             {
                 "event": "worker.removed",
                 "worker_id": worker_id,
                 "data": {"timestamp": utc_timestamp()},
-            }, persist=PersistStrategy.NONE
+            },
+            persist=PersistStrategy.NONE,
         )
 
     async def test_worker_connection(self, worker_config: NPUWorkerConfig) -> WorkerTestResult:

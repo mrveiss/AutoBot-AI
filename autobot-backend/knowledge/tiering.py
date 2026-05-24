@@ -68,8 +68,8 @@ except ImportError as _e:
 
 HOT_MAX_COLLECTIONS = 16
 WARM_MAX_COLLECTIONS = 64
-PROMOTE_TO_HOT_ACCESSES = 10     # accesses in the last window to go hot
-PROMOTE_TO_WARM_ACCESSES = 3     # accesses to go warm
+PROMOTE_TO_HOT_ACCESSES = 10  # accesses in the last window to go hot
+PROMOTE_TO_WARM_ACCESSES = 3  # accesses to go warm
 REAP_INTERVAL_SECONDS = 60.0
 HOT_STALE_AFTER_SECONDS = 300.0  # demote hot→warm if not accessed in 5 min
 WARM_STALE_AFTER_SECONDS = 1800.0  # demote warm→cold if not accessed in 30 min
@@ -95,6 +95,7 @@ class TierEntry:
 # ---------------------------------------------------------------------------
 # DiskANN cold-tier index wrapper
 # ---------------------------------------------------------------------------
+
 
 class _DiskANNIndex:
     """Thin wrapper around a DiskANN (or fallback FAISS) cold index."""
@@ -170,7 +171,7 @@ class CollectionTierManager:
         self._hot_count: int = 0
         self._warm_count: int = 0
         # Pluggable index loaders — set by the caller for each tier
-        self._hot_loader: Optional[Any] = None   # callable(collection_id) → index
+        self._hot_loader: Optional[Any] = None  # callable(collection_id) → index
         self._warm_loader: Optional[Any] = None
         self._cold_loader: Optional[Any] = None  # returns _DiskANNIndex
         # Issue #8408: shared state backend
@@ -262,16 +263,12 @@ class CollectionTierManager:
         Returns the resulting tier.
         """
         async with self._lock:
-            entry = self._entries.setdefault(
-                collection_id, TierEntry(collection_id=collection_id)
-            )
+            entry = self._entries.setdefault(collection_id, TierEntry(collection_id=collection_id))
             entry.last_accessed = time.monotonic()
 
             # Issue #8408: use Redis shared counter when available so all workers
             # see the same access frequency, preventing per-worker tier divergence.
-            shared_count = await self._redis_hincrby(
-                f"{_REDIS_PREFIX}:access_counts", collection_id, 1
-            )
+            shared_count = await self._redis_hincrby(f"{_REDIS_PREFIX}:access_counts", collection_id, 1)
             entry.access_count = shared_count if shared_count is not None else entry.access_count + 1
 
             new_tier = self._desired_tier(entry)

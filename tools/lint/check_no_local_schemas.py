@@ -22,6 +22,7 @@ Exit codes:
 Background: #5799 (schemas_common.py split), #5996 (terminal/analytics/knowledge model
 merges), #6056 (this hook).
 """
+
 from __future__ import annotations
 
 import ast

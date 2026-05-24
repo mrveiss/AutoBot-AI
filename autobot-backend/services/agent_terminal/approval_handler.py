@@ -167,7 +167,8 @@ class ApprovalHandler:
             try:
                 from events.bus import publish_event, PersistStrategy
 
-                await publish_event("global", 
+                await publish_event(
+                    "global",
                     event_type="command_approval_status",
                     payload={
                         "conversation_id": session.conversation_id,
@@ -177,7 +178,8 @@ class ApprovalHandler:
                         "approved": approved,
                         "comment": comment,
                         "pre_approved": pre_approved,
-                    }, persist=PersistStrategy.NONE
+                    },
+                    persist=PersistStrategy.NONE,
                 )
                 logger.info(
                     f"✅ Approval status broadcast sent: "

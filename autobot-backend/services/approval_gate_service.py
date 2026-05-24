@@ -345,7 +345,8 @@ class ApprovalGateService:
         try:
             from events.bus import publish_event, PersistStrategy
 
-            await publish_event("global", 
+            await publish_event(
+                "global",
                 event_type=event_type,
                 payload={
                     "approval_id": str(approval.id),
@@ -356,7 +357,8 @@ class ApprovalGateService:
                     "decided_by_user": approval.decided_by_user,
                     "workflow_id": approval.workflow_id,
                     "workflow_step": approval.workflow_step,
-                }, persist=PersistStrategy.NONE
+                },
+                persist=PersistStrategy.NONE,
             )
         except Exception as exc:
             logger.warning(

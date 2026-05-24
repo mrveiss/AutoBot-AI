@@ -249,9 +249,7 @@ class WebCrawlerConnector(AbstractConnector):
             await self._clear_checkpoint()
 
         already_processed = await self._read_checkpoint()
-        pending_seeds = [
-            url for url in self._seed_urls if _url_to_source_id(url) not in already_processed
-        ]
+        pending_seeds = [url for url in self._seed_urls if _url_to_source_id(url) not in already_processed]
         if already_processed:
             result.resumed_from_checkpoint = True
             self.logger.info(
@@ -261,6 +259,7 @@ class WebCrawlerConnector(AbstractConnector):
             )
 
         try:
+
             async def _on_seed_done(url: str) -> None:
                 await self._write_checkpoint(_url_to_source_id(url))
 

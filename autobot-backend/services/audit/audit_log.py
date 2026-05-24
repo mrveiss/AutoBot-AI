@@ -26,8 +26,7 @@ Key design choices
 import warnings
 
 warnings.warn(
-    "services.audit.audit_log is deprecated (GH#8290). "
-    "Import from services.audit.unified_audit instead.",
+    "services.audit.audit_log is deprecated (GH#8290). " "Import from services.audit.unified_audit instead.",
     DeprecationWarning,
     stacklevel=2,
 )

@@ -8,6 +8,7 @@ and ``check_no_kb_aioredis_access.py``. Covers the directories each
 hook depends on being excluded (especially ``.worktrees`` — the drift
 that motivated the extraction per #5394 and #5418).
 """
+
 from __future__ import annotations
 
 import importlib.util

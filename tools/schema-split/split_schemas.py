@@ -32,24 +32,24 @@ PYDANTIC_IMPORT = "from typing import Any, Dict, List, Optional\n\nfrom pydantic
 # Domain → file mapping
 # ---------------------------------------------------------------------------
 DOMAIN_FILE = {
-    "terminal":  "schemas_terminal.py",
+    "terminal": "schemas_terminal.py",
     "analytics": "schemas_analytics.py",
     "knowledge": "schemas_knowledge.py",
-    "agent":     "schemas_agent.py",
-    "system":    "schemas_system.py",
+    "agent": "schemas_agent.py",
+    "system": "schemas_system.py",
     "workflows": "schemas_workflows.py",
-    "code":      "schemas_code.py",
-    "common":    "schemas_common.py",
+    "code": "schemas_code.py",
+    "common": "schemas_common.py",
 }
 
 DOMAIN_HEADERS = {
-    "terminal":  "Terminal and AgentTerminal session, SSH, command, and health schemas.",
+    "terminal": "Terminal and AgentTerminal session, SSH, command, and health schemas.",
     "analytics": "Analytics, cost, budget, usage, and metrics schemas.",
     "knowledge": "Knowledge base collection, category, fact, grounding, and audit schemas.",
-    "agent":     "Agent config, memory, and LLM schemas.",
-    "system":    "System health, cache, NPU worker, wake-word, and feature-flag schemas.",
+    "agent": "Agent config, memory, and LLM schemas.",
+    "system": "System health, cache, NPU worker, wake-word, and feature-flag schemas.",
     "workflows": "Workflow, registry, RUM, elevation, advanced-control, state-tracking, and validation schemas.",
-    "code":      "Code review, git, skills, database, template, log, voice, access-control, MCP, and file-sandbox schemas.",
+    "code": "Code review, git, skills, database, template, log, voice, access-control, MCP, and file-sandbox schemas.",
 }
 
 # ---------------------------------------------------------------------------
@@ -64,8 +64,14 @@ DOMAIN_RULES = [
     (r"^Knowledge", "knowledge"),
     (r"^(LLM|Memory)", "agent"),
     (r"^(System|NPU|WakeWord|FeatureFlag|AdminFile)", "system"),
-    (r"^(ValidationDashboard|ValidationJudge|ValidationJudgment|Workflow|Registry|RUM|Elevation|AdvancedControl|StateTracking|StructuredThinking)", "workflows"),
-    (r"^(CodeReview|Git|Skills|SkillsDraft|SkillsApproval|SkillsGovernance|SkillsGap|Database|Template|Templates|Log|Voice|AccessControl|FileSandbox|MCP|HTTP)", "code"),
+    (
+        r"^(ValidationDashboard|ValidationJudge|ValidationJudgment|Workflow|Registry|RUM|Elevation|AdvancedControl|StateTracking|StructuredThinking)",
+        "workflows",
+    ),
+    (
+        r"^(CodeReview|Git|Skills|SkillsDraft|SkillsApproval|SkillsGovernance|SkillsGap|Database|Template|Templates|Log|Voice|AccessControl|FileSandbox|MCP|HTTP)",
+        "code",
+    ),
     (r"^(Success|Data|UsageRecord)", "common"),
 ]
 
@@ -142,7 +148,7 @@ def split(dry_run: bool = False) -> None:
         extra_import = f"\n{base_import}\n" if base_import else ""
 
         file_content = (
-            f"{COPYRIGHT}\"\"\"\n{DOMAIN_HEADERS[domain]}\n\"\"\"\n\n"
+            f'{COPYRIGHT}"""\n{DOMAIN_HEADERS[domain]}\n"""\n\n'
             f"{PYDANTIC_IMPORT}{extra_import}\n"
             f"# ---------------------------------------------------------------------------\n"
             f"# {domain.capitalize()} schemas\n"
@@ -159,13 +165,12 @@ def split(dry_run: bool = False) -> None:
     common_body = "\n\n".join(class_blocks[cls] for cls in common_classes)
 
     new_common = (
-        f"{COPYRIGHT}\"\"\"\n"
+        f'{COPYRIGHT}"""\n'
         "Shared cross-domain Pydantic response schemas for AutoBot API endpoints.\n\n"
         "These are truly generic types used across multiple unrelated domains.\n"
         "Domain-specific schemas live in:\n"
-        + "".join(f"  {DOMAIN_FILE[d]:28s} - {DOMAIN_HEADERS[d]}\n"
-                  for d in sorted(DOMAIN_FILE) if d != "common")
-        + "\"\"\"\n\n"
+        + "".join(f"  {DOMAIN_FILE[d]:28s} - {DOMAIN_HEADERS[d]}\n" for d in sorted(DOMAIN_FILE) if d != "common")
+        + '"""\n\n'
         f"{PYDANTIC_IMPORT}\n"
         "# ---------------------------------------------------------------------------\n"
         "# Generic / reusable (used across multiple unrelated domains)\n"

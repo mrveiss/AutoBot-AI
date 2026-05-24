@@ -39,10 +39,10 @@ logger = get_logger(__name__)
 class PersistStrategy(Enum):
     """Controls which storage backend(s) receive the event."""
 
-    NONE = "none"      # In-memory EventManager only (fire-and-forget signals)
+    NONE = "none"  # In-memory EventManager only (fire-and-forget signals)
     MEMORY = "memory"  # LiveEventManager (WebSocket fan-out, channel-scoped)
-    BOTH = "both"      # EventManager + LiveEventManager (old workaround, now explicit)
-    REDIS = "redis"    # RedisEventStreamManager (durable, task-scoped history)
+    BOTH = "both"  # EventManager + LiveEventManager (old workaround, now explicit)
+    REDIS = "redis"  # RedisEventStreamManager (durable, task-scoped history)
 
 
 class EventBus:
@@ -99,21 +99,15 @@ class EventBus:
         """Remove a disconnected client from all LiveEventManager channels."""
         await get_live_event_manager().remove_client(ws)
 
-    def subscribe(
-        self, event_type: str, listener: Callable[[Dict[str, Any]], Awaitable[None]]
-    ) -> None:
+    def subscribe(self, event_type: str, listener: Callable[[Dict[str, Any]], Awaitable[None]]) -> None:
         """Subscribe a listener to EventManager events (in-process signals)."""
         get_event_manager().subscribe(event_type, listener)
 
-    def unsubscribe(
-        self, event_type: str, listener: Callable[[Dict[str, Any]], Awaitable[None]]
-    ) -> None:
+    def unsubscribe(self, event_type: str, listener: Callable[[Dict[str, Any]], Awaitable[None]]) -> None:
         """Unsubscribe a listener from EventManager events."""
         get_event_manager().unsubscribe(event_type, listener)
 
-    def register_ws_broadcast(
-        self, callback: Callable[[Dict[str, Any]], Awaitable[None]] | None
-    ) -> None:
+    def register_ws_broadcast(self, callback: Callable[[Dict[str, Any]], Awaitable[None]] | None) -> None:
         """Register (or clear) the EventManager WebSocket broadcast callback."""
         get_event_manager().register_websocket_broadcast(callback)
 

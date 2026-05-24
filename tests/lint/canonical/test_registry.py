@@ -1,4 +1,5 @@
 """Tests for rule discovery + execution."""
+
 import ast
 import textwrap
 from pathlib import Path
@@ -21,10 +22,18 @@ def _make_rule_module(name: str, severity: str = "warn") -> ModuleType:
     mod.FIX_HINT = "fix it"
 
     def check(file_path: Path, tree: ast.AST, ctx: Context) -> list[Diagnostic]:
-        return [Diagnostic(
-            rule_id=mod.RULE_ID, issue=mod.ISSUE, severity=mod.SEVERITY,
-            file=file_path, line=1, col=0, message="m", snippet="s",
-        )]
+        return [
+            Diagnostic(
+                rule_id=mod.RULE_ID,
+                issue=mod.ISSUE,
+                severity=mod.SEVERITY,
+                file=file_path,
+                line=1,
+                col=0,
+                message="m",
+                snippet="s",
+            )
+        ]
 
     mod.check = check
     return mod

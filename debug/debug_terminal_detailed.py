@@ -40,10 +40,7 @@ async def _wait_for_session_init(websocket):
             logger.info(f"📥 Init message {i+1}: {msg}")
 
             data = json.loads(msg)
-            if (
-                data.get("type") == "terminal_session"
-                and data.get("status") == "started"
-            ):
+            if data.get("type") == "terminal_session" and data.get("status") == "started":
                 logger.info("✅ Terminal session started successfully!")
                 break
             elif data.get("type") == "connection":
@@ -64,22 +61,13 @@ async def _check_active_sessions(chat_id):
     logger.info("\n🔍 Step 2: Checking Active Sessions")
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{BASE_URL}/api/terminal/sessions", timeout=5.0
-            )
+            response = await client.get(f"{BASE_URL}/api/terminal/sessions", timeout=5.0)
             if response.status_code == 200:
                 sessions_data = response.json()
-                logger.info(
-                    f"📊 Active sessions response: "
-                    f"{json.dumps(sessions_data, indent=2)}"
-                )
+                logger.info(f"📊 Active sessions response: " f"{json.dumps(sessions_data, indent=2)}")
 
                 found_session = False
-                sessions = (
-                    sessions_data.get("sessions", [])
-                    if isinstance(sessions_data, dict)
-                    else sessions_data
-                )
+                sessions = sessions_data.get("sessions", []) if isinstance(sessions_data, dict) else sessions_data
                 for session in sessions:
                     if session.get("chat_id") == chat_id:
                         found_session = True
@@ -87,13 +75,9 @@ async def _check_active_sessions(chat_id):
                         break
 
                 if not found_session:
-                    logger.info(
-                        f"❌ Our session {chat_id} not found in " f"active sessions"
-                    )
+                    logger.info(f"❌ Our session {chat_id} not found in " f"active sessions")
             else:
-                logger.info(
-                    f"❌ Failed to get active sessions: " f"{response.status_code}"
-                )
+                logger.info(f"❌ Failed to get active sessions: " f"{response.status_code}")
     except Exception as e:
         logger.error(f"❌ Active sessions check error: {e}")
 
@@ -266,9 +250,7 @@ async def main():
     if session_success:
         logger.info("Terminal is working - user may have different access method issue")
     else:
-        logger.info(
-            "Terminal has execution problems - likely in InteractiveTerminalAgent"
-        )
+        logger.info("Terminal has execution problems - likely in InteractiveTerminalAgent")
         logger.info("Possible causes:")
         logger.info("1. PTY not properly initialized")
         logger.info("2. Process not starting correctly")

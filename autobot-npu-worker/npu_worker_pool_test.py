@@ -57,9 +57,7 @@ npu:
       priority: 5
       max_concurrent: 3
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(config_content)
         config_path = f.name
 
@@ -96,9 +94,7 @@ npu:
       port: 8081
       enabled: true
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(config_content)
         config_path = f.name
 
@@ -139,9 +135,7 @@ npu:
       enabled: false
       priority: 1
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(config_content)
         config_path = f.name
 
@@ -194,9 +188,7 @@ npu:
       enabled: true
       priority: 5
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(config_content)
         config_path = f.name
 
@@ -233,9 +225,7 @@ npu:
       enabled: true
       priority: 10
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(config_content)
         config_path = f.name
 
@@ -271,9 +261,7 @@ npu:
       enabled: true
       priority: 5
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(config_content)
         config_path = f.name
 
@@ -307,9 +295,7 @@ npu:
       enabled: true
       priority: 5
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(config_content)
         config_path = f.name
 
@@ -340,9 +326,7 @@ npu:
       enabled: true
       priority: 10
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(config_content)
         config_path = f.name
 
@@ -376,9 +360,7 @@ npu:
       enabled: true
       priority: 10
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(config_content)
         config_path = f.name
 
@@ -413,9 +395,7 @@ npu:
       enabled: true
       priority: 10
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(config_content)
         config_path = f.name
 
@@ -424,9 +404,7 @@ npu:
         worker = pool.workers["worker-1"]
 
         # Mock the client's check_health to return unhealthy
-        worker.client.check_health = AsyncMock(
-            return_value={"status": "unhealthy", "error": "Connection refused"}
-        )
+        worker.client.check_health = AsyncMock(return_value={"status": "unhealthy", "error": "Connection refused"})
 
         await pool._check_worker_health(worker)
 
@@ -453,9 +431,7 @@ npu:
       enabled: true
       priority: 10
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(config_content)
         config_path = f.name
 
@@ -485,9 +461,7 @@ npu:
       enabled: true
       priority: 10
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(config_content)
         config_path = f.name
 
@@ -521,9 +495,7 @@ npu:
       enabled: true
       priority: 10
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(config_content)
         config_path = f.name
 
@@ -551,9 +523,7 @@ npu:
       enabled: true
       priority: 10
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(config_content)
         config_path = f.name
 
@@ -581,9 +551,7 @@ npu:
       enabled: true
       priority: 10
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(config_content)
         config_path = f.name
 
@@ -622,9 +590,7 @@ npu:
       enabled: true
       priority: 10
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(config_content)
         config_path = f.name
 
@@ -657,9 +623,7 @@ npu:
       enabled: true
       priority: 10
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(config_content)
         config_path = f.name
 
@@ -695,9 +659,7 @@ npu:
       enabled: true
       priority: 10
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(config_content)
         config_path = f.name
 
@@ -706,9 +668,7 @@ npu:
         worker = pool.workers["worker-1"]
 
         # Mock successful task execution
-        worker.client.offload_heavy_processing = AsyncMock(
-            return_value={"success": True, "result": "test_data"}
-        )
+        worker.client.offload_heavy_processing = AsyncMock(return_value={"success": True, "result": "test_data"})
 
         result = await pool.execute_task("text_analysis", {"text": "hello"})
 
@@ -738,9 +698,7 @@ npu:
       enabled: true
       priority: 5
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(config_content)
         config_path = f.name
 
@@ -748,9 +706,7 @@ npu:
         pool = NPUWorkerPool(config_path=config_path)
 
         # Worker 1 fails, Worker 2 succeeds
-        pool.workers["worker-1"].client.offload_heavy_processing = AsyncMock(
-            side_effect=Exception("Connection error")
-        )
+        pool.workers["worker-1"].client.offload_heavy_processing = AsyncMock(side_effect=Exception("Connection error"))
         pool.workers["worker-2"].client.offload_heavy_processing = AsyncMock(
             return_value={"success": True, "result": "fallback"}
         )
@@ -778,9 +734,7 @@ npu:
       enabled: true
       priority: 10
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(config_content)
         config_path = f.name
 
@@ -788,9 +742,7 @@ npu:
         pool = NPUWorkerPool(config_path=config_path)
 
         # Worker fails on all attempts
-        pool.workers["worker-1"].client.offload_heavy_processing = AsyncMock(
-            side_effect=Exception("Connection error")
-        )
+        pool.workers["worker-1"].client.offload_heavy_processing = AsyncMock(side_effect=Exception("Connection error"))
 
         result = await pool.execute_task("text_analysis", {"text": "hello"})
 
@@ -848,9 +800,7 @@ npu:
       enabled: true
       priority: 5
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(config_content)
         config_path = f.name
 
@@ -896,9 +846,7 @@ npu:
       enabled: true
       priority: 5
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(config_content)
         config_path = f.name
 
@@ -933,9 +881,7 @@ npu:
       enabled: true
       priority: 10
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(initial_config)
         config_path = f.name
 
@@ -989,9 +935,7 @@ npu:
       enabled: true
       priority: 5
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(initial_config)
         config_path = f.name
 
@@ -1035,9 +979,7 @@ npu:
       enabled: true
       priority: 5
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(initial_config)
         config_path = f.name
 

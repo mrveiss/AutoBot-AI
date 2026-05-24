@@ -50,13 +50,15 @@ class AskUserForManualHandler(TaskHandler):
         program_name = ctx.require_payload_value("program_name")
         question_text = ctx.require_payload_value("question_text")
 
-        await publish_event("global", 
+        await publish_event(
+            "global",
             "ask_user_for_manual",
             {
                 "task_id": ctx.task_id,
                 "program_name": program_name,
                 "question_text": question_text,
-            }, persist=PersistStrategy.NONE
+            },
+            persist=PersistStrategy.NONE,
         )
 
         result = task_success(f"Asked user for manual for {program_name}.")
@@ -77,9 +79,11 @@ class AskUserCommandApprovalHandler(TaskHandler):
         """Execute command approval request task requiring user confirmation."""
         command_to_approve = ctx.require_payload_value("command")
 
-        await publish_event("global", 
+        await publish_event(
+            "global",
             "ask_user_command_approval",
-            {"task_id": ctx.task_id, "command": command_to_approve}, persist=PersistStrategy.NONE
+            {"task_id": ctx.task_id, "command": command_to_approve},
+            persist=PersistStrategy.NONE,
         )
 
         result = task_pending_approval(f"Requested user approval for command: {command_to_approve}")

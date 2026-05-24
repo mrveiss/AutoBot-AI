@@ -3,6 +3,8 @@ Application Configuration - GUI Application Settings
 """
 
 from pathlib import Path
+
+
 class AppConfig:
     """Application configuration and paths"""
 

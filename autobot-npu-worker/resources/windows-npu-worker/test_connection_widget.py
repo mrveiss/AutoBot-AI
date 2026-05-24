@@ -1,4 +1,5 @@
 """Test Connection Info Widget in isolation"""
+
 import sys
 from PySide6.QtWidgets import QApplication
 from gui.widgets.connection_info import ConnectionInfoWidget
@@ -18,6 +19,7 @@ def main():
     except Exception as e:
         print(f"ERROR: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 

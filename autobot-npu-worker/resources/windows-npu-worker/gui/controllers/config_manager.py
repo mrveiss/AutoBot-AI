@@ -28,7 +28,7 @@ class ConfigManager:
             if not self.config_file.exists():
                 return self.get_default_config()
 
-            with open(self.config_file, 'r', encoding='utf-8') as f:
+            with open(self.config_file, "r", encoding="utf-8") as f:
                 return yaml.safe_load(f) or {}
 
         except yaml.YAMLError as e:
@@ -43,7 +43,7 @@ class ConfigManager:
             self.create_backup()
 
             # Save config
-            with open(self.config_file, 'w', encoding='utf-8') as f:
+            with open(self.config_file, "w", encoding="utf-8") as f:
                 yaml.safe_dump(config, f, default_flow_style=False, sort_keys=False)
 
         except Exception as e:
@@ -53,13 +53,9 @@ class ConfigManager:
         """Get YAML configuration as text"""
         try:
             if not self.config_file.exists():
-                return yaml.safe_dump(
-                    self.get_default_config(),
-                    default_flow_style=False,
-                    sort_keys=False
-                )
+                return yaml.safe_dump(self.get_default_config(), default_flow_style=False, sort_keys=False)
 
-            with open(self.config_file, 'r', encoding='utf-8') as f:
+            with open(self.config_file, "r", encoding="utf-8") as f:
                 return f.read()
 
         except Exception as e:
@@ -75,7 +71,7 @@ class ConfigManager:
             self.create_backup()
 
             # Save
-            with open(self.config_file, 'w', encoding='utf-8') as f:
+            with open(self.config_file, "w", encoding="utf-8") as f:
                 f.write(yaml_text)
 
         except yaml.YAMLError as e:
@@ -100,8 +96,8 @@ class ConfigManager:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             backup_file = self.backup_dir / f"npu_worker_{timestamp}.yaml"
 
-            with open(self.config_file, 'r', encoding='utf-8') as src:
-                with open(backup_file, 'w', encoding='utf-8') as dst:
+            with open(self.config_file, "r", encoding="utf-8") as src:
+                with open(backup_file, "w", encoding="utf-8") as dst:
                     dst.write(src.read())
 
             # Keep only last 10 backups
@@ -128,35 +124,35 @@ class ConfigManager:
         or must be configured by the user in the GUI.
         """
         return {
-            'service': {
-                'host': '0.0.0.0',
-                'port': 8082,
-                'workers': 1,
+            "service": {
+                "host": "0.0.0.0",
+                "port": 8082,
+                "workers": 1,
             },
-            'backend': {
-                'host': '',  # Configure via GUI or bootstrap
-                'port': 8001,
+            "backend": {
+                "host": "",  # Configure via GUI or bootstrap
+                "port": 8001,
             },
-            'redis': {
-                'host': '',  # Fetched from backend via bootstrap
-                'port': 6379,
+            "redis": {
+                "host": "",  # Fetched from backend via bootstrap
+                "port": 6379,
             },
-            'npu': {
-                'enabled': True,
-                'fallback_to_cpu': True,
-                'optimization': {
-                    'precision': 'INT8',
-                    'batch_size': 32,
-                    'num_streams': 2,
-                    'num_threads': 4,
-                }
+            "npu": {
+                "enabled": True,
+                "fallback_to_cpu": True,
+                "optimization": {
+                    "precision": "INT8",
+                    "batch_size": 32,
+                    "num_streams": 2,
+                    "num_threads": 4,
+                },
             },
-            'logging': {
-                'level': 'INFO',
-                'directory': 'logs',
-                'max_size_mb': 100,
-                'backup_count': 5,
-            }
+            "logging": {
+                "level": "INFO",
+                "directory": "logs",
+                "max_size_mb": 100,
+                "backup_count": 5,
+            },
         }
 
     # =========================================================================
@@ -176,7 +172,7 @@ class ConfigManager:
         worker_id_file = self.get_worker_id_file()
         if worker_id_file.exists():
             try:
-                return worker_id_file.read_text(encoding='utf-8').strip()
+                return worker_id_file.read_text(encoding="utf-8").strip()
             except Exception as e:
                 logger.warning(f"Failed to read worker ID: {e}")
         return None
@@ -185,14 +181,14 @@ class ConfigManager:
         """Get current pairing status"""
         worker_id = self.get_current_worker_id()
         config = self.load_config()
-        backend_host = config.get('backend', {}).get('host', '')
+        backend_host = config.get("backend", {}).get("host", "")
 
         return {
-            'paired': bool(worker_id and backend_host),
-            'worker_id': worker_id,
-            'backend_host': backend_host,
-            'backend_port': config.get('backend', {}).get('port', 8001),
-            'redis_host': config.get('redis', {}).get('host', ''),
+            "paired": bool(worker_id and backend_host),
+            "worker_id": worker_id,
+            "backend_host": backend_host,
+            "backend_port": config.get("backend", {}).get("port", 8001),
+            "redis_host": config.get("redis", {}).get("host", ""),
         }
 
     def clear_pairing(self) -> Dict[str, Any]:
@@ -206,21 +202,21 @@ class ConfigManager:
             Dict with status and details of what was cleared
         """
         result = {
-            'success': True,
-            'cleared': [],
-            'errors': [],
+            "success": True,
+            "cleared": [],
+            "errors": [],
         }
 
         # 1. Remove worker ID file
         worker_id_file = self.get_worker_id_file()
         if worker_id_file.exists():
             try:
-                old_id = worker_id_file.read_text(encoding='utf-8').strip()
+                old_id = worker_id_file.read_text(encoding="utf-8").strip()
                 worker_id_file.unlink()
-                result['cleared'].append(f"Worker ID: {old_id}")
+                result["cleared"].append(f"Worker ID: {old_id}")
                 logger.info(f"Cleared worker ID: {old_id}")
             except Exception as e:
-                result['errors'].append(f"Failed to remove worker ID file: {e}")
+                result["errors"].append(f"Failed to remove worker ID file: {e}")
                 logger.error(f"Failed to remove worker ID file: {e}")
 
         # 2. Remove bootstrap cache if exists
@@ -228,33 +224,33 @@ class ConfigManager:
         if bootstrap_cache.exists():
             try:
                 bootstrap_cache.unlink()
-                result['cleared'].append("Bootstrap cache")
+                result["cleared"].append("Bootstrap cache")
                 logger.info("Cleared bootstrap cache")
             except Exception as e:
-                result['errors'].append(f"Failed to remove bootstrap cache: {e}")
+                result["errors"].append(f"Failed to remove bootstrap cache: {e}")
 
         # 3. Clear backend and redis config (but keep other settings)
         try:
             config = self.load_config()
-            if config.get('backend', {}).get('host'):
-                result['cleared'].append(f"Backend host: {config['backend']['host']}")
-                config['backend']['host'] = ''
+            if config.get("backend", {}).get("host"):
+                result["cleared"].append(f"Backend host: {config['backend']['host']}")
+                config["backend"]["host"] = ""
 
-            if config.get('redis', {}).get('host'):
-                result['cleared'].append(f"Redis host: {config['redis']['host']}")
-                config['redis']['host'] = ''
+            if config.get("redis", {}).get("host"):
+                result["cleared"].append(f"Redis host: {config['redis']['host']}")
+                config["redis"]["host"] = ""
 
             self.save_config(config)
             logger.info("Cleared backend and Redis host configuration")
 
         except Exception as e:
-            result['errors'].append(f"Failed to clear config: {e}")
+            result["errors"].append(f"Failed to clear config: {e}")
             logger.error(f"Failed to clear config: {e}")
 
-        result['success'] = len(result['errors']) == 0
+        result["success"] = len(result["errors"]) == 0
         return result
 
     def is_paired(self) -> bool:
         """Check if worker is currently paired with a master"""
         status = self.get_pairing_status()
-        return status['paired']
+        return status["paired"]

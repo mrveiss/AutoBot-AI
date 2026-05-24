@@ -103,9 +103,7 @@ class ConnectorRegistry:
                     current_version,
                     exc,
                 )
-                raise ValueError(
-                    "Config migration failed for connector '%s': %s" % (config.connector_id, exc)
-                ) from exc
+                raise ValueError("Config migration failed for connector '%s': %s" % (config.connector_id, exc)) from exc
 
         instance = klass(config)
         logger.info(

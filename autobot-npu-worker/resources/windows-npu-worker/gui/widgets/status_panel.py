@@ -2,10 +2,7 @@
 Status Panel - NPU Worker Status Display
 """
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QGroupBox,
-    QLabel, QProgressBar, QGridLayout
-)
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QGroupBox, QLabel, QProgressBar, QGridLayout
 from PySide6.QtCore import Slot
 
 
@@ -101,7 +98,7 @@ class StatusPanel(QWidget):
     def update_status(self, metrics: dict):
         """Update status display with new metrics"""
         # Update NPU status
-        npu_available = metrics.get('npu_available', False)
+        npu_available = metrics.get("npu_available", False)
         if npu_available:
             self.npu_available_label.setText("✓ Yes")
             self.npu_available_label.setStyleSheet("color: green; font-weight: bold;")
@@ -110,29 +107,29 @@ class StatusPanel(QWidget):
             self.npu_available_label.setStyleSheet("color: orange; font-weight: bold;")
 
         # Update NPU metrics
-        npu_metrics = metrics.get('npu_metrics', {})
-        utilization = npu_metrics.get('utilization_percent', 0)
+        npu_metrics = metrics.get("npu_metrics", {})
+        utilization = npu_metrics.get("utilization_percent", 0)
         self.npu_utilization.setValue(int(utilization))
 
-        temperature = npu_metrics.get('temperature_c', 0)
+        temperature = npu_metrics.get("temperature_c", 0)
         self.npu_temperature.setText(f"{temperature:.1f} °C")
 
-        power = npu_metrics.get('power_usage_w', 0)
+        power = npu_metrics.get("power_usage_w", 0)
         self.npu_power.setText(f"{power:.1f} W")
 
         # Update task statistics
-        stats = metrics.get('stats', {})
-        self.tasks_completed.setText(str(stats.get('tasks_completed', 0)))
-        self.tasks_failed.setText(str(stats.get('tasks_failed', 0)))
+        stats = metrics.get("stats", {})
+        self.tasks_completed.setText(str(stats.get("tasks_completed", 0)))
+        self.tasks_failed.setText(str(stats.get("tasks_failed", 0)))
 
-        avg_time = stats.get('average_response_time_ms', 0)
+        avg_time = stats.get("average_response_time_ms", 0)
         self.avg_response_time.setText(f"{avg_time:.2f} ms")
 
-        self.embeddings_generated.setText(str(stats.get('embedding_generations', 0)))
-        self.semantic_searches.setText(str(stats.get('semantic_searches', 0)))
+        self.embeddings_generated.setText(str(stats.get("embedding_generations", 0)))
+        self.semantic_searches.setText(str(stats.get("semantic_searches", 0)))
 
         # Update loaded models
-        loaded_models = metrics.get('loaded_models', [])
+        loaded_models = metrics.get("loaded_models", [])
         if loaded_models:
             models_text = "\n".join([f"• {model}" for model in loaded_models])
             self.loaded_models_label.setText(models_text)

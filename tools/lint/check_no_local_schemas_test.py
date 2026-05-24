@@ -7,6 +7,7 @@ Covers detection, allowlist, path filtering, and exit codes for the hook
 that prevents re-introduction of local BaseModel subclasses in non-schema
 API endpoint files (autobot-backend/api/*.py, excluding schemas_*.py).
 """
+
 from __future__ import annotations
 
 import importlib.util

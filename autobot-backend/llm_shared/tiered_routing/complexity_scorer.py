@@ -228,9 +228,7 @@ class TaskComplexityScorer:
             re.compile(p, re.IGNORECASE) for p in self.COMPLEX_QUESTION_PATTERNS
         ]
         self._compiled_simple_question_patterns = [re.compile(p, re.IGNORECASE) for p in self.SIMPLE_QUESTION_PATTERNS]
-        self._compiled_output_length_patterns = [
-            re.compile(p, re.IGNORECASE) for p in self.OUTPUT_LENGTH_PATTERNS
-        ]
+        self._compiled_output_length_patterns = [re.compile(p, re.IGNORECASE) for p in self.OUTPUT_LENGTH_PATTERNS]
 
     def score(self, messages: List[Dict], expected_output_tokens: Optional[int] = None) -> ComplexityResult:
         """

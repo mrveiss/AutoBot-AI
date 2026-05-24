@@ -361,9 +361,11 @@ class WorkerNode:
 
     async def _publish_task_start(self, task_id: str, task_type: str, user_role: str) -> None:
         """Publish task start event and log execution start. Issue #620."""
-        await publish_event("global", 
+        await publish_event(
+            "global",
             "worker_task_start",
-            {"worker_id": self.worker_id, "task_id": task_id, "type": task_type}, persist=PersistStrategy.NONE
+            {"worker_id": self.worker_id, "task_id": task_id, "type": task_type},
+            persist=PersistStrategy.NONE,
         )
         logger.info(
             "Worker %s executing task %s of type '%s' for role '%s'",
@@ -375,9 +377,11 @@ class WorkerNode:
 
     async def _publish_task_completion(self, task_id: str, result: Dict[str, Any]) -> None:
         """Publish task completion event and log result. Issue #620."""
-        await publish_event("global", 
+        await publish_event(
+            "global",
             "worker_task_end",
-            {"worker_id": self.worker_id, "task_id": task_id, "result": result}, persist=PersistStrategy.NONE
+            {"worker_id": self.worker_id, "task_id": task_id, "result": result},
+            persist=PersistStrategy.NONE,
         )
         logger.info(
             "Worker %s finished task %s with status: %s",

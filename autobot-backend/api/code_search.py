@@ -883,7 +883,9 @@ def _build_refactor_response(root_path: str, suggestions: list) -> dict:
     }
 
 
-@router.post("/analytics/refactor-suggestions", response_model=DataResponse[CodeSearchRefactorSuggestionsResultResponse])
+@router.post(
+    "/analytics/refactor-suggestions", response_model=DataResponse[CodeSearchRefactorSuggestionsResultResponse]
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_refactor_suggestions",

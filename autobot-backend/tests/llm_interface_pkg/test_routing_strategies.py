@@ -27,8 +27,7 @@ COMPLEX_MSG = [
         "content": (
             "Write a multi-step algorithm in Python that implements "
             "a distributed consensus protocol with fault tolerance, "
-            "including detailed code comments and error handling. "
-            + "x" * 2000
+            "including detailed code comments and error handling. " + "x" * 2000
         ),
     }
 ]
@@ -44,6 +43,7 @@ def config():
 
 
 # ─── ComplexityRouter ────────────────────────────────────────────────────────
+
 
 class TestComplexityRouter:
     def test_simple_message_selects_simple_model(self, config):
@@ -83,6 +83,7 @@ class TestComplexityRouter:
 
 
 # ─── CostRouter ──────────────────────────────────────────────────────────────
+
 
 class TestCostRouter:
     def test_prefers_cheaper_model_for_simple_request(self, config):
@@ -130,6 +131,7 @@ class TestCostRouter:
 
 # ─── LatencyRouter ───────────────────────────────────────────────────────────
 
+
 class TestLatencyRouter:
     def test_no_p95_data_still_routes(self, config):
         router = LatencyRouter(config)
@@ -168,6 +170,7 @@ class TestLatencyRouter:
 
 
 # ─── Registry ────────────────────────────────────────────────────────────────
+
 
 class TestStrategyRegistry:
     def test_default_strategy_is_complexity(self, config):

@@ -321,9 +321,7 @@ class TestCheckpointFixes:
             if change.source_id == "s2":
                 result.errors.append("s2 failed")
 
-        self.conn.detect_changes = AsyncMock(
-            return_value=[self._change("s1"), self._change("s2")]
-        )
+        self.conn.detect_changes = AsyncMock(return_value=[self._change("s1"), self._change("s2")])
         self.conn._process_change = _failing_process
         self.conn._read_checkpoint = AsyncMock(return_value=set())
         self.conn._write_checkpoint = AsyncMock()
@@ -344,9 +342,7 @@ class TestCheckpointFixes:
             if change.source_id == "s2":
                 result.errors.append("s2 failed")
 
-        self.conn.detect_changes = AsyncMock(
-            return_value=[self._change("s1"), self._change("s2")]
-        )
+        self.conn.detect_changes = AsyncMock(return_value=[self._change("s1"), self._change("s2")])
         self.conn._process_change = _failing_process
         self.conn._read_checkpoint = AsyncMock(return_value=set())
         self.conn._write_checkpoint = AsyncMock()
@@ -536,8 +532,6 @@ class TestConnectionLevelRetry:
 
         with patch("knowledge.connectors.web_crawler.WebFetcher.fetch", side_effect=fake_fetch):
             with patch("asyncio.sleep", new_callable=AsyncMock):
-                content = await self.conn.fetch_content(
-                    _url_to_source_id("https://example.com")
-                )
+                content = await self.conn.fetch_content(_url_to_source_id("https://example.com"))
 
         assert call_count == 2

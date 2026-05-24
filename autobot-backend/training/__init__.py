@@ -30,5 +30,12 @@ try:
     globals().update(optional_import("training.evaluator", ["CompletionEvaluator"]))
 except RuntimeError as _e:
     logger.warning("ML training dependencies unavailable: %s", _e)
-    for _name in ["CompletionModel", "CompletionTrainer", "PatternDataset", "Tokenizer", "create_dataloaders", "CompletionEvaluator"]:
+    for _name in [
+        "CompletionModel",
+        "CompletionTrainer",
+        "PatternDataset",
+        "Tokenizer",
+        "create_dataloaders",
+        "CompletionEvaluator",
+    ]:
         globals()[_name] = _MissingDep(_name, _e)

@@ -99,9 +99,7 @@ class TestConfigureHfTokenPresent:
         mock_hub = MagicMock()
         with patch.dict("sys.modules", {"huggingface_hub": mock_hub}):
             _configure_hf_token("hf_testtoken123", "liquid-ai/kani-tts-2")
-        mock_hub.login.assert_called_once_with(
-            token="hf_testtoken123", add_to_git_credential=False
-        )
+        mock_hub.login.assert_called_once_with(token="hf_testtoken123", add_to_git_credential=False)
 
     def test_logs_authenticated_message(self, caplog):
         mock_hub = MagicMock()

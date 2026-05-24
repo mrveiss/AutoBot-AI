@@ -83,7 +83,7 @@ WORKFLOW_NODES = [
         "type": "distributed_shell",
         "data": {
             "nodes": TARGET_NODES,
-            "script": "echo \"Fleet health check complete on $HOSTNAME\"",
+            "script": 'echo "Fleet health check complete on $HOSTNAME"',
             "language": "bash",
             "timeout": 15,
         },

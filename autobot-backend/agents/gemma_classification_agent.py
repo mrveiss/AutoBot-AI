@@ -42,8 +42,10 @@ try:
         logger.warning("AUTOBOT_CLASSIFICATION_CACHE_TTL < 0, using default 300s (set to 0 to disable)")
 except (ValueError, TypeError):
     _CLASSIFICATION_CACHE_TTL = 300
-    logger.warning("Invalid AUTOBOT_CLASSIFICATION_CACHE_TTL=%r, using default 300s",
-                   os.environ.get("AUTOBOT_CLASSIFICATION_CACHE_TTL"))
+    logger.warning(
+        "Invalid AUTOBOT_CLASSIFICATION_CACHE_TTL=%r, using default 300s",
+        os.environ.get("AUTOBOT_CLASSIFICATION_CACHE_TTL"),
+    )
 _CLASSIFICATION_REDIS_KEY_PREFIX = "gemma_classify:"
 
 
@@ -165,7 +167,9 @@ Respond with valid JSON:
             try:
                 cached = await redis.get(cache_key)
                 if cached:
-                    logger.debug("Classification cache hit: key=%s...", cache_key[len(_CLASSIFICATION_REDIS_KEY_PREFIX):16])
+                    logger.debug(
+                        "Classification cache hit: key=%s...", cache_key[len(_CLASSIFICATION_REDIS_KEY_PREFIX) : 16]
+                    )
                     return json.loads(cached)
             except Exception as exc:
                 logger.debug("Classification cache read failed (non-critical): %s", exc)
@@ -180,9 +184,7 @@ Respond with valid JSON:
 
         return result
 
-    async def classify_multiple(
-        self, messages: List[str], max_concurrent: int = 10
-    ) -> List[ClassificationResult]:
+    async def classify_multiple(self, messages: List[str], max_concurrent: int = 10) -> List[ClassificationResult]:
         """
         Classify a batch of messages in parallel with deduplication.
 
@@ -215,9 +217,7 @@ Respond with valid JSON:
             async with sem:
                 return await self.classify_request(msg)
 
-        raw_results = await asyncio.gather(
-            *[_one(m) for m in hash_to_msg.values()], return_exceptions=True
-        )
+        raw_results = await asyncio.gather(*[_one(m) for m in hash_to_msg.values()], return_exceptions=True)
         unique_results: dict[str, ClassificationResult] = {}
         for h, msg, result in zip(hash_to_msg.keys(), hash_to_msg.values(), raw_results):
             if isinstance(result, BaseException):

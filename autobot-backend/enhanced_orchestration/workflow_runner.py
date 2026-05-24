@@ -381,7 +381,9 @@ class WorkflowRunner:
         return task.to_completed_result(result)
 
     async def _publish_workflow_event(self, workflow_id: str, event_type: str, data: Dict[str, Any]) -> None:
-        await publish_event("global", 
+        await publish_event(
+            "global",
             "workflow_event",
-            {"workflow_id": workflow_id, "event_type": event_type, "timestamp": time.time(), "data": data}, persist=PersistStrategy.NONE
+            {"workflow_id": workflow_id, "event_type": event_type, "timestamp": time.time(), "data": data},
+            persist=PersistStrategy.NONE,
         )

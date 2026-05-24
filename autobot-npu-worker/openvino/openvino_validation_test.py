@@ -453,9 +453,7 @@ class TestOpenVINOProductionReadiness:
 
         models = []
         for i in range(3):
-            param = opset10.parameter(
-                PartialShape([1, 10 + i]), Type.f32, name=f"input_{i}"
-            )
+            param = opset10.parameter(PartialShape([1, 10 + i]), Type.f32, name=f"input_{i}")
             result = opset10.relu(param)
             model = Model([result], [param], f"model_{i}")
             models.append(model)

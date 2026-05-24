@@ -1,10 +1,10 @@
 """End-to-end CLI tests for the Python runner."""
+
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
-
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 RUNNER = REPO_ROOT / "tools" / "lint" / "canonical_check.py"

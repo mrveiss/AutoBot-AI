@@ -62,11 +62,13 @@ def upgrade() -> None:
     op.create_index("ix_llc_boards_type", "llc_boards", ["type"])
     op.create_unique_constraint(
         "uq_llc_boards_company_project_type",
-        "llc_boards", ["company_id", "project_id", "type"],
+        "llc_boards",
+        ["company_id", "project_id", "type"],
     )
     op.create_unique_constraint(
         "uq_llc_boards_company_sprint_type",
-        "llc_boards", ["company_id", "sprint_id", "type"],
+        "llc_boards",
+        ["company_id", "sprint_id", "type"],
     )
 
     op.create_table(

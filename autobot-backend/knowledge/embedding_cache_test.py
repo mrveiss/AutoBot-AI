@@ -113,8 +113,8 @@ class TestEmbeddingCache:
         assert result == [0.1]
 
         stats = cache.get_stats()
-        assert stats["t1_size"] == 1   # query2 remains in T1
-        assert stats["t2_size"] == 1   # query1 promoted to T2
+        assert stats["t1_size"] == 1  # query2 remains in T1
+        assert stats["t2_size"] == 1  # query1 promoted to T2
 
     @pytest.mark.asyncio
     async def test_t2_entries_survive_scan(self, cache):

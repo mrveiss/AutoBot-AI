@@ -458,14 +458,16 @@ class SystemCommandAgent(StandardizedAgent):
 
     async def _request_user_confirmation(self, command: str, chat_id: str) -> bool:
         """Request user confirmation for dangerous commands"""
-        await publish_event("global", 
+        await publish_event(
+            "global",
             "command_confirmation",
             {
                 "chat_id": chat_id,
                 "command": command,
                 "warning": "⚠️ This command may be dangerous. Please confirm execution.",
                 "requires_confirmation": True,
-            }, persist=PersistStrategy.NONE
+            },
+            persist=PersistStrategy.NONE,
         )
 
         # Wait for user response (this would be handled by the frontend)

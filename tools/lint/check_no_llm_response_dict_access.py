@@ -162,11 +162,7 @@ def _scan_file(path: Path, source: str) -> list[tuple[int, str]]:
         elif isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name):
             if node.value.id in tracked:
                 # Pull literal subscript key
-                key_node = (
-                    node.slice
-                    if isinstance(node.slice, ast.Constant)
-                    else None
-                )
+                key_node = node.slice if isinstance(node.slice, ast.Constant) else None
                 if key_node and key_node.value in DICT_ACCESS_KEYS:
                     findings.append(
                         (

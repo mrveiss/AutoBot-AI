@@ -56,6 +56,7 @@ except ImportError:
 
 logger = get_llm_logger("npu_semantic_search")
 
+
 # #8159: L2 embedding cache TTL. Override via AUTOBOT_NPU_EMBEDDING_CACHE_TTL (seconds).
 # Default 3600s (1h) — embeddings are stable within a model version.
 def _resolve_npu_embedding_cache_ttl() -> int:
@@ -879,9 +880,7 @@ class NPUSemanticSearch:
             async with _emb_sem:
                 return await self._generate_optimized_embedding(queries[i], enable_npu_acceleration, None)
 
-        emb_results = await asyncio.gather(
-            *[_embed_with_limit(i) for i in miss_indices], return_exceptions=True
-        )
+        emb_results = await asyncio.gather(*[_embed_with_limit(i) for i in miss_indices], return_exceptions=True)
 
         valid_miss_indices: List[int] = []
         valid_embeddings: List[List[float]] = []

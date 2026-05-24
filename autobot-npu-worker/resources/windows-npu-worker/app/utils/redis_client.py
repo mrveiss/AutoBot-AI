@@ -101,9 +101,7 @@ class RedisConnectionManager:
                 self._connection_pool = self._create_connection_pool()
 
             # Create Redis client with connection pool
-            self._client = async_redis.Redis(
-                connection_pool=self._connection_pool
-            )  # noqa: redis
+            self._client = async_redis.Redis(connection_pool=self._connection_pool)  # noqa: redis
 
             # Test connection
             await self._client.ping()
@@ -157,16 +155,10 @@ class RedisConnectionManager:
             "db": self.redis_config.get("db", 0),
             "max_connections": self.redis_config.get("max_connections", 20),
             "socket_timeout": self.redis_config.get("socket_timeout", 5),
-            "socket_connect_timeout": self.redis_config.get(
-                "socket_connect_timeout", 2
-            ),
+            "socket_connect_timeout": self.redis_config.get("socket_connect_timeout", 2),
             "retry_on_timeout": self.redis_config.get("retry_on_timeout", True),
             "tls_enabled": tls_enabled,
-            "port": (
-                self.redis_config.get("tls_port", 6380)
-                if tls_enabled
-                else self.redis_config.get("port", 6379)
-            ),
+            "port": (self.redis_config.get("tls_port", 6380) if tls_enabled else self.redis_config.get("port", 6379)),
             "tls_ca_cert": self.redis_config.get("tls_ca_cert"),
             "tls_cert_file": self.redis_config.get("tls_cert_file"),
             "tls_key_file": self.redis_config.get("tls_key_file"),
@@ -178,11 +170,7 @@ class RedisConnectionManager:
 
         Helper for _create_connection_pool (#825).
         """
-        retry = (
-            Retry(ExponentialBackoff(base=0.05, cap=1.0), retries=3)
-            if config_params["retry_on_timeout"]
-            else None
-        )
+        retry = Retry(ExponentialBackoff(base=0.05, cap=1.0), retries=3) if config_params["retry_on_timeout"] else None
 
         return {
             "host": config_params["host"],
@@ -211,9 +199,7 @@ class RedisConnectionManager:
         if config_params["tls_ca_cert"]:
             ssl_context.load_verify_locations(config_params["tls_ca_cert"])
         if config_params["tls_cert_file"] and config_params["tls_key_file"]:
-            ssl_context.load_cert_chain(
-                config_params["tls_cert_file"], config_params["tls_key_file"]
-            )
+            ssl_context.load_cert_chain(config_params["tls_cert_file"], config_params["tls_key_file"])
 
         pool_kwargs["connection_class"] = SSLConnection
         pool_kwargs["ssl"] = ssl_context
@@ -225,9 +211,7 @@ class RedisConnectionManager:
         Helper for _create_connection_pool (#825).
         """
         logger.info(
-            "Redis connection pool created "
-            "(db=%s, max_connections=%s, "
-            "socket_timeout=%ss, TLS=enabled)",
+            "Redis connection pool created " "(db=%s, max_connections=%s, " "socket_timeout=%ss, TLS=enabled)",
             config_params["db"],
             config_params["max_connections"],
             config_params["socket_timeout"],
@@ -240,9 +224,7 @@ class RedisConnectionManager:
         Helper for _create_connection_pool (#825).
         """
         logger.info(
-            "Redis connection pool created "
-            "(db=%s, max_connections=%s, "
-            "socket_timeout=%ss)",
+            "Redis connection pool created " "(db=%s, max_connections=%s, " "socket_timeout=%ss)",
             config_params["db"],
             config_params["max_connections"],
             config_params["socket_timeout"],

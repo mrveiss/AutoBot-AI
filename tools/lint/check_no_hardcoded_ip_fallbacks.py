@@ -27,6 +27,7 @@ Exit code:
   0 — clean
   1 — banned patterns found
 """
+
 from __future__ import annotations
 
 import ast

@@ -27,9 +27,7 @@ class LoggerPlugin(BasePlugin):
         """Initialize logger plugin."""
         super().__init__(manifest, config)
         self.log_file = (
-            Path(config.get("log_file", "/tmp/plugin_events.log"))
-            if config
-            else Path("/tmp/plugin_events.log")
+            Path(config.get("log_file", "/tmp/plugin_events.log")) if config else Path("/tmp/plugin_events.log")
         )
         self.hook_registry = HookRegistry()
 
@@ -67,15 +65,9 @@ class LoggerPlugin(BasePlugin):
         self._logger.info("Logger Plugin shutting down...")
 
         # Unregister all hooks for this plugin
-        self.hook_registry.unregister_hook(
-            Hook.ON_AGENT_EXECUTE.value, plugin_name=self.manifest.name
-        )
-        self.hook_registry.unregister_hook(
-            Hook.ON_TOOL_CALL.value, plugin_name=self.manifest.name
-        )
-        self.hook_registry.unregister_hook(
-            Hook.ON_MESSAGE_RECEIVED.value, plugin_name=self.manifest.name
-        )
+        self.hook_registry.unregister_hook(Hook.ON_AGENT_EXECUTE.value, plugin_name=self.manifest.name)
+        self.hook_registry.unregister_hook(Hook.ON_TOOL_CALL.value, plugin_name=self.manifest.name)
+        self.hook_registry.unregister_hook(Hook.ON_MESSAGE_RECEIVED.value, plugin_name=self.manifest.name)
 
         self._logger.info("Logger Plugin shutdown complete")
 

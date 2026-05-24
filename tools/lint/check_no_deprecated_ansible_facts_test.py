@@ -3,6 +3,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Tests for check_no_deprecated_ansible_facts (#7221)."""
+
 from __future__ import annotations
 
 import sys

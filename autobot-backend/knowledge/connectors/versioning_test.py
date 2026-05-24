@@ -90,13 +90,16 @@ async def test_web_crawler_migrate_idempotent_when_crawl_depth_present():
 async def test_persist_config_patches_redis_blob():
     """_persist_config reads, patches config field, and writes back."""
     import json
+
     cfg = _make_config(config={"urls": ["https://example.com"], "_version": 2})
-    existing_blob = json.dumps({
-        "connector_id": cfg.connector_id,
-        "connector_type": cfg.connector_type,
-        "name": cfg.name,
-        "config": {"urls": ["https://example.com"], "_version": 1},
-    })
+    existing_blob = json.dumps(
+        {
+            "connector_id": cfg.connector_id,
+            "connector_type": cfg.connector_type,
+            "name": cfg.name,
+            "config": {"urls": ["https://example.com"], "_version": 1},
+        }
+    )
     mock_redis = AsyncMock()
     mock_redis.get = AsyncMock(return_value=existing_blob.encode("utf-8"))
     mock_redis.set = AsyncMock()

@@ -92,6 +92,7 @@ from .success_criteria import SuccessCriteriaEvaluator  # noqa: F401
 from .workflow_executor import WorkflowExecutor
 from .workflow_memory import WorkflowMemory
 from .workflow_planner import WorkflowPlanner
+
 # GH #6816: causal subsystem — wired as recoverable execution mode in StepErrorHandler
 from .causal_models import CausalMetadata, EffectTrace
 from .causal_error_recovery import CausalErrorRecovery, RecoveryPlan, get_recovery_recommender

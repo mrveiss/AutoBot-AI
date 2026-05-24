@@ -11,7 +11,6 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -37,12 +36,12 @@ def builder(tmp_index_dir):
     from utils.faiss_ivfpq_builder import FAISSIVFPQBuilder
 
     # Patch IVFPQ_NLIST to a small value so tests train quickly
-    with patch("utils.faiss_ivfpq_builder.IVFPQ_NLIST", 8), patch(
-        "utils.faiss_ivfpq_builder.IVFPQ_M_PQ", 8
-    ), patch("utils.faiss_ivfpq_builder.IVFPQ_NBITS", 8), patch(
-        "utils.faiss_ivfpq_builder.IVFPQ_NPROBE", 4
-    ), patch(
-        "utils.faiss_ivfpq_builder.IVFPQ_TRAIN_SAMPLE", 500
+    with (
+        patch("utils.faiss_ivfpq_builder.IVFPQ_NLIST", 8),
+        patch("utils.faiss_ivfpq_builder.IVFPQ_M_PQ", 8),
+        patch("utils.faiss_ivfpq_builder.IVFPQ_NBITS", 8),
+        patch("utils.faiss_ivfpq_builder.IVFPQ_NPROBE", 4),
+        patch("utils.faiss_ivfpq_builder.IVFPQ_TRAIN_SAMPLE", 500),
     ):
         yield FAISSIVFPQBuilder(dim=64, index_dir=tmp_index_dir, collection_name="test_col")
 
@@ -85,12 +84,12 @@ class TestBuildOrLoad:
         """build_or_load trains a new index when no persisted file exists."""
         from utils.faiss_ivfpq_builder import FAISSIVFPQBuilder
 
-        with patch("utils.faiss_ivfpq_builder.IVFPQ_NLIST", 8), patch(
-            "utils.faiss_ivfpq_builder.IVFPQ_M_PQ", 8
-        ), patch("utils.faiss_ivfpq_builder.IVFPQ_NBITS", 8), patch(
-            "utils.faiss_ivfpq_builder.IVFPQ_NPROBE", 4
-        ), patch(
-            "utils.faiss_ivfpq_builder.IVFPQ_TRAIN_SAMPLE", 500
+        with (
+            patch("utils.faiss_ivfpq_builder.IVFPQ_NLIST", 8),
+            patch("utils.faiss_ivfpq_builder.IVFPQ_M_PQ", 8),
+            patch("utils.faiss_ivfpq_builder.IVFPQ_NBITS", 8),
+            patch("utils.faiss_ivfpq_builder.IVFPQ_NPROBE", 4),
+            patch("utils.faiss_ivfpq_builder.IVFPQ_TRAIN_SAMPLE", 500),
         ):
             b = FAISSIVFPQBuilder(dim=64, index_dir=tmp_index_dir, collection_name="c1")
             vectors = _make_vectors(600, 64)
@@ -103,12 +102,12 @@ class TestBuildOrLoad:
         """Second call loads persisted index instead of retraining."""
         from utils.faiss_ivfpq_builder import FAISSIVFPQBuilder
 
-        with patch("utils.faiss_ivfpq_builder.IVFPQ_NLIST", 8), patch(
-            "utils.faiss_ivfpq_builder.IVFPQ_M_PQ", 8
-        ), patch("utils.faiss_ivfpq_builder.IVFPQ_NBITS", 8), patch(
-            "utils.faiss_ivfpq_builder.IVFPQ_NPROBE", 4
-        ), patch(
-            "utils.faiss_ivfpq_builder.IVFPQ_TRAIN_SAMPLE", 500
+        with (
+            patch("utils.faiss_ivfpq_builder.IVFPQ_NLIST", 8),
+            patch("utils.faiss_ivfpq_builder.IVFPQ_M_PQ", 8),
+            patch("utils.faiss_ivfpq_builder.IVFPQ_NBITS", 8),
+            patch("utils.faiss_ivfpq_builder.IVFPQ_NPROBE", 4),
+            patch("utils.faiss_ivfpq_builder.IVFPQ_TRAIN_SAMPLE", 500),
         ):
             b = FAISSIVFPQBuilder(dim=64, index_dir=tmp_index_dir, collection_name="c2")
             vectors = _make_vectors(600, 64)
@@ -128,9 +127,7 @@ class TestBuildOrLoad:
         original = faiss_ivfpq_builder._FAISS_AVAILABLE
         faiss_ivfpq_builder._FAISS_AVAILABLE = False
         try:
-            b = faiss_ivfpq_builder.FAISSIVFPQBuilder(
-                dim=64, index_dir=tmp_index_dir, collection_name="c3"
-            )
+            b = faiss_ivfpq_builder.FAISSIVFPQBuilder(dim=64, index_dir=tmp_index_dir, collection_name="c3")
             result = asyncio.run(b.build_or_load(_make_vectors(100, 64)))
             assert result is None
         finally:
@@ -141,14 +138,13 @@ class TestBuildOrLoad:
         import logging
         from utils.faiss_ivfpq_builder import FAISSIVFPQBuilder
 
-        with patch("utils.faiss_ivfpq_builder.IVFPQ_NLIST", 8), patch(
-            "utils.faiss_ivfpq_builder.IVFPQ_M_PQ", 8
-        ), patch("utils.faiss_ivfpq_builder.IVFPQ_NBITS", 8), patch(
-            "utils.faiss_ivfpq_builder.IVFPQ_NPROBE", 4
-        ), patch(
-            "utils.faiss_ivfpq_builder.IVFPQ_TRAIN_SAMPLE", 500
-        ), caplog.at_level(
-            logging.WARNING, logger="utils.faiss_ivfpq_builder"
+        with (
+            patch("utils.faiss_ivfpq_builder.IVFPQ_NLIST", 8),
+            patch("utils.faiss_ivfpq_builder.IVFPQ_M_PQ", 8),
+            patch("utils.faiss_ivfpq_builder.IVFPQ_NBITS", 8),
+            patch("utils.faiss_ivfpq_builder.IVFPQ_NPROBE", 4),
+            patch("utils.faiss_ivfpq_builder.IVFPQ_TRAIN_SAMPLE", 500),
+            caplog.at_level(logging.WARNING, logger="utils.faiss_ivfpq_builder"),
         ):
             b = FAISSIVFPQBuilder(dim=64, index_dir=tmp_index_dir, collection_name="c4")
             # 8 * 39 = 312 required; supply only 50
@@ -161,12 +157,12 @@ class TestPersistence:
     def test_index_file_written_after_train(self, tmp_index_dir):
         from utils.faiss_ivfpq_builder import FAISSIVFPQBuilder
 
-        with patch("utils.faiss_ivfpq_builder.IVFPQ_NLIST", 8), patch(
-            "utils.faiss_ivfpq_builder.IVFPQ_M_PQ", 8
-        ), patch("utils.faiss_ivfpq_builder.IVFPQ_NBITS", 8), patch(
-            "utils.faiss_ivfpq_builder.IVFPQ_NPROBE", 4
-        ), patch(
-            "utils.faiss_ivfpq_builder.IVFPQ_TRAIN_SAMPLE", 500
+        with (
+            patch("utils.faiss_ivfpq_builder.IVFPQ_NLIST", 8),
+            patch("utils.faiss_ivfpq_builder.IVFPQ_M_PQ", 8),
+            patch("utils.faiss_ivfpq_builder.IVFPQ_NBITS", 8),
+            patch("utils.faiss_ivfpq_builder.IVFPQ_NPROBE", 4),
+            patch("utils.faiss_ivfpq_builder.IVFPQ_TRAIN_SAMPLE", 500),
         ):
             b = FAISSIVFPQBuilder(dim=64, index_dir=tmp_index_dir, collection_name="persist_col")
             vectors = _make_vectors(600, 64)
@@ -185,12 +181,12 @@ class TestPersistence:
     def test_load_returns_index_when_file_present(self, tmp_index_dir):
         from utils.faiss_ivfpq_builder import FAISSIVFPQBuilder
 
-        with patch("utils.faiss_ivfpq_builder.IVFPQ_NLIST", 8), patch(
-            "utils.faiss_ivfpq_builder.IVFPQ_M_PQ", 8
-        ), patch("utils.faiss_ivfpq_builder.IVFPQ_NBITS", 8), patch(
-            "utils.faiss_ivfpq_builder.IVFPQ_NPROBE", 4
-        ), patch(
-            "utils.faiss_ivfpq_builder.IVFPQ_TRAIN_SAMPLE", 500
+        with (
+            patch("utils.faiss_ivfpq_builder.IVFPQ_NLIST", 8),
+            patch("utils.faiss_ivfpq_builder.IVFPQ_M_PQ", 8),
+            patch("utils.faiss_ivfpq_builder.IVFPQ_NBITS", 8),
+            patch("utils.faiss_ivfpq_builder.IVFPQ_NPROBE", 4),
+            patch("utils.faiss_ivfpq_builder.IVFPQ_TRAIN_SAMPLE", 500),
         ):
             b = FAISSIVFPQBuilder(dim=64, index_dir=tmp_index_dir, collection_name="saved")
             vectors = _make_vectors(600, 64)

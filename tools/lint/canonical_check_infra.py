@@ -82,9 +82,14 @@ def main(argv: list[str] | None = None) -> int:
         out = to_pretty(diagnostics)
         sink = sys.stderr
     elif args.format == "markdown":
-        out = to_markdown(diagnostics, scan_meta={
-            "scanned_files": len(files), "duration_seconds": duration, "rule_count": len(rules),
-        })
+        out = to_markdown(
+            diagnostics,
+            scan_meta={
+                "scanned_files": len(files),
+                "duration_seconds": duration,
+                "rule_count": len(rules),
+            },
+        )
         sink = sys.stdout
     else:
         out = to_json(diagnostics)

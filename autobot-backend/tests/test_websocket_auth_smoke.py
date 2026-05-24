@@ -48,6 +48,7 @@ _SMOKE_BEARER = "smoke"  # short sentinel; matched by mock only
 # Context manager — keeps patches alive while the TestClient makes requests
 # ---------------------------------------------------------------------------
 
+
 def _mock_live_event_manager() -> AsyncMock:
     lem = AsyncMock()
     lem.subscribe = AsyncMock(return_value=True)

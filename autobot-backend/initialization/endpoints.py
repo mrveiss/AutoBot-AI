@@ -59,9 +59,7 @@ def _build_services_status(state: Any) -> Dict[str, str]:
     }
 
 
-def _build_capabilities(
-    ai_stack_ready: bool, ai_agents_ready: bool, npu_ready: bool
-) -> Dict[str, bool]:
+def _build_capabilities(ai_stack_ready: bool, ai_agents_ready: bool, npu_ready: bool) -> Dict[str, bool]:
     """Build capabilities dict from AI readiness flags."""
     return {
         "rag_enhanced_search": ai_stack_ready,

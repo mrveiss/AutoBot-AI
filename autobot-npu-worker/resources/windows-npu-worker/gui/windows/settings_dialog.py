@@ -3,10 +3,21 @@ Settings Dialog - Configuration Management
 """
 
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QTabWidget,
-    QPushButton, QTextEdit, QLabel, QMessageBox,
-    QFileDialog, QGroupBox, QFormLayout, QLineEdit,
-    QSpinBox, QComboBox, QCheckBox
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QTabWidget,
+    QPushButton,
+    QTextEdit,
+    QLabel,
+    QMessageBox,
+    QFileDialog,
+    QGroupBox,
+    QFormLayout,
+    QLineEdit,
+    QSpinBox,
+    QComboBox,
+    QCheckBox,
 )
 from PySide6.QtCore import Slot
 from PySide6.QtGui import QFont
@@ -73,8 +84,7 @@ class SettingsDialog(QDialog):
 
         # Info label
         info_label = QLabel(
-            "⚠️ Advanced: Direct YAML configuration editing. "
-            "Use the other tabs for guided configuration."
+            "⚠️ Advanced: Direct YAML configuration editing. " "Use the other tabs for guided configuration."
         )
         info_label.setWordWrap(True)
         layout.addWidget(info_label)
@@ -231,44 +241,40 @@ class SettingsDialog(QDialog):
             self.yaml_editor.setPlainText(self.config_manager.get_yaml_text())
 
             # Load service settings
-            service = config.get('service', {})
-            self.service_host.setText(service.get('host', '0.0.0.0'))
-            self.service_port.setValue(service.get('port', 8082))
-            self.service_workers.setValue(service.get('workers', 1))
+            service = config.get("service", {})
+            self.service_host.setText(service.get("host", "0.0.0.0"))
+            self.service_port.setValue(service.get("port", 8082))
+            self.service_workers.setValue(service.get("workers", 1))
 
-            backend = config.get('backend', {})
-            self.backend_host.setText(backend.get('host', ''))
-            self.backend_port.setValue(backend.get('port', 8001))
+            backend = config.get("backend", {})
+            self.backend_host.setText(backend.get("host", ""))
+            self.backend_port.setValue(backend.get("port", 8001))
 
-            redis = config.get('redis', {})
-            self.redis_host.setText(redis.get('host', ''))
-            self.redis_port.setValue(redis.get('port', 6379))
+            redis = config.get("redis", {})
+            self.redis_host.setText(redis.get("host", ""))
+            self.redis_port.setValue(redis.get("port", 6379))
 
             # Load NPU settings
-            npu = config.get('npu', {})
-            self.npu_enabled.setChecked(npu.get('enabled', True))
-            self.npu_fallback.setChecked(npu.get('fallback_to_cpu', True))
+            npu = config.get("npu", {})
+            self.npu_enabled.setChecked(npu.get("enabled", True))
+            self.npu_fallback.setChecked(npu.get("fallback_to_cpu", True))
 
-            optimization = npu.get('optimization', {})
-            precision = optimization.get('precision', 'INT8')
+            optimization = npu.get("optimization", {})
+            precision = optimization.get("precision", "INT8")
             self.npu_precision.setCurrentText(precision)
-            self.npu_batch_size.setValue(optimization.get('batch_size', 32))
-            self.npu_streams.setValue(optimization.get('num_streams', 2))
-            self.npu_threads.setValue(optimization.get('num_threads', 4))
+            self.npu_batch_size.setValue(optimization.get("batch_size", 32))
+            self.npu_streams.setValue(optimization.get("num_streams", 2))
+            self.npu_threads.setValue(optimization.get("num_threads", 4))
 
             # Load logging settings
-            logging = config.get('logging', {})
-            self.log_level.setCurrentText(logging.get('level', 'INFO'))
-            self.log_directory.setText(logging.get('directory', 'logs'))
-            self.log_max_size.setValue(logging.get('max_size_mb', 100))
-            self.log_backup_count.setValue(logging.get('backup_count', 5))
+            logging = config.get("logging", {})
+            self.log_level.setCurrentText(logging.get("level", "INFO"))
+            self.log_directory.setText(logging.get("directory", "logs"))
+            self.log_max_size.setValue(logging.get("max_size_mb", 100))
+            self.log_backup_count.setValue(logging.get("backup_count", 5))
 
         except Exception as e:
-            QMessageBox.warning(
-                self,
-                "Load Error",
-                f"Failed to load configuration: {e}"
-            )
+            QMessageBox.warning(self, "Load Error", f"Failed to load configuration: {e}")
 
     @Slot()
     def save_configuration(self):
@@ -288,9 +294,7 @@ class SettingsDialog(QDialog):
                 yaml_text = self.yaml_editor.toPlainText()
                 if not self.config_manager.validate_yaml(yaml_text):
                     QMessageBox.warning(
-                        self,
-                        "Invalid YAML",
-                        "The YAML configuration is invalid. Please fix errors before saving."
+                        self, "Invalid YAML", "The YAML configuration is invalid. Please fix errors before saving."
                     )
                     return False
 
@@ -300,19 +304,11 @@ class SettingsDialog(QDialog):
                 config = self.build_config_from_forms()
                 self.config_manager.save_config(config)
 
-            QMessageBox.information(
-                self,
-                "Success",
-                "Configuration saved successfully."
-            )
+            QMessageBox.information(self, "Success", "Configuration saved successfully.")
             return True
 
         except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Save Error",
-                f"Failed to save configuration: {e}"
-            )
+            QMessageBox.critical(self, "Save Error", f"Failed to save configuration: {e}")
             return False
 
     def build_config_from_forms(self):
@@ -320,40 +316,40 @@ class SettingsDialog(QDialog):
         config = {}
 
         # Service settings
-        config['service'] = {
-            'host': self.service_host.text(),
-            'port': self.service_port.value(),
-            'workers': self.service_workers.value(),
+        config["service"] = {
+            "host": self.service_host.text(),
+            "port": self.service_port.value(),
+            "workers": self.service_workers.value(),
         }
 
-        config['backend'] = {
-            'host': self.backend_host.text(),
-            'port': self.backend_port.value(),
+        config["backend"] = {
+            "host": self.backend_host.text(),
+            "port": self.backend_port.value(),
         }
 
-        config['redis'] = {
-            'host': self.redis_host.text(),
-            'port': self.redis_port.value(),
+        config["redis"] = {
+            "host": self.redis_host.text(),
+            "port": self.redis_port.value(),
         }
 
         # NPU settings
-        config['npu'] = {
-            'enabled': self.npu_enabled.isChecked(),
-            'fallback_to_cpu': self.npu_fallback.isChecked(),
-            'optimization': {
-                'precision': self.npu_precision.currentText(),
-                'batch_size': self.npu_batch_size.value(),
-                'num_streams': self.npu_streams.value(),
-                'num_threads': self.npu_threads.value(),
-            }
+        config["npu"] = {
+            "enabled": self.npu_enabled.isChecked(),
+            "fallback_to_cpu": self.npu_fallback.isChecked(),
+            "optimization": {
+                "precision": self.npu_precision.currentText(),
+                "batch_size": self.npu_batch_size.value(),
+                "num_streams": self.npu_streams.value(),
+                "num_threads": self.npu_threads.value(),
+            },
         }
 
         # Logging settings
-        config['logging'] = {
-            'level': self.log_level.currentText(),
-            'directory': self.log_directory.text(),
-            'max_size_mb': self.log_max_size.value(),
-            'backup_count': self.log_backup_count.value(),
+        config["logging"] = {
+            "level": self.log_level.currentText(),
+            "directory": self.log_directory.text(),
+            "max_size_mb": self.log_max_size.value(),
+            "backup_count": self.log_backup_count.value(),
         }
 
         return config
@@ -362,49 +358,30 @@ class SettingsDialog(QDialog):
     def load_yaml_file(self):
         """Load YAML from file"""
         file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Load YAML Configuration",
-            "",
-            "YAML Files (*.yaml *.yml);;All Files (*)"
+            self, "Load YAML Configuration", "", "YAML Files (*.yaml *.yml);;All Files (*)"
         )
 
         if file_path:
             try:
-                with open(file_path, 'r', encoding='utf-8') as f:
+                with open(file_path, "r", encoding="utf-8") as f:
                     yaml_text = f.read()
                 self.yaml_editor.setPlainText(yaml_text)
             except Exception as e:
-                QMessageBox.warning(
-                    self,
-                    "Load Error",
-                    f"Failed to load file: {e}"
-                )
+                QMessageBox.warning(self, "Load Error", f"Failed to load file: {e}")
 
     @Slot()
     def validate_yaml(self):
         """Validate YAML content"""
         yaml_text = self.yaml_editor.toPlainText()
         if self.config_manager.validate_yaml(yaml_text):
-            QMessageBox.information(
-                self,
-                "Valid YAML",
-                "The YAML configuration is valid."
-            )
+            QMessageBox.information(self, "Valid YAML", "The YAML configuration is valid.")
         else:
-            QMessageBox.warning(
-                self,
-                "Invalid YAML",
-                "The YAML configuration contains errors."
-            )
+            QMessageBox.warning(self, "Invalid YAML", "The YAML configuration contains errors.")
 
     @Slot()
     def browse_log_directory(self):
         """Browse for log directory"""
-        directory = QFileDialog.getExistingDirectory(
-            self,
-            "Select Log Directory",
-            self.log_directory.text()
-        )
+        directory = QFileDialog.getExistingDirectory(self, "Select Log Directory", self.log_directory.text())
 
         if directory:
             self.log_directory.setText(directory)

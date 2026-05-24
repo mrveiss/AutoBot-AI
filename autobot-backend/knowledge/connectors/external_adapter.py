@@ -85,9 +85,7 @@ class ExternalConnectorAdapter(AbstractConnector):
         self._source_config: Dict[str, Any] = cfg.get("source_config", {})
         self._selected_streams: List[str] = cfg.get("selected_streams", [])
         self._field_map: Dict[str, Any] = cfg.get("field_map", {})
-        self._state_key: str = cfg.get(
-            "state_key", "connector:%s:external_state" % config.connector_id
-        )
+        self._state_key: str = cfg.get("state_key", "connector:%s:external_state" % config.connector_id)
 
     # ------------------------------------------------------------------
     # AbstractConnector interface
@@ -97,9 +95,7 @@ class ExternalConnectorAdapter(AbstractConnector):
         """Run the check command and return True if status is SUCCEEDED."""
         config_path = None
         try:
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".json", delete=False, encoding="utf-8"
-            ) as f:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8") as f:
                 json.dump(self._source_config, f)
                 config_path = f.name
 
@@ -113,9 +109,7 @@ class ExternalConnectorAdapter(AbstractConnector):
                 stderr=asyncio.subprocess.PIPE,
             )
             try:
-                stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(), timeout=_CHECK_TIMEOUT
-                )
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=_CHECK_TIMEOUT)
             except asyncio.TimeoutError:
                 proc.kill()
                 self.logger.warning("check command timed out after %ds", _CHECK_TIMEOUT)
@@ -144,6 +138,7 @@ class ExternalConnectorAdapter(AbstractConnector):
         finally:
             if config_path:
                 import os
+
                 try:
                     os.unlink(config_path)
                 except OSError:
@@ -153,9 +148,7 @@ class ExternalConnectorAdapter(AbstractConnector):
         """Run the discover command and return one SourceInfo per selected stream."""
         config_path = None
         try:
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".json", delete=False, encoding="utf-8"
-            ) as f:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8") as f:
                 json.dump(self._source_config, f)
                 config_path = f.name
 
@@ -169,9 +162,7 @@ class ExternalConnectorAdapter(AbstractConnector):
                 stderr=asyncio.subprocess.PIPE,
             )
             try:
-                stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(), timeout=_DISCOVER_TIMEOUT
-                )
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=_DISCOVER_TIMEOUT)
             except asyncio.TimeoutError:
                 proc.kill()
                 self.logger.warning("discover command timed out after %ds", _DISCOVER_TIMEOUT)
@@ -205,10 +196,7 @@ class ExternalConnectorAdapter(AbstractConnector):
             streams = catalog.get("streams", [])
             sources: List[SourceInfo] = []
             for stream_def in streams:
-                name = (
-                    stream_def.get("stream", {}).get("name")
-                    or stream_def.get("name", "")
-                )
+                name = stream_def.get("stream", {}).get("name") or stream_def.get("name", "")
                 if not name:
                     continue
                 if self._selected_streams and name not in self._selected_streams:
@@ -233,6 +221,7 @@ class ExternalConnectorAdapter(AbstractConnector):
         finally:
             if config_path:
                 import os
+
                 try:
                     os.unlink(config_path)
                 except OSError:
@@ -270,9 +259,7 @@ class ExternalConnectorAdapter(AbstractConnector):
 
         try:
             # Write source_config to temp file
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".json", delete=False, encoding="utf-8"
-            ) as f:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8") as f:
                 json.dump(self._source_config, f)
                 config_path = f.name
 
@@ -287,9 +274,7 @@ class ExternalConnectorAdapter(AbstractConnector):
                     for s in self._selected_streams
                 ]
             }
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".json", delete=False, encoding="utf-8"
-            ) as f:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8") as f:
                 json.dump(streams_catalog, f)
                 catalog_path = f.name
 
@@ -308,9 +293,7 @@ class ExternalConnectorAdapter(AbstractConnector):
             if incremental:
                 state = await self._load_state()
                 if state:
-                    with tempfile.NamedTemporaryFile(
-                        mode="w", suffix=".json", delete=False, encoding="utf-8"
-                    ) as f:
+                    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8") as f:
                         json.dump(state, f)
                         state_path = f.name
                     cmd.extend(["--state", state_path])
@@ -359,6 +342,7 @@ class ExternalConnectorAdapter(AbstractConnector):
         finally:
             result.completed_at = now_utc()
             import os
+
             for path in (config_path, catalog_path, state_path):
                 if path:
                     try:
@@ -393,9 +377,7 @@ class ExternalConnectorAdapter(AbstractConnector):
         state_data = msg.get("state", {}).get("data", msg.get("data", {}))
         if state_data:
             await self._save_state(state_data)
-            self.logger.debug(
-                "Persisted STATE checkpoint for connector %s", self.config.connector_id
-            )
+            self.logger.debug("Persisted STATE checkpoint for connector %s", self.config.connector_id)
 
     def _handle_log(self, msg: Dict[str, Any]) -> None:
         """Forward LOG message from subprocess to logger."""

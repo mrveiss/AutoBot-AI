@@ -224,9 +224,7 @@ def migrate_file(
     dest_path = dest_dir / new_name
 
     if dry_run:
-        return str(src_path.relative_to(PROJECT_ROOT)), str(
-            dest_path.relative_to(PROJECT_ROOT)
-        )
+        return str(src_path.relative_to(PROJECT_ROOT)), str(dest_path.relative_to(PROJECT_ROOT))
 
     # Ensure dest directory exists
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -252,9 +250,7 @@ def migrate_file(
         capture_output=True,
     )
 
-    return str(src_path.relative_to(PROJECT_ROOT)), str(
-        dest_path.relative_to(PROJECT_ROOT)
-    )
+    return str(src_path.relative_to(PROJECT_ROOT)), str(dest_path.relative_to(PROJECT_ROOT))
 
 
 def migrate_unit_tests(dry_run: bool = True) -> list[tuple[str, str]]:
@@ -284,10 +280,7 @@ def migrate_unit_tests(dry_run: bool = True) -> list[tuple[str, str]]:
                     result = migrate_file(test_file, dest_dir, dry_run)
                     results.append(result)
                 else:
-                    logger.info(
-                        f"  WARNING: No mapping for subdir "
-                        f"{subdir.name}/{test_file.name}"
-                    )
+                    logger.info(f"  WARNING: No mapping for subdir " f"{subdir.name}/{test_file.name}")
 
     return results
 
@@ -402,16 +395,12 @@ def main() -> None:
 
     if args.phase in ("root", "all"):
         results = migrate_root_tests(args.dry_run, migrated_destinations)
-        print_report(
-            results, "Phase 2: Root Tests (infrastructure/shared/tests/test_*.py)"
-        )
+        print_report(results, "Phase 2: Root Tests (infrastructure/shared/tests/test_*.py)")
         all_results.extend(results)
 
     if args.phase in ("infra", "all"):
         results = migrate_infra_component_tests(args.dry_run)
-        print_report(
-            results, "Phase 3: Infra Component Tests (infrastructure/*/tests/)"
-        )
+        print_report(results, "Phase 3: Infra Component Tests (infrastructure/*/tests/)")
         all_results.extend(results)
 
     logger.info(f"\n{'='*60}")

@@ -226,17 +226,13 @@ def _render_enum(cls: type, source: str) -> str:
     """Emit a TypeScript string union for a Python Enum."""
     members = [f"  | '{m.value}'" for m in cls]
     body = "\n".join(members)
-    return (
-        f"/** Generated from `{source}.{cls.__name__}` */\n"
-        f"export type {cls.__name__} =\n{body};\n"
-    )
+    return f"/** Generated from `{source}.{cls.__name__}` */\n" f"export type {cls.__name__} =\n{body};\n"
 
 
 def _render_alias(name: str, target: str, source_cls: str) -> str:
     """Emit a TypeScript type alias re-exporting an existing union."""
     return (
-        f"/** Generated alias — same union as `{source_cls}` (#6689 / #7226) */\n"
-        f"export type {name} = {target};\n"
+        f"/** Generated alias — same union as `{source_cls}` (#6689 / #7226) */\n" f"export type {name} = {target};\n"
     )
 
 
@@ -313,7 +309,7 @@ def generate() -> str:
         display_module = rel_file_path
         for prefix in ("autobot-backend/", ""):
             if display_module.startswith(prefix):
-                display_module = display_module[len(prefix):]
+                display_module = display_module[len(prefix) :]
                 break
         display_module = display_module.removesuffix(".py").replace("/", ".")
 

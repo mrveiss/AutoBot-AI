@@ -94,7 +94,9 @@ def _calculate_severity_distribution(conflicts: list) -> dict:
     }
 
 
-def _build_resolution_response(results: list, file_path: str, safe_mode: bool) -> DataResponse[MergeConflictResolveResponse]:
+def _build_resolution_response(
+    results: list, file_path: str, safe_mode: bool
+) -> DataResponse[MergeConflictResolveResponse]:
     """Build the DataResponse for a successful conflict resolution.
 
     Helper for resolve_conflicts. Ref: #1088.

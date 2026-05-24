@@ -23,9 +23,7 @@ import aiohttp
 try:
     from utils.network_constants import NetworkConstants
 
-    AUTOBOT_BACKEND_URL = (
-        f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
-    )
+    AUTOBOT_BACKEND_URL = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
 except ImportError:
     # Fallback for standalone usage - use environment variable
     AUTOBOT_BACKEND_URL = os.getenv("AUTOBOT_BACKEND_URL", "")
@@ -106,9 +104,7 @@ class MCPClient:
         """
         if attempt < self.max_retries - 1:
             wait_time = 2**attempt
-            logger.warning(
-                f"{label}, retrying in {wait_time}s... " f"(attempt {attempt + 1})"
-            )
+            logger.warning(f"{label}, retrying in {wait_time}s... " f"(attempt {attempt + 1})")
             await asyncio.sleep(wait_time)
             return
         raise MCPToolError(bridge, tool, 0, msg)
@@ -132,9 +128,7 @@ class MCPClient:
                     return result
 
                 if response.status in (400, 403, 404, 422):
-                    self._raise_client_error(
-                        bridge, tool, response.status, response_text
-                    )
+                    self._raise_client_error(bridge, tool, response.status, response_text)
 
                 if response.status >= 500:
                     if attempt < self.max_retries - 1:
@@ -188,9 +182,7 @@ class MCPClient:
 
         for attempt in range(self.max_retries):
             try:
-                result = await self._execute_request(
-                    url, params, bridge, tool_name, attempt
-                )
+                result = await self._execute_request(url, params, bridge, tool_name, attempt)
                 if result is not None:
                     return result
             except asyncio.TimeoutError:
@@ -210,9 +202,7 @@ class MCPClient:
                     f"Connection error: {str(e)}",
                 )
             except json.JSONDecodeError as e:
-                raise MCPToolError(
-                    bridge, tool_name, 0, f"Invalid JSON response: {str(e)}"
-                )
+                raise MCPToolError(bridge, tool_name, 0, f"Invalid JSON response: {str(e)}")
 
         raise MCPToolError(bridge, tool_name, 0, "Max retries exceeded")
 
@@ -242,9 +232,7 @@ class MCPClient:
 default_client = MCPClient()
 
 
-async def call_mcp_tool(
-    bridge_name: str, tool_name: str, params: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
+async def call_mcp_tool(bridge_name: str, tool_name: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     Convenience function to call MCP tool using default client.
 
@@ -324,9 +312,7 @@ async def write_file_safe(path: str, content: str) -> bool:
         True on success, False on failure
     """
     try:
-        await call_mcp_tool(
-            "filesystem_mcp", "write_file", {"path": path, "content": content}
-        )
+        await call_mcp_tool("filesystem_mcp", "write_file", {"path": path, "content": content})
         logger.info(f"File written: {path}")
         return True
     except MCPToolError as e:
@@ -363,9 +349,7 @@ class WorkflowResult:
         self.success = True
         self.error: Optional[str] = None
 
-    def add_step(
-        self, step_name: str, status: str, data: Any = None, error: str = None
-    ):
+    def add_step(self, step_name: str, status: str, data: Any = None, error: str = None):
         """Add step result to workflow"""
         step = {
             "step": step_name,

@@ -43,9 +43,7 @@ class ConnectorAcceptanceTest:
     @pytest.mark.asyncio
     async def test_connection_returns_bool(self):
         result = await self.connector.test_connection()
-        assert isinstance(result, bool), (
-            "test_connection() must return bool, got %s" % type(result).__name__
-        )
+        assert isinstance(result, bool), "test_connection() must return bool, got %s" % type(result).__name__
 
     # ------------------------------------------------------------------
     # discover_sources
@@ -54,9 +52,7 @@ class ConnectorAcceptanceTest:
     @pytest.mark.asyncio
     async def test_discover_sources_returns_list(self):
         sources = await self.connector.discover_sources()
-        assert isinstance(sources, list), (
-            "discover_sources() must return list, got %s" % type(sources).__name__
-        )
+        assert isinstance(sources, list), "discover_sources() must return list, got %s" % type(sources).__name__
 
     @pytest.mark.asyncio
     async def test_discover_sources_items_are_source_info(self):
@@ -99,9 +95,7 @@ class ConnectorAcceptanceTest:
     @pytest.mark.asyncio
     async def test_detect_changes_returns_list(self):
         changes = await self.connector.detect_changes(since=None)
-        assert isinstance(changes, list), (
-            "detect_changes() must return list, got %s" % type(changes).__name__
-        )
+        assert isinstance(changes, list), "detect_changes() must return list, got %s" % type(changes).__name__
 
     @pytest.mark.asyncio
     async def test_detect_changes_items_are_change_info(self):
@@ -109,9 +103,11 @@ class ConnectorAcceptanceTest:
         for c in changes:
             assert isinstance(c, ChangeInfo), "detect_changes() items must be ChangeInfo, got %s" % type(c).__name__
             assert c.source_id, "ChangeInfo.source_id must not be empty"
-            assert c.change_type in ("added", "modified", "deleted"), (
-                "ChangeInfo.change_type must be 'added', 'modified', or 'deleted'"
-            )
+            assert c.change_type in (
+                "added",
+                "modified",
+                "deleted",
+            ), "ChangeInfo.change_type must be 'added', 'modified', or 'deleted'"
 
     # ------------------------------------------------------------------
     # sync
@@ -120,16 +116,16 @@ class ConnectorAcceptanceTest:
     @pytest.mark.asyncio
     async def test_sync_full_returns_valid_sync_result(self):
         result = await self.connector.sync(incremental=False)
-        assert isinstance(result, SyncResult), (
-            "sync() must return SyncResult, got %s" % type(result).__name__
-        )
+        assert isinstance(result, SyncResult), "sync() must return SyncResult, got %s" % type(result).__name__
         assert result.connector_id, "SyncResult.connector_id must not be empty"
         assert result.started_at is not None, "SyncResult.started_at must not be None"
         assert isinstance(result.added, int), "SyncResult.added must be int"
         assert isinstance(result.errors, list), "SyncResult.errors must be list"
-        assert result.status in ("success", "partial", "failed"), (
-            "SyncResult.status must be 'success', 'partial', or 'failed'"
-        )
+        assert result.status in (
+            "success",
+            "partial",
+            "failed",
+        ), "SyncResult.status must be 'success', 'partial', or 'failed'"
 
     @pytest.mark.asyncio
     async def test_sync_incremental_returns_valid_sync_result(self):
@@ -142,7 +138,7 @@ class ConnectorAcceptanceTest:
     async def test_incremental_sync_does_not_exceed_full_sync_count(self):
         full = await self.connector.sync(incremental=False)
         incremental = await self.connector.sync(incremental=True)
-        assert incremental.added <= full.added, (
-            "Incremental sync added=%d should not exceed full sync added=%d"
-            % (incremental.added, full.added)
+        assert incremental.added <= full.added, "Incremental sync added=%d should not exceed full sync added=%d" % (
+            incremental.added,
+            full.added,
         )

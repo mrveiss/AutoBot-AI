@@ -1,4 +1,5 @@
 """End-to-end CLI tests for the Infra runner."""
+
 import subprocess
 import sys
 from pathlib import Path
@@ -11,7 +12,9 @@ FIXTURES = REPO_ROOT / "tests" / "lint" / "canonical" / "fixtures" / "sh_echo_de
 def _run(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, str(RUNNER), *args],
-        cwd=REPO_ROOT, capture_output=True, text=True,
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
     )
 
 

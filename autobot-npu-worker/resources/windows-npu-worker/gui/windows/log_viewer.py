@@ -5,9 +5,15 @@ Log Viewer - Real-time Log Display
 import logging
 from pathlib import Path
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
-    QPushButton, QComboBox, QLabel, QCheckBox,
-    QFileDialog
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QTextEdit,
+    QPushButton,
+    QComboBox,
+    QLabel,
+    QCheckBox,
+    QFileDialog,
 )
 from PySide6.QtCore import Signal, Slot, QThread, QTimer
 from PySide6.QtGui import QFont, QTextCursor
@@ -34,7 +40,7 @@ class LogWatcher(QThread):
         while self.running:
             try:
                 if self.log_file_path.exists():
-                    with open(self.log_file_path, 'r', encoding='utf-8', errors='replace') as f:
+                    with open(self.log_file_path, "r", encoding="utf-8", errors="replace") as f:
                         f.seek(self.last_position)
                         new_content = f.read()
                         if new_content:
@@ -77,12 +83,7 @@ class LogViewer(QWidget):
         controls.addWidget(QLabel("Log File:"))
 
         self.log_file_combo = QComboBox()
-        self.log_file_combo.addItems([
-            "app.log",
-            "service.log",
-            "error.log",
-            "gui_crash.log"
-        ])
+        self.log_file_combo.addItems(["app.log", "service.log", "error.log", "gui_crash.log"])
         controls.addWidget(self.log_file_combo)
 
         controls.addStretch()
@@ -188,7 +189,7 @@ class LogViewer(QWidget):
                 self.log_display.setPlainText(f"Log file not found: {log_path}")
                 return
 
-            with open(log_path, 'r', encoding='utf-8') as f:
+            with open(log_path, "r", encoding="utf-8") as f:
                 content = f.read()
                 self.log_display.setPlainText(content)
                 self.update_line_count()
@@ -227,15 +228,12 @@ class LogViewer(QWidget):
     def export_logs(self):
         """Export logs to file"""
         file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Export Logs",
-            "",
-            "Text Files (*.txt);;Log Files (*.log);;All Files (*)"
+            self, "Export Logs", "", "Text Files (*.txt);;Log Files (*.log);;All Files (*)"
         )
 
         if file_path:
             try:
-                with open(file_path, 'w', encoding='utf-8') as f:
+                with open(file_path, "w", encoding="utf-8") as f:
                     f.write(self.log_display.toPlainText())
                 self.status_label.setText(f"Exported to: {file_path}")
             except Exception as e:

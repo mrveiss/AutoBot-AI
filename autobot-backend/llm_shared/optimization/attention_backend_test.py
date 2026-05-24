@@ -483,12 +483,15 @@ class TestArchitectureFamilyDispatch:
     def test_transformer_family_enters_normal_selection(self):
         """TRANSFORMER family must fall through to normal tier selection."""
         sel = _make_selector()
-        with patch(
-            "llm_shared.optimization.attention_backend._import_better_transformer",
-            return_value=None,
-        ), patch(
-            "llm_shared.optimization.attention_backend.AttentionBackendSelector._can_use_sdpa",
-            return_value=False,
+        with (
+            patch(
+                "llm_shared.optimization.attention_backend._import_better_transformer",
+                return_value=None,
+            ),
+            patch(
+                "llm_shared.optimization.attention_backend.AttentionBackendSelector._can_use_sdpa",
+                return_value=False,
+            ),
         ):
             result = sel.select_backend(ModelConfig(architecture_family=ArchitectureFamily.TRANSFORMER))
         assert result == AttentionBackend.VANILLA

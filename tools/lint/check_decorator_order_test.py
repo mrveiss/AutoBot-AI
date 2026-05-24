@@ -10,6 +10,7 @@ Covers detection of:
 Plus path filtering, exit codes, the negative case (correct ordering
 is not flagged), and the ``--fix`` mode via libcst (#6787).
 """
+
 from __future__ import annotations
 
 import importlib.util

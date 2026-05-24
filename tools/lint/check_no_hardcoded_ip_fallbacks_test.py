@@ -60,11 +60,7 @@ class TestDenyCases:
         path = _write(
             tmp_path,
             "multi.py",
-            (
-                "import os\n"
-                "r = os.getenv('R', '172.16.168.23')\n"
-                "b = os.getenv('B', '172.16.168.20')\n"
-            ),
+            ("import os\n" "r = os.getenv('R', '172.16.168.23')\n" "b = os.getenv('B', '172.16.168.20')\n"),
         )
         hits = hook._scan(path, tmp_path)
         assert len(hits) == 2
@@ -124,10 +120,7 @@ class TestAllowCases:
         path = _write(
             tmp_path,
             "ok.py",
-            (
-                "from autobot_shared.ssot_config import config\n"
-                "h = config.vm.redis\n"
-            ),
+            ("from autobot_shared.ssot_config import config\n" "h = config.vm.redis\n"),
         )
         assert hook._scan(path, tmp_path) == []
 
@@ -140,18 +133,14 @@ class TestAllowlistedFiles:
         target = tmp_path / "tools" / "lint"
         target.mkdir(parents=True)
         path = target / "check_no_hardcoded_ip_fallbacks.py"
-        path.write_text(
-            "import os\nh = os.getenv('X', '172.16.168.23')\n", encoding="utf-8"
-        )
+        path.write_text("import os\nh = os.getenv('X', '172.16.168.23')\n", encoding="utf-8")
         assert hook._scan(path, tmp_path) == []
 
 
 class TestEntryPoint:
     """Smoke test the main() argv harness end-to-end."""
 
-    def test_returns_1_when_violations(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_returns_1_when_violations(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         path = _write(
             tmp_path,
             "bad.py",
@@ -163,9 +152,7 @@ class TestEntryPoint:
         assert "172.16.168.23" in captured.err
         assert "1 hardcoded-IP fallback(s)" in captured.err
 
-    def test_returns_0_on_clean(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_returns_0_on_clean(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         path = _write(
             tmp_path,
             "clean.py",

@@ -1,4 +1,5 @@
 """Tests for the sh-echo-debug-smoke rule (Wave 0 infra smoke-test rule)."""
+
 from pathlib import Path
 
 import pytest

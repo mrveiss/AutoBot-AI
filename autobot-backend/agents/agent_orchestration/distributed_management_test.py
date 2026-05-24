@@ -598,9 +598,7 @@ class TestRedisPersistence:
             _register_agent(mgr, "a1")
             await mgr.add_active_task("a1", "t1")
             await mgr.report_task_progress("t1")
-            mocks["persist_task_progress"].assert_awaited_with(
-                mgr._deployment_id, "t1", mgr._task_last_progress["t1"]
-            )
+            mocks["persist_task_progress"].assert_awaited_with(mgr._deployment_id, "t1", mgr._task_last_progress["t1"])
 
     @pytest.mark.asyncio
     async def test_rehydrate_restores_assigned_at_from_redis(self):

@@ -87,12 +87,8 @@ TEST_PATH_FRAGMENTS = ("_test.", ".test.", "/tests/", "/__tests__/")
 # which the import-grep below cannot detect. We parse these files at script
 # startup and treat any file whose dotted module path appears in a registry
 # tuple as already wired (#7109).
-ROUTER_REGISTRY_DIR = (
-    Path(__file__).resolve().parent.parent / "autobot-backend" / "initialization" / "router_registry"
-)
-REGISTRY_TUPLE_RE = re.compile(
-    r'\(\s*"([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)+)"'
-)
+ROUTER_REGISTRY_DIR = Path(__file__).resolve().parent.parent / "autobot-backend" / "initialization" / "router_registry"
+REGISTRY_TUPLE_RE = re.compile(r'\(\s*"([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)+)"')
 
 DOCSTRING_HEAD_LINES = 40  # how many lines from top of file to scan for tracker refs
 # Match common docstring tracker-reference shapes (#6928 widened the set).
@@ -276,9 +272,7 @@ def grep_count_production_callers(stem: str, self_path: Path) -> int:
         "--include=*.vue",
     ]
     try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=60, check=False
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=False)
     except subprocess.TimeoutExpired:
         return -1
     if result.returncode > 1:  # 0 = matches, 1 = no matches, >1 = error
@@ -314,9 +308,7 @@ def fetch_closed_tracker_set() -> set[int]:
         "number",
     ]
     try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=120, check=True
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, check=True)
     except (subprocess.SubprocessError, FileNotFoundError) as e:
         print(f"warning: gh unavailable, tracker states will be UNKNOWN ({e})", file=sys.stderr)
         return set()
@@ -348,9 +340,7 @@ def existing_audit_issues_by_tracker() -> set[int]:
         "number,title",
     ]
     try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=60, check=True
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=True)
         data = json.loads(result.stdout)
     except (subprocess.SubprocessError, json.JSONDecodeError, FileNotFoundError):
         return set()
@@ -489,9 +479,7 @@ P2 — closure-verification process gap, blocks credibility of "closed" tracker 
         body,
     ]
     try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=60, check=True
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=True)
     except subprocess.SubprocessError as e:
         print(f"warning: failed to file issue for {finding.file}: {e}", file=sys.stderr)
         return None

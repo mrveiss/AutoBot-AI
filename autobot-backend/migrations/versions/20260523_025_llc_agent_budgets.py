@@ -24,9 +24,7 @@ def upgrade() -> None:
         sa.Column("company_id", sa.String(255), nullable=False),
         sa.Column("agent_id", sa.String(255), nullable=False, unique=True),
         sa.Column("budget_limit", sa.Numeric(15, 6), nullable=False),
-        sa.Column(
-            "budget_spent", sa.Numeric(15, 6), nullable=False, server_default="0"
-        ),
+        sa.Column("budget_spent", sa.Numeric(15, 6), nullable=False, server_default="0"),
         sa.Column("alert_threshold", sa.Float, nullable=False, server_default="0.8"),
         sa.Column(
             "created_at",
@@ -41,12 +39,8 @@ def upgrade() -> None:
             server_default=sa.func.now(),
         ),
     )
-    op.create_index(
-        "ix_llc_agent_budgets_company_id", "llc_agent_budgets", ["company_id"]
-    )
-    op.create_index(
-        "ix_llc_agent_budgets_agent_id", "llc_agent_budgets", ["agent_id"]
-    )
+    op.create_index("ix_llc_agent_budgets_company_id", "llc_agent_budgets", ["company_id"])
+    op.create_index("ix_llc_agent_budgets_agent_id", "llc_agent_budgets", ["agent_id"])
 
 
 def downgrade() -> None:

@@ -77,12 +77,7 @@ _EXPORT_CONTENT_TYPES: dict[str, str] = {
 # CSP for the canvas page (MVA-486 §2.3/§3.1).
 # Allows Vega SVG inline styles + data-URI images; blocks scripts, eval,
 # and all external network fetches (preventing data.url exfiltration at browser level).
-_CANVAS_PAGE_CSP = (
-    "default-src 'none'; "
-    "style-src 'unsafe-inline'; "
-    "img-src data:; "
-    "font-src data:"
-)
+_CANVAS_PAGE_CSP = "default-src 'none'; " "style-src 'unsafe-inline'; " "img-src data:; " "font-src data:"
 
 
 def _user_id(current_user: dict) -> str:

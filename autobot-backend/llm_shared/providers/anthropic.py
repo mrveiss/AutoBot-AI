@@ -208,8 +208,7 @@ class AnthropicProvider(BaseProvider):
 
         if request.tools:
             kwargs["tools"] = [
-                {"name": t.name, "description": t.description, "input_schema": t.input_schema}
-                for t in request.tools
+                {"name": t.name, "description": t.description, "input_schema": t.input_schema} for t in request.tools
             ]
             if request.tool_choice:
                 kwargs["tool_choice"] = {"type": request.tool_choice}

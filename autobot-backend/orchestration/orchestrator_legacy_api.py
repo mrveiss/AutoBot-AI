@@ -40,9 +40,7 @@ class _DeprecatedRequestMixin:
     def _update_success_metrics(self, processing_time: float) -> None:
         self.metrics["tasks_completed"] += 1
         self.metrics["total_processing_time"] += processing_time
-        self.metrics["average_response_time"] = (
-            self.metrics["total_processing_time"] / self.metrics["tasks_completed"]
-        )
+        self.metrics["average_response_time"] = self.metrics["total_processing_time"] / self.metrics["tasks_completed"]
 
     async def process_user_request(
         self,
@@ -124,6 +122,7 @@ class _DeprecatedRequestMixin:
     def _select_model_for_task(self, classification_result: Any | None) -> str:
         if classification_result and classification_result.complexity == TaskComplexity.SIMPLE:
             from config.manager import get_config_manager
+
             model = get_config_manager().get_default_llm_model()
             logger.info("Using fast model for simple task: %s", model)
             return model

@@ -881,9 +881,7 @@ async def execute_command(
     stdout, stderr, returncode = await _run_subprocess(command, security_layer, user_role)
 
     # Handle result and publish completion event (Issue #620: uses helper)
-    return await _handle_command_result(
-        security_layer, user_role, command, stdout, stderr, returncode
-    )
+    return await _handle_command_result(security_layer, user_role, command, stdout, stderr, returncode)
 
 
 # ====================================================================

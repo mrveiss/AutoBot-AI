@@ -28,6 +28,7 @@ Usage:
       $(grep -rln "parseApiResponse" autobot-frontend/src/components \\
         --include='*.vue')
 """
+
 import re
 import sys
 from pathlib import Path
@@ -35,17 +36,12 @@ from pathlib import Path
 # Match the start of `const VAR = await (apiClient|ApiClient).METHOD(`.
 # Works for single-line AND multi-line call bodies because we only patch
 # the opener — the `(args)` span is left alone.
-RESPONSE_OPEN = re.compile(
-    r"^(\s*)const (\w+) = await "
-    r"(apiClient|ApiClient)\.(get|post|put|delete|patch)\("
-)
+RESPONSE_OPEN = re.compile(r"^(\s*)const (\w+) = await " r"(apiClient|ApiClient)\.(get|post|put|delete|patch)\(")
 
 # Match `const NEW_VAR = await parseApiResponse<TYPE>(PREV_VAR)` on one line.
 # TYPE captures everything up to the final `(` — handles nested generics
 # like `Record<string, any>` without needing brace counting.
-PARSE_LINE = re.compile(
-    r"^(\s*)const (\w+) = await parseApiResponse<([^(]+)>\((\w+)\)\s*$"
-)
+PARSE_LINE = re.compile(r"^(\s*)const (\w+) = await parseApiResponse<([^(]+)>\((\w+)\)\s*$")
 
 PARSE_IMPORT = re.compile(
     r"^import \{ parseApiResponse \} from '@/utils/apiResponseHelpers'\s*\n",
@@ -88,10 +84,7 @@ def transform(text: str) -> tuple[str, int]:
         # Patch only the opener: rename the binding and type the method.
         original = out_lines[match_idx]
         patched = RESPONSE_OPEN.sub(
-            lambda m: (
-                f"{m.group(1)}const {new_var} = await "
-                f"{m.group(3)}.{m.group(4)}<{type_arg}>("
-            ),
+            lambda m: (f"{m.group(1)}const {new_var} = await " f"{m.group(3)}.{m.group(4)}<{type_arg}>("),
             original,
             count=1,
         )
@@ -99,15 +92,11 @@ def transform(text: str) -> tuple[str, int]:
         deletes.add(i)
         count += 1
 
-    new_lines = [
-        line for idx, line in enumerate(out_lines) if idx not in deletes
-    ]
+    new_lines = [line for idx, line in enumerate(out_lines) if idx not in deletes]
     text2 = "".join(new_lines)
 
     # Drop `import { parseApiResponse }` if no uses remain.
-    if "parseApiResponse" not in text2.replace(
-        "import { parseApiResponse }", ""
-    ):
+    if "parseApiResponse" not in text2.replace("import { parseApiResponse }", ""):
         text2 = PARSE_IMPORT.sub("", text2)
 
     return text2, count

@@ -54,11 +54,7 @@ def check_reference(ref: str) -> bool:
         return True
     # Fall back to filename search across known source trees.
     name = Path(clean).name
-    return any(
-        list(Path(tree).glob(f"**/{name}"))
-        for tree in SOURCE_TREES
-        if Path(tree).exists()
-    )
+    return any(list(Path(tree).glob(f"**/{name}")) for tree in SOURCE_TREES if Path(tree).exists())
 
 
 def main() -> int:

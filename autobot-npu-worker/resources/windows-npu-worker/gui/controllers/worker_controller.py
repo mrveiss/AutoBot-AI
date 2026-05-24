@@ -129,9 +129,7 @@ class WorkerController(QObject):
             # Fall back to starting as subprocess if service doesn't exist
             # Check if worker script exists
             if not self.worker_script.exists():
-                self.error_occurred.emit(
-                    f"Worker script not found: {self.worker_script}"
-                )
+                self.error_occurred.emit(f"Worker script not found: {self.worker_script}")
                 return
 
             # Check if Python executable exists
@@ -141,9 +139,7 @@ class WorkerController(QObject):
             else:
                 python_cmd = str(self.python_exe)
 
-            logger.info(
-                "Starting worker process: %s %s", python_cmd, self.worker_script
-            )
+            logger.info("Starting worker process: %s %s", python_cmd, self.worker_script)
 
             # Start worker process
             self.worker_process = subprocess.Popen(
@@ -151,11 +147,7 @@ class WorkerController(QObject):
                 cwd=str(self.worker_dir),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                creationflags=(
-                    subprocess.CREATE_NO_WINDOW
-                    if hasattr(subprocess, "CREATE_NO_WINDOW")
-                    else 0
-                ),
+                creationflags=(subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0),
             )
 
             # Set status to starting and trigger async check after delay
@@ -210,11 +202,7 @@ class WorkerController(QObject):
                 ["sc", "query", "AutoBotNPUWorker"],
                 capture_output=True,
                 text=True,
-                creationflags=(
-                    subprocess.CREATE_NO_WINDOW
-                    if hasattr(subprocess, "CREATE_NO_WINDOW")
-                    else 0
-                ),
+                creationflags=(subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0),
             )
 
             if result.returncode != 0:
@@ -232,11 +220,7 @@ class WorkerController(QObject):
                 ["sc", "stop", "AutoBotNPUWorker"],
                 capture_output=True,
                 text=True,
-                creationflags=(
-                    subprocess.CREATE_NO_WINDOW
-                    if hasattr(subprocess, "CREATE_NO_WINDOW")
-                    else 0
-                ),
+                creationflags=(subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0),
             )
 
             if stop_result.returncode == 0:
@@ -265,11 +249,7 @@ class WorkerController(QObject):
                 ["sc", "query", "AutoBotNPUWorker"],
                 capture_output=True,
                 text=True,
-                creationflags=(
-                    subprocess.CREATE_NO_WINDOW
-                    if hasattr(subprocess, "CREATE_NO_WINDOW")
-                    else 0
-                ),
+                creationflags=(subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0),
             )
 
             if result.returncode != 0:
@@ -287,11 +267,7 @@ class WorkerController(QObject):
                 ["sc", "start", "AutoBotNPUWorker"],
                 capture_output=True,
                 text=True,
-                creationflags=(
-                    subprocess.CREATE_NO_WINDOW
-                    if hasattr(subprocess, "CREATE_NO_WINDOW")
-                    else 0
-                ),
+                creationflags=(subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0),
             )
 
             if start_result.returncode == 0:

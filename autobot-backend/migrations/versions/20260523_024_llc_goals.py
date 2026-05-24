@@ -56,8 +56,10 @@ def upgrade() -> None:
     # llc_goals must exist before this FK can be wired — deferred from migration 022.
     op.create_foreign_key(
         "fk_llc_work_items_goal_id",
-        "llc_work_items", "llc_goals",
-        ["goal_id"], ["id"],
+        "llc_work_items",
+        "llc_goals",
+        ["goal_id"],
+        ["id"],
         ondelete="SET NULL",
     )
 

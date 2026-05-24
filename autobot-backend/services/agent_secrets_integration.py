@@ -29,7 +29,9 @@ class SecretRequirement(Enum):
 
     SSH_KEY = "ssh_key"
     API_KEY = "api_key"  # nosemgrep: autobot-hardcoded-secret-key
-    PASSWORD = "password"  # nosec B105 - secret type enum, not actual password  # nosemgrep: autobot-hardcoded-secret-key
+    PASSWORD = (
+        "password"  # nosec B105 - secret type enum, not actual password  # nosemgrep: autobot-hardcoded-secret-key
+    )
     TOKEN = "token"  # nosec B105 - secret type enum, not actual token  # nosemgrep: autobot-hardcoded-secret-key
     CERTIFICATE = "certificate"
     DATABASE_URL = "database_url"

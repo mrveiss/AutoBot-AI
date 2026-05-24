@@ -97,9 +97,24 @@ class TestGetInternalTlsContext:
 
         try:
             result = subprocess.run(
-                ["openssl", "req", "-x509", "-newkey", "rsa:2048", "-keyout", "/dev/null",
-                 "-out", ca_path, "-days", "1", "-nodes", "-subj", "/CN=TestCA"],
-                capture_output=True, timeout=10,
+                [
+                    "openssl",
+                    "req",
+                    "-x509",
+                    "-newkey",
+                    "rsa:2048",
+                    "-keyout",
+                    "/dev/null",
+                    "-out",
+                    ca_path,
+                    "-days",
+                    "1",
+                    "-nodes",
+                    "-subj",
+                    "/CN=TestCA",
+                ],
+                capture_output=True,
+                timeout=10,
             )
             if result.returncode != 0:
                 pytest.skip("openssl not available")
@@ -114,9 +129,7 @@ class TestGetInternalTlsContext:
 
     def test_nonexistent_ca_path_falls_through(self) -> None:
         """A missing AUTOBOT_TLS_CA_PATH file does not crash — falls through."""
-        with patch.dict(
-            os.environ, {"AUTOBOT_TLS_CA_PATH": "/nonexistent/ca.pem"}, clear=False
-        ):
+        with patch.dict(os.environ, {"AUTOBOT_TLS_CA_PATH": "/nonexistent/ca.pem"}, clear=False):
             os.environ.pop("AUTOBOT_SKIP_TLS_VERIFY", None)
             ctx = get_internal_tls_context()
         assert isinstance(ctx, ssl.SSLContext)
