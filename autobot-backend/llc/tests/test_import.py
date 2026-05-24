@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from llc.services.portability import TemplateImportError as LLCImportError
 from llc.services.portability import PortabilityService
+from llc.services.portability import TemplateImportError as LLCImportError
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -79,7 +79,9 @@ async def test_preview_no_collision() -> None:
     svc = _make_svc()
     # all selects return empty
     svc.session.execute.return_value.scalar.return_value = None
-    svc.session.execute.return_value = MagicMock(scalar=MagicMock(return_value=None), __iter__=MagicMock(return_value=iter([])))
+    svc.session.execute.return_value = MagicMock(
+        scalar=MagicMock(return_value=None), __iter__=MagicMock(return_value=iter([]))
+    )
 
     tmpl = _template(
         agents=[{"name": "Bob", "adapter_config": {}}],
@@ -249,9 +251,7 @@ async def test_execute_import_rollback_on_failure() -> None:
     svc = _make_svc()
     tmpl = _template()
 
-    with patch.object(
-        svc, "_resolve_or_create_company", side_effect=Exception("DB boom")
-    ):
+    with patch.object(svc, "_resolve_or_create_company", side_effect=Exception("DB boom")):
         sp_mock = AsyncMock()
         sp_mock.commit = AsyncMock()
         sp_mock.rollback = AsyncMock()

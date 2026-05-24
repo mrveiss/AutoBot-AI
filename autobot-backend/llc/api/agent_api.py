@@ -150,8 +150,10 @@ async def agent_upload_attachment(
     """Agent uploads a file attachment to a work item (GH#8253)."""
     agent_id, company_id = _agent_context(request)
     from autobot_shared.singleton_factory import lazy_singleton
-    from ..services.attachment_service import AttachmentService, AttachmentTooLarge
     from user_management.database import get_async_session_factory
+
+    from ..services.attachment_service import AttachmentService, AttachmentTooLarge
+
     content = await file.read()
     factory = get_async_session_factory()
     try:
@@ -174,15 +176,22 @@ async def agent_upload_attachment(
         }
     except AttachmentTooLarge as exc:
         raise HTTPException(status_code=413, detail=str(exc))
+
+
 @router.get("/context/{item_id}")
 async def get_item_context(item_id: uuid.UUID, request: Request) -> Dict[str, Any]:
     """Return agent context for a work item, including any human handoff KB notes (GH#8232)."""
     from ..kb.work_item_kb import WorkItemKB
+
     kb = WorkItemKB()
     handoff_chunks = await kb.get_context(str(item_id))
+    return {
         "item_id": str(item_id),
         "handoff_notes": handoff_chunks,
         "has_human_handoff_context": bool(handoff_chunks),
         "context": {},
         "message": "Handoff KB notes included; full RAG context available in Phase 5",
+    }
+
+
 __all__ = ["router"]

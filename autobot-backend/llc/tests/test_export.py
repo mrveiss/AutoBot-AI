@@ -12,7 +12,6 @@ import pytest
 
 from llc.services.portability import PortabilityService, _scrub_adapter_config
 
-
 # ------------------------------------------------------------------
 # Unit tests for _scrub_adapter_config
 # ------------------------------------------------------------------

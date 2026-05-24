@@ -12,8 +12,8 @@ from fastapi.testclient import TestClient
 
 from llc.models.label import LLCLabel, LLCWorkItemLabel
 from llc.services.label_service import (  # noqa: E402
-    LLCLabelService,
     LabelNotFound,
+    LLCLabelService,
     WorkItemNotFound,
 )
 
