@@ -169,12 +169,11 @@ async def get_agent_diary(
     except Exception:
         import logging
 
-        logging.getLogger(__name__).warning(
-            "get_agent_diary: KB read failed for agent_id=%s", agent_id, exc_info=True
-        )
+        logging.getLogger(__name__).warning("get_agent_diary: KB read failed for agent_id=%s", agent_id, exc_info=True)
         return []
 
     if date_from or date_to:
+
         def _in_range(entry: Dict[str, Any]) -> bool:
             ts = (entry.get("metadata") or {}).get("diary_timestamp", "")
             if not ts:

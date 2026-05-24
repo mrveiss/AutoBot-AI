@@ -173,9 +173,7 @@ class AgentDiaryKbWriter:
             }
             await kb.store_fact(content=entry, metadata=metadata)
         except Exception:
-            logger.warning(
-                "AgentDiaryKbWriter: metadata upsert failed for fact_id=%s", fact_id, exc_info=True
-            )
+            logger.warning("AgentDiaryKbWriter: metadata upsert failed for fact_id=%s", fact_id, exc_info=True)
 
     # ------------------------------------------------------------------
     # Pattern learning
@@ -229,9 +227,7 @@ class AgentDiaryKbWriter:
                 },
             )
         except Exception:
-            logger.warning(
-                "AgentDiaryKbWriter: pattern write failed for run_id=%s", run_id, exc_info=True
-            )
+            logger.warning("AgentDiaryKbWriter: pattern write failed for run_id=%s", run_id, exc_info=True)
 
 
 __all__ = ["AgentDiaryKbWriter"]

@@ -11,7 +11,6 @@ import pytest
 
 from llc.kb.diary_writer import AgentDiaryKbWriter, _format_diary_entry
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -140,9 +139,7 @@ async def test_write_from_run_skips_non_terminal_status() -> None:
         patch.object(writer, "_write_diary_entry", new=AsyncMock()) as m_diary,
         patch.object(writer, "_write_patterns", new=AsyncMock()) as m_patterns,
     ):
-        await writer.write_from_run(
-            run_id="run-x", agent_id="agent-A", status="running"
-        )
+        await writer.write_from_run(run_id="run-x", agent_id="agent-A", status="running")
 
     m_diary.assert_not_awaited()
     m_patterns.assert_not_awaited()
@@ -155,9 +152,7 @@ async def test_write_from_run_failed_status_is_terminal() -> None:
         patch.object(writer, "_write_diary_entry", new=AsyncMock()) as m_diary,
         patch.object(writer, "_write_patterns", new=AsyncMock()),
     ):
-        await writer.write_from_run(
-            run_id="run-f", agent_id="agent-A", status="failed"
-        )
+        await writer.write_from_run(run_id="run-f", agent_id="agent-A", status="failed")
 
     m_diary.assert_awaited_once()
 
@@ -170,9 +165,7 @@ async def test_write_from_run_handles_diary_exception() -> None:
         patch.object(writer, "_write_patterns", new=AsyncMock()),
     ):
         # Must not raise — write_from_run is fully best-effort
-        await writer.write_from_run(
-            run_id="run-err", agent_id="agent-A", status="succeeded"
-        )
+        await writer.write_from_run(run_id="run-err", agent_id="agent-A", status="succeeded")
 
 
 # ---------------------------------------------------------------------------
@@ -381,9 +374,7 @@ async def test_on_run_complete_ignores_cancelled_status() -> None:
         calls.append(kw)
 
     with patch.object(AgentDiaryKbWriter, "write_from_run", fake_write_from_run):
-        await scheduler.on_run_complete(
-            run_id="run-x", agent_id="agent-A", status="cancelled"
-        )
+        await scheduler.on_run_complete(run_id="run-x", agent_id="agent-A", status="cancelled")
 
     assert calls == []
 
@@ -399,6 +390,4 @@ async def test_on_run_complete_swallows_writer_exception() -> None:
 
     with patch.object(AgentDiaryKbWriter, "write_from_run", failing_write):
         # Must not raise
-        await scheduler.on_run_complete(
-            run_id="run-err", agent_id="agent-A", status="failed"
-        )
+        await scheduler.on_run_complete(run_id="run-err", agent_id="agent-A", status="failed")
