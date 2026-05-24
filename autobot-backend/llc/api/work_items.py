@@ -1,4 +1,4 @@
-"""LLC work items API routes (GH#8213, GH#8223).
+"""LLC work items API routes (GH#8213, GH#8223, GH#8232).
 
 Routes:
   POST   /api/llc/work-items
@@ -12,6 +12,7 @@ Routes:
   POST   /api/llc/work-items/{work_item_id}/comments
   POST   /api/llc/work-items/{work_item_id}/claim    (human claim — GH#8223)
   POST   /api/llc/work-items/{work_item_id}/unclaim  (human unclaim — GH#8223)
+  POST   /api/llc/work-items/{work_item_id}/handoff/to-agent  (GH#8232)
 """
 
 import uuid
@@ -26,6 +27,7 @@ from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
 
 from ..models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
+from ..services.handoff import HandoffAttachment, HandoffNotAuthorized, HandoffService
 from ..services.work_item_service import CheckoutConflict, InvalidTransition, WorkItemService
 
 
@@ -40,10 +42,15 @@ class HumanUnclaimRequest(BaseModel):
 
 router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
 _get_service = lazy_singleton(WorkItemService)
+_get_handoff_service = lazy_singleton(HandoffService)
 
 
 def _service() -> WorkItemService:
     return _get_service()
+
+
+def _handoff_service() -> HandoffService:
+    return _get_handoff_service()
 
 
 async def get_session() -> AsyncSession:
@@ -110,6 +117,22 @@ class CommentCreate(BaseModel):
     author_user_id: Optional[str] = None
 
 
+class HandoffAttachmentRequest(BaseModel):
+    attachment_id: str
+    filename: str
+    content: str
+    mime_type: Optional[str] = None
+
+
+class HandoffToAgentRequest(BaseModel):
+    user_id: str
+    company_id: str
+    target_agent_id: str
+    human_notes: str
+    user_display: str = ""
+    attachments: Optional[List[HandoffAttachmentRequest]] = None
+
+
 def _assignee_display(item: Any) -> Optional[Dict[str, Any]]:
     """Return structured assignee display info (GH#8223).
 
@@ -162,6 +185,8 @@ def _item_to_dict(item: Any) -> Dict[str, Any]:
         "started_at": item.started_at.isoformat() if item.started_at else None,
         "completed_at": item.completed_at.isoformat() if item.completed_at else None,
         "cancelled_at": item.cancelled_at.isoformat() if item.cancelled_at else None,
+        "review_brief": getattr(item, "review_brief", None),
+        "has_human_handoff_context": bool(getattr(item, "review_brief", None)),
         "created_at": item.created_at.isoformat() if item.created_at else None,
         "updated_at": item.updated_at.isoformat() if item.updated_at else None,
     }
@@ -385,3 +410,43 @@ async def add_comment(
         "author_user_id": str(comment.author_user_id) if comment.author_user_id else None,
         "created_at": comment.created_at.isoformat() if comment.created_at else None,
     }
+
+
+@router.post("/{work_item_id}/handoff/to-agent", status_code=200)
+async def handoff_to_agent(
+    work_item_id: str,
+    body: HandoffToAgentRequest,
+    session: AsyncSession = Depends(get_session),
+) -> Dict[str, Any]:
+    """Human→Agent handoff: ingest notes into KB, reassign to agent (GH#8232)."""
+    atts = [
+        HandoffAttachment(
+            attachment_id=a.attachment_id,
+            filename=a.filename,
+            content=a.content,
+            mime_type=a.mime_type,
+        )
+        for a in (body.attachments or [])
+    ]
+    try:
+        result = await _handoff_service().human_to_agent(
+            session,
+            work_item_id=work_item_id,
+            target_agent_id=body.target_agent_id,
+            user_id=body.user_id,
+            company_id=body.company_id,
+            human_notes=body.human_notes,
+            user_display=body.user_display,
+            attachments=atts,
+        )
+        await session.commit()
+        return {
+            "work_item_id": result.work_item_id,
+            "target_agent_id": result.target_agent_id,
+            "kb_doc_ids": result.kb_doc_ids,
+            "review_brief": result.review_brief,
+        }
+    except HandoffNotAuthorized as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))

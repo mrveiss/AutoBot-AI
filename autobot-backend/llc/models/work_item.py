@@ -95,6 +95,9 @@ class LLCWorkItem(Base):
     created_by_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
     created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
 
+    # Handoff context (GH#8232): written by HandoffService.human_to_agent()
+    review_brief: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+
     # Lifecycle timestamps
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

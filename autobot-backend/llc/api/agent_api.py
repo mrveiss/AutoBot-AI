@@ -1,7 +1,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""LLC agent-facing API routes (GH#8218).
+"""LLC agent-facing API routes (GH#8218, GH#8232).
 
 All routes require a valid LLC bearer token (injected by LLCAgentAuthMiddleware).
 Phase 1 stubs — real implementations land in subsequent phases.
@@ -13,7 +13,7 @@ Routes (all under /llc/agent):
   POST /comments                    — comment on work item
   POST /products                    — upload work product artifact
   POST /heartbeat/report            — heartbeat run completion
-  GET  /context/{item_id}           — pre-assembled context (stub)
+  GET  /context/{item_id}           — pre-assembled context + KB handoff notes (GH#8232)
 """
 
 import uuid
@@ -112,12 +112,18 @@ async def report_heartbeat(body: HeartbeatReport, request: Request) -> Dict[str,
 
 @router.get("/context/{item_id}")
 async def get_item_context(item_id: uuid.UUID, request: Request) -> Dict[str, Any]:
+    """Return agent context for a work item, including any human handoff KB notes (GH#8232)."""
     agent_id, company_id = _agent_context(request)
-    # Phase 5: real RAG assembly via LLCRagAssembler
+    from ..kb.work_item_kb import WorkItemKB
+
+    kb = WorkItemKB()
+    handoff_chunks = await kb.get_context(str(item_id))
     return {
         "item_id": str(item_id),
+        "handoff_notes": handoff_chunks,
+        "has_human_handoff_context": bool(handoff_chunks),
         "context": {},
-        "message": "Phase 1 stub — full RAG context available in Phase 5",
+        "message": "Handoff KB notes included; full RAG context available in Phase 5",
     }
 
 
