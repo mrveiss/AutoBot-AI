@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from llc.services.portability import ImportError as LLCImportError, PortabilityService
-
+from llc.services.portability import ImportError as LLCImportError
+from llc.services.portability import PortabilityService
 
 # ---------------------------------------------------------------------------
 # Helpers

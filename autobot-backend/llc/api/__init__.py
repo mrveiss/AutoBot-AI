@@ -14,12 +14,12 @@ from .ceo_chat import router as ceo_chat_router
 from .companies import router as companies_router
 from .context import router as context_router
 from .goals import router as goals_router
+from .portability import router as portability_router
 from .review_gate_policies import router as review_gate_router
 from .routines import router as routines_router
 from .runs import router as runs_router
 from .secrets import router as secrets_router
 from .sprints import router as sprints_router
-from .portability import router as portability_router
 from .work_items import router as work_items_router
 
 router = APIRouter(prefix="/llc", tags=["llc"])

@@ -90,9 +90,7 @@ class PortabilityService(LLCServiceBase):
             cfg = agent.get("adapter_config") or {}
             all_placeholders.update(_PLACEHOLDER_RE.findall(str(cfg)))
         if all_placeholders:
-            warnings.append(
-                f"Secret placeholders found that require mapping: {sorted(all_placeholders)}"
-            )
+            warnings.append(f"Secret placeholders found that require mapping: {sorted(all_placeholders)}")
 
         return {
             "collisions": collisions,
@@ -129,16 +127,12 @@ class PortabilityService(LLCServiceBase):
 
         sp = await self.session.begin_nested()
         try:
-            company_id = await self._resolve_or_create_company(
-                template, target_company_id, remapping_options, warnings
-            )
+            company_id = await self._resolve_or_create_company(template, target_company_id, remapping_options, warnings)
 
             # agents
             agent_id_map: Dict[str, str] = {}
             for agent in template.get("agents", []):
-                agent_id = await self._import_agent(
-                    agent, company_id, secret_mapping, warnings
-                )
+                agent_id = await self._import_agent(agent, company_id, secret_mapping, warnings)
                 if agent_id:
                     agent_id_map[agent.get("agent_id", "")] = agent_id
                     created_entities["agents"].append(agent_id)
@@ -188,27 +182,21 @@ class PortabilityService(LLCServiceBase):
     # ------------------------------------------------------------------
 
     async def _prefix_exists(self, prefix: str) -> bool:
-        result = await self.session.execute(
-            select(Organization.id).where(Organization.issue_prefix == prefix).limit(1)
-        )
+        result = await self.session.execute(select(Organization.id).where(Organization.issue_prefix == prefix).limit(1))
         return result.scalar() is not None
 
     async def _agent_names_exist(self, names: List[str]) -> List[str]:
         if not names:
             return []
         rows = await self.session.execute(
-            text(
-                "SELECT name FROM agent_org_nodes WHERE name = ANY(:names)"
-            ).bindparams(names=names)
+            text("SELECT name FROM agent_org_nodes WHERE name = ANY(:names)").bindparams(names=names)
         )
         return [r[0] for r in rows]
 
     async def _goal_titles_exist(self, titles: List[str]) -> List[str]:
         if not titles:
             return []
-        result = await self.session.execute(
-            select(LLCGoal.title).where(LLCGoal.title.in_(titles))
-        )
+        result = await self.session.execute(select(LLCGoal.title).where(LLCGoal.title.in_(titles)))
         return [r[0] for r in result]
 
     # ------------------------------------------------------------------
@@ -223,9 +211,7 @@ class PortabilityService(LLCServiceBase):
         warnings: List[str],
     ) -> uuid.UUID:
         if target_company_id:
-            result = await self.session.execute(
-                select(Organization).where(Organization.id == target_company_id)
-            )
+            result = await self.session.execute(select(Organization).where(Organization.id == target_company_id))
             org = result.scalar_one_or_none()
             if org is None:
                 raise ImportError(f"target_company_id {target_company_id} not found")
@@ -282,13 +268,10 @@ class PortabilityService(LLCServiceBase):
             return None
 
         new_agent_id = str(uuid.uuid4())
-        adapter_config = self._resolve_secrets(
-            agent.get("adapter_config") or {}, secret_mapping, name, warnings
-        )
+        adapter_config = self._resolve_secrets(agent.get("adapter_config") or {}, secret_mapping, name, warnings)
 
         await self.session.execute(
-            text(
-                """
+            text("""
                 INSERT INTO agent_org_nodes
                   (id, agent_id, name, reports_to, org_role, title, capabilities,
                    company_id, adapter_type, adapter_config, heartbeat_cron,
@@ -297,8 +280,7 @@ class PortabilityService(LLCServiceBase):
                   (:id, :agent_id, :name, :reports_to, :org_role, :title, :capabilities,
                    :company_id, :adapter_type, :adapter_config::jsonb, :heartbeat_cron,
                    :heartbeat_enabled, :context_mode)
-                """
-            ).bindparams(
+                """).bindparams(
                 id=uuid.uuid4(),
                 agent_id=new_agent_id,
                 name=name,
@@ -336,14 +318,10 @@ class PortabilityService(LLCServiceBase):
 
         resolved_str = _PLACEHOLDER_RE.sub(replace, config_str)
         if unresolved:
-            warnings.append(
-                f"Agent {agent_name!r}: unresolved secret placeholders {unresolved}"
-            )
+            warnings.append(f"Agent {agent_name!r}: unresolved secret placeholders {unresolved}")
         return __import__("json").loads(resolved_str)
 
-    async def _import_goal(
-        self, goal: Dict[str, Any], company_id: uuid.UUID
-    ) -> Optional[uuid.UUID]:
+    async def _import_goal(self, goal: Dict[str, Any], company_id: uuid.UUID) -> Optional[uuid.UUID]:
         title = goal.get("title", "")
         existing = await self._goal_titles_exist([title])
         if existing:
@@ -364,9 +342,7 @@ class PortabilityService(LLCServiceBase):
         await self.session.flush()
         return new_id
 
-    async def _import_project(
-        self, project: Dict[str, Any], company_id: uuid.UUID
-    ) -> Optional[uuid.UUID]:
+    async def _import_project(self, project: Dict[str, Any], company_id: uuid.UUID) -> Optional[uuid.UUID]:
         new_id = uuid.uuid4()
         obj = LLCProject(
             id=new_id,
@@ -379,9 +355,7 @@ class PortabilityService(LLCServiceBase):
         await self.session.flush()
         return new_id
 
-    async def _import_work_item(
-        self, item: Dict[str, Any], company_id: uuid.UUID
-    ) -> Optional[uuid.UUID]:
+    async def _import_work_item(self, item: Dict[str, Any], company_id: uuid.UUID) -> Optional[uuid.UUID]:
         new_id = uuid.uuid4()
         identifier = f"IMP-{new_id.hex[:8].upper()}"
         obj = LLCWorkItem(
@@ -407,6 +381,4 @@ class PortabilityService(LLCServiceBase):
     def _validate_schema(template: Dict[str, Any]) -> None:
         version = template.get("schema_version")
         if version != "1.0":
-            raise ImportError(
-                f"Unsupported schema_version {version!r}; expected '1.0'"
-            )
+            raise ImportError(f"Unsupported schema_version {version!r}; expected '1.0'")

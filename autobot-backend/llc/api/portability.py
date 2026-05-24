@@ -11,12 +11,12 @@ Route group: /llc/import
 import uuid
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import Depends
 
-from llc.services.portability import ImportError as LLCImportError, PortabilityService
+from llc.services.portability import ImportError as LLCImportError
+from llc.services.portability import PortabilityService
 from user_management.database import get_async_session
 
 router = APIRouter(prefix="/import", tags=["llc-import"])

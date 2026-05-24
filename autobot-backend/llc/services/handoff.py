@@ -83,9 +83,7 @@ class HandoffService(LLCServiceBase):
         await self._release_redis_key(work_item_id, user_id)
         await self._publish_h2a_notification(company_id, target_agent_id, work_item_id)
         await self._record_h2a_activity(session, company_id, user_id, work_item_id, target_agent_id)
-        return HandoffResult(
-            work_item_id=work_item_id, target_agent_id=target_agent_id, kb_doc_ids=kb_doc_ids, review_brief=review_brief
-        )
+        return HandoffResult(work_item_id=work_item_id, target_agent_id=target_agent_id, kb_doc_ids=kb_doc_ids, review_brief=review_brief)
 
     async def agent_to_human(
         self,
@@ -96,9 +94,7 @@ class HandoffService(LLCServiceBase):
         company_id: str,
         agent_notes: Optional[str] = None,
     ) -> LLCWorkItem:
-        result = await session.execute(
-            select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
-        )
+        result = await session.execute(select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update())
         item = result.scalar_one_or_none()
         if item is None:
             raise ValueError(f"Work item {work_item_id} not found")
@@ -123,28 +119,13 @@ class HandoffService(LLCServiceBase):
             try:
                 from ..models.activity import ActorType
                 from .activity_log import ActivityEventType
-
-                await self.activity_log.record(
-                    session,
-                    company_id=company_id,
-                    actor_type=ActorType.AGENT,
-                    actor_id=agent_id,
-                    event_type=ActivityEventType.WORK_ITEM_HANDOFF,
-                    entity_type="work_item",
-                    entity_id=work_item_id,
-                    after={"status": WorkItemStatus.IN_REVIEW.value, "reviewer_user_id": reviewer_user_id},
-                    metadata={"brief": brief},
-                )
+                await self.activity_log.record(session, company_id=company_id, actor_type=ActorType.AGENT, actor_id=agent_id, event_type=ActivityEventType.WORK_ITEM_HANDOFF, entity_type="work_item", entity_id=work_item_id, after={"status": WorkItemStatus.IN_REVIEW.value, "reviewer_user_id": reviewer_user_id}, metadata={"brief": brief})
             except Exception:
                 logger.warning("Activity log failed for agent_to_human %s", work_item_id)
         return item
 
-    async def approve(
-        self, session: AsyncSession, work_item_id: str, reviewer_user_id: str, company_id: str
-    ) -> LLCWorkItem:
-        result = await session.execute(
-            select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
-        )
+    async def approve(self, session: AsyncSession, work_item_id: str, reviewer_user_id: str, company_id: str) -> LLCWorkItem:
+        result = await session.execute(select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update())
         item = result.scalar_one_or_none()
         if item is None:
             raise ValueError(f"Work item {work_item_id} not found")
@@ -163,33 +144,13 @@ class HandoffService(LLCServiceBase):
             try:
                 from ..models.activity import ActorType
                 from .activity_log import ActivityEventType
-
-                await self.activity_log.record(
-                    session,
-                    company_id=company_id,
-                    actor_type=ActorType.USER,
-                    actor_id=reviewer_user_id,
-                    event_type=ActivityEventType.WORK_ITEM_REVIEW_APPROVED,
-                    entity_type="work_item",
-                    entity_id=work_item_id,
-                    after={"status": WorkItemStatus.DONE.value, "completed_at": now.isoformat()},
-                )
+                await self.activity_log.record(session, company_id=company_id, actor_type=ActorType.USER, actor_id=reviewer_user_id, event_type=ActivityEventType.WORK_ITEM_REVIEW_APPROVED, entity_type="work_item", entity_id=work_item_id, after={"status": WorkItemStatus.DONE.value, "completed_at": now.isoformat()})
             except Exception:
                 logger.warning("Activity log failed for approve %s", work_item_id)
         return item
 
-    async def request_changes(
-        self,
-        session: AsyncSession,
-        work_item_id: str,
-        reviewer_user_id: str,
-        company_id: str,
-        change_request: str,
-        return_to_agent_id: Optional[str] = None,
-    ) -> LLCWorkItem:
-        result = await session.execute(
-            select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
-        )
+    async def request_changes(self, session: AsyncSession, work_item_id: str, reviewer_user_id: str, company_id: str, change_request: str, return_to_agent_id: Optional[str] = None) -> LLCWorkItem:
+        result = await session.execute(select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update())
         item = result.scalar_one_or_none()
         if item is None:
             raise ValueError(f"Work item {work_item_id} not found")
@@ -203,32 +164,14 @@ class HandoffService(LLCServiceBase):
         item.version += 1
         await session.flush()
         from ..models.work_item import LLCWorkItemComment
-
-        comment = LLCWorkItemComment(
-            id=uuid.uuid4(),
-            company_id=uuid.UUID(company_id),
-            work_item_id=uuid.UUID(work_item_id),
-            body=change_request,
-            author_user_id=uuid.UUID(reviewer_user_id),
-        )
+        comment = LLCWorkItemComment(id=uuid.uuid4(), company_id=uuid.UUID(company_id), work_item_id=uuid.UUID(work_item_id), body=change_request, author_user_id=uuid.UUID(reviewer_user_id))
         session.add(comment)
         await session.flush()
         if self.activity_log:
             try:
                 from ..models.activity import ActorType
                 from .activity_log import ActivityEventType
-
-                await self.activity_log.record(
-                    session,
-                    company_id=company_id,
-                    actor_type=ActorType.USER,
-                    actor_id=reviewer_user_id,
-                    event_type=ActivityEventType.WORK_ITEM_REVIEW_CHANGES_REQUESTED,
-                    entity_type="work_item",
-                    entity_id=work_item_id,
-                    after={"status": WorkItemStatus.IN_PROGRESS.value, "assignee_agent_id": return_to_agent_id},
-                    metadata={"change_request": change_request},
-                )
+                await self.activity_log.record(session, company_id=company_id, actor_type=ActorType.USER, actor_id=reviewer_user_id, event_type=ActivityEventType.WORK_ITEM_REVIEW_CHANGES_REQUESTED, entity_type="work_item", entity_id=work_item_id, after={"status": WorkItemStatus.IN_PROGRESS.value, "assignee_agent_id": return_to_agent_id}, metadata={"change_request": change_request})
             except Exception:
                 logger.warning("Activity log failed for request_changes %s", work_item_id)
         return item
@@ -241,37 +184,24 @@ class HandoffService(LLCServiceBase):
         return item.review_brief
 
     async def _get_and_validate_human(self, session: AsyncSession, work_item_id: str, user_id: str) -> LLCWorkItem:
-        result = await session.execute(
-            select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
-        )
+        result = await session.execute(select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update())
         item = result.scalar_one_or_none()
         if item is None:
             raise ValueError(f"Work item {work_item_id} not found")
         holder_user_id = str(item.assignee_user_id) if item.assignee_user_id else None
         if item.assignee_type != "user" or holder_user_id != user_id:
-            raise HandoffNotAuthorized(
-                f"User {user_id} does not hold work item {work_item_id} (current holder: {holder_user_id!r}, type: {item.assignee_type!r})"
-            )
+            raise HandoffNotAuthorized(f"User {user_id} does not hold work item {work_item_id} (current holder: {holder_user_id!r}, type: {item.assignee_type!r})")
         return item
 
-    async def _ingest_kb(
-        self, work_item_id: str, user_id: str, human_notes: str, attachments: List[HandoffAttachment]
-    ) -> List[str]:
+    async def _ingest_kb(self, work_item_id: str, user_id: str, human_notes: str, attachments: List[HandoffAttachment]) -> List[str]:
         from ..kb.work_item_kb import WorkItemKB
-
         kb = WorkItemKB()
         doc_ids: List[str] = []
         if human_notes.strip():
             doc_id = await kb.ingest_notes(work_item_id=work_item_id, notes=human_notes, source_user_id=user_id)
             doc_ids.append(doc_id)
         for att in attachments:
-            doc_id = await kb.ingest_attachment(
-                work_item_id=work_item_id,
-                attachment_id=att.attachment_id,
-                filename=att.filename,
-                content=att.content,
-                mime_type=att.mime_type,
-            )
+            doc_id = await kb.ingest_attachment(work_item_id=work_item_id, attachment_id=att.attachment_id, filename=att.filename, content=att.content, mime_type=att.mime_type)
             if doc_id:
                 doc_ids.append(doc_id)
         return doc_ids
@@ -286,14 +216,7 @@ class HandoffService(LLCServiceBase):
             await redis.delete(key)
 
     async def _publish_h2a_notification(self, company_id: str, target_agent_id: str, work_item_id: str) -> None:
-        payload = json.dumps(
-            {
-                "event": "work_item.handoff_ready",
-                "work_item_id": work_item_id,
-                "target_agent_id": target_agent_id,
-                "has_human_handoff_context": True,
-            }
-        )
+        payload = json.dumps({"event": "work_item.handoff_ready", "work_item_id": work_item_id, "target_agent_id": target_agent_id, "has_human_handoff_context": True})
         channel = f"{_NOTIFICATION_CHANNEL_PREFIX}{company_id}"
         try:
             redis = await get_async_redis_client()
@@ -303,80 +226,29 @@ class HandoffService(LLCServiceBase):
         except Exception:
             logger.exception("Failed to publish h2a handoff notification for work_item %s — non-fatal", work_item_id)
 
-    async def _publish_a2h_notification(
-        self, company_id: str, work_item_id: str, reviewer_user_id: str, brief: Dict[str, Any]
-    ) -> None:
+    async def _publish_a2h_notification(self, company_id: str, work_item_id: str, reviewer_user_id: str, brief: Dict[str, Any]) -> None:
         redis = await get_async_redis_client()
         if redis is None:
             logger.warning("HandoffService: Redis unavailable, dropping a2h notification")
             return
         try:
             channel = f"{_NOTIFICATION_CHANNEL_PREFIX}{company_id}"
-            await redis.publish(
-                channel,
-                json.dumps(
-                    {
-                        "event_type": "work_item.handoff",
-                        "work_item_id": work_item_id,
-                        "reviewer_user_id": reviewer_user_id,
-                        "brief_title": brief.get("title"),
-                        "brief_identifier": brief.get("identifier"),
-                    }
-                ),
-            )
+            await redis.publish(channel, json.dumps({"event_type": "work_item.handoff", "work_item_id": work_item_id, "reviewer_user_id": reviewer_user_id, "brief_title": brief.get("title"), "brief_identifier": brief.get("identifier")}))
         except Exception:
             logger.debug("HandoffService._publish_a2h_notification failed (swallowed)")
 
-    async def _record_h2a_activity(
-        self, session: AsyncSession, company_id: str, user_id: str, work_item_id: str, target_agent_id: str
-    ) -> None:
+    async def _record_h2a_activity(self, session: AsyncSession, company_id: str, user_id: str, work_item_id: str, target_agent_id: str) -> None:
         if not self.activity_log:
             return
         try:
             from .activity_log import ActivityEventType
-
-            await self.activity_log.record(
-                session,
-                company_id=company_id,
-                actor_type="user",
-                actor_id=user_id,
-                event_type=ActivityEventType.WORK_ITEM_ASSIGNED,
-                entity_type="work_item",
-                entity_id=work_item_id,
-                after={
-                    "assignee_type": "agent",
-                    "assignee_agent_id": target_agent_id,
-                    "status": WorkItemStatus.READY.value,
-                    "has_human_handoff_context": True,
-                },
-            )
+            await self.activity_log.record(session, company_id=company_id, actor_type="user", actor_id=user_id, event_type=ActivityEventType.WORK_ITEM_ASSIGNED, entity_type="work_item", entity_id=work_item_id, after={"assignee_type": "agent", "assignee_agent_id": target_agent_id, "status": WorkItemStatus.READY.value, "has_human_handoff_context": True})
         except Exception:
             logger.warning("Activity log failed for h2a handoff work_item=%s", work_item_id)
 
     def _generate_brief(self, item: LLCWorkItem, agent_notes: Optional[str]) -> Dict[str, Any]:
-        comment_excerpts = [
-            {
-                "author_agent_id": str(c.author_agent_id) if c.author_agent_id else None,
-                "author_user_id": str(c.author_user_id) if c.author_user_id else None,
-                "excerpt": c.body[:200],
-            }
-            for c in (item.comments or [])
-        ]
-        return {
-            "work_item_id": str(item.id),
-            "identifier": item.identifier,
-            "title": item.title,
-            "type": item.type.value if hasattr(item.type, "value") else item.type,
-            "status_before_handoff": item.status.value if hasattr(item.status, "value") else item.status,
-            "priority": item.priority.value if hasattr(item.priority, "value") else item.priority,
-            "description_excerpt": (item.description or "")[:500],
-            "acceptance_criteria": item.acceptance_criteria or [],
-            "comment_count": len(item.comments or []),
-            "recent_comments": comment_excerpts[-5:],
-            "agent_notes": agent_notes,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-            "generator": "stub-phase4",
-        }
+        comment_excerpts = [{"author_agent_id": str(c.author_agent_id) if c.author_agent_id else None, "author_user_id": str(c.author_user_id) if c.author_user_id else None, "excerpt": c.body[:200]} for c in (item.comments or [])]
+        return {"work_item_id": str(item.id), "identifier": item.identifier, "title": item.title, "type": item.type.value if hasattr(item.type, "value") else item.type, "status_before_handoff": item.status.value if hasattr(item.status, "value") else item.status, "priority": item.priority.value if hasattr(item.priority, "value") else item.priority, "description_excerpt": (item.description or "")[:500], "acceptance_criteria": item.acceptance_criteria or [], "comment_count": len(item.comments or []), "recent_comments": comment_excerpts[-5:], "agent_notes": agent_notes, "generated_at": datetime.now(timezone.utc).isoformat(), "generator": "stub-phase4"}
 
     def _assert_reviewer(self, item: LLCWorkItem, reviewer_user_id: str) -> None:
         if item.reviewer_user_id is None or str(item.reviewer_user_id) != reviewer_user_id:
