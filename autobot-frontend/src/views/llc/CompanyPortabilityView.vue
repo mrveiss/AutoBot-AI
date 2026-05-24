@@ -64,7 +64,7 @@
           class="drop-zone"
           :class="{ 'drop-zone--over': isDragOver, 'drop-zone--loaded': !!importFile }"
           @dragover.prevent="isDragOver = true"
-          @dragleave="isDragOver = false"
+          @dragleave="onDragLeave"
           @drop.prevent="onDrop"
           @click="fileInputRef?.click()"
         >
@@ -227,6 +227,7 @@ const importFile = ref<File | null>(null)
 const isDragOver = ref(false)
 const loadingPreview = ref(false)
 const importPreview = ref<ImportPreview | null>(null)
+const previewPayload = ref<unknown>(null)
 const secretMapping = ref<Record<string, string>>({})
 const executingImport = ref(false)
 const importResult = ref<ImportResultDisplay | null>(null)
@@ -330,6 +331,12 @@ function onDrop(e: DragEvent): void {
   if (file) loadFile(file)
 }
 
+// GH#8562: guard against dragleave firing on child elements (flicker fix)
+function onDragLeave(e: DragEvent): void {
+  if ((e.currentTarget as Element).contains(e.relatedTarget as Node)) return
+  isDragOver.value = false
+}
+
 function onFileChange(e: Event): void {
   const file = (e.target as HTMLInputElement).files?.[0]
   if (file) loadFile(file)
@@ -342,6 +349,7 @@ function loadFile(file: File): void {
   }
   importFile.value = file
   importPreview.value = null
+  previewPayload.value = null
   importResult.value = null
   secretMapping.value = {}
   secretPlaceholders.value = []
@@ -350,6 +358,7 @@ function loadFile(file: File): void {
 function clearFile(): void {
   importFile.value = null
   importPreview.value = null
+  previewPayload.value = null
   importResult.value = null
   secretMapping.value = {}
   secretPlaceholders.value = []
@@ -361,6 +370,7 @@ async function runPreview(): Promise<void> {
   if (!importFile.value) return
   loadingPreview.value = true
   importPreview.value = null
+  previewPayload.value = null
   importResult.value = null
   try {
     const text = await importFile.value.text()
@@ -381,6 +391,8 @@ async function runPreview(): Promise<void> {
     for (const p of placeholders) {
       if (!secretMapping.value[p]) secretMapping.value[p] = ''
     }
+    // GH#8561: store parsed payload to avoid re-reading file on execute (TOCTOU fix)
+    previewPayload.value = parsed
     importPreview.value = preview
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Preview failed'
@@ -393,12 +405,12 @@ async function runPreview(): Promise<void> {
 
 // ── execute ───────────────────────────────────────────────────────────────────
 async function executeImport(): Promise<void> {
-  if (!importFile.value || !importPreview.value) return
+  if (!importPreview.value || !previewPayload.value) return
   executingImport.value = true
   importResult.value = null
   try {
-    const text = await importFile.value.text()
-    const parsed: unknown = JSON.parse(text)
+    // GH#8561: reuse the payload captured during preview instead of re-reading file
+    const parsed: unknown = previewPayload.value
     const res = await fetchWithAuth(`${getApiBase()}/llc/import/execute`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

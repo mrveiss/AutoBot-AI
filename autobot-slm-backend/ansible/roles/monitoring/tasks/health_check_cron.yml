@@ -24,13 +24,21 @@
     mode: "0755"
   tags: ["monitoring", "health_check"]
 
-- name: "Health Check Cron | Ensure health check scripts are executable"
-  ansible.builtin.file:
+- name: "Health Check Cron | Stat health check scripts"
+  ansible.builtin.stat:
     path: "{{ autobot_repo_dir }}/scripts/{{ item }}"
-    mode: "0755"
   loop:
     - daily_health_check.py
     - post_health_check.py
+  register: _health_check_script_stat
+  tags: ["monitoring", "health_check"]
+
+- name: "Health Check Cron | Ensure health check scripts are executable"
+  ansible.builtin.file:
+    path: "{{ autobot_repo_dir }}/scripts/{{ item.item }}"
+    mode: "0755"
+  loop: "{{ _health_check_script_stat.results }}"
+  when: item.stat.exists
   tags: ["monitoring", "health_check"]
 
 - name: "Health Check Cron | Install cron job via Ansible cron module"
