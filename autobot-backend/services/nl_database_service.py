@@ -687,9 +687,9 @@ class NLDatabaseService:
 
                 ddl_parts = []
                 for tbl in tables:
-                    await cur.execute(
+                    await cur.execute(  # nosemgrep: autobot-sql-string-format
                         f"SHOW CREATE TABLE `{tbl}`"
-                    )  # noqa: S608  # nosemgrep: autobot-sql-string-format
+                    )  # noqa: S608
                     row = await cur.fetchone()
                     if row:
                         ddl_parts.append(list(row.values())[1])
