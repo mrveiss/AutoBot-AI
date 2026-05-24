@@ -34,9 +34,7 @@ LLC_ATTACHMENT_MAX_BYTES = int(os.getenv("LLC_ATTACHMENT_MAX_BYTES", str(_DEFAUL
 _TEXT_SUFFIXES = {".txt", ".md", ".py", ".ts", ".js", ".json", ".yaml", ".yml", ".toml", ".csv"}
 
 _STORAGE_BACKEND = os.getenv("LLC_STORAGE_BACKEND", "local_disk")
-_LOCAL_STORAGE_PATH = Path(
-    os.getenv("LLC_STORAGE_PATH", str(Path.home() / ".autobot" / "llc" / "attachments"))
-)
+_LOCAL_STORAGE_PATH = Path(os.getenv("LLC_STORAGE_PATH", str(Path.home() / ".autobot" / "llc" / "attachments")))
 
 
 class AttachmentTooLarge(Exception):
@@ -109,9 +107,7 @@ class AttachmentService:
         uploaded_by_user_id: Optional[str] = None,
     ) -> LLCWorkItemAttachment:
         if len(content) > LLC_ATTACHMENT_MAX_BYTES:
-            raise AttachmentTooLarge(
-                f"Upload exceeds limit: {len(content)} > {LLC_ATTACHMENT_MAX_BYTES} bytes"
-            )
+            raise AttachmentTooLarge(f"Upload exceeds limit: {len(content)} > {LLC_ATTACHMENT_MAX_BYTES} bytes")
         if _STORAGE_BACKEND != "local_disk":
             raise StorageBackendNotImplemented(f"Backend '{_STORAGE_BACKEND}' not implemented")
 

@@ -40,7 +40,12 @@ from user_management.database import get_async_session_factory
 
 from ..kb.collections import KbCollectionManager
 from ..models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
-from ..services.attachment_service import AttachmentNotFound, AttachmentService, AttachmentTooLarge, LLC_ATTACHMENT_MAX_BYTES
+from ..services.attachment_service import (
+    AttachmentNotFound,
+    AttachmentService,
+    AttachmentTooLarge,
+    LLC_ATTACHMENT_MAX_BYTES,
+)
 from ..services.handoff import HandoffAttachment, HandoffNotAllowed, HandoffNotAuthorized, HandoffService
 from ..services.work_item_service import CheckoutConflict, InvalidTransition, WorkItemService
 from ..models.enums import WorkItemPriority, WorkItemRelationType, WorkItemStatus, WorkItemType
@@ -749,6 +754,11 @@ async def upload_attachment(
 async def list_attachments(
     rows = await _attachment_service().list_attachments(
         session, work_item_id=work_item_id, company_id=company_id
+    work_item_id: str,
+    company_id: str = Query(...),
+    session: AsyncSession = Depends(get_session),
+) -> Dict[str, Any]:
+    rows = await _attachment_service().list_attachments(session, work_item_id=work_item_id, company_id=company_id)
     return {"attachments": [_attachment_to_dict(r) for r in rows]}
 @router.get("/{work_item_id}/attachments/{attachment_id}/download")
 async def download_attachment(
@@ -768,3 +778,10 @@ async def get_attachment_text(
 @router.delete("/{work_item_id}/attachments/{attachment_id}", status_code=204)
 async def delete_attachment(
         await _attachment_service().delete(
+            session,
+            attachment_id=attachment_id,
+            work_item_id=work_item_id,
+            company_id=company_id,
+        )
+    except AttachmentNotFound:
+        raise HTTPException(status_code=404, detail="Attachment not found")
