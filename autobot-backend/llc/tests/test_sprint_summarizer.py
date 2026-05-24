@@ -80,7 +80,7 @@ async def test_empty_collection_skips_merge(summarizer, km_mock):
         patch.object(summarizer, "_load_sprint_context", new=AsyncMock(return_value=(None, uuid.uuid4()))),
         patch.object(summarizer, "_fetch_documents", new=AsyncMock(return_value=[])),
     ):
-        result = await summarizer.summarize_and_merge(sprint_id)
+        result = await summarizer.summarize_and_merge(sprint_id, session=MagicMock())
 
     assert result is None
     km_mock.archive_collection.assert_called_once()
@@ -98,7 +98,7 @@ async def test_small_collection_direct_merge(summarizer, km_mock):
         patch.object(summarizer, "_direct_merge", new=AsyncMock()) as dm,
         patch.object(summarizer, "_llm_summarize_and_index", new=AsyncMock()) as lsi,
     ):
-        result = await summarizer.summarize_and_merge(sprint_id)
+        result = await summarizer.summarize_and_merge(sprint_id, session=MagicMock())
 
     dm.assert_called_once()
     lsi.assert_not_called()
@@ -117,7 +117,7 @@ async def test_large_collection_llm_summarize(summarizer, km_mock):
         patch.object(summarizer, "_direct_merge", new=AsyncMock()) as dm,
         patch.object(summarizer, "_llm_summarize_and_index", new=AsyncMock(return_value="summary text")) as lsi,
     ):
-        result = await summarizer.summarize_and_merge(sprint_id)
+        result = await summarizer.summarize_and_merge(sprint_id, session=MagicMock())
 
     lsi.assert_called_once()
     dm.assert_not_called()
@@ -132,7 +132,7 @@ async def test_no_project_id_archives_and_skips_merge(summarizer, km_mock):
     with (
         patch.object(summarizer, "_load_sprint_context", new=AsyncMock(return_value=(None, None))),
     ):
-        result = await summarizer.summarize_and_merge(sprint_id)
+        result = await summarizer.summarize_and_merge(sprint_id, session=MagicMock())
 
     assert result is None
     km_mock.archive_collection.assert_called_once_with(
@@ -154,7 +154,7 @@ async def test_llm_failure_falls_back_to_direct_merge(summarizer, km_mock):
         patch.object(summarizer, "_direct_merge", new=AsyncMock()) as dm,
         patch.object(summarizer, "_llm_summarize_and_index", new=AsyncMock(return_value=_SENTINEL)) as lsi,
     ):
-        result = await summarizer.summarize_and_merge(sprint_id)
+        result = await summarizer.summarize_and_merge(sprint_id, session=MagicMock())
 
     # LLM fallback returns sentinel so caller if-guard fires and persists kb_summary
     lsi.assert_called_once()
@@ -172,9 +172,76 @@ async def test_archive_always_called_on_success(summarizer, km_mock):
         patch.object(summarizer, "_fetch_documents", new=AsyncMock(return_value=docs)),
         patch.object(summarizer, "_direct_merge", new=AsyncMock()),
     ):
-        await summarizer.summarize_and_merge(sprint_id)
+        await summarizer.summarize_and_merge(sprint_id, session=MagicMock())
 
     km_mock.archive_collection.assert_called_once_with(
         KbCollectionManager.SPRINT_PREFIX, sprint_id
     )
     assert km_mock.archive_collection.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_llm_empty_content_falls_back_to_direct_merge(summarizer, km_mock):
+    """Fix 1: empty LLM content must trigger direct merge, not index empty doc."""
+    import sys
+
+    sprint_id = uuid.uuid4()
+    project_id = uuid.uuid4()
+    docs = _make_docs(20)
+    dst_collection = KbCollectionManager.collection_name(
+        KbCollectionManager.PROJECT_PREFIX, project_id
+    )
+
+    llm_response = MagicMock()
+    llm_response.error = None
+    llm_response.content = ""
+
+    llm_instance = MagicMock()
+    llm_instance.chat = AsyncMock(return_value=llm_response)
+
+    fake_llm_module = MagicMock()
+    fake_llm_module.get_llm_service = MagicMock(return_value=llm_instance)
+
+    with (
+        patch.dict(sys.modules, {"services.llm_service": fake_llm_module}),
+        patch.object(summarizer, "_direct_merge", new=AsyncMock()) as dm,
+    ):
+        result = await summarizer._llm_summarize_and_index(
+            docs, dst_collection, sprint_id, project_id
+        )
+
+    dm.assert_called_once()
+    assert result == "[direct-merged: LLM returned empty content]"
+
+
+@pytest.mark.asyncio
+async def test_fetch_documents_reraises_non_notfound_exception(summarizer, km_mock):
+    """Fix 2: transient ChromaDB errors must propagate, not silently return []."""
+    kb_mock = AsyncMock()
+    kb_mock._async_chroma_client = AsyncMock()
+    kb_mock._async_chroma_client.get_collection = AsyncMock(
+        side_effect=RuntimeError("connection refused")
+    )
+
+    import sys
+
+    fake_kb_module = MagicMock()
+    fake_kb_module.get_knowledge_base = AsyncMock(return_value=kb_mock)
+    with patch.dict(sys.modules, {"knowledge": fake_kb_module}):
+        with pytest.raises(RuntimeError, match="connection refused"):
+            await summarizer._fetch_documents("sprint:xxx")
+
+
+@pytest.mark.asyncio
+async def test_no_session_skips_load_sprint_context(summarizer, km_mock):
+    """Fix 3: calling without session must skip _load_sprint_context and archive."""
+    sprint_id = uuid.uuid4()
+
+    with patch.object(
+        summarizer, "_load_sprint_context", new=AsyncMock()
+    ) as load_mock:
+        result = await summarizer.summarize_and_merge(sprint_id)
+
+    assert load_mock.call_count == 0
+    km_mock.archive_collection.assert_called_once()
+    assert result is None

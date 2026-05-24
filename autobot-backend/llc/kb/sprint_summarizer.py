@@ -15,8 +15,9 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from autobot_shared.logging_manager import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from autobot_shared.logging_manager import get_logger
 
 from ..kb.collections import KbCollectionManager
 from ..models.sprint import LLCSprint
@@ -67,24 +68,28 @@ class SprintKbSummarizer:
         Returns:
             Summary text if LLM summarization occurred, else None.
         """
-        sprint_collection = KbCollectionManager.collection_name(
-            KbCollectionManager.SPRINT_PREFIX, sprint_id
-        )
+        sprint_collection = KbCollectionManager.collection_name(KbCollectionManager.SPRINT_PREFIX, sprint_id)
+
+        if session is None:
+            logger.warning(
+                "summarize_and_merge called without session for sprint %s; "
+                "cannot resolve project_id — merge skipped, archive only",
+                sprint_id,
+            )
+            await self._km.archive_collection(KbCollectionManager.SPRINT_PREFIX, sprint_id)
+            return None
+
         sprint, project_id = await self._load_sprint_context(sprint_id, session)
 
         if project_id is None:
             logger.warning(
-                "Cannot resolve project_id for sprint %s; skipping KB merge",
+                "Sprint %s has no parent project in DB; skipping KB merge",
                 sprint_id,
             )
-            await self._km.archive_collection(
-                KbCollectionManager.SPRINT_PREFIX, sprint_id
-            )
+            await self._km.archive_collection(KbCollectionManager.SPRINT_PREFIX, sprint_id)
             return None
 
-        project_collection = KbCollectionManager.collection_name(
-            KbCollectionManager.PROJECT_PREFIX, project_id
-        )
+        project_collection = KbCollectionManager.collection_name(KbCollectionManager.PROJECT_PREFIX, project_id)
 
         docs = await self._fetch_documents(sprint_collection)
         doc_count = len(docs)
@@ -100,9 +105,7 @@ class SprintKbSummarizer:
                 docs, project_collection, sprint_id, project_id, sprint=sprint
             )
 
-        await self._km.archive_collection(
-            KbCollectionManager.SPRINT_PREFIX, sprint_id
-        )
+        await self._km.archive_collection(KbCollectionManager.SPRINT_PREFIX, sprint_id)
 
         if summary_text and session is not None and sprint is not None:
             sprint.kb_summary = summary_text  # type: ignore[attr-defined]
@@ -138,11 +141,20 @@ class SprintKbSummarizer:
             kb = await get_knowledge_base()
             col = await kb._async_chroma_client.get_collection(collection_name)
             raw = await col.get(include=["documents", "metadatas", "embeddings"])
-        except Exception:
-            logger.warning(
-                "Collection %s not found or empty; returning []", collection_name
+        except Exception as exc:
+            exc_msg = str(exc).lower()
+            if "not found" in exc_msg or "does not exist" in exc_msg:
+                logger.info(
+                    "Collection %s does not exist; treating as empty",
+                    collection_name,
+                )
+                return []
+            logger.error(
+                "Failed to fetch documents from %s: %s — archive will be skipped",
+                collection_name,
+                exc,
             )
-            return []
+            raise
 
         ids = raw.get("ids") or []
         documents = raw.get("documents") or []
@@ -184,9 +196,7 @@ class SprintKbSummarizer:
         else:
             await dst.add(ids=ids, documents=texts, metadatas=metadatas)
 
-        logger.info(
-            "Direct-merged %d docs from sprint:%s into %s", len(docs), sprint_id, dst_collection
-        )
+        logger.info("Direct-merged %d docs from sprint:%s into %s", len(docs), sprint_id, dst_collection)
 
     async def _llm_summarize_and_index(
         self,
@@ -210,14 +220,19 @@ class SprintKbSummarizer:
         )
 
         if response.error:
-            logger.error(
-                "LLM summarization failed for sprint %s: %s", sprint_id, response.error
-            )
+            logger.error("LLM summarization failed for sprint %s: %s", sprint_id, response.error)
             # Fall back to direct merge on LLM failure
             await self._direct_merge(docs, dst_collection, sprint_id, project_id)
             return "[direct-merged: LLM summarization failed]"
 
         summary_text: str = response.content or ""
+        if not summary_text:
+            logger.error(
+                "LLM returned empty content for sprint %s; falling back to direct merge",
+                sprint_id,
+            )
+            await self._direct_merge(docs, dst_collection, sprint_id, project_id)
+            return "[direct-merged: LLM returned empty content]"
         closed_at = datetime.now(timezone.utc).isoformat()
         sprint_name = sprint.name if sprint else str(sprint_id)
 
