@@ -1,5 +1,6 @@
 """LLC work items API routes (GH#8213, GH#8223, GH#8231, GH#8232).
 """LLC work items API routes (GH#8213, GH#8223, GH#8231, GH#8232, GH#8252).
+"""LLC work items API routes (GH#8213, GH#8223, GH#8231, GH#8232, GH#8253).
 Routes:
   POST   /api/llc/work-items
   GET    /api/llc/work-items
@@ -18,12 +19,18 @@ Routes:
   POST   /api/llc/work-items/{work_item_id}/review/request-changes (GH#8231)
   GET    /api/llc/work-items/{work_item_id}/handoff-brief       (GH#8231)
   POST   /api/llc/work-items/{work_item_id}/coworker   (set/clear co-worker — GH#8230)
+  POST   /api/llc/work-items/{work_item_id}/attachments         (GH#8253)
+  GET    /api/llc/work-items/{work_item_id}/attachments         (GH#8253)
+  GET    /api/llc/work-items/{work_item_id}/attachments/{attachment_id}/download (GH#8253)
+  GET    /api/llc/work-items/{work_item_id}/attachments/{attachment_id}/text     (GH#8253)
+  DELETE /api/llc/work-items/{work_item_id}/attachments/{attachment_id}          (GH#8253)
 """
 
 import uuid
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,6 +40,7 @@ from user_management.database import get_async_session_factory
 
 from ..kb.collections import KbCollectionManager
 from ..models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
+from ..services.attachment_service import AttachmentNotFound, AttachmentService, AttachmentTooLarge, LLC_ATTACHMENT_MAX_BYTES
 from ..services.handoff import HandoffAttachment, HandoffNotAllowed, HandoffNotAuthorized, HandoffService
 from ..services.work_item_service import CheckoutConflict, InvalidTransition, WorkItemService
 from ..models.enums import WorkItemPriority, WorkItemRelationType, WorkItemStatus, WorkItemType
@@ -77,6 +85,7 @@ _get_product_service = lazy_singleton(WorkProductService)
 _get_handoff_service = lazy_singleton(HandoffService)
 _kb_manager = KbCollectionManager()
 _get_relation_service = lazy_singleton(WorkItemRelationService)
+_get_attachment_service = lazy_singleton(AttachmentService)
 
 
 def _service() -> WorkItemService:
@@ -89,6 +98,8 @@ def _handoff_service() -> HandoffService:
 
 def _relation_service() -> WorkItemRelationService:
     return _get_relation_service()
+def _attachment_service() -> AttachmentService:
+    return _get_attachment_service()
 async def get_session() -> AsyncSession:
     factory = get_async_session_factory()
     async with factory() as session:
@@ -706,3 +717,54 @@ async def remove_relation(
             relation_id=relation_id,
             actor_agent_id=actor_agent_id,
             actor_user_id=actor_user_id,
+# ---------------------------------------------------------------------------
+# Attachment routes (GH#8253)
+def _attachment_to_dict(row: Any) -> Dict[str, Any]:
+        "id": str(row.id),
+        "work_item_id": str(row.work_item_id),
+        "company_id": str(row.company_id),
+        "filename": row.filename,
+        "content_type": row.content_type,
+        "size_bytes": row.size_bytes,
+        "text_extracted": row.text_extracted,
+        "uploaded_by_agent_id": str(row.uploaded_by_agent_id) if row.uploaded_by_agent_id else None,
+        "uploaded_by_user_id": str(row.uploaded_by_user_id) if row.uploaded_by_user_id else None,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+@router.post("/{work_item_id}/attachments", status_code=201)
+async def upload_attachment(
+    file: UploadFile = File(...),
+    uploaded_by_agent_id: Optional[str] = Query(None),
+    uploaded_by_user_id: Optional[str] = Query(None),
+    content = await file.read()
+        row = await _attachment_service().upload(
+            filename=file.filename or "upload",
+            content_type=file.content_type or "application/octet-stream",
+            content=content,
+            uploaded_by_agent_id=uploaded_by_agent_id,
+            uploaded_by_user_id=uploaded_by_user_id,
+    except AttachmentTooLarge as exc:
+        raise HTTPException(status_code=413, detail=str(exc))
+    return _attachment_to_dict(row)
+@router.get("/{work_item_id}/attachments")
+async def list_attachments(
+    rows = await _attachment_service().list_attachments(
+        session, work_item_id=work_item_id, company_id=company_id
+    return {"attachments": [_attachment_to_dict(r) for r in rows]}
+@router.get("/{work_item_id}/attachments/{attachment_id}/download")
+async def download_attachment(
+    attachment_id: str,
+) -> Response:
+        row, content = await _attachment_service().download(
+            attachment_id=attachment_id,
+    except AttachmentNotFound:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    return Response(
+        media_type=row.content_type,
+        headers={"Content-Disposition": f'attachment; filename="{row.filename}"'},
+@router.get("/{work_item_id}/attachments/{attachment_id}/text")
+async def get_attachment_text(
+        text = await _attachment_service().get_text(
+    return {"attachment_id": attachment_id, "text": text, "text_extracted": text is not None}
+@router.delete("/{work_item_id}/attachments/{attachment_id}", status_code=204)
+async def delete_attachment(
+        await _attachment_service().delete(

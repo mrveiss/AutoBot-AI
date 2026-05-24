@@ -1,7 +1,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""LLC agent-facing API routes (GH#8218, GH#8232).
+"""LLC agent-facing API routes (GH#8218, GH#8232, GH#8253).
 
 All routes require a valid LLC bearer token (injected by LLCAgentAuthMiddleware).
 Phase 1 stubs — real implementations land in subsequent phases.
@@ -14,12 +14,13 @@ Routes (all under /llc/agent):
   POST /products                    — upload work product artifact
   POST /heartbeat/report            — heartbeat run completion
   GET  /context/{item_id}           — pre-assembled context + KB handoff notes (GH#8232)
+  POST /attachments                 — agent file upload (GH#8253)
 """
 
 import uuid
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/agent", tags=["llc-agent"])
@@ -140,4 +141,48 @@ async def report_heartbeat(body: HeartbeatReport, request: Request) -> Dict[str,
     return {"recorded": True, "run_id": body.run_id}
 
 
+@router.post("/attachments", status_code=201)
+async def agent_upload_attachment(
+    work_item_id: str,
+    file: UploadFile = File(...),
+    request: Request = None,
+) -> Dict[str, Any]:
+    """Agent uploads a file attachment to a work item (GH#8253)."""
+    agent_id, company_id = _agent_context(request)
+    from autobot_shared.singleton_factory import lazy_singleton
+    from ..services.attachment_service import AttachmentService, AttachmentTooLarge
+    from user_management.database import get_async_session_factory
+    content = await file.read()
+    factory = get_async_session_factory()
+    try:
+        async with factory() as session:
+            svc = lazy_singleton(AttachmentService)()
+            row = await svc.upload(
+                session,
+                company_id=company_id,
+                work_item_id=work_item_id,
+                filename=file.filename or "upload",
+                content_type=file.content_type or "application/octet-stream",
+                content=content,
+                uploaded_by_agent_id=agent_id,
+            )
+        return {
+            "id": str(row.id),
+            "filename": row.filename,
+            "size_bytes": row.size_bytes,
+            "text_extracted": row.text_extracted,
+        }
+    except AttachmentTooLarge as exc:
+        raise HTTPException(status_code=413, detail=str(exc))
+@router.get("/context/{item_id}")
+async def get_item_context(item_id: uuid.UUID, request: Request) -> Dict[str, Any]:
+    """Return agent context for a work item, including any human handoff KB notes (GH#8232)."""
+    from ..kb.work_item_kb import WorkItemKB
+    kb = WorkItemKB()
+    handoff_chunks = await kb.get_context(str(item_id))
+        "item_id": str(item_id),
+        "handoff_notes": handoff_chunks,
+        "has_human_handoff_context": bool(handoff_chunks),
+        "context": {},
+        "message": "Handoff KB notes included; full RAG context available in Phase 5",
 __all__ = ["router"]
