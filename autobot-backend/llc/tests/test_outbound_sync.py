@@ -4,16 +4,16 @@
 """Unit tests for LLC outbound PM sync (GH#8257)."""
 
 import json
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from llc.sync.outbound_sync import (
+    _DEFAULT_STATUS_MAP,
     LLCOutboundSyncService,
     map_status,
     map_work_item_type,
-    _DEFAULT_STATUS_MAP,
 )
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Field mapping
@@ -93,9 +93,7 @@ async def test_dispatch_jira_create():
     }
     payload = {"title": "Fix bug", "description": "Details", "type": "task"}
 
-    with patch(
-        "llc.sync.outbound_sync.JiraIntegration"
-    ) as MockJira:
+    with patch("llc.sync.outbound_sync.JiraIntegration") as MockJira:
         instance = AsyncMock()
         instance.execute_action = AsyncMock(return_value={"issue": {"key": "PROJ-1"}})
         MockJira.return_value = instance
@@ -184,9 +182,7 @@ async def test_sync_failure_is_logged_not_raised():
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=None)
         mock_result = MagicMock()
-        mock_result.one_or_none = MagicMock(
-            return_value=("jira", "encrypted_blob")
-        )
+        mock_result.one_or_none = MagicMock(return_value=("jira", "encrypted_blob"))
         mock_session.execute = AsyncMock(return_value=mock_result)
         MockSession.return_value = mock_session
 

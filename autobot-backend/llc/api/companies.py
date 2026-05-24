@@ -34,7 +34,7 @@ from llc.models.company import (
     CompanyTreeNode,
     CompanyUpdate,
 )
-from llc.models.enums import LLCCompanyStatus, MembershipRole
+from llc.models.enums import ExternalPMType, LLCCompanyStatus, MembershipRole
 from llc.models.membership import LLCCompanyMembership
 from llc.services.company import (
     CompanyBudgetError,
@@ -49,7 +49,6 @@ from llc.services.membership_service import (
     MemberNotFoundError,
     MembershipService,
 )
-from llc.models.enums import ExternalPMType
 from user_management.database import get_async_session
 from user_management.models.organization import Organization
 
@@ -308,12 +307,11 @@ async def set_pm_config(
     """Store encrypted PM credentials for a company (GH#8257)."""
     import json
 
-    from autobot_shared.field_encryption import encrypt_field
     from sqlalchemy import select, update
 
-    row = await session.execute(
-        select(Organization.id).where(Organization.id == company_id)
-    )
+    from autobot_shared.field_encryption import encrypt_field
+
+    row = await session.execute(select(Organization.id).where(Organization.id == company_id))
     if row.one_or_none() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
 
@@ -335,14 +333,13 @@ async def test_pm_config(
     """Test connectivity to the configured external PM system (GH#8257)."""
     import json
 
-    from autobot_shared.field_encryption import decrypt_field
-    from integrations.base import IntegrationConfig
     from sqlalchemy import select
 
+    from autobot_shared.field_encryption import decrypt_field
+    from integrations.base import IntegrationConfig
+
     row = await session.execute(
-        select(Organization.external_pm_type, Organization.external_pm_config).where(
-            Organization.id == company_id
-        )
+        select(Organization.external_pm_type, Organization.external_pm_config).where(Organization.id == company_id)
     )
     result = row.one_or_none()
     if result is None:

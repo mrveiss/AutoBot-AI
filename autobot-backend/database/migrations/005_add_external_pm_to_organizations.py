@@ -8,8 +8,8 @@ Adds:
   external_pm_config — nullable TEXT: AES-256-encrypted JSON blob
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 
 def upgrade() -> None:

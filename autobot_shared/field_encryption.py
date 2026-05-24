@@ -27,9 +27,7 @@ _TAG_LEN = 16
 def _load_key() -> bytes:
     raw = os.environ.get(_KEY_ENV, "")
     if not raw:
-        raise RuntimeError(
-            f"{_KEY_ENV} is not set — cannot encrypt/decrypt sensitive fields"
-        )
+        raise RuntimeError(f"{_KEY_ENV} is not set — cannot encrypt/decrypt sensitive fields")
     key = base64.urlsafe_b64decode(raw + "==")
     if len(key) != 32:
         raise RuntimeError(f"{_KEY_ENV} must be 32 bytes (got {len(key)})")

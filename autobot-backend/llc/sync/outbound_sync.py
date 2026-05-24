@@ -345,6 +345,7 @@ class LLCOutboundSyncService:
     ) -> None:
         """Look up company PM config and dispatch to the right connector."""
         from sqlalchemy import select
+
         from user_management.database import AsyncSessionLocal
         from user_management.models.organization import Organization
 
