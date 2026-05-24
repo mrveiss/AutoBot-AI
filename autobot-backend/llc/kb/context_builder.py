@@ -234,13 +234,15 @@ class HeartbeatContextBuilder:
         sources_set = set()
 
         for result in results:
-            chunks.append({
-                "id": result.get("id"),
-                "content": result.get("content", ""),
-                "score": result.get("weighted_score", result.get("score", 0.0)),
-                "source_company_id": result.get("source_company_id"),
-                "metadata": result.get("metadata", {}),
-            })
+            chunks.append(
+                {
+                    "id": result.get("id"),
+                    "content": result.get("content", ""),
+                    "score": result.get("weighted_score", result.get("score", 0.0)),
+                    "source_company_id": result.get("source_company_id"),
+                    "metadata": result.get("metadata", {}),
+                }
+            )
             if result.get("source_company_id"):
                 sources_set.add(result["source_company_id"])
 

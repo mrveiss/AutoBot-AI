@@ -29,7 +29,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     op.add_column(
         "agent_org_nodes",
-        sa.Column("company_id", UUID(as_uuid=True), nullable=True, index=True),
+        sa.Column("company_id", UUID(as_uuid=True), nullable=True),
     )
     op.create_index(
         "ix_agent_org_nodes_company_id",

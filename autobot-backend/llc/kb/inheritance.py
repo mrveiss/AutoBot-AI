@@ -225,4 +225,3 @@ class KbInheritanceResolver:
         except Exception as e:
             logger.error("Failed to search KB with inheritance for company %s: %s", company_id, e)
             raise
-

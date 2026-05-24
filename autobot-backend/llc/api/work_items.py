@@ -70,7 +70,8 @@ class HumanUnclaimRequest(BaseModel):
 class CoworkerRequest(BaseModel):
     """Set or clear a co-worker on a work item (GH#8230).
     To clear the co-worker, omit co_worker_type (or send null).
-    caller_role must be 'owner', 'admin', or 'lead' to mutate co-working state.
+    The caller's role is resolved server-side from the auth context — not supplied
+    by the client (GH#8516: removed client-supplied caller_role to prevent privilege escalation).
     """
 
     company_id: str
@@ -79,7 +80,6 @@ class CoworkerRequest(BaseModel):
     co_worker_user_id: Optional[str] = None
     actor_agent_id: Optional[str] = None
     actor_user_id: Optional[str] = None
-    caller_role: str = "member"
 
 
 router = APIRouter(prefix="/work-items", tags=["llc-work-items"])

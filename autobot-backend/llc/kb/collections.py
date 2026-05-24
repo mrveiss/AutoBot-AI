@@ -101,9 +101,7 @@ class KbCollectionManager:
                 collection_name,
                 str(e),
             )
-            raise RuntimeError(
-                f"Failed to ensure KB collection {collection_name}"
-            ) from e
+            raise RuntimeError(f"Failed to ensure KB collection {collection_name}") from e
 
     async def archive_collection(
         self,
@@ -182,9 +180,7 @@ class KbCollectionManager:
                 original_name,
                 str(e),
             )
-            raise RuntimeError(
-                f"Failed to archive KB collection {original_name}"
-            ) from e
+            raise RuntimeError(f"Failed to archive KB collection {original_name}") from e
 
     async def merge_collection(
         self,
@@ -219,8 +215,7 @@ class KbCollectionManager:
 
         if summarize:
             logger.info(
-                "Collection merge with summarization requested (%s -> %s); "
-                "deferring to GH#8238",
+                "Collection merge with summarization requested (%s -> %s); " "deferring to GH#8238",
                 src_name,
                 dst_name,
             )
@@ -276,6 +271,4 @@ class KbCollectionManager:
                 dst_name,
                 str(e),
             )
-            raise RuntimeError(
-                f"Failed to merge KB collection {src_name} -> {dst_name}"
-            ) from e
+            raise RuntimeError(f"Failed to merge KB collection {src_name} -> {dst_name}") from e
