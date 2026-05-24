@@ -19,11 +19,11 @@ from autobot_shared.singleton_factory import lazy_singleton
 
 logger = get_logger(__name__)
 
-_VALID_PREFIXES = {"agent", "task", "workflow", "heartbeat"}
+_VALID_PREFIXES = {"agent", "task", "workflow", "heartbeat", "company"}
 
 
 def _is_valid_channel(channel: str) -> bool:
-    """Return True if channel matches agent:{id}, task:{id}, workflow:{id}, heartbeat:{id}, or global."""
+    """Return True if channel matches agent:{id}, task:{id}, workflow:{id}, heartbeat:{id}, company:{id}, or global."""
     if channel == "global":
         return True
     parts = channel.split(":", 1)

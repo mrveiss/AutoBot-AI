@@ -1399,6 +1399,25 @@ async def _start_community_clustering_loop(app: FastAPI) -> None:
     )
 
 
+async def _start_llc_notification_router(app: FastAPI) -> None:
+    """Start the LLC notification router background task (GH#8255).
+
+    Subscribes to llc:* Redis pub/sub patterns and fans out events to WebSocket
+    clients filtered by company_id. NON-CRITICAL: failure logs a warning but
+    does not block startup.
+    """
+    try:
+        from llc.notifications.router import get_llc_notification_router
+
+        router = get_llc_notification_router()
+        await router.start()
+        app.state.llc_notification_router = router
+        logger.info("✅ LLC notification router started")
+    except Exception as exc:
+        logger.warning("LLC notification router failed to start (non-critical): %s", exc)
+        app.state.llc_notification_router = None
+
+
 async def _init_web_researcher(app: FastAPI) -> None:
     """Initialize the WebResearcher singleton so web browsing is available in chat.
 
@@ -1508,6 +1527,7 @@ async def initialize_background_services(app: FastAPI):
         await _init_llm_key_rotation_scheduler(app)
         await _start_autonomous_loop(app)
         await _start_community_clustering_loop(app)
+        await _start_llc_notification_router(app)
 
         await update_app_state_multi(
             initialization_status="ready",
@@ -1604,6 +1624,10 @@ async def cleanup_services(app: FastAPI):
         if hasattr(app.state, "llc_outbound_sync") and app.state.llc_outbound_sync:
             await app.state.llc_outbound_sync.stop()
             logger.info("✅ LLC outbound sync service stopped")
+        # GH#8255: Stop LLC notification router
+        if hasattr(app.state, "llc_notification_router") and app.state.llc_notification_router:
+            await app.state.llc_notification_router.stop()
+            logger.info("✅ LLC notification router stopped")
 
         # GH#8229: Stop LLC routine scheduler
         if hasattr(app.state, "llc_routine_scheduler") and app.state.llc_routine_scheduler:
