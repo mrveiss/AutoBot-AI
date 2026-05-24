@@ -36,6 +36,7 @@ from .membership import LLCCompanyMembership
 from .secret import LLCSecret
 from .sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint
 from .ceo_chat import LLCCeoChatMessage, LLCCeoChatThread
+from .review_gate import LLCReviewGatePolicy
 from .work_item import LLCWorkItem, LLCWorkItemComment
 
 __all__ = [
@@ -76,6 +77,7 @@ __all__ = [
     "LLCSecret",
     "MembershipRole",
     "RoutineStatus",
+    "LLCReviewGatePolicy",
     "LLCWorkItem",
     "LLCWorkItemComment",
     "SprintStatus",

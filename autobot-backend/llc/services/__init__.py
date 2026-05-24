@@ -12,6 +12,12 @@ from .base import LLCServiceBase
 from .board import BoardService
 from .budget import BudgetService
 from .goal import GoalService
+from .handoff import HandoffError, HandoffService
+from .review_gate import (
+    ReviewGatePolicyConflictError,
+    ReviewGatePolicyNotFoundError,
+    ReviewGatePolicyService,
+)
 from .routine_service import RoutineService
 from .sprint_autoclose import SprintAutoCloseService
 from .sprint_planning import SprintNotFound, SprintPlanningService
@@ -22,8 +28,13 @@ __all__ = [
     "BoardService",
     "BudgetService",
     "GoalService",
+    "HandoffError",
+    "HandoffService",
     "LLCActivityLogService",
     "LLCServiceBase",
+    "ReviewGatePolicyConflictError",
+    "ReviewGatePolicyNotFoundError",
+    "ReviewGatePolicyService",
     "RoutineService",
     "SprintAutoCloseService",
     "SprintNotFound",

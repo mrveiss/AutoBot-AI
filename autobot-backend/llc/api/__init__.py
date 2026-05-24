@@ -17,6 +17,7 @@ from .runs import router as runs_router
 from .secrets import router as secrets_router
 from .sprints import router as sprints_router
 from .ceo_chat import router as ceo_chat_router
+from .review_gate_policies import router as review_gate_router
 from .work_items import router as work_items_router
 
 router = APIRouter(prefix="/llc", tags=["llc"])
@@ -36,6 +37,7 @@ router.include_router(agents_router)
 router.include_router(runs_router)
 router.include_router(ceo_chat_router)
 router.include_router(routines_router)
+router.include_router(review_gate_router)
 
 
 @router.get("/health")

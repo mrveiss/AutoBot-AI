@@ -256,3 +256,5 @@ class HandoffService(LLCServiceBase):
 
 
 __all__ = ["HandoffService", "HandoffAttachment", "HandoffResult", "HandoffNotAuthorized", "HandoffNotAllowed"]
+
+HandoffError = HandoffNotAllowed  # backward compat alias for GH#8234
