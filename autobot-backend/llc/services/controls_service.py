@@ -281,9 +281,7 @@ class ControlsService:
         """Set company-wide Redis pause flag — blocks all new heartbeat runs."""
         if await self._get_company_row(session, company_id) is None:
             raise CompanyNotFoundError(company_id)
-        await self._set_redis_flag(
-            _COMPANY_PAUSED_KEY.format(company_id=company_id), reason or "1"
-        )
+        await self._set_redis_flag(_COMPANY_PAUSED_KEY.format(company_id=company_id), reason or "1")
 
         await self._activity_log.record(
             session=session,

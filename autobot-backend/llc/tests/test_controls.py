@@ -27,7 +27,6 @@ from llc.services.controls_service import (
     SprintNotFoundError,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -458,11 +457,14 @@ async def test_routine_scheduler_pause_requeue_raises_on_redis_none():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("initial_status", [
-    LLCAgentStatus.ONBOARDING.value,
-    LLCAgentStatus.AVAILABLE.value,
-    LLCAgentStatus.ONBOARDING.value,
-])
+@pytest.mark.parametrize(
+    "initial_status",
+    [
+        LLCAgentStatus.ONBOARDING.value,
+        LLCAgentStatus.AVAILABLE.value,
+        LLCAgentStatus.ONBOARDING.value,
+    ],
+)
 async def test_resume_agent_restores_pre_pause_status(initial_status):
     """resume_agent must restore the status that was active before pausing."""
     company_id = str(uuid.uuid4())

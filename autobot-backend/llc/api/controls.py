@@ -135,9 +135,7 @@ async def resume_agent(
 ) -> Dict[str, Any]:
     actor_id = await _require_board_role(company_id, current_user, _membership_svc(), session)
     try:
-        result = await _controls_svc().resume_agent(
-            session, str(company_id), str(agent_id), actor_id
-        )
+        result = await _controls_svc().resume_agent(session, str(company_id), str(agent_id), actor_id)
         await session.commit()
         return result
     except AgentNotFoundError:
@@ -196,9 +194,7 @@ async def resume_sprint(
 ) -> Dict[str, Any]:
     actor_id = await _require_board_role(company_id, current_user, _membership_svc(), session)
     try:
-        result = await _controls_svc().resume_sprint(
-            session, str(company_id), str(sprint_id), actor_id
-        )
+        result = await _controls_svc().resume_sprint(session, str(company_id), str(sprint_id), actor_id)
         await session.commit()
         return result
     except SprintNotFoundError:
@@ -219,9 +215,7 @@ async def pause_all(
 ) -> Dict[str, Any]:
     actor_id = await _require_board_role(company_id, current_user, _membership_svc(), session)
     try:
-        result = await _controls_svc().pause_company(
-            session, str(company_id), actor_id, reason=body.reason
-        )
+        result = await _controls_svc().pause_company(session, str(company_id), actor_id, reason=body.reason)
         await session.commit()
         return result
     except CompanyNotFoundError:

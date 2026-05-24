@@ -178,14 +178,10 @@ class RoutineScheduler:
                         routine_id_str,
                     )
                     # Re-queue at next fire time so the routine resumes automatically when unpaused
-                    next_ts_skip: float = croniter(
-                        routine.cron_schedule, datetime.now(tz=timezone.utc)
-                    ).get_next(float)
+                    next_ts_skip: float = croniter(routine.cron_schedule, datetime.now(tz=timezone.utc)).get_next(float)
                     redis = await get_async_redis_client()
                     if redis is None:
-                        raise RuntimeError(
-                            f"Redis unavailable — cannot re-queue paused routine {routine_id_str}"
-                        )
+                        raise RuntimeError(f"Redis unavailable — cannot re-queue paused routine {routine_id_str}")
                     await redis.zadd(_SCHEDULE_KEY, {f"routine:{routine_id}": next_ts_skip})
                     return
 

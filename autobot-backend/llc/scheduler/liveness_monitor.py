@@ -109,9 +109,7 @@ class LivenessMonitor:
         )
         return list(result.scalars().all())
 
-    async def _agent_deliberately_paused(
-        self, session: AsyncSession, agent_id: str, company_id: str
-    ) -> bool:
+    async def _agent_deliberately_paused(self, session: AsyncSession, agent_id: str, company_id: str) -> bool:
         """Return True if agent is deliberately paused or terminated (Redis + DB fallback)."""
         redis = await get_async_redis_client()
         if redis is not None:
@@ -120,8 +118,7 @@ class LivenessMonitor:
         # DB fallback — consulted when Redis is unavailable or key was evicted
         result = await session.execute(
             text(
-                "SELECT status FROM agent_org_nodes"
-                " WHERE agent_id = :agent_id AND company_id = :company_id LIMIT 1"
+                "SELECT status FROM agent_org_nodes" " WHERE agent_id = :agent_id AND company_id = :company_id LIMIT 1"
             ),
             {"agent_id": agent_id, "company_id": company_id},
         )
