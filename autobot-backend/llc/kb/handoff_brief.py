@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
+from services.llm_service import get_llm_service
 
 from .rag_assembler import AssemblerProfile, LLCRAGAssembler
 
@@ -60,8 +61,6 @@ class HandoffBriefGenerator:
             )
 
             formatted_context = self._format_context_for_llm(context.chunks, "agent_to_human")
-
-            from services.llm_service import get_llm_service
 
             llm = get_llm_service()
             response = await llm.chat(
@@ -116,6 +115,7 @@ class HandoffBriefGenerator:
         work_item_id: str,
         human_notes: str,
         company_id: str,
+        agent_id: Optional[str] = None,
         project_id: Optional[str] = None,
         work_item_title: str = "",
     ) -> Dict[str, Any]:
@@ -124,12 +124,14 @@ class HandoffBriefGenerator:
         Assembles KB context from:
         - company:{company_id} (relevant policies/standards)
         - project:{project_id} (architecture decisions, prior work)
+        - agent:{agent_id} (target agent's diary entries for similar work)
         - human_notes (verbatim context from human)
 
         Args:
             work_item_id: Work item UUID.
             human_notes: Human-provided context notes.
             company_id: Tenant company UUID.
+            agent_id: Optional target agent UUID for agent-scoped KB profile.
             project_id: Optional project scope.
             work_item_title: Work item title for RAG query.
 
@@ -141,13 +143,12 @@ class HandoffBriefGenerator:
                 company_id=company_id,
                 profile=AssemblerProfile.HANDOFF,
                 project_id=project_id,
+                agent_id=agent_id,
                 work_item_id=work_item_id,
                 query_text=work_item_title,
             )
 
             formatted_context = self._format_context_for_llm(context.chunks, "human_to_agent")
-
-            from services.llm_service import get_llm_service
 
             llm = get_llm_service()
             response = await llm.chat(
@@ -238,8 +239,25 @@ class HandoffBriefGenerator:
         }
 
     def _parse_llm_text_response(self, text: str) -> Dict[str, Any]:
-        """Attempt to parse LLM text response when JSON parsing fails."""
-        return {}
+        """Attempt to extract JSON from LLM text when direct parse fails.
+
+        Tries markdown code-fenced JSON (```json ... ```) and bare JSON
+        objects/arrays embedded in prose. Raises ValueError if no JSON found,
+        so the outer handler falls through to the appropriate fallback.
+        """
+        import re
+
+        # Try ```json ... ``` or ``` ... ``` fences
+        fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+        if fence_match:
+            return json.loads(fence_match.group(1))
+
+        # Try bare JSON object anywhere in the text
+        obj_match = re.search(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)?\}", text, re.DOTALL)
+        if obj_match:
+            return json.loads(obj_match.group(0))
+
+        raise ValueError("No JSON object found in LLM text response")
 
 
 __all__ = ["HandoffBriefGenerator"]
