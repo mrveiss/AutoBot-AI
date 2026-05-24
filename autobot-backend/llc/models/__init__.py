@@ -4,6 +4,7 @@ from .activity import ActorType, LLCActivityLog, LLCBase
 from .approval import LLCApproval
 from .board import LLCBoard, LLCBoardColumn
 from .budget import LLCAgentBudget
+from .ceo_chat import LLCCeoChatMessage, LLCCeoChatThread
 from .company import (
     CompanyAncestor,
     CompanyCreate,
@@ -35,6 +36,7 @@ from .enums import (
 from .goal import GoalLevel, GoalStatus, LLCGoal
 from .heartbeat_run import LLCHeartbeatRun
 from .membership import LLCCompanyMembership
+from .review_gate import LLCReviewGatePolicy
 from .secret import LLCSecret
 from .sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint
 from .work_item import LLCWorkItem, LLCWorkItemComment
