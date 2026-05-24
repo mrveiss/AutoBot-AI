@@ -3,6 +3,7 @@
 # Author: mrveiss
 """LLC HandoffService — bi-directional work item handoff (GH#8231, GH#8232)."""
 
+import asyncio
 import json
 import logging
 import uuid
@@ -83,6 +84,16 @@ class HandoffService(LLCServiceBase):
         await self._release_redis_key(work_item_id, user_id)
         await self._publish_h2a_notification(company_id, target_agent_id, work_item_id)
         await self._record_h2a_activity(session, company_id, user_id, work_item_id, target_agent_id)
+        asyncio.create_task(
+            self._generate_and_update_h2a_brief_async(
+                work_item_id=work_item_id,
+                target_agent_id=target_agent_id,
+                company_id=company_id,
+                project_id=str(item.project_id) if item.project_id else None,
+                work_item_title=item.title,
+                human_notes=human_notes,
+            )
+        )
         return HandoffResult(
             work_item_id=work_item_id, target_agent_id=target_agent_id, kb_doc_ids=kb_doc_ids, review_brief=review_brief
         )
@@ -104,6 +115,7 @@ class HandoffService(LLCServiceBase):
             raise ValueError(f"Work item {work_item_id} not found")
         if item.assignee_agent_id is None or str(item.assignee_agent_id) != agent_id:
             raise HandoffNotAllowed(f"Agent {agent_id} does not hold checkout for work item {work_item_id}")
+
         brief = self._generate_brief(item, agent_notes)
         item.status = WorkItemStatus.IN_REVIEW
         item.reviewer_user_id = uuid.UUID(reviewer_user_id)
@@ -137,6 +149,19 @@ class HandoffService(LLCServiceBase):
                 )
             except Exception:
                 logger.warning("Activity log failed for agent_to_human %s", work_item_id)
+
+        asyncio.create_task(
+            self._generate_and_update_brief_async(
+                work_item_id=work_item_id,
+                agent_id=agent_id,
+                company_id=company_id,
+                project_id=str(item.project_id) if item.project_id else None,
+                work_item_title=item.title,
+                work_item_description=item.description or "",
+                agent_notes=agent_notes,
+            )
+        )
+
         return item
 
     async def approve(
@@ -352,6 +377,77 @@ class HandoffService(LLCServiceBase):
             )
         except Exception:
             logger.warning("Activity log failed for h2a handoff work_item=%s", work_item_id)
+
+    async def _generate_and_update_brief_async(
+        self,
+        work_item_id: str,
+        agent_id: str,
+        company_id: str,
+        project_id: Optional[str],
+        work_item_title: str,
+        work_item_description: str,
+        agent_notes: Optional[str],
+    ) -> None:
+        """Background task: generate KB-powered brief and persist it (GH#8239)."""
+        try:
+            from ..kb.handoff_brief import HandoffBriefGenerator
+
+            generator = HandoffBriefGenerator()
+            brief = await generator.generate_agent_to_human_brief(
+                work_item_id=work_item_id,
+                agent_id=agent_id,
+                company_id=company_id,
+                project_id=project_id,
+                work_item_title=work_item_title,
+                work_item_description=work_item_description,
+            )
+            if agent_notes:
+                brief["agent_notes"] = agent_notes
+            from user_management.database import get_async_session_factory
+
+            async with get_async_session_factory()() as session:
+                result = await session.execute(
+                    select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id))
+                )
+                item = result.scalar_one_or_none()
+                if item is not None:
+                    item.review_brief = brief
+                    item.version += 1
+                    await session.commit()
+                    logger.debug("KB brief updated for work_item %s", work_item_id)
+        except Exception:
+            logger.exception("Background brief generation failed for work_item %s (non-fatal)", work_item_id)
+
+    async def _generate_and_update_h2a_brief_async(
+        self,
+        work_item_id: str,
+        target_agent_id: str,
+        company_id: str,
+        project_id: Optional[str],
+        work_item_title: str,
+        human_notes: str,
+    ) -> None:
+        """Background task: generate KB-powered H2A brief and store in Redis (GH#8239)."""
+        try:
+            from ..kb.handoff_brief import HandoffBriefGenerator
+
+            generator = HandoffBriefGenerator()
+            brief = await generator.generate_human_to_agent_brief(
+                work_item_id=work_item_id,
+                human_notes=human_notes,
+                company_id=company_id,
+                project_id=project_id,
+                work_item_title=work_item_title,
+            )
+            redis = await get_async_redis_client()
+            if redis is not None:
+                import json as _json
+
+                key = f"llc:h2a_brief:{work_item_id}"
+                await redis.set(key, _json.dumps(brief), ex=86400)
+                logger.debug("H2A brief cached for work_item %s", work_item_id)
+        except Exception:
+            logger.exception("Background H2A brief generation failed for work_item %s (non-fatal)", work_item_id)
 
     def _generate_brief(self, item: LLCWorkItem, agent_notes: Optional[str]) -> Dict[str, Any]:
         comment_excerpts = [
