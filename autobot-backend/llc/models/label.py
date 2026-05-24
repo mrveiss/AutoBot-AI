@@ -42,9 +42,7 @@ class LLCLabel(Base):
     """A named, coloured tag that can be attached to work items."""
 
     __tablename__ = "llc_labels"
-    __table_args__ = (
-        UniqueConstraint("company_id", "name", name="uq_llc_labels_company_name"),
-    )
+    __table_args__ = (UniqueConstraint("company_id", "name", name="uq_llc_labels_company_name"),)
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -74,9 +72,7 @@ class LLCWorkItemLabel(Base):
     """Join table — assignment of a label to a work item."""
 
     __tablename__ = "llc_work_item_labels"
-    __table_args__ = (
-        UniqueConstraint("work_item_id", "label_id", name="uq_llc_work_item_labels"),
-    )
+    __table_args__ = (UniqueConstraint("work_item_id", "label_id", name="uq_llc_work_item_labels"),)
 
     work_item_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

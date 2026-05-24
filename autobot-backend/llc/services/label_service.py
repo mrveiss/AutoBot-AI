@@ -91,9 +91,7 @@ class LLCLabelService(LLCServiceBase):
         return result
 
     async def get(self, session: AsyncSession, label_id: str) -> Optional[LLCLabel]:
-        result = await session.execute(
-            select(LLCLabel).where(LLCLabel.id == uuid.UUID(label_id))
-        )
+        result = await session.execute(select(LLCLabel).where(LLCLabel.id == uuid.UUID(label_id)))
         return result.scalar_one_or_none()
 
     async def update(
@@ -134,18 +132,14 @@ class LLCLabelService(LLCServiceBase):
         label_ids: List[str],
         assigned_by: Optional[str] = None,
     ) -> List[LLCWorkItemLabel]:
-        wi_result = await session.execute(
-            select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id))
-        )
+        wi_result = await session.execute(select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)))
         work_item = wi_result.scalar_one_or_none()
         if work_item is None:
             raise WorkItemNotFound(work_item_id)
 
         added: List[LLCWorkItemLabel] = []
         for lid in label_ids:
-            existing = await session.get(
-                LLCWorkItemLabel, (uuid.UUID(work_item_id), uuid.UUID(lid))
-            )
+            existing = await session.get(LLCWorkItemLabel, (uuid.UUID(work_item_id), uuid.UUID(lid)))
             if existing is not None:
                 continue
             wil = LLCWorkItemLabel(
@@ -160,6 +154,7 @@ class LLCLabelService(LLCServiceBase):
 
         if added and self.activity_log:
             from .activity_log import ActivityEventType
+
             await self.activity_log.record(
                 session,
                 company_id=str(work_item.company_id),
@@ -177,9 +172,7 @@ class LLCLabelService(LLCServiceBase):
         work_item_id: str,
         label_id: str,
     ) -> None:
-        wi_result = await session.execute(
-            select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id))
-        )
+        wi_result = await session.execute(select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)))
         work_item = wi_result.scalar_one_or_none()
         if work_item is None:
             raise WorkItemNotFound(work_item_id)
@@ -194,6 +187,7 @@ class LLCLabelService(LLCServiceBase):
 
         if self.activity_log:
             from .activity_log import ActivityEventType
+
             await self.activity_log.record(
                 session,
                 company_id=str(work_item.company_id),
@@ -209,9 +203,7 @@ class LLCLabelService(LLCServiceBase):
         work_item_id: str,
     ) -> List[str]:
         result = await session.execute(
-            select(LLCWorkItemLabel.label_id).where(
-                LLCWorkItemLabel.work_item_id == uuid.UUID(work_item_id)
-            )
+            select(LLCWorkItemLabel.label_id).where(LLCWorkItemLabel.work_item_id == uuid.UUID(work_item_id))
         )
         return [str(r) for r in result.scalars().all()]
 

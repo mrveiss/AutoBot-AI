@@ -207,9 +207,7 @@ class WorkItemService(LLCServiceBase):
             label_uuids = [uuid.UUID(lid) for lid in label_ids]
             q = q.where(
                 LLCWorkItem.id.in_(
-                    select(LLCWorkItemLabel.work_item_id).where(
-                        LLCWorkItemLabel.label_id.in_(label_uuids)
-                    )
+                    select(LLCWorkItemLabel.work_item_id).where(LLCWorkItemLabel.label_id.in_(label_uuids))
                 )
             )
         q = q.order_by(LLCWorkItem.created_at.desc()).limit(limit).offset(offset)

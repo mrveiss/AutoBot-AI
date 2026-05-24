@@ -17,7 +17,6 @@ from llc.services.label_service import (  # noqa: E402
     WorkItemNotFound,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -246,9 +245,7 @@ def test_delete_label_not_found(app_client):
         svc.delete = AsyncMock(side_effect=LabelNotFound(label_id))
         mock_svc.return_value = svc
 
-        resp = client.delete(
-            f"/api/llc/companies/{company_id}/labels/{label_id}"
-        )
+        resp = client.delete(f"/api/llc/companies/{company_id}/labels/{label_id}")
 
     assert resp.status_code == 404
 
@@ -279,8 +276,6 @@ def test_remove_label_work_item_not_found(app_client):
         svc.remove_label = AsyncMock(side_effect=WorkItemNotFound(work_item_id))
         mock_svc.return_value = svc
 
-        resp = client.delete(
-            f"/api/llc/companies/{company_id}/labels/work-items/{work_item_id}/labels/{label_id}"
-        )
+        resp = client.delete(f"/api/llc/companies/{company_id}/labels/work-items/{work_item_id}/labels/{label_id}")
 
     assert resp.status_code == 404
