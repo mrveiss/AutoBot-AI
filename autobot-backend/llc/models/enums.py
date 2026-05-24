@@ -184,3 +184,11 @@ class WorkProductType(str, Enum):
     SCREENSHOT = "screenshot"
     PR_LINK = "pr_link"
     OTHER = "other"
+class WorkItemRelationType(str, Enum):
+    """Relation type between two LLC work items (GH#8252).
+    ``blocks`` and ``blocked_by`` are mirrors: adding A→B blocks creates B→A blocked_by.
+    """
+    BLOCKS = "blocks"
+    BLOCKED_BY = "blocked_by"
+    DUPLICATES = "duplicates"
+    RELATES_TO = "relates_to"

@@ -574,6 +574,8 @@ class WorkItemService(LLCServiceBase):
         session: AsyncSession,
         work_item_id: str,
         new_status: WorkItemStatus,
+        company_id: Optional[str] = None,
+        relation_svc: Optional[Any] = None,
     ) -> LLCWorkItem:
         """Transition a work item to a new status, enforcing the state machine."""
         result = await session.execute(
@@ -590,6 +592,19 @@ class WorkItemService(LLCServiceBase):
                 f"Cannot transition from {current.value!r} to {new_status.value!r}. "
                 f"Allowed: {[s.value for s in allowed]}"
             )
+
+        # GH#8252: block BLOCKED→IN_PROGRESS while unresolved blockers remain
+        if (
+            current == WorkItemStatus.BLOCKED
+            and new_status == WorkItemStatus.IN_PROGRESS
+            and relation_svc is not None
+            and company_id is not None
+        ):
+            cid = company_id or str(item.company_id)
+            if await relation_svc.has_unresolved_blockers(session, work_item_id, cid):
+                raise InvalidTransition(
+                    "Cannot move to in_progress: item has unresolved blocked_by relations"
+                )
 
         item.status = new_status
         now = datetime.now(timezone.utc)

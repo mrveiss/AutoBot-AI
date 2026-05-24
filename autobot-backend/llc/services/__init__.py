@@ -5,12 +5,12 @@ All concrete LLC service classes should inherit from this base so they
 receive a typed ``activity_log`` reference at construction time.
 """
 
+from .base import LLCServiceBase
 from .activity_log import LLCActivityLogService
 from .approval import ApprovalService
-from .base import LLCServiceBase
+from .ceo_chat import CeoChatService
 from .board import BoardService
 from .budget import BudgetService
-from .ceo_chat import CeoChatService
 from .goal import GoalService
 from .handoff import HandoffError, HandoffService
 from .review_gate import (
