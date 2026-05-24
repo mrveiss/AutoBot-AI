@@ -167,7 +167,7 @@ class SprintUpdate(BaseModel):
     goal_description: Optional[str] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
-    status: Optional[SprintStatus] = None
+    # status is intentionally absent: use POST /sprints/{id}/start or /close
     committed_points: Optional[int] = None
 
 
@@ -470,7 +470,9 @@ async def update_sprint(
     body: SprintUpdate,
     session: AsyncSession = Depends(get_async_session),
 ) -> LLCSprint:
-    result = await session.execute(select(LLCSprint).where(LLCSprint.id == sprint_id))
+    result = await session.execute(
+        select(LLCSprint).where(LLCSprint.id == sprint_id).with_for_update()
+    )
     sprint = result.scalar_one_or_none()
     if sprint is None:
         raise HTTPException(status_code=404, detail="Sprint not found")
