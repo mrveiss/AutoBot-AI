@@ -57,7 +57,7 @@ class PIIType(str, Enum):
     PHONE = "PHONE"
     SSN = "SSN"
     CREDIT_CARD = "CREDIT_CARD"
-    API_KEY = "API_KEY"
+    API_KEY = "API_KEY"  # nosemgrep: autobot-hardcoded-secret-key
     JWT = "JWT"
     AWS_ACCESS_KEY = "AWS_ACCESS_KEY"
     IP_ADDRESS = "IP_ADDRESS"

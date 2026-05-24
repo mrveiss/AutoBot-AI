@@ -37,9 +37,9 @@ class SecretType(str, Enum):
     """Secret type classification."""
 
     SSH_KEY = "ssh_key"
-    PASSWORD = "password"  # nosec B105 - enum value, not actual password
-    API_KEY = "api_key"
-    TOKEN = "token"  # nosec B105 - enum value, not actual token
+    PASSWORD = "password"  # nosec B105 - enum value, not actual password  # nosemgrep: autobot-hardcoded-secret-key
+    API_KEY = "api_key"  # nosemgrep: autobot-hardcoded-secret-key
+    TOKEN = "token"  # nosec B105 - enum value, not actual token  # nosemgrep: autobot-hardcoded-secret-key
     CERTIFICATE = "certificate"
     DATABASE_URL = "database_url"
     INFRASTRUCTURE_HOST = "infrastructure_host"

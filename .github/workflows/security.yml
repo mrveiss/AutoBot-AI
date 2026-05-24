@@ -161,23 +161,24 @@ jobs:
 
     - name: Semgrep SAST Scan
       # Blocking: exits non-zero when ERROR-severity findings are present.
-      # Custom rules (.semgrep/rules.yaml) cover AutoBot-specific patterns;
-      # p/python + p/secrets add community coverage.
+      # Uses only local .semgrep/rules.yaml — community configs (p/python,
+      # p/secrets) require SEMGREP_APP_TOKEN and are not available in CI.
+      # semgrep.sarif is pre-initialised so the upload step always has a file.
       run: |
         set -euo pipefail
         echo "## Semgrep Security Analysis" >> $GITHUB_STEP_SUMMARY
-        python3 -m semgrep \
+        # Pre-initialise so the SARIF upload step succeeds even if semgrep exits
+        # early (e.g. config error) before writing its own output file.
+        echo '{"version":"2.1.0","runs":[]}' > semgrep.sarif
+        semgrep \
           --config=.semgrep/rules.yaml \
-          --config=p/python \
-          --config=p/secrets \
+          --severity ERROR \
           --sarif \
           --output=semgrep.sarif \
           --error \
           autobot-backend/ autobot-slm-backend/ autobot_shared/
-        python3 -m semgrep \
+        semgrep \
           --config=.semgrep/rules.yaml \
-          --config=p/python \
-          --config=p/secrets \
           --json \
           --output=semgrep-report.json \
           autobot-backend/ autobot-slm-backend/ autobot_shared/ || true
