@@ -95,7 +95,9 @@ class LLCWorkItem(Base):
     created_by_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
     created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
 
-    # Handoff context (GH#8232): written by HandoffService.human_to_agent()
+    # Review / handoff fields (GH#8231, GH#8232)
+    reviewer_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    reviewer_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
     review_brief: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
 
     # Lifecycle timestamps
