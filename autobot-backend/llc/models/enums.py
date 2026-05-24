@@ -120,6 +120,34 @@ class LLCRunStatus(str, Enum):
     FAILED = "failed"
     TIMEOUT = "timeout"
     CANCELLED = "cancelled"
+    RATE_LIMITED = "rate_limited"
+
+
+class HeartbeatInvocationSource(str, Enum):
+    """What triggered a heartbeat run (GH#8225)."""
+
+    SCHEDULER = "scheduler"
+    MANUAL = "manual"
+    CALLBACK = "callback"
+
+
+class HeartbeatRunStatus(str, Enum):
+    """Lifecycle status of a single heartbeat run (GH#8225)."""
+
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    TIMED_OUT = "timed_out"
+    RATE_LIMITED = "rate_limited"
+
+
+class ContextMode(str, Enum):
+    """How much context to include in heartbeat invocations (GH#8225)."""
+
+    THIN = "thin"
+    FAT = "fat"
 
 
 class AssignmentType(str, Enum):
@@ -129,6 +157,13 @@ class AssignmentType(str, Enum):
     AUTO = "auto"
     DELEGATED = "delegated"
     INHERITED = "inherited"
+
+
+class CoWorkerType(str, Enum):
+    """Identifies whether the co-worker is an agent or human (GH#8230)."""
+
+    AGENT = "agent"
+    HUMAN = "human"
 
 
 class BoardType(str, Enum):
@@ -160,35 +195,3 @@ class RoutineProduces(str, Enum):
 
     NEW_WORK_ITEM = "new_work_item"
     UPDATES_RECURRING = "updates_recurring"
-
-
-class ExternalPMType(str, Enum):
-    """External project management system type (GH#8257)."""
-    JIRA = "jira"
-    AZURE_DEVOPS = "azure_devops"
-    TRELLO = "trello"
-    ASANA = "asana"
-    NONE = "none"
-class LLCSyncEvent(str, Enum):
-    """LLC work item events published to Redis pub/sub (GH#8257)."""
-    CREATED = "created"
-    TRANSITIONED = "transitioned"
-    COMMENTED = "commented"
-    COMPLETED = "completed"
-class WorkProductType(str, Enum):
-    """Type of work product artifact produced by an agent (GH#8242)."""
-    CODE = "code"
-    DOCUMENT = "document"
-    REPORT = "report"
-    PLAN = "plan"
-    SCREENSHOT = "screenshot"
-    PR_LINK = "pr_link"
-    OTHER = "other"
-class WorkItemRelationType(str, Enum):
-    """Relation type between two LLC work items (GH#8252).
-    ``blocks`` and ``blocked_by`` are mirrors: adding A→B blocks creates B→A blocked_by.
-    """
-    BLOCKS = "blocks"
-    BLOCKED_BY = "blocked_by"
-    DUPLICATES = "duplicates"
-    RELATES_TO = "relates_to"
