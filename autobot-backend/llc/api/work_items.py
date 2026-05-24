@@ -47,15 +47,14 @@ from ..services.attachment_service import (
     AttachmentTooLarge,
 )
 from ..services.handoff import HandoffAttachment, HandoffNotAllowed, HandoffNotAuthorized, HandoffService
-from ..services.work_item_service import CheckoutConflict, InvalidTransition, WorkItemService
-from ..models.enums import WorkItemPriority, WorkItemRelationType, WorkItemStatus, WorkItemType
-from ..services.work_item_relations import RelationConflict, WorkItemRelationService
 from ..services.work_item_service import (
     CheckoutConflict,
     CoWorkingPermissionError,
     InvalidTransition,
     WorkItemService,
 )
+from ..models.enums import WorkItemPriority, WorkItemRelationType, WorkItemStatus, WorkItemType
+from ..services.work_item_relations import RelationConflict, WorkItemRelationService
 from ..services.work_product_service import WorkProductService
 
 

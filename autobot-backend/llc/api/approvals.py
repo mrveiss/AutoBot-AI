@@ -141,6 +141,7 @@ async def decide_approval(
         raise HTTPException(status_code=409, detail=str(exc))
 
     await svc.publish_decided(approval, body.decision)
+    await svc.log_decision_to_kb(approval)  # GH#8243: index to decisions KB
     return _to_response(approval)
 
 
