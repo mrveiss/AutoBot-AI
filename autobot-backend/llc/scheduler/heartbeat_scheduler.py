@@ -120,18 +120,14 @@ class HeartbeatScheduler:
         """
         factory = get_async_session_factory()
         async with factory() as session:
-            result = await session.execute(
-                text(
-                    """
+            result = await session.execute(text("""
                     SELECT aon.agent_id, aon.name, aon.heartbeat_cron,
                            aon.adapter_type, aon.adapter_config, aon.context_mode,
                            aon.company_id
                     FROM agent_org_nodes aon
                     WHERE aon.heartbeat_enabled = true
                       AND aon.heartbeat_cron IS NOT NULL
-                    """
-                )
-            )
+                    """))
             rows = result.mappings().all()
             return [dict(r) for r in rows]
 
@@ -196,9 +192,7 @@ class HeartbeatScheduler:
                     source=HeartbeatInvocationSource.SCHEDULER,
                 )
             except ValueError as exc:
-                logger.warning(
-                    "Skipping heartbeat for agent %s (no organization): %s", agent_id, exc
-                )
+                logger.warning("Skipping heartbeat for agent %s (no organization): %s", agent_id, exc)
                 retry_ts = datetime.now(tz=timezone.utc).timestamp() + _POLL_INTERVAL * 6
                 await redis.zadd(_SCHEDULE_KEY, {agent_id: retry_ts})
                 return
@@ -271,20 +265,16 @@ class HeartbeatScheduler:
     # Shared helpers
     # ------------------------------------------------------------------
 
-    async def _get_agent_config(
-        self, session: AsyncSession, agent_id: str
-    ) -> Optional[Dict[str, Any]]:
+    async def _get_agent_config(self, session: AsyncSession, agent_id: str) -> Optional[Dict[str, Any]]:
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT aon.agent_id, aon.name, aon.heartbeat_cron, aon.heartbeat_enabled,
                        aon.adapter_type, aon.adapter_config, aon.context_mode,
                        aon.company_id
                 FROM agent_org_nodes aon
                 WHERE aon.agent_id = :agent_id
                   AND aon.heartbeat_enabled = true
-                """
-            ),
+                """),
             {"agent_id": agent_id},
         )
         row = result.mappings().first()
@@ -365,10 +355,7 @@ class HeartbeatScheduler:
                 # Only bump last_heartbeat_at on success — failures must not mask stale agents
                 if final_status == HeartbeatRunStatus.SUCCEEDED.value:
                     await session.execute(
-                        text(
-                            "UPDATE agent_org_nodes SET last_heartbeat_at = now() "
-                            "WHERE agent_id = :aid"
-                        ),
+                        text("UPDATE agent_org_nodes SET last_heartbeat_at = now() " "WHERE agent_id = :aid"),
                         {"aid": agent["agent_id"]},
                     )
                 await session.commit()

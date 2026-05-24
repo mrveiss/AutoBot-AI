@@ -483,6 +483,7 @@ async def _init_knowledge_base(app: FastAPI):
         try:
             from knowledge.tiering import get_tier_manager
             from autobot_shared.redis_client import get_redis_client as _get_sync_redis
+
             _tier_redis = _get_sync_redis(database="knowledge")
             await get_tier_manager(redis_client=_tier_redis).start()
             app.state.tier_manager = get_tier_manager()
