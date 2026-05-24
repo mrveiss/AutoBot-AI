@@ -120,6 +120,7 @@ class LLCRunStatus(str, Enum):
     FAILED = "failed"
     TIMEOUT = "timeout"
     CANCELLED = "cancelled"
+    RATE_LIMITED = "rate_limited"
 
 
 class HeartbeatInvocationSource(str, Enum):
@@ -139,6 +140,7 @@ class HeartbeatRunStatus(str, Enum):
     FAILED = "failed"
     CANCELLED = "cancelled"
     TIMED_OUT = "timed_out"
+    RATE_LIMITED = "rate_limited"
 
 
 class ContextMode(str, Enum):
