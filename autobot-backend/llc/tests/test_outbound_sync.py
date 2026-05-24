@@ -275,6 +275,7 @@ async def test_integration_create_triggers_jira_sync():
         jira_instance.execute_action = AsyncMock(return_value={"issue": {"key": "ABO-42"}})
         MockJira.return_value = jira_instance
 
+        service._is_leader = True  # simulate this worker winning leadership
         await service._handle_message(message)
 
         jira_instance.execute_action.assert_called_once()
@@ -283,3 +284,114 @@ async def test_integration_create_triggers_jira_sync():
         assert params["project_key"] == "ABO"
         assert params["summary"] == "Implement feature X"
         assert params["issue_type"] == "Story"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# CR blockers (GH#8257 review fixes)
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_non_leader_skips_dispatch():
+    """Non-leader worker must not dispatch messages (multi-worker dedup fix)."""
+    service = LLCOutboundSyncService()
+    # _is_leader defaults to False — no explicit setup needed
+
+    message = {
+        "channel": b"llc:work_item:created",
+        "data": json.dumps(
+            {"company_id": "00000000-0000-0000-0000-000000000099", "work_item_id": "wi_x"}
+        ).encode(),
+    }
+
+    with patch("llc.sync.outbound_sync._DISPATCHER") as mock_dispatcher:
+        await service._handle_message(message)
+        mock_dispatcher.get.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_resolve_jira_transition_id_maps_name_to_numeric_id():
+    """_resolve_jira_transition_id must return the numeric string ID, not the name."""
+    from llc.sync.outbound_sync import _resolve_jira_transition_id
+
+    integration = AsyncMock()
+    integration.execute_action = AsyncMock(
+        return_value={
+            "transitions": [
+                {"id": "11", "name": "Backlog"},
+                {"id": "21", "name": "In Progress"},
+                {"id": "31", "name": "Done"},
+            ]
+        }
+    )
+
+    result = await _resolve_jira_transition_id(integration, "PROJ-42", "In Progress")
+    assert result == "21"
+
+    integration.execute_action.assert_called_once_with(
+        "list_transitions", {"issue_key": "PROJ-42"}
+    )
+
+
+@pytest.mark.asyncio
+async def test_resolve_jira_transition_id_case_insensitive():
+    """Name matching must be case-insensitive."""
+    from llc.sync.outbound_sync import _resolve_jira_transition_id
+
+    integration = AsyncMock()
+    integration.execute_action = AsyncMock(
+        return_value={"transitions": [{"id": "31", "name": "Done"}]}
+    )
+
+    assert await _resolve_jira_transition_id(integration, "PROJ-1", "done") == "31"
+    assert await _resolve_jira_transition_id(integration, "PROJ-1", "DONE") == "31"
+
+
+@pytest.mark.asyncio
+async def test_resolve_jira_transition_id_returns_none_when_not_found():
+    """Missing transition name must return None (caller raises ValueError)."""
+    from llc.sync.outbound_sync import _resolve_jira_transition_id
+
+    integration = AsyncMock()
+    integration.execute_action = AsyncMock(
+        return_value={"transitions": [{"id": "11", "name": "Backlog"}]}
+    )
+
+    result = await _resolve_jira_transition_id(integration, "PROJ-1", "NonExistent")
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_dispatch_jira_transitioned_uses_numeric_transition_id():
+    """Jira transitioned event must resolve name to numeric ID before updating status."""
+    from llc.sync.outbound_sync import _dispatch_to_jira
+
+    pm_config = {
+        "base_url": "https://example.atlassian.net",
+        "username": "bot@example.com",
+        "api_key": "secret",
+        "project_key": "PROJ",
+    }
+    payload = {"external_id": "PROJ-10", "status": "in_progress"}
+
+    jira_instance = AsyncMock()
+    jira_instance.execute_action = AsyncMock(
+        side_effect=lambda action, params: (
+            {"transitions": [{"id": "21", "name": "In Progress"}]}
+            if action == "list_transitions"
+            else {"success": True}
+        )
+    )
+
+    # Lazy import inside _dispatch_to_jira means we must patch at the source module
+    with patch("integrations.project_management_integration.JiraIntegration") as MockJira:
+        MockJira.return_value = jira_instance
+
+        await _dispatch_to_jira(pm_config, "transitioned", payload)
+
+        calls = jira_instance.execute_action.call_args_list
+        assert calls[0][0] == ("list_transitions", {"issue_key": "PROJ-10"})
+        assert calls[1][0] == (
+            "update_issue_status",
+            {"issue_key": "PROJ-10", "transition_id": "21"},
+        )

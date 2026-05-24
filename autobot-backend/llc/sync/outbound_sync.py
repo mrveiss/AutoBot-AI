@@ -19,6 +19,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import socket
 import uuid
 from typing import Any, Dict, Optional
 
@@ -29,6 +31,26 @@ logger = logging.getLogger(__name__)
 
 # Redis pub/sub channel pattern for LLC work item events
 _LLC_WORK_ITEM_CHANNEL = "llc:work_item:*"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Leader election (multi-worker duplicate-dispatch prevention, GH#8257 CR fix)
+# ──────────────────────────────────────────────────────────────────────────────
+
+_LEADER_KEY = "llc:outbound_sync:leader"
+_LEADER_TTL_MS = 30_000  # 30-second lease
+_LEADER_REFRESH_S = 10  # leader refreshes its lease every 10 s
+_LEADER_POLL_S = 15  # non-leaders poll every 15 s
+
+# Atomic compare-and-expire: refresh TTL only if the key still holds our
+# worker_id.  A plain GET→PEXPIRE pair is non-atomic and risks dual-leader
+# under GC pause or network delay.
+_REFRESH_LUA = """
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+    return redis.call('PEXPIRE', KEYS[1], tonumber(ARGV[2]))
+else
+    return 0
+end
+"""
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Field mapping: LLC → external PM
@@ -134,6 +156,21 @@ def _decrypt_pm_config(encrypted_blob: str) -> Dict[str, Any]:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
+async def _resolve_jira_transition_id(
+    integration: Any, issue_key: str, transition_name: str
+) -> Optional[str]:
+    """Fetch available transitions and map a human-readable name to its numeric ID.
+
+    Jira's POST /transitions endpoint requires a numeric ID (e.g. "31"), not
+    a display name.  Returns None when no matching transition is found.
+    """
+    result = await integration.execute_action("list_transitions", {"issue_key": issue_key})
+    for t in result.get("transitions", []):
+        if t.get("name", "").lower() == transition_name.lower():
+            return str(t["id"])
+    return None
+
+
 async def _dispatch_to_jira(pm_config: Dict[str, Any], event: str, payload: Dict[str, Any]) -> None:
     from integrations.base import IntegrationConfig
     from integrations.project_management_integration import JiraIntegration
@@ -162,10 +199,15 @@ async def _dispatch_to_jira(pm_config: Dict[str, Any], event: str, payload: Dict
     elif event == "transitioned" or event == "completed":
         issue_key = payload.get("external_id")
         if issue_key:
-            new_status = map_status(pm_config, payload.get("status", ""))
+            transition_name = map_status(pm_config, payload.get("status", ""))
+            transition_id = await _resolve_jira_transition_id(integration, issue_key, transition_name)
+            if transition_id is None:
+                raise ValueError(
+                    f"No Jira transition found matching '{transition_name}' on {issue_key}"
+                )
             await integration.execute_action(
                 "update_issue_status",
-                {"issue_key": issue_key, "transition_id": new_status},
+                {"issue_key": issue_key, "transition_id": transition_id},
             )
 
 
@@ -273,28 +315,87 @@ class LLCOutboundSyncService:
 
     Instantiate once (e.g. in the FastAPI lifespan) and call ``start()``.
     The background task loops until ``stop()`` is called.
+
+    Multi-worker safety: a Redis SETNX leader lock ensures only one uvicorn
+    worker processes messages at a time, preventing duplicate PM dispatches.
     """
 
     def __init__(self) -> None:
         self._task: Optional[asyncio.Task] = None  # type: ignore[type-arg]
+        self._leader_task: Optional[asyncio.Task] = None  # type: ignore[type-arg]
         self._stop_event = asyncio.Event()
+        self._is_leader = False
+        self._worker_id = "%s-%d" % (socket.gethostname(), os.getpid())
 
     async def start(self) -> None:
-        """Start the background subscriber task."""
+        """Start the background subscriber task and leader election loop."""
         self._stop_event.clear()
+        self._leader_task = asyncio.create_task(
+            self._leader_loop(), name="llc-outbound-sync-leader"
+        )
         self._task = asyncio.create_task(self._run(), name="llc-outbound-sync")
-        logger.info("LLCOutboundSyncService started")
+        logger.info("LLCOutboundSyncService started (worker=%s)", self._worker_id)
 
     async def stop(self) -> None:
         """Signal the subscriber to exit and await task completion."""
         self._stop_event.set()
-        if self._task and not self._task.done():
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
+        for t in (self._task, self._leader_task):
+            if t and not t.done():
+                t.cancel()
+                try:
+                    await t
+                except asyncio.CancelledError:
+                    pass
         logger.info("LLCOutboundSyncService stopped")
+
+    async def _leader_loop(self) -> None:
+        """Continuously attempt to hold or acquire the Redis leader lock."""
+        while not self._stop_event.is_set():
+            try:
+                won = await self._try_acquire_or_refresh()
+
+                if won and not self._is_leader:
+                    logger.info("LLCOutboundSyncService: became leader (%s)", self._worker_id)
+                    self._is_leader = True
+                elif not won and self._is_leader:
+                    logger.warning(
+                        "LLCOutboundSyncService: lost leadership (%s)", self._worker_id
+                    )
+                    self._is_leader = False
+
+                sleep_s = _LEADER_REFRESH_S if self._is_leader else _LEADER_POLL_S
+                try:
+                    await asyncio.wait_for(
+                        asyncio.shield(self._stop_event.wait()), timeout=sleep_s
+                    )
+                    return  # stop_event fired — exit gracefully
+                except asyncio.TimeoutError:
+                    pass  # normal: sleep interval elapsed, loop again
+            except asyncio.CancelledError:
+                break
+            except Exception as exc:
+                logger.error("LLCOutboundSyncService leader loop error: %s", exc)
+                await asyncio.sleep(_LEADER_POLL_S)
+
+    async def _try_acquire_or_refresh(self) -> bool:
+        """Acquire leader lock via SETNX (new) or atomic Lua refresh (existing)."""
+        redis = await get_async_redis_client()
+        if redis is None:
+            return False
+        try:
+            if self._is_leader:
+                # Atomic refresh via server-side Lua — prevents dual-leader from
+                # a non-atomic GET+PEXPIRE pair splitting under GC pause.
+                result = await redis.eval(  # noqa: S603  (Redis server-side Lua, not Python eval)
+                    _REFRESH_LUA, 1, _LEADER_KEY, self._worker_id, str(_LEADER_TTL_MS)
+                )
+                return bool(result)
+            else:
+                result = await redis.set(_LEADER_KEY, self._worker_id, nx=True, px=_LEADER_TTL_MS)
+                return result is not None
+        except Exception as exc:
+            logger.warning("LLCOutboundSyncService leader election error: %s", exc)
+            return False
 
     async def _run(self) -> None:
         redis = await get_async_redis_client()
@@ -317,6 +418,8 @@ class LLCOutboundSyncService:
             await pubsub.close()
 
     async def _handle_message(self, message: Dict[str, Any]) -> None:
+        if not self._is_leader:
+            return  # non-leaders skip dispatch; leader handles for all workers
         channel: str = (message.get("channel") or b"").decode("utf-8", errors="replace")
         # channel format: llc:work_item:<event>
         parts = channel.split(":")
