@@ -58,8 +58,10 @@ jobs:
 
       - name: Job summary
         run: |
-          echo "## Canonical audit — ${{ steps.audit.outputs.date }}" >> $GITHUB_STEP_SUMMARY
+          echo "## Canonical audit — ${{ steps.audit.outputs.date }}" >> "$GITHUB_STEP_SUMMARY"
           for f in audit-output/*.md; do
-            echo "" >> $GITHUB_STEP_SUMMARY
-            cat "$f" >> $GITHUB_STEP_SUMMARY
+            {
+              echo ""
+              cat "$f"
+            } >> "$GITHUB_STEP_SUMMARY"
           done

@@ -51,7 +51,7 @@ jobs:
 
           # Count merged branches
           merged_count=$(git branch -r --merged origin/Dev_new_gui \
-            | grep -v "HEAD\|main\|master\|Dev_new_gui" | wc -l)
+            | grep -cv "HEAD\|main\|master\|Dev_new_gui")
 
           # Count stale branches (30+ days)
           DAYS_STALE=30
@@ -88,13 +88,15 @@ jobs:
             open_issues=$(gh issue list --state open --json number -q 'length' 2>/dev/null || echo "0")
           fi
 
-          echo "total_local=$total_local" >> "$GITHUB_OUTPUT"
-          echo "total_remote=$total_remote" >> "$GITHUB_OUTPUT"
-          echo "merged=$merged_count" >> "$GITHUB_OUTPUT"
-          echo "stale=$stale_count" >> "$GITHUB_OUTPUT"
-          echo "worktrees=$worktree_count" >> "$GITHUB_OUTPUT"
-          echo "open_prs=$open_prs" >> "$GITHUB_OUTPUT"
-          echo "open_issues=$open_issues" >> "$GITHUB_OUTPUT"
+          {
+            echo "total_local=$total_local"
+            echo "total_remote=$total_remote"
+            echo "merged=$merged_count"
+            echo "stale=$stale_count"
+            echo "worktrees=$worktree_count"
+            echo "open_prs=$open_prs"
+            echo "open_issues=$open_issues"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Create health report issue
         uses: actions/github-script@v9
