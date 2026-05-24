@@ -77,6 +77,15 @@ class ActivityEventType(str, Enum):
     APPROVAL_REJECTED = "approval.rejected"
     APPROVAL_WITHDRAWN = "approval.withdrawn"
 
+    # Board instant controls (GH#8256 — FR-GOV-05)
+    CONTROL_AGENT_PAUSED = "control.agent_paused"
+    CONTROL_AGENT_RESUMED = "control.agent_resumed"
+    CONTROL_AGENT_TERMINATED = "control.agent_terminated"
+    CONTROL_SPRINT_PAUSED = "control.sprint_paused"
+    CONTROL_SPRINT_RESUMED = "control.sprint_resumed"
+    CONTROL_COMPANY_PAUSED = "control.company_paused"
+    CONTROL_COMPANY_RESUMED = "control.company_resumed"
+
     # Heartbeat / run
     HEARTBEAT_STARTED = "heartbeat.started"
     HEARTBEAT_COMPLETED = "heartbeat.completed"
