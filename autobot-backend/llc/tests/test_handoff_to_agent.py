@@ -285,6 +285,7 @@ class TestHumanToAgent:
         channel, payload_json = mock_redis.publish.call_args[0]
         assert channel == f"llc:notifications:{company_id}"
         import json
+
         payload = json.loads(payload_json)
         assert payload["event"] == "work_item.handoff_ready"
         assert payload["work_item_id"] == str(item.id)

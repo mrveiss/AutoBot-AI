@@ -210,6 +210,7 @@ class TestAgentToHuman:
         channel, payload_str = redis_mock.publish.call_args[0]
         assert channel == f"llc:notifications:{company_id}"
         import json
+
         payload = json.loads(payload_str)
         assert payload["event_type"] == "work_item.handoff"
         assert payload["reviewer_user_id"] == str(reviewer_id)
@@ -346,10 +347,7 @@ class TestRequestChanges:
             change_request="Need more tests",
         )
 
-        assert any(
-            isinstance(obj, LLCWorkItemComment) and obj.body == "Need more tests"
-            for obj in added_objects
-        )
+        assert any(isinstance(obj, LLCWorkItemComment) and obj.body == "Need more tests" for obj in added_objects)
 
 
 # ---------------------------------------------------------------------------

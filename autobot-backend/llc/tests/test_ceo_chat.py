@@ -76,9 +76,7 @@ async def test_create_thread_with_user(svc: CeoChatService) -> None:
     session.flush = AsyncMock()
     user_id = str(uuid.uuid4())
 
-    thread = await svc.create_thread(
-        session, company_id="co1", title="Board Session", created_by_user_id=user_id
-    )
+    thread = await svc.create_thread(session, company_id="co1", title="Board Session", created_by_user_id=user_id)
 
     assert str(thread.created_by_user_id) == user_id
 
@@ -177,9 +175,7 @@ async def test_send_create_task_intent(svc: CeoChatService) -> None:
         patch.object(svc, "get_thread", new=AsyncMock(return_value=thread)),
         patch.object(svc, "_dispatch_intent", new=AsyncMock(return_value=("work_item", fake_item.id))),
     ):
-        msg = await svc.send(
-            session, thread_id=thread_id, message="Create a Q3 roadmap task", user_id=None
-        )
+        msg = await svc.send(session, thread_id=thread_id, message="Create a Q3 roadmap task", user_id=None)
 
     assert msg.author_type == "system"
     assert "work_item" in msg.body or "Resolved" in msg.body
@@ -200,15 +196,11 @@ async def test_send_record_decision_intent(svc: CeoChatService) -> None:
         patch.object(
             svc,
             "_resolve_via_llm",
-            new=AsyncMock(
-                return_value={"intent": "record_decision", "summary": "Approved budget", "entity": {}}
-            ),
+            new=AsyncMock(return_value={"intent": "record_decision", "summary": "Approved budget", "entity": {}}),
         ),
         patch.object(svc, "get_thread", new=AsyncMock(return_value=thread)),
     ):
-        msg = await svc.send(
-            session, thread_id=thread_id, message="We approved the budget", user_id=None
-        )
+        msg = await svc.send(session, thread_id=thread_id, message="We approved the budget", user_id=None)
 
     assert msg.author_type == "system"
     assert "decision" in msg.body.lower() or "Recorded" in msg.body
@@ -218,9 +210,7 @@ async def test_send_record_decision_intent(svc: CeoChatService) -> None:
 
 
 def test_build_reply_clarify() -> None:
-    body = CeoChatService._build_reply(
-        {"intent": "clarify", "summary": "Need more info", "entity": {}}, None, None
-    )
+    body = CeoChatService._build_reply({"intent": "clarify", "summary": "Need more info", "entity": {}}, None, None)
     assert "clarify" in body.lower() or "could you" in body.lower()
 
 

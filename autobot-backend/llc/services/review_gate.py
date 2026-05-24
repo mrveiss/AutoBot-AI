@@ -127,9 +127,9 @@ class ReviewGatePolicyService(LLCServiceBase):
     ) -> bool:
         """Delete a policy. Returns True if deleted, False if not found."""
         result = await session.execute(
-            delete(LLCReviewGatePolicy).where(
-                LLCReviewGatePolicy.id == uuid.UUID(policy_id)
-            ).returning(LLCReviewGatePolicy.id)
+            delete(LLCReviewGatePolicy)
+            .where(LLCReviewGatePolicy.id == uuid.UUID(policy_id))
+            .returning(LLCReviewGatePolicy.id)
         )
         deleted = result.scalar_one_or_none()
         await session.flush()

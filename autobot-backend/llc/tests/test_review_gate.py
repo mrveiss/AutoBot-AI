@@ -324,9 +324,7 @@ class TestTransitionToDone:
         svc = WorkItemService()
         company_id = str(uuid.uuid4())
 
-        result = await svc.transition_to_done(
-            session, str(wi.id), company_id, actor_user_id=str(uuid.uuid4())
-        )
+        result = await svc.transition_to_done(session, str(wi.id), company_id, actor_user_id=str(uuid.uuid4()))
 
         assert result.status == WorkItemStatus.DONE
         session.flush.assert_awaited()
@@ -411,9 +409,7 @@ class TestTransitionToDone:
         svc = WorkItemService()
 
         with pytest.raises(InvalidTransition):
-            await svc.transition_to_done(
-                session, str(wi.id), str(uuid.uuid4()), actor_user_id=str(uuid.uuid4())
-            )
+            await svc.transition_to_done(session, str(wi.id), str(uuid.uuid4()), actor_user_id=str(uuid.uuid4()))
 
     @pytest.mark.asyncio
     async def test_review_gate_transition_not_found_raises(self) -> None:
@@ -421,9 +417,7 @@ class TestTransitionToDone:
         svc = WorkItemService()
 
         with pytest.raises(ValueError, match="not found"):
-            await svc.transition_to_done(
-                session, str(uuid.uuid4()), str(uuid.uuid4()), actor_user_id=str(uuid.uuid4())
-            )
+            await svc.transition_to_done(session, str(uuid.uuid4()), str(uuid.uuid4()), actor_user_id=str(uuid.uuid4()))
 
     @pytest.mark.asyncio
     async def test_review_gate_board_override_logs_override(self) -> None:

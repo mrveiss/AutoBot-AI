@@ -334,9 +334,7 @@ class TestCoworkerSubtaskInvariant:
         )
 
         # create() fetches a fresh item; mock the identifier generation
-        mock_session._db_result.fetchone.return_value = MagicMock(
-            issue_prefix="WI", issue_counter=99
-        )
+        mock_session._db_result.fetchone.return_value = MagicMock(issue_prefix="WI", issue_counter=99)
 
         # create() should succeed without any checkout validation on parent
         co_worker_agent_id = str(uuid.uuid4())

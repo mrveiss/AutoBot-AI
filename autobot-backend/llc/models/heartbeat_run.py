@@ -66,9 +66,7 @@ class LLCHeartbeatRun(Base):
     # Rate-limit retry fields (GH#8204).
     # retry_after: when the scheduler should next re-dispatch this agent.
     # retry_count: number of rate-limit retries so far (drives exponential backoff).
-    retry_after: Mapped[Optional[datetime]] = mapped_column(
-        sa.DateTime(timezone=True), nullable=True, index=True
-    )
+    retry_after: Mapped[Optional[datetime]] = mapped_column(sa.DateTime(timezone=True), nullable=True, index=True)
     retry_count: Mapped[int] = mapped_column(sa.Integer, nullable=False, server_default="0")
 
     created_at: Mapped[datetime] = mapped_column(

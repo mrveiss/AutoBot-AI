@@ -71,9 +71,7 @@ class CeoChatService(LLCServiceBase):
         session: AsyncSession,
         thread_id: str,
     ) -> Optional[LLCCeoChatThread]:
-        result = await session.execute(
-            select(LLCCeoChatThread).where(LLCCeoChatThread.id == thread_id)
-        )
+        result = await session.execute(select(LLCCeoChatThread).where(LLCCeoChatThread.id == thread_id))
         return result.scalar_one_or_none()
 
     async def list_threads(
