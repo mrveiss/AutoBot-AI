@@ -30,11 +30,13 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
+from user_management.models.user import User
 
 from ..kb.collections import KbCollectionManager
 from ..models.enums import WorkItemPriority, WorkItemRelationType, WorkItemStatus, WorkItemType
@@ -217,20 +219,47 @@ class RelationDelete(BaseModel):
     actor_user_id: Optional[str] = None
 
 
-def _assignee_display(item: Any) -> Optional[Dict[str, Any]]:
-    """Return structured assignee display info (GH#8223).
+async def _resolve_user_display(
+    session: AsyncSession,
+    user_id: Any,
+) -> Dict[str, Optional[str]]:
+    """Resolve display_name and email for a user from user_management.users (GH#8476).
 
-    display_name and name are None until user_management JOIN is implemented
-    (see discovery issue filed in GH#8223 implementation).
+    Query:
+        SELECT display_name, email FROM users WHERE id = :user_id
+    Returns a dict with keys ``display_name`` and ``email``, both None on miss.
+    """
+    try:
+        result = await session.execute(select(User.display_name, User.email).where(User.id == user_id))
+        row = result.one_or_none()
+        if row:
+            return {"display_name": row.display_name, "email": row.email}
+    except Exception:
+        pass
+    return {"display_name": None, "email": None}
+
+
+def _assignee_display(
+    item: Any,
+    resolved_user: Optional[Dict[str, Optional[str]]] = None,
+) -> Optional[Dict[str, Any]]:
+    """Return structured assignee display info (GH#8223, GH#8476).
+
+    Pass ``resolved_user`` (from ``_resolve_user_display``) to populate
+    display_name/email for user assignees.  Agent display_name resolution
+    requires the agent registry and is left as a future TODO.
     """
     if item.assignee_type == "user" and item.assignee_user_id:
+        display = resolved_user or {}
         return {
             "type": "user",
             "id": str(item.assignee_user_id),
-            "display_name": None,
-            "name": None,
+            "display_name": display.get("display_name"),
+            "email": display.get("email"),
+            "name": display.get("display_name"),
         }
     if item.assignee_type == "agent" and item.assignee_agent_id:
+        # TODO(GH#8476): resolve display_name from agent registry
         return {
             "type": "agent",
             "id": str(item.assignee_agent_id),
@@ -279,7 +308,10 @@ def _relations_to_list(item: Any) -> List[Dict[str, Any]]:
     return rows
 
 
-def _item_to_dict(item: Any) -> Dict[str, Any]:
+def _item_to_dict(
+    item: Any,
+    resolved_user: Optional[Dict[str, Optional[str]]] = None,
+) -> Dict[str, Any]:
     return {
         "id": str(item.id),
         "company_id": str(item.company_id),
@@ -299,7 +331,7 @@ def _item_to_dict(item: Any) -> Dict[str, Any]:
         "assignee_agent_id": str(item.assignee_agent_id) if item.assignee_agent_id else None,
         "assignee_user_id": str(item.assignee_user_id) if item.assignee_user_id else None,
         "assignee_type": item.assignee_type,
-        "assignee_display": _assignee_display(item),
+        "assignee_display": _assignee_display(item, resolved_user),
         "checkout_run_id": item.checkout_run_id,
         "checkout_locked_at": item.checkout_locked_at.isoformat() if item.checkout_locked_at else None,
         "version": item.version,
@@ -350,7 +382,11 @@ async def create_work_item(
     )
     await session.commit()
     await _kb_manager.ensure_collection(KbCollectionManager.WORK_ITEM_PREFIX, item.id)
-    return _item_to_dict(item)
+    # GH#8476: resolve user display_name/email for user assignees
+    resolved_user = None
+    if item.assignee_type == "user" and item.assignee_user_id:
+        resolved_user = await _resolve_user_display(session, item.assignee_user_id)
+    return _item_to_dict(item, resolved_user)
 
 
 @router.get("")
@@ -386,7 +422,14 @@ async def list_work_items(
         limit=limit,
         offset=offset,
     )
-    return [_item_to_dict(i) for i in items]
+    # GH#8476: resolve user display_name/email for each item's user assignee
+    result = []
+    for i in items:
+        resolved_user = None
+        if i.assignee_type == "user" and i.assignee_user_id:
+            resolved_user = await _resolve_user_display(session, i.assignee_user_id)
+        result.append(_item_to_dict(i, resolved_user))
+    return result
 
 
 @router.get("/{work_item_id}")
@@ -397,7 +440,11 @@ async def get_work_item(
     item = await _service().get(session, work_item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Work item not found")
-    return _item_to_dict(item)
+    # GH#8476: resolve user display_name/email for user assignees
+    resolved_user = None
+    if item.assignee_type == "user" and item.assignee_user_id:
+        resolved_user = await _resolve_user_display(session, item.assignee_user_id)
+    return _item_to_dict(item, resolved_user)
 
 
 @router.patch("/{work_item_id}")
@@ -411,7 +458,11 @@ async def update_work_item(
     if item is None:
         raise HTTPException(status_code=404, detail="Work item not found")
     await session.commit()
-    return _item_to_dict(item)
+    # GH#8476: resolve user display_name/email for user assignees
+    resolved_user = None
+    if item.assignee_type == "user" and item.assignee_user_id:
+        resolved_user = await _resolve_user_display(session, item.assignee_user_id)
+    return _item_to_dict(item, resolved_user)
 
 
 @router.delete("/{work_item_id}", status_code=204)

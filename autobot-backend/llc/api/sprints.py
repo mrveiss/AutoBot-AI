@@ -160,6 +160,8 @@ class SprintCreate(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     committed_points: int = 0
+    # GH#8474: sprint planning analytics fields
+    capacity_points: Optional[int] = None
 
 
 class SprintUpdate(BaseModel):
@@ -169,6 +171,9 @@ class SprintUpdate(BaseModel):
     end_date: Optional[date] = None
     # status is intentionally absent: use POST /sprints/{id}/start or /close
     committed_points: Optional[int] = None
+    # GH#8474: sprint planning analytics fields
+    velocity_actual: Optional[float] = None
+    capacity_points: Optional[int] = None
 
 
 class SprintResponse(BaseModel):
@@ -182,6 +187,9 @@ class SprintResponse(BaseModel):
     status: str
     committed_points: int
     actual_points: int
+    # GH#8474: sprint planning analytics columns (migration 007)
+    velocity_actual: Optional[float] = None
+    capacity_points: Optional[int] = None
     pending_close_approval_id: Optional[uuid.UUID]
     kb_summary: Optional[str] = None
     created_at: datetime
@@ -444,6 +452,7 @@ async def create_sprint(
         start_date=body.start_date,
         end_date=body.end_date,
         committed_points=body.committed_points,
+        capacity_points=body.capacity_points,  # GH#8474
     )
     session.add(sprint)
     await session.commit()
