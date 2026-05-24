@@ -107,38 +107,6 @@ class TestGetQueryCollections:
         assert result[1][1] == pytest.approx(0.5)
 
 
-class TestAssertCanWrite:
-    async def test_own_collection_allowed(self, resolver):
-        session = AsyncMock()
-        await resolver.assert_can_write(
-            session,
-            writer_company_id=str(CHILD_ID),
-            target_collection=f"{CHILD_ID}:company",
-        )
-
-    async def test_parent_collection_denied(self, resolver):
-        session = AsyncMock()
-        with pytest.raises(PermissionError, match=str(PARENT_ID)):
-            await resolver.assert_can_write(
-                session,
-                writer_company_id=str(CHILD_ID),
-                target_collection=f"{PARENT_ID}:company",
-            )
-
-    async def test_own_collection_with_suffix_allowed(self, resolver):
-        session = AsyncMock()
-        await resolver.assert_can_write(
-            session,
-            writer_company_id=str(CHILD_ID),
-            target_collection=f"{CHILD_ID}:company:decisions",
-        )
-
-    async def test_invalid_collection_raises(self, resolver):
-        session = AsyncMock()
-        with pytest.raises(PermissionError, match="Invalid"):
-            await resolver.assert_can_write(session, writer_company_id=str(CHILD_ID), target_collection="")
-
-
 class TestSearchWithInheritance:
     async def test_returns_empty_when_no_collections(self, resolver):
         session = AsyncMock()
@@ -159,9 +127,9 @@ class TestSearchWithInheritance:
         session.execute.side_effect = execute_results
 
         child_context = MagicMock()
-        child_context.chunks = [{"id": "doc-1", "content": "child doc", "score": 0.9}]
+        child_context.chunks = [{"id": "doc-1", "content": "child doc", "similarity_score": 0.9}]
         parent_context = MagicMock()
-        parent_context.chunks = [{"id": "doc-2", "content": "parent doc", "score": 1.0}]
+        parent_context.chunks = [{"id": "doc-2", "content": "parent doc", "similarity_score": 1.0}]
 
         resolver.rag_assembler.assemble = AsyncMock(side_effect=[child_context, parent_context])
 
@@ -184,9 +152,9 @@ class TestSearchWithInheritance:
         session.execute.side_effect = execute_results
 
         child_context = MagicMock()
-        child_context.chunks = [{"id": "shared-doc", "content": "child version", "score": 0.8}]
+        child_context.chunks = [{"id": "shared-doc", "content": "child version", "similarity_score": 0.8}]
         parent_context = MagicMock()
-        parent_context.chunks = [{"id": "shared-doc", "content": "parent version", "score": 0.5}]
+        parent_context.chunks = [{"id": "shared-doc", "content": "parent version", "similarity_score": 0.5}]
 
         resolver.rag_assembler.assemble = AsyncMock(side_effect=[child_context, parent_context])
 

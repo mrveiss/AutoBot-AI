@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.logging_manager import get_logger
 
 from ..models.work_item import LLCWorkItem
-from .rag_assembler import LLCRAGAssembler
+from .rag_assembler import AssemblerProfile, LLCRAGAssembler
 
 logger = get_logger(__name__)
 
@@ -77,6 +77,7 @@ class KbInheritanceResolver:
             collections = []
             current = company
             weight = 1.0
+            visited: set[uuid.UUID] = {company_uuid}
 
             while current:
                 weight_multiplier = current.kb_inheritance_weight
@@ -84,6 +85,15 @@ class KbInheritanceResolver:
 
                 # Move to parent if exists
                 if current.parent_org_id:
+                    # Cycle detection: break if we've seen this org before
+                    if current.parent_org_id in visited:
+                        logger.warning(
+                            "Circular parent_org_id detected for company %s, stopping traversal",
+                            company_id,
+                        )
+                        break
+                    visited.add(current.parent_org_id)
+
                     stmt = select(Organization).where(Organization.id == current.parent_org_id)
                     result = await session.execute(stmt)
                     current = result.scalar_one_or_none()
@@ -144,7 +154,7 @@ class KbInheritanceResolver:
                 task = asyncio.create_task(
                     self.rag_assembler.assemble(
                         company_id=source_company_id,
-                        profile=None,  # Use raw query, no profile
+                        profile=AssemblerProfile.HEARTBEAT,
                         query_text=query_text,
                     )
                 )
@@ -181,8 +191,8 @@ class KbInheritanceResolver:
                     if not doc_id:
                         continue
 
-                    # Use existing score or default to 1.0
-                    score = chunk.get("score", 1.0)
+                    # Use similarity_score from production (fallback to score for tests)
+                    score = chunk.get("similarity_score", chunk.get("score", 0.0))
                     weighted_score = score * weight
 
                     if doc_id not in merged or merged[doc_id]["weighted_score"] < weighted_score:
@@ -216,32 +226,3 @@ class KbInheritanceResolver:
             logger.error("Failed to search KB with inheritance for company %s: %s", company_id, e)
             raise
 
-    async def assert_can_write(
-        self,
-        session: AsyncSession,
-        writer_company_id: str,
-        target_collection: str,
-    ) -> None:
-        """Raise PermissionError if writer_company_id cannot write to target_collection.
-
-        Sub-companies can only write to their own collections, not parent collections.
-        The collection format is expected to be ``<company_id>:<type>[:<suffix>]``.
-
-        Args:
-            session: DB session
-            writer_company_id: Company UUID attempting to write
-            target_collection: Collection name to write to
-
-        Raises:
-            PermissionError: If the writer does not own the target collection
-        """
-        parts = target_collection.split(":")
-        if not parts:
-            raise PermissionError(f"Invalid collection name: {target_collection!r}")
-
-        collection_owner_id = parts[0]
-        if collection_owner_id != writer_company_id:
-            raise PermissionError(
-                f"Company {writer_company_id} cannot write to collection "
-                f"{target_collection!r} owned by {collection_owner_id}"
-            )
