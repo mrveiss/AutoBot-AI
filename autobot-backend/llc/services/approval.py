@@ -7,6 +7,7 @@ Provides:
 - ``ApprovalService.request_approval`` — create a pending approval record
 - ``ApprovalService.decide`` — approve or reject
 - ``ApprovalService.get_pending`` — list pending approvals for a company
+- ``ApprovalService.log_decision_to_kb`` — post-decision hook: indexes to decisions KB (GH#8243)
 - ``requires_approval`` — decorator that gates async methods behind a board approval
 """
 
@@ -22,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
 
+from ..kb.decision_log import DecisionLogWriter
 from ..models.approval import LLCApproval
 from ..models.enums import ApprovalStatus, ApprovalType
 from .base import LLCServiceBase
@@ -162,6 +164,22 @@ class ApprovalService(LLCServiceBase):
             },
         )
 
+    async def log_decision_to_kb(self, approval: "LLCApproval") -> None:
+        """Post-decision hook: index the resolved approval into the decisions KB (GH#8243).
+
+        Best-effort — never raises; KB failures are logged but do not affect callers.
+        Call AFTER the DB transaction commits, alongside ``publish_decided``.
+        """
+        try:
+            writer = DecisionLogWriter()
+            await writer.write(approval)
+        except Exception as exc:
+            logger.warning(
+                "Decision KB write failed for approval %s (non-fatal): %s",
+                approval.id,
+                exc,
+            )
+
     async def get_pending(
         self,
         session: AsyncSession,
@@ -273,3 +291,4 @@ __all__ = [
     "_EVENT_REQUESTED",
     "_EVENT_DECIDED",
 ]
+

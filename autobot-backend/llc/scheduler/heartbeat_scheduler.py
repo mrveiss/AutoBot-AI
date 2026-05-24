@@ -278,6 +278,14 @@ class HeartbeatScheduler:
                     await redis.zadd(_SCHEDULE_KEY, {agent_id: retry_ts})
                     return
 
+                # Enrich context with recent decisions when context_mode=fat (GH#8243)
+                if agent.get("context_mode") == "fat":
+                    company_id_val = agent.get("company_id")
+                    if company_id_val:
+                        context["recent_decisions"] = await _fetch_recent_decisions(
+                            str(company_id_val)
+                        )
+
             await session.commit()
 
         t = asyncio.create_task(
@@ -614,3 +622,19 @@ async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> N
     )
     # Adapter framework (GH#8226) will replace this stub.
     await asyncio.sleep(0)
+
+
+async def _fetch_recent_decisions(company_id: str, n: int = 5) -> list[Dict[str, Any]]:
+    """Query the decisions KB for the most recent decisions (GH#8243).
+
+    Used by heartbeat context building when context_mode=fat.  Best-effort —
+    returns an empty list on any failure rather than blocking the heartbeat.
+    """
+    try:
+        from ..kb.decision_log import DecisionLogReader
+
+        reader = DecisionLogReader()
+        return await reader.list_decisions(company_id=company_id, limit=n)
+    except Exception as exc:
+        logger.warning("Failed to fetch recent decisions for company %s: %s", company_id, exc)
+        return []

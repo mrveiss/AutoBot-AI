@@ -28,7 +28,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.ceo_chat import LLCCeoChatMessage, LLCCeoChatThread
 from .base import LLCServiceBase
-from . import LLCServiceBase
 
 logger = logging.getLogger(__name__)
 
@@ -121,12 +120,14 @@ class CeoChatService(LLCServiceBase):
         session.add(human_msg)
         await session.flush()
 
-        # 2. RAG context
+        # 2. RAG context — company KB + decisions KB (GH#8243)
         kb_chunks = await self._rag_query(thread_id, message)
-
-        # 3. LLM resolution
         thread = await self.get_thread(session, thread_id)
         company_id = str(thread.company_id) if thread else "unknown"
+        decision_chunks = await self._query_decisions(company_id, message)
+        kb_chunks = kb_chunks + decision_chunks
+
+        # 3. LLM resolution
         resolution = await self._resolve_via_llm(
             message=message,
             kb_chunks=kb_chunks,
@@ -134,7 +135,7 @@ class CeoChatService(LLCServiceBase):
             conversation_id=thread_id,
         )
 
-        # 4. Act on resolved intent
+        # 4. Act on resolved intent (company_id resolved above in step 2)
         entity_type, entity_id = await self._dispatch_intent(
             session=session,
             company_id=company_id,
@@ -188,6 +189,18 @@ class CeoChatService(LLCServiceBase):
                 return []
         except Exception as exc:
             logger.warning("RAG query failed for ceo_chat thread %s: %s", thread_id, exc)
+            return []
+
+    async def _query_decisions(self, company_id: str, message: str) -> List[str]:
+        """Query the decisions KB and return relevant past decision texts (GH#8243)."""
+        try:
+            from ..kb.decision_log import DecisionLogReader
+
+            reader = DecisionLogReader()
+            results = await reader.search(company_id=company_id, query=message, n_results=3)
+            return [r["text"] for r in results if r.get("text")]
+        except Exception as exc:
+            logger.warning("Decisions RAG query failed for company %s: %s", company_id, exc)
             return []
 
     async def _resolve_via_llm(
