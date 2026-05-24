@@ -20,6 +20,7 @@ from .review_gate import (
 )
 from .routine_service import RoutineService
 from .sprint_autoclose import SprintAutoCloseService
+from .portability import PortabilityService
 from .sprint_planning import SprintNotFound, SprintPlanningService
 from .work_product_service import WorkProductService
 
@@ -38,6 +39,7 @@ __all__ = [
     "ReviewGatePolicyService",
     "RoutineService",
     "SprintAutoCloseService",
+    "PortabilityService",
     "SprintNotFound",
     "SprintPlanningService",
     "WorkProductService",

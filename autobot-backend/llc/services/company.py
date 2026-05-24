@@ -19,7 +19,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from llc.models.company import CompanyCreate, CompanyRead, CompanyTreeNode, CompanyUpdate
 from llc.models.enums import LLCCompanyStatus
-from llc.services import LLCServiceBase
+from llc.services.base import LLCServiceBase
 from user_management.models.organization import Organization
 
 logger = get_logger(__name__)

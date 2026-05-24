@@ -1,19 +1,21 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""LLC Company API routes (GH#8211, GH#8223).
+"""LLC Company API routes (GH#8211, GH#8223, GH#8245).
 
 Route group: /llc/companies
-  GET    /                       — list root companies (no parent)
-  POST   /                       — create a company
-  GET    /{id}                   — get a single company
-  PATCH  /{id}                   — update a company
-  DELETE /{id}                   — soft-delete a company
-  GET    /{id}/tree              — recursive sub-company tree
-  GET    /{id}/ancestry          — ancestors from root to this company
-  POST   /{id}/members           — add a member (GH#8223)
-  DELETE /{id}/members/{user_id} — remove a member (GH#8223)
-  GET    /{id}/members           — list members (GH#8223)
+  GET    /                         — list root companies (no parent)
+  POST   /                         — create a company
+  GET    /{id}                     — get a single company
+  PATCH  /{id}                     — update a company
+  DELETE /{id}                     — soft-delete a company
+  GET    /{id}/tree                — recursive sub-company tree
+  GET    /{id}/ancestry            — ancestors from root to this company
+  POST   /{id}/members             — add a member (GH#8223)
+  DELETE /{id}/members/{user_id}   — remove a member (GH#8223)
+  GET    /{id}/members             — list members (GH#8223)
+  POST   /{id}/export/template     — export structural template, secrets scrubbed (GH#8245)
+  POST   /{id}/export/snapshot     — full-state export for backup/migration (GH#8245)
 
 All endpoints enforce company_id scoping via the org_id path or
 the authenticated session's organization context.
@@ -22,7 +24,8 @@ the authenticated session's organization context.
 import uuid
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -49,6 +52,7 @@ from llc.services.membership_service import (
     MemberNotFoundError,
     MembershipService,
 )
+from llc.services.portability import PortabilityService
 from user_management.database import get_async_session
 from user_management.models.organization import Organization
 
@@ -286,18 +290,12 @@ async def remove_member(
 # ------------------------------------------------------------------
 # External PM config (GH#8257)
 # ------------------------------------------------------------------
-
-
 class PMConfigSetRequest(BaseModel):
     pm_type: ExternalPMType
     credentials: Dict[str, Any]
-
-
 class PMConfigRead(BaseModel):
     pm_type: Optional[str]
     configured: bool
-
-
 @router.patch("/{company_id}/pm-config", response_model=PMConfigRead)
 async def set_pm_config(
     company_id: uuid.UUID,
@@ -306,15 +304,11 @@ async def set_pm_config(
 ) -> PMConfigRead:
     """Store encrypted PM credentials for a company (GH#8257)."""
     import json
-
     from sqlalchemy import select, update
-
     from autobot_shared.field_encryption import encrypt_field
-
     row = await session.execute(select(Organization.id).where(Organization.id == company_id))
     if row.one_or_none() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
-
     encrypted = encrypt_field(json.dumps(body.credentials, ensure_ascii=False))
     await session.execute(
         update(Organization)
@@ -323,59 +317,36 @@ async def set_pm_config(
     )
     await session.commit()
     return PMConfigRead(pm_type=body.pm_type.value, configured=True)
-
-
 @router.post("/{company_id}/pm-config/test")
 async def test_pm_config(
-    company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
 ) -> Dict[str, Any]:
     """Test connectivity to the configured external PM system (GH#8257)."""
-    import json
-
     from sqlalchemy import select
-
     from autobot_shared.field_encryption import decrypt_field
     from integrations.base import IntegrationConfig
-
     row = await session.execute(
         select(Organization.external_pm_type, Organization.external_pm_config).where(Organization.id == company_id)
-    )
     result = row.one_or_none()
     if result is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
-
     pm_type, encrypted_config = result
     if not pm_type or pm_type == "none" or not encrypted_config:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No PM integration configured for this company",
-        )
-
     try:
         pm_config = json.loads(decrypt_field(encrypted_config))
     except Exception:
-        raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to decrypt PM config",
-        )
-
-    try:
         health = await _test_pm_connectivity(pm_type, pm_config)
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
-
     return {"ok": health.get("ok", False), "details": health}
-
-
 async def _test_pm_connectivity(pm_type: str, pm_config: Dict[str, Any]) -> Dict[str, Any]:
-    from integrations.base import IntegrationConfig
     from integrations.project_management_integration import (
         AsanaIntegration,
         JiraIntegration,
         TrelloIntegration,
-    )
-
     if pm_type == "jira":
         cfg = IntegrationConfig(
             name="jira",
@@ -383,27 +354,47 @@ async def _test_pm_connectivity(pm_type: str, pm_config: Dict[str, Any]) -> Dict
             base_url=pm_config.get("base_url", ""),
             username=pm_config.get("username", ""),
             api_key=pm_config.get("api_key", ""),
-        )
         health = await JiraIntegration(cfg).test_connection()
     elif pm_type == "trello":
-        cfg = IntegrationConfig(
             name="trello",
             provider="trello",
-            api_key=pm_config.get("api_key", ""),
             token=pm_config.get("token", ""),
-        )
         health = await TrelloIntegration(cfg).test_connection()
     elif pm_type == "asana":
         cfg = IntegrationConfig(name="asana", provider="asana", token=pm_config.get("token", ""))
         health = await AsanaIntegration(cfg).test_connection()
     else:
         return {"ok": False, "error": f"Unsupported pm_type: {pm_type}"}
-
     from integrations.base import IntegrationStatus
-
     return {
         "ok": health.status == IntegrationStatus.CONNECTED,
         "status": health.status.value,
         "message": health.message,
         "details": health.details,
     }
+# Export endpoints (GH#8245)
+def _get_portability_service(session: AsyncSession = Depends(get_async_session)) -> PortabilityService:
+    return PortabilityService(session=session)
+@router.post("/{company_id}/export/template")
+async def export_template(
+    svc: PortabilityService = Depends(_get_portability_service),
+) -> JSONResponse:
+    """Export a portable structural template for the company.
+    Returns a JSON file download with company meta, agents (secrets scrubbed),
+    goals, active routines, projects, portfolios, and up to 20 seed work items.
+    Secret values are never exported — only ``{{SECRET_NAME}}`` placeholders.
+    """
+        payload = await svc.export_template(company_id)
+        await session.rollback()
+        raise
+    filename = f"company_{company_id}_template.json"
+    return JSONResponse(
+        content=payload,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+@router.post("/{company_id}/export/snapshot")
+async def export_snapshot(
+    """Export a full-state snapshot for backup/migration.
+    Extends the template export with all work items, sprint history, and KB
+    collection names (not content).
+        payload = await svc.export_snapshot(company_id)
+    filename = f"company_{company_id}_snapshot.json"

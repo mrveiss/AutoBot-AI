@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .base import LLCServiceBase
 from ..models.ceo_chat import LLCCeoChatMessage, LLCCeoChatThread
 from .base import LLCServiceBase
 from . import LLCServiceBase

@@ -38,6 +38,8 @@ class ActivityEventType(str, Enum):
     COMPANY_UPDATED = "company.updated"
     COMPANY_STATUS_CHANGED = "company.status_changed"
     COMPANY_ARCHIVED = "company.archived"
+    COMPANY_EXPORT_TEMPLATE = "company.export_template"
+    COMPANY_EXPORT_SNAPSHOT = "company.export_snapshot"
 
     # Agent lifecycle
     AGENT_HIRED = "agent.hired"
