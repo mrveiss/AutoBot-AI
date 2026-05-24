@@ -21,6 +21,7 @@ from .review_gate import (
 from .routine_service import RoutineService
 from .sprint_autoclose import SprintAutoCloseService
 from .sprint_planning import SprintNotFound, SprintPlanningService
+from .work_product_service import WorkProductService
 
 __all__ = [
     "ApprovalService",
@@ -39,4 +40,5 @@ __all__ = [
     "SprintAutoCloseService",
     "SprintNotFound",
     "SprintPlanningService",
+    "WorkProductService",
 ]

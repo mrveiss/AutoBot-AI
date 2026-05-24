@@ -30,6 +30,7 @@ from .enums import (
     WorkItemPriority,
     WorkItemStatus,
     WorkItemType,
+    WorkProductType,
 )
 from .goal import GoalLevel, GoalStatus, LLCGoal
 from .heartbeat_run import LLCHeartbeatRun
@@ -38,6 +39,7 @@ from .review_gate import LLCReviewGatePolicy
 from .secret import LLCSecret
 from .sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint
 from .work_item import LLCWorkItem, LLCWorkItemComment
+from .work_product import LLCWorkProduct
 
 __all__ = [
     "ActorType",
@@ -80,8 +82,10 @@ __all__ = [
     "LLCReviewGatePolicy",
     "LLCWorkItem",
     "LLCWorkItemComment",
+    "LLCWorkProduct",
     "SprintStatus",
     "WorkItemPriority",
     "WorkItemStatus",
     "WorkItemType",
+    "WorkProductType",
 ]
