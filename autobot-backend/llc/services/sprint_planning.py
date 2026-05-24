@@ -139,9 +139,7 @@ class SprintPlanningService(LLCServiceBase):
             .group_by(LLCWorkItem.sprint_id)
         )
         velocity_result = await session.execute(velocity_stmt)
-        velocity_by_sprint: Dict[uuid.UUID, int] = {
-            row.sprint_id: row.velocity for row in velocity_result
-        }
+        velocity_by_sprint: Dict[uuid.UUID, int] = {row.sprint_id: row.velocity for row in velocity_result}
 
         history: List[Dict[str, Any]] = []
         for sprint in sprints:
@@ -198,9 +196,7 @@ class SprintPlanningService(LLCServiceBase):
         for item in items:
             if item.completed_at is not None and item.story_points:
                 completed_date = item.completed_at.astimezone(timezone.utc).date()
-                completed_by_date[completed_date] = (
-                    completed_by_date.get(completed_date, 0) + item.story_points
-                )
+                completed_by_date[completed_date] = completed_by_date.get(completed_date, 0) + item.story_points
 
         if sprint.start_date is None:
             return {

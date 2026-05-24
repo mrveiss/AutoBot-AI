@@ -46,9 +46,7 @@ async def test_no_stuck_runs_is_noop() -> None:
     monitor = LivenessMonitor(poll_interval=9999)
     session = _make_session([])
 
-    with patch(
-        "llc.scheduler.liveness_monitor.get_async_session_factory"
-    ) as mock_factory:
+    with patch("llc.scheduler.liveness_monitor.get_async_session_factory") as mock_factory:
         factory_instance = MagicMock()
         factory_instance.return_value.__aenter__ = AsyncMock(return_value=session)
         factory_instance.return_value.__aexit__ = AsyncMock(return_value=False)

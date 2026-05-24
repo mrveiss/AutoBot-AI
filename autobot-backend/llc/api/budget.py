@@ -47,9 +47,7 @@ class UpdateLimitRequest(BaseModel):
     alert_threshold: Optional[float] = None
 
 
-def _build_response(
-    row: LLCAgentBudget, remaining: Decimal, is_over: bool, alert: bool
-) -> BudgetResponse:
+def _build_response(row: LLCAgentBudget, remaining: Decimal, is_over: bool, alert: bool) -> BudgetResponse:
     return BudgetResponse(
         agent_id=row.agent_id,
         budget_limit=Decimal(str(row.budget_limit)),
@@ -69,9 +67,7 @@ async def get_budget(
     svc = BudgetService()
     remaining, is_over, alert = await svc.check_budget(session, agent_id)
 
-    result = await session.execute(
-        select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id)
-    )
+    result = await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id))
     row = result.scalar_one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail=f"No budget row for agent {agent_id}")
@@ -87,9 +83,7 @@ async def ingest_cost(
 ) -> IngestResponse:
     svc = BudgetService()
     try:
-        cost = await svc.ingest_cost_event(
-            session, agent_id, body.tokens_in, body.tokens_out, body.model
-        )
+        cost = await svc.ingest_cost_event(session, agent_id, body.tokens_in, body.tokens_out, body.model)
     except BudgetExhausted as exc:
         raise HTTPException(status_code=402, detail=str(exc)) from exc
     return IngestResponse(cost=cost)
@@ -101,9 +95,7 @@ async def update_limit(
     body: UpdateLimitRequest,
     session: AsyncSession = Depends(get_async_session),
 ) -> BudgetResponse:
-    result = await session.execute(
-        select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id)
-    )
+    result = await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id))
     row = result.scalar_one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail=f"No budget row for agent {agent_id}")
@@ -112,11 +104,7 @@ async def update_limit(
     if body.alert_threshold is not None:
         values["alert_threshold"] = body.alert_threshold
 
-    await session.execute(
-        update(LLCAgentBudget)
-        .where(LLCAgentBudget.agent_id == agent_id)
-        .values(**values)
-    )
+    await session.execute(update(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id).values(**values))
     await session.refresh(row)
 
     svc = BudgetService()

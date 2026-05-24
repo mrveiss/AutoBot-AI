@@ -42,9 +42,7 @@ class MembershipService(LLCServiceBase):
         """Add a user to a company. Raises MemberAlreadyExistsError on conflict."""
         existing = await self.get_member(session, company_id, user_id)
         if existing is not None:
-            raise MemberAlreadyExistsError(
-                f"User {user_id} is already a member of company {company_id}"
-            )
+            raise MemberAlreadyExistsError(f"User {user_id} is already a member of company {company_id}")
         membership = LLCCompanyMembership(
             id=uuid.uuid4(),
             company_id=uuid.UUID(company_id),
@@ -81,9 +79,7 @@ class MembershipService(LLCServiceBase):
         """Remove a user from a company. Raises MemberNotFoundError if absent."""
         existing = await self.get_member(session, company_id, user_id)
         if existing is None:
-            raise MemberNotFoundError(
-                f"User {user_id} is not a member of company {company_id}"
-            )
+            raise MemberNotFoundError(f"User {user_id} is not a member of company {company_id}")
 
         if self.activity_log:
             try:

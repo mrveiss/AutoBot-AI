@@ -163,12 +163,8 @@ class LLCActivityLogService:
         Returns:
             The persisted LLCActivityLog row (id and occurred_at populated).
         """
-        actor_type_str = (
-            actor_type.value if isinstance(actor_type, ActorType) else actor_type
-        )
-        action_str = (
-            event_type.value if isinstance(event_type, ActivityEventType) else event_type
-        )
+        actor_type_str = actor_type.value if isinstance(actor_type, ActorType) else actor_type
+        action_str = event_type.value if isinstance(event_type, ActivityEventType) else event_type
 
         actor_agent_id: uuid.UUID | None = None
         actor_user_id: uuid.UUID | None = None
@@ -272,11 +268,7 @@ class LLCActivityLogService:
         if params.action:
             stmt = stmt.where(LLCActivityLog.action == params.action)
         if params.actor_type:
-            actor_type_str = (
-                params.actor_type.value
-                if isinstance(params.actor_type, ActorType)
-                else params.actor_type
-            )
+            actor_type_str = params.actor_type.value if isinstance(params.actor_type, ActorType) else params.actor_type
             stmt = stmt.where(LLCActivityLog.actor_type == actor_type_str)
         if params.actor_id:
             try:
@@ -284,22 +276,15 @@ class LLCActivityLogService:
             except ValueError as exc:
                 raise ValueError(f"Invalid actor_id UUID: {params.actor_id!r}") from exc
             stmt = stmt.where(
-                (LLCActivityLog.actor_agent_id == actor_uuid)
-                | (LLCActivityLog.actor_user_id == actor_uuid)
+                (LLCActivityLog.actor_agent_id == actor_uuid) | (LLCActivityLog.actor_user_id == actor_uuid)
             )
         if params.from_date:
             from_date = (
-                params.from_date.replace(tzinfo=timezone.utc)
-                if params.from_date.tzinfo is None
-                else params.from_date
+                params.from_date.replace(tzinfo=timezone.utc) if params.from_date.tzinfo is None else params.from_date
             )
             stmt = stmt.where(LLCActivityLog.occurred_at >= from_date)
         if params.to_date:
-            to_date = (
-                params.to_date.replace(tzinfo=timezone.utc)
-                if params.to_date.tzinfo is None
-                else params.to_date
-            )
+            to_date = params.to_date.replace(tzinfo=timezone.utc) if params.to_date.tzinfo is None else params.to_date
             stmt = stmt.where(LLCActivityLog.occurred_at <= to_date)
 
         count_stmt = select(sa.func.count()).select_from(stmt.subquery())
@@ -307,11 +292,7 @@ class LLCActivityLogService:
         total = total_result.scalar_one()
 
         offset = (params.page - 1) * params.page_size
-        stmt = (
-            stmt.order_by(LLCActivityLog.occurred_at.desc())
-            .offset(offset)
-            .limit(params.page_size)
-        )
+        stmt = stmt.order_by(LLCActivityLog.occurred_at.desc()).offset(offset).limit(params.page_size)
 
         result = await session.execute(stmt)
         items = list(result.scalars().all())
@@ -349,6 +330,4 @@ class LLCActivityLogService:
                 return
             await redis.publish(channel, json.dumps(payload))
         except Exception:
-            logger.exception(
-                "Failed to publish activity log event to Redis channel %s", channel
-            )
+            logger.exception("Failed to publish activity log event to Redis channel %s", channel)

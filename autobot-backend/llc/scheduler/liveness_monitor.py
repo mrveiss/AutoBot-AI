@@ -160,12 +160,8 @@ class LivenessMonitor:
         except Exception:
             logger.debug("Redis DEL llc:checkout:%s failed (swallowed)", work_item_id)
 
-    async def _block_work_item(
-        self, session: AsyncSession, work_item_id: str
-    ) -> Optional[LLCWorkItem]:
-        result = await session.execute(
-            select(LLCWorkItem).where(LLCWorkItem.id == work_item_id)
-        )
+    async def _block_work_item(self, session: AsyncSession, work_item_id: str) -> Optional[LLCWorkItem]:
+        result = await session.execute(select(LLCWorkItem).where(LLCWorkItem.id == work_item_id))
         item = result.scalar_one_or_none()
         if item is not None:
             item.status = WorkItemStatus.BLOCKED
@@ -203,9 +199,7 @@ class LivenessMonitor:
             goal_id=str(work_item.goal_id) if work_item and work_item.goal_id else None,
         )
 
-    async def _resolve_manager(
-        self, session: AsyncSession, company_id: str, agent_id: str
-    ) -> Optional[str]:
+    async def _resolve_manager(self, session: AsyncSession, company_id: str, agent_id: str) -> Optional[str]:
         """Best-effort lookup for the agent's manager agent_id."""
         try:
             result = await session.execute(

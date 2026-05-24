@@ -25,7 +25,6 @@ from llc.services.activity_log import (
     LLCActivityLogService,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -204,9 +203,7 @@ class TestRecordUnit:
         svc = LLCActivityLogService()
         assert not hasattr(svc, "update"), "update() must not exist on LLCActivityLogService"
         assert not hasattr(svc, "delete"), "delete() must not exist on LLCActivityLogService"
-        assert not hasattr(svc, "bulk_delete"), (
-            "bulk_delete() must not exist on LLCActivityLogService"
-        )
+        assert not hasattr(svc, "bulk_delete"), "bulk_delete() must not exist on LLCActivityLogService"
 
     @pytest.mark.asyncio
     async def test_publish_swallows_redis_errors(self) -> None:
@@ -272,9 +269,7 @@ class TestRecordUnit:
 class TestQueryUnit:
     """Unit tests for query() with mocked DB execute."""
 
-    def _mocked_session_with_rows(
-        self, rows: list[LLCActivityLog], total: int
-    ) -> AsyncSession:
+    def _mocked_session_with_rows(self, rows: list[LLCActivityLog], total: int) -> AsyncSession:
         session = AsyncMock(spec=AsyncSession)
 
         count_result = MagicMock()

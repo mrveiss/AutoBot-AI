@@ -118,9 +118,7 @@ async def create_kanban_board(
 ) -> Dict[str, Any]:
     """Get or create the kanban board for a project."""
     try:
-        board = await svc.get_or_create_kanban(
-            session, body.company_id, body.project_id, name=body.name
-        )
+        board = await svc.get_or_create_kanban(session, body.company_id, body.project_id, name=body.name)
         await session.commit()
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -135,9 +133,7 @@ async def create_sprint_board(
 ) -> Dict[str, Any]:
     """Get or create the sprint board for a sprint."""
     try:
-        board = await svc.get_or_create_sprint_board(
-            session, body.company_id, body.sprint_id, name=body.name
-        )
+        board = await svc.get_or_create_sprint_board(session, body.company_id, body.sprint_id, name=body.name)
         await session.commit()
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

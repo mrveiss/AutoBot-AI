@@ -201,9 +201,7 @@ async def list_portfolios(
     company_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
 ) -> List[LLCPortfolio]:
-    result = await session.execute(
-        select(LLCPortfolio).where(LLCPortfolio.company_id == company_id)
-    )
+    result = await session.execute(select(LLCPortfolio).where(LLCPortfolio.company_id == company_id))
     return list(result.scalars().all())
 
 
@@ -225,9 +223,7 @@ async def get_portfolio(
     portfolio_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
 ) -> LLCPortfolio:
-    result = await session.execute(
-        select(LLCPortfolio).where(LLCPortfolio.id == portfolio_id)
-    )
+    result = await session.execute(select(LLCPortfolio).where(LLCPortfolio.id == portfolio_id))
     portfolio = result.scalar_one_or_none()
     if portfolio is None:
         raise HTTPException(status_code=404, detail="Portfolio not found")
@@ -240,9 +236,7 @@ async def update_portfolio(
     body: PortfolioUpdate,
     session: AsyncSession = Depends(get_async_session),
 ) -> LLCPortfolio:
-    result = await session.execute(
-        select(LLCPortfolio).where(LLCPortfolio.id == portfolio_id)
-    )
+    result = await session.execute(select(LLCPortfolio).where(LLCPortfolio.id == portfolio_id))
     portfolio = result.scalar_one_or_none()
     if portfolio is None:
         raise HTTPException(status_code=404, detail="Portfolio not found")
@@ -258,9 +252,7 @@ async def delete_portfolio(
     portfolio_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
 ) -> None:
-    result = await session.execute(
-        select(LLCPortfolio).where(LLCPortfolio.id == portfolio_id)
-    )
+    result = await session.execute(select(LLCPortfolio).where(LLCPortfolio.id == portfolio_id))
     portfolio = result.scalar_one_or_none()
     if portfolio is None:
         raise HTTPException(status_code=404, detail="Portfolio not found")
@@ -276,9 +268,7 @@ async def list_programs(
     portfolio_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
 ) -> List[LLCProgram]:
-    result = await session.execute(
-        select(LLCProgram).where(LLCProgram.portfolio_id == portfolio_id)
-    )
+    result = await session.execute(select(LLCProgram).where(LLCProgram.portfolio_id == portfolio_id))
     return list(result.scalars().all())
 
 
@@ -350,9 +340,7 @@ async def list_projects(
     program_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
 ) -> List[LLCProject]:
-    result = await session.execute(
-        select(LLCProject).where(LLCProject.program_id == program_id)
-    )
+    result = await session.execute(select(LLCProject).where(LLCProject.program_id == program_id))
     return list(result.scalars().all())
 
 

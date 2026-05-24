@@ -126,6 +126,7 @@ _FAILING_AGENT_PATH = f"{_THIS_MODULE}._FailingAgent"
 # Ensure the current test module is discoverable via importlib.
 sys.modules.setdefault(_THIS_MODULE, sys.modules[__name__])
 
+
 @pytest.fixture(autouse=True)
 def _no_redis(monkeypatch):
     """Ensure no real Redis calls are made in unit tests."""
@@ -282,9 +283,7 @@ async def test_status_cross_worker_reads_redis():
     run_id = "cross-worker-run-id"
 
     mock_redis = AsyncMock()
-    mock_redis.get = AsyncMock(
-        return_value=_json.dumps({"status": "completed", "error": None, "exit_code": 0})
-    )
+    mock_redis.get = AsyncMock(return_value=_json.dumps({"status": "completed", "error": None, "exit_code": 0}))
 
     with patch(
         "llc.adapters.autobot_agent_adapter.get_async_redis_client",
@@ -348,6 +347,7 @@ async def test_error_response_redis_matches_local():
 
     async def _capture_setex(key, ttl, value):
         import json as _json
+
         persisted.update(_json.loads(value))
 
     mock_redis.setex.side_effect = _capture_setex
@@ -495,7 +495,7 @@ async def test_cost_forwarded_to_budget_service():
         # positional: session, agent_id, tokens_in, tokens_out, model
         assert args[1] == "agent-xyz"
         assert args[2] == 10  # prompt_tokens from _FakeAgent metadata
-        assert args[3] == 5   # completion_tokens
+        assert args[3] == 5  # completion_tokens
 
 
 @pytest.mark.asyncio
@@ -511,9 +511,7 @@ async def test_budget_exhausted_propagates_to_failed_status():
         return mock_session
 
     with patch("llc.services.budget.BudgetService") as MockBS:
-        MockBS.return_value.ingest_cost_event = AsyncMock(
-            side_effect=BudgetExhausted("agent-xyz", 100.0, 50.0)
-        )
+        MockBS.return_value.ingest_cost_event = AsyncMock(side_effect=BudgetExhausted("agent-xyz", 100.0, 50.0))
 
         adapter = AutoBotAgentAdapter(
             {"agent_class": _FAKE_AGENT_PATH},
@@ -604,9 +602,7 @@ async def test_integration_summarization_agent_reaches_completed():
     Verifies the run record reaches ``COMPLETED`` (maps to GH#8227's
     "succeeded" language; GH#8261 unified both into ``LLCRunStatus.COMPLETED``).
     """
-    adapter = AutoBotAgentAdapter(
-        {"agent_class": "agents.summarization_agent.SummarizationAgent"}
-    )
+    adapter = AutoBotAgentAdapter({"agent_class": "agents.summarization_agent.SummarizationAgent"})
     context = {
         "title": "Summarize the widget documentation",
         "description": "The widget docs are 3 pages long.",

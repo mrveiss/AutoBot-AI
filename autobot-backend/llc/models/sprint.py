@@ -44,9 +44,7 @@ class LLCPortfolio(Base):
         server_default="active",
         index=True,
     )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=sa.func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -81,9 +79,7 @@ class LLCProgram(Base):
         server_default="active",
         index=True,
     )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=sa.func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -120,8 +116,13 @@ class LLCProject(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(
         sa.Enum(
-            "backlog", "planned", "in_progress", "completed", "cancelled",
-            name="projectstatus", create_type=True,
+            "backlog",
+            "planned",
+            "in_progress",
+            "completed",
+            "cancelled",
+            name="projectstatus",
+            create_type=True,
         ),
         nullable=False,
         server_default="backlog",
@@ -133,9 +134,7 @@ class LLCProject(Base):
     env: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     # Per-project rollover behaviour (overrides company default when set).
     auto_rollover: Mapped[Optional[bool]] = mapped_column(sa.Boolean, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=sa.func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -182,12 +181,8 @@ class LLCSprint(Base):
     committed_points: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     actual_points: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     # Stores the approval_id once a sprint_close gate is requested.
-    pending_close_approval_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), nullable=True
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
-    )
+    pending_close_approval_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=sa.func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

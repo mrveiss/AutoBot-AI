@@ -33,12 +33,14 @@ from . import LLCServiceBase
 
 logger = logging.getLogger(__name__)
 
-_INCOMPLETE_STATUSES = frozenset([
-    WorkItemStatus.BACKLOG.value,
-    WorkItemStatus.READY.value,
-    WorkItemStatus.IN_PROGRESS.value,
-    WorkItemStatus.BLOCKED.value,
-])
+_INCOMPLETE_STATUSES = frozenset(
+    [
+        WorkItemStatus.BACKLOG.value,
+        WorkItemStatus.READY.value,
+        WorkItemStatus.IN_PROGRESS.value,
+        WorkItemStatus.BLOCKED.value,
+    ]
+)
 
 _SYSTEM_AGENT_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
@@ -53,9 +55,7 @@ class SprintAutoCloseService(LLCServiceBase):
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)  # type: ignore[arg-type]
-        self._approval = approval_service or ApprovalService(
-            activity_log=self.activity_log
-        )
+        self._approval = approval_service or ApprovalService(activity_log=self.activity_log)
         self._summarizer = summarizer or SprintKbSummarizer()
 
     # ------------------------------------------------------------------
@@ -179,20 +179,15 @@ class SprintAutoCloseService(LLCServiceBase):
             ValueError: Sprint not found, wrong status, or approval mismatch.
         """
         # -- Fetch and validate sprint --
-        result = await session.execute(
-            select(LLCSprint).where(LLCSprint.id == sprint_id).with_for_update()
-        )
+        result = await session.execute(select(LLCSprint).where(LLCSprint.id == sprint_id).with_for_update())
         sprint = result.scalar_one_or_none()
         if sprint is None:
             raise ValueError(f"Sprint {sprint_id} not found")
         if sprint.status not in (SprintStatus.ACTIVE.value, SprintStatus.REVIEW.value):
-            raise ValueError(
-                f"Sprint {sprint_id} has status {sprint.status!r}; expected active or review"
-            )
+            raise ValueError(f"Sprint {sprint_id} has status {sprint.status!r}; expected active or review")
         if sprint.pending_close_approval_id != approval_id:
             raise ValueError(
-                f"Sprint {sprint_id} pending approval is "
-                f"{sprint.pending_close_approval_id!r}, got {approval_id!r}"
+                f"Sprint {sprint_id} pending approval is " f"{sprint.pending_close_approval_id!r}, got {approval_id!r}"
             )
 
         # -- Compute actual_points from DONE items --
@@ -216,9 +211,7 @@ class SprintAutoCloseService(LLCServiceBase):
 
         # -- Roll over incomplete items --
         auto_rollover = await self._resolve_auto_rollover(session, sprint)
-        rolled_count = await self._rollover_items(
-            session, sprint_id=sprint_id, auto_rollover=auto_rollover
-        )
+        rolled_count = await self._rollover_items(session, sprint_id=sprint_id, auto_rollover=auto_rollover)
 
         # -- Activity log --
         if self.activity_log:
@@ -249,15 +242,11 @@ class SprintAutoCloseService(LLCServiceBase):
     # Internal helpers
     # ------------------------------------------------------------------
 
-    async def _resolve_auto_rollover(
-        self, session: AsyncSession, sprint: LLCSprint
-    ) -> bool:
+    async def _resolve_auto_rollover(self, session: AsyncSession, sprint: LLCSprint) -> bool:
         """Determine rollover mode: project override > company default (true)."""
         from ..models.sprint import LLCProject
 
-        result = await session.execute(
-            select(LLCProject.auto_rollover).where(LLCProject.id == sprint.project_id)
-        )
+        result = await session.execute(select(LLCProject.auto_rollover).where(LLCProject.id == sprint.project_id))
         project_override: Optional[bool] = result.scalar_one_or_none()
         if project_override is not None:
             return project_override

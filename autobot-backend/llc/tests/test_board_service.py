@@ -13,7 +13,6 @@ from llc.exceptions import WipLimitExceeded
 from llc.models.enums import BoardType, WorkItemPriority, WorkItemStatus, WorkItemType
 from llc.services.board import BoardService, _DEFAULT_COLUMNS
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -112,8 +111,7 @@ async def test_get_or_create_kanban_creates_when_absent(service):
     project_id = str(uuid.uuid4())
     session = _make_session(scalar_value=None)
 
-    with patch("llc.services.board.LLCBoard") as MockBoard, \
-         patch("llc.services.board.LLCBoardColumn") as MockColumn:
+    with patch("llc.services.board.LLCBoard") as MockBoard, patch("llc.services.board.LLCBoardColumn") as MockColumn:
         MockBoard.return_value = MagicMock()
         MockBoard.return_value.id = uuid.uuid4()
         MockBoard.return_value.columns = []
@@ -121,6 +119,7 @@ async def test_get_or_create_kanban_creates_when_absent(service):
         # Simulate refresh populating board.columns
         async def _refresh(obj):
             obj.columns = []
+
         session.refresh.side_effect = _refresh
 
         board = await service.get_or_create_kanban(session, company_id, project_id)
@@ -301,8 +300,10 @@ async def test_move_item_transitions_status_and_publishes(service):
 
     session.execute.side_effect = fake_execute
 
-    with patch("llc.services.board.WorkItemService") as MockWIS, \
-         patch("llc.services.board.get_async_redis_client", new_callable=AsyncMock) as mock_redis_fn:
+    with (
+        patch("llc.services.board.WorkItemService") as MockWIS,
+        patch("llc.services.board.get_async_redis_client", new_callable=AsyncMock) as mock_redis_fn,
+    ):
 
         mock_wis_instance = AsyncMock()
         mock_wis_instance.transition_status = AsyncMock(return_value=updated_item)
@@ -354,8 +355,10 @@ async def test_move_item_publishes_silently_when_redis_unavailable(service):
 
     session.execute.side_effect = fake_execute
 
-    with patch("llc.services.board.WorkItemService") as MockWIS, \
-         patch("llc.services.board.get_async_redis_client", new_callable=AsyncMock) as mock_redis_fn:
+    with (
+        patch("llc.services.board.WorkItemService") as MockWIS,
+        patch("llc.services.board.get_async_redis_client", new_callable=AsyncMock) as mock_redis_fn,
+    ):
 
         mock_wis_instance = AsyncMock()
         mock_wis_instance.transition_status = AsyncMock(return_value=updated_item)

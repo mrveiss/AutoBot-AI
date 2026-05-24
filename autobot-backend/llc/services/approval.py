@@ -127,21 +127,15 @@ class ApprovalService(LLCServiceBase):
                 value is not APPROVED/REJECTED.
         """
         if decision not in (ApprovalStatus.APPROVED, ApprovalStatus.REJECTED):
-            raise ApprovalStateError(
-                f"Decision must be APPROVED or REJECTED, got {decision.value!r}"
-            )
+            raise ApprovalStateError(f"Decision must be APPROVED or REJECTED, got {decision.value!r}")
 
-        result = await session.execute(
-            select(LLCApproval).where(LLCApproval.id == approval_id).with_for_update()
-        )
+        result = await session.execute(select(LLCApproval).where(LLCApproval.id == approval_id).with_for_update())
         approval = result.scalar_one_or_none()
         if approval is None:
             raise ApprovalNotFoundError(f"Approval {approval_id} not found")
 
         if approval.status != ApprovalStatus.PENDING.value:
-            raise ApprovalStateError(
-                f"Approval {approval_id} is already in state {approval.status!r}"
-            )
+            raise ApprovalStateError(f"Approval {approval_id} is already in state {approval.status!r}")
 
         approval.status = decision.value
         approval.decided_by_agent_id = decided_by
@@ -244,9 +238,7 @@ def requires_approval(gate_type: ApprovalType) -> Callable:
             if approval_id is None:
                 raise ApprovalRequiredError(gate_type)
 
-            result = await session.execute(
-                select(LLCApproval).where(LLCApproval.id == approval_id)
-            )
+            result = await session.execute(select(LLCApproval).where(LLCApproval.id == approval_id))
             approval = result.scalar_one_or_none()
 
             if approval is None:
@@ -256,14 +248,11 @@ def requires_approval(gate_type: ApprovalType) -> Callable:
                     f"Approval {approval_id} is type {approval.type!r}, expected {gate_type.value!r}"
                 )
             if approval.status != ApprovalStatus.APPROVED.value:
-                raise ApprovalStateError(
-                    f"Approval {approval_id} has status {approval.status!r}, must be APPROVED"
-                )
+                raise ApprovalStateError(f"Approval {approval_id} has status {approval.status!r}, must be APPROVED")
             target_company_id: Optional[uuid.UUID] = kwargs.get("company_id")
             if target_company_id is not None and approval.company_id != target_company_id:
                 raise ApprovalStateError(
-                    f"Approval {approval_id} belongs to company {approval.company_id!r}, "
-                    f"not {target_company_id!r}"
+                    f"Approval {approval_id} belongs to company {approval.company_id!r}, " f"not {target_company_id!r}"
                 )
 
             return await fn(self, session, *args, **kwargs)

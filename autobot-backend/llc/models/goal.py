@@ -48,9 +48,7 @@ class LLCGoal(Base):
 
     __tablename__ = "llc_goals"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     company_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     parent_goal_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         Uuid(as_uuid=True),
@@ -61,15 +59,9 @@ class LLCGoal(Base):
     title: Mapped[str] = mapped_column(String(512), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     level: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
-    status: Mapped[str] = mapped_column(
-        String(32), nullable=False, default=GoalStatus.DRAFT.value, index=True
-    )
-    owner_agent_id: Mapped[Optional[str]] = mapped_column(
-        String(255), nullable=True, index=True
-    )
-    due_date: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default=GoalStatus.DRAFT.value, index=True)
+    owner_agent_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     children: Mapped[list["LLCGoal"]] = relationship(
         "LLCGoal",

@@ -110,12 +110,8 @@ class GoalService(LLCServiceBase):
             )
         return goal
 
-    async def get(
-        self, session: AsyncSession, goal_id: uuid.UUID
-    ) -> Optional[LLCGoal]:
-        result = await session.execute(
-            select(LLCGoal).where(LLCGoal.id == goal_id)
-        )
+    async def get(self, session: AsyncSession, goal_id: uuid.UUID) -> Optional[LLCGoal]:
+        result = await session.execute(select(LLCGoal).where(LLCGoal.id == goal_id))
         return result.scalar_one_or_none()
 
     async def list_by_company(
@@ -166,8 +162,13 @@ class GoalService(LLCServiceBase):
                 _validate_level_order(new_level, _as_goal_level(parent.level))
 
         allowed = {
-            "title", "description", "level", "status",
-            "owner_agent_id", "due_date", "parent_goal_id",
+            "title",
+            "description",
+            "level",
+            "status",
+            "owner_agent_id",
+            "due_date",
+            "parent_goal_id",
         }
         for key, value in fields.items():
             if key in allowed:
@@ -180,9 +181,7 @@ class GoalService(LLCServiceBase):
         self._schedule_post_commit_index(session, goal)
         return goal
 
-    async def delete(
-        self, session: AsyncSession, goal_id: uuid.UUID
-    ) -> bool:
+    async def delete(self, session: AsyncSession, goal_id: uuid.UUID) -> bool:
         # Fix #4: Collect subtree IDs before deletion so ChromaDB can be cleaned up
         subtree = await self.get_subtree(session, goal_id)
         if not subtree:
@@ -191,9 +190,7 @@ class GoalService(LLCServiceBase):
         company_id = subtree[0].company_id
         subtree_ids = [str(g.id) for g in subtree]
 
-        result = await session.execute(
-            delete(LLCGoal).where(LLCGoal.id == goal_id)
-        )
+        result = await session.execute(delete(LLCGoal).where(LLCGoal.id == goal_id))
         if result.rowcount == 0:
             return False
 
@@ -203,9 +200,7 @@ class GoalService(LLCServiceBase):
 
     # ----------------------------------------------------------- Traversal
 
-    async def get_ancestors(
-        self, session: AsyncSession, goal_id: uuid.UUID
-    ) -> List[LLCGoal]:
+    async def get_ancestors(self, session: AsyncSession, goal_id: uuid.UUID) -> List[LLCGoal]:
         """Walk parent chain from goal_id up to the root (exclusive of goal_id)."""
         ancestors: List[LLCGoal] = []
         current_id: Optional[uuid.UUID] = goal_id
@@ -223,9 +218,7 @@ class GoalService(LLCServiceBase):
             current_id = goal.parent_goal_id
         return list(reversed(ancestors))
 
-    async def get_subtree(
-        self, session: AsyncSession, goal_id: uuid.UUID
-    ) -> List[LLCGoal]:
+    async def get_subtree(self, session: AsyncSession, goal_id: uuid.UUID) -> List[LLCGoal]:
         """Return all descendants of goal_id (BFS, inclusive of goal_id)."""
         root = await self.get(session, goal_id)
         if root is None:
@@ -235,9 +228,7 @@ class GoalService(LLCServiceBase):
         visited: set = {goal_id}
         while queue:
             node = queue.pop(0)
-            children_result = await session.execute(
-                select(LLCGoal).where(LLCGoal.parent_goal_id == node.id)
-            )
+            children_result = await session.execute(select(LLCGoal).where(LLCGoal.parent_goal_id == node.id))
             for child in children_result.scalars().all():
                 if child.id not in visited:
                     visited.add(child.id)
@@ -253,9 +244,7 @@ class GoalService(LLCServiceBase):
             from utils.async_chromadb_client import get_async_chromadb_client
 
             client = await get_async_chromadb_client()
-            collection = await client.get_or_create_collection(
-                _goal_collection_name(goal.company_id)
-            )
+            collection = await client.get_or_create_collection(_goal_collection_name(goal.company_id))
             doc_id = str(goal.id)
             text = f"{goal.title}\n{goal.description or ''}".strip()
             metadata: Dict[str, Any] = {
@@ -270,30 +259,20 @@ class GoalService(LLCServiceBase):
                 metadatas=[metadata],
             )
         except Exception:
-            logger.exception(
-                "Failed to index goal %s into KB — non-fatal", goal.id
-            )
+            logger.exception("Failed to index goal %s into KB — non-fatal", goal.id)
 
-    async def _delete_from_chromadb(
-        self, company_id: str, ids: List[str]
-    ) -> None:
+    async def _delete_from_chromadb(self, company_id: str, ids: List[str]) -> None:
         """Remove goal entries from the company-scoped KB collection."""
         try:
             from utils.async_chromadb_client import get_async_chromadb_client
 
             client = await get_async_chromadb_client()
-            collection = await client.get_or_create_collection(
-                _goal_collection_name(company_id)
-            )
+            collection = await client.get_or_create_collection(_goal_collection_name(company_id))
             await collection.delete(ids=ids)
         except Exception:
-            logger.exception(
-                "Failed to remove goals %s from KB — non-fatal", ids
-            )
+            logger.exception("Failed to remove goals %s from KB — non-fatal", ids)
 
-    def _schedule_post_commit_index(
-        self, session: AsyncSession, goal: LLCGoal
-    ) -> None:
+    def _schedule_post_commit_index(self, session: AsyncSession, goal: LLCGoal) -> None:
         """Register ChromaDB indexing to fire after DB commit (not after flush)."""
         goal_ref = goal
         svc_ref = self
@@ -309,13 +288,9 @@ class GoalService(LLCServiceBase):
                 loop = asyncio.get_running_loop()
                 loop.create_task(svc_ref._index_goal(goal_ref))
             except Exception:
-                logger.exception(
-                    "Could not schedule goal indexing post-commit for %s", goal_ref.id
-                )
+                logger.exception("Could not schedule goal indexing post-commit for %s", goal_ref.id)
 
-    def _schedule_post_commit_chromadb_delete(
-        self, session: AsyncSession, company_id: str, ids: List[str]
-    ) -> None:
+    def _schedule_post_commit_chromadb_delete(self, session: AsyncSession, company_id: str, ids: List[str]) -> None:
         """Register ChromaDB bulk delete to fire after DB commit."""
         svc_ref = self
 
@@ -330,6 +305,4 @@ class GoalService(LLCServiceBase):
                 loop = asyncio.get_running_loop()
                 loop.create_task(svc_ref._delete_from_chromadb(company_id, ids))
             except Exception:
-                logger.exception(
-                    "Could not schedule ChromaDB cleanup post-commit for goals %s", ids
-                )
+                logger.exception("Could not schedule ChromaDB cleanup post-commit for goals %s", ids)

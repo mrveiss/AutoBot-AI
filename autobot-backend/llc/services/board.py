@@ -139,17 +139,11 @@ class BoardService(LLCServiceBase):
     # Read
     # ------------------------------------------------------------------
 
-    async def get_board(
-        self, session: AsyncSession, board_id: str
-    ) -> Optional[LLCBoard]:
-        result = await session.execute(
-            select(LLCBoard).where(LLCBoard.id == uuid.UUID(board_id))
-        )
+    async def get_board(self, session: AsyncSession, board_id: str) -> Optional[LLCBoard]:
+        result = await session.execute(select(LLCBoard).where(LLCBoard.id == uuid.UUID(board_id)))
         return result.scalar_one_or_none()
 
-    async def get_board_items(
-        self, session: AsyncSession, board_id: str
-    ) -> Dict[str, Any]:
+    async def get_board_items(self, session: AsyncSession, board_id: str) -> Dict[str, Any]:
         """Return board columns with work items grouped per column.
 
         Result shape::

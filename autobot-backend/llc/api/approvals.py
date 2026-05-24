@@ -157,9 +157,7 @@ def _to_response(approval: Any) -> ApprovalResponse:
         status=approval.status,
         requested_by_agent_id=str(approval.requested_by_agent_id),
         payload=approval.payload or {},
-        decided_by_agent_id=(
-            str(approval.decided_by_agent_id) if approval.decided_by_agent_id else None
-        ),
+        decided_by_agent_id=(str(approval.decided_by_agent_id) if approval.decided_by_agent_id else None),
         decided_at=approval.decided_at.isoformat() if approval.decided_at else None,
         created_at=approval.created_at.isoformat(),
         updated_at=approval.updated_at.isoformat(),

@@ -25,9 +25,7 @@ class SprintKbSummarizer:
         Args:
             sprint_id: UUID of the sprint that just closed.
         """
-        logger.info(
-            "KB merge pending Phase 5 (GH#8236) — sprint_id=%s", sprint_id
-        )
+        logger.info("KB merge pending Phase 5 (GH#8236) — sprint_id=%s", sprint_id)
 
 
 __all__ = ["SprintKbSummarizer"]

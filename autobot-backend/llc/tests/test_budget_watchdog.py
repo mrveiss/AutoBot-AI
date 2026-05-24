@@ -50,9 +50,7 @@ async def test_soft_alert_published_at_80pct() -> None:
             new_callable=AsyncMock,
             return_value=mock_redis,
         ),
-        patch(
-            "llc.scheduler.budget_watchdog.get_async_session_factory"
-        ) as mock_factory,
+        patch("llc.scheduler.budget_watchdog.get_async_session_factory") as mock_factory,
     ):
         factory = MagicMock()
         factory.return_value.__aenter__ = AsyncMock(return_value=session)
@@ -112,9 +110,7 @@ async def test_hard_stop_at_100pct() -> None:
             new_callable=AsyncMock,
             return_value=mock_redis,
         ),
-        patch(
-            "llc.scheduler.budget_watchdog.get_async_session_factory"
-        ) as mock_factory,
+        patch("llc.scheduler.budget_watchdog.get_async_session_factory") as mock_factory,
     ):
         factory = MagicMock()
         factory.return_value.__aenter__ = AsyncMock(return_value=session)
