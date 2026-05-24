@@ -59,10 +59,7 @@ def _state_path(output_dir: str, run_id: str) -> str:
 def _resolve_claude_cli() -> str:
     path = shutil.which("claude")
     if path is None:
-        raise RuntimeError(
-            "claude CLI not found on PATH. "
-            "Install Claude Code and ensure 'claude' is on PATH."
-        )
+        raise RuntimeError("claude CLI not found on PATH. " "Install Claude Code and ensure 'claude' is on PATH.")
     return path
 
 
@@ -102,7 +99,8 @@ class ClaudeCodeAdapter:
             session_id = resume_session_id
             logger.info(
                 "ClaudeCodeAdapter: resuming session %s for agent %s",
-                session_id, agent_id,
+                session_id,
+                agent_id,
             )
         else:
             if model:
@@ -127,7 +125,10 @@ class ClaudeCodeAdapter:
         run_id = f"{proc.pid}/{session_id}"
         logger.info(
             "ClaudeCodeAdapter: spawned PID %d session %s agent %s output=%s",
-            proc.pid, session_id, agent_id, output_file,
+            proc.pid,
+            session_id,
+            agent_id,
+            output_file,
         )
 
         state = {

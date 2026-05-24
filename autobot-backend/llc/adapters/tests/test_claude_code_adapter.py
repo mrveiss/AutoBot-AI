@@ -92,7 +92,9 @@ class TestInvoke:
             cfg = _agent_cfg(output_dir=td)
             with (
                 patch("llc.adapters.claude_code_adapter.shutil.which", return_value="/usr/bin/claude"),
-                patch("llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None),
+                patch(
+                    "llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None
+                ),
                 patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=fake_proc),
                 patch("builtins.open", MagicMock(return_value=MagicMock())),
             ):
@@ -116,7 +118,9 @@ class TestInvoke:
             cfg = _agent_cfg(output_dir=td)
             with (
                 patch("llc.adapters.claude_code_adapter.shutil.which", return_value="/usr/bin/claude"),
-                patch("llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None),
+                patch(
+                    "llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None
+                ),
                 patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=fake_proc),
                 patch("builtins.open", MagicMock(return_value=MagicMock())),
             ):
@@ -136,9 +140,7 @@ class TestInvoke:
         stored_session = "abcd-1234-efgh-5678-" + "x" * 16
 
         fake_redis = AsyncMock()
-        fake_redis.get = AsyncMock(
-            return_value=json.dumps({"session_id": stored_session, "stored_at": time.time()})
-        )
+        fake_redis.get = AsyncMock(return_value=json.dumps({"session_id": stored_session, "stored_at": time.time()}))
         fake_redis.set = AsyncMock()
 
         captured_cmd: list = []
@@ -151,7 +153,11 @@ class TestInvoke:
             cfg = _agent_cfg(output_dir=td)
             with (
                 patch("llc.adapters.claude_code_adapter.shutil.which", return_value="/usr/bin/claude"),
-                patch("llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=fake_redis),
+                patch(
+                    "llc.adapters.claude_code_adapter.get_async_redis_client",
+                    new_callable=AsyncMock,
+                    return_value=fake_redis,
+                ),
                 patch("asyncio.create_subprocess_exec", side_effect=fake_exec),
                 patch("builtins.open", MagicMock(return_value=MagicMock())),
             ):
@@ -174,7 +180,9 @@ class TestInvoke:
             cfg = _agent_cfg(output_dir=td, allowed_tools=["Bash", "Read"])
             with (
                 patch("llc.adapters.claude_code_adapter.shutil.which", return_value="/usr/bin/claude"),
-                patch("llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None),
+                patch(
+                    "llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None
+                ),
                 patch("asyncio.create_subprocess_exec", side_effect=fake_exec),
                 patch("builtins.open", MagicMock(return_value=MagicMock())),
             ):
@@ -194,9 +202,7 @@ class TestInvoke:
 class TestStatus:
     async def test_running_pid_returns_running(self) -> None:
         adapter = ClaudeCodeAdapter()
-        with (
-            patch("os.kill", return_value=None),  # signal 0 succeeds
-        ):
+        with (patch("os.kill", return_value=None),):  # signal 0 succeeds
             result = await adapter.status(_agent_cfg(), "1234/session-abc")
         assert result.status == LLCRunStatus.RUNNING
 
@@ -270,7 +276,9 @@ class TestCancel:
         with tempfile.TemporaryDirectory() as td:
             with (
                 patch("os.kill", side_effect=[None, ProcessLookupError()]),
-                patch("llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None),
+                patch(
+                    "llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None
+                ),
             ):
                 await adapter.cancel(_agent_cfg(agent_id="a1", output_dir=td), "5678/session-q")
 
@@ -283,7 +291,9 @@ class TestCancel:
         with tempfile.TemporaryDirectory() as td:
             with (
                 patch("os.kill", side_effect=ProcessLookupError()),
-                patch("llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None),
+                patch(
+                    "llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None
+                ),
             ):
                 await adapter.cancel(_agent_cfg(agent_id="a2", output_dir=td), "9999/session-r")
 
@@ -295,7 +305,11 @@ class TestCancel:
         with tempfile.TemporaryDirectory() as td:
             with (
                 patch("os.kill", side_effect=ProcessLookupError()),
-                patch("llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=fake_redis),
+                patch(
+                    "llc.adapters.claude_code_adapter.get_async_redis_client",
+                    new_callable=AsyncMock,
+                    return_value=fake_redis,
+                ),
             ):
                 await adapter.cancel(_agent_cfg(agent_id="agent-clear", output_dir=td), "1/session-s")
 
@@ -317,5 +331,6 @@ class TestCancel:
 class TestRegistry:
     def test_claude_code_registered(self) -> None:
         from llc.adapters import get_adapter
+
         adapter = get_adapter("claude_code")
         assert isinstance(adapter, ClaudeCodeAdapter)
