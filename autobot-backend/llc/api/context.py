@@ -88,6 +88,9 @@ async def get_context(
             context_mode=mode,
         )
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        error_msg = str(e)
+        if "Unknown context_mode" in error_msg:
+            raise HTTPException(status_code=422, detail=error_msg)
+        raise HTTPException(status_code=404, detail=error_msg)
 
     return context_dict

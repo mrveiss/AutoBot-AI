@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 
+from ..config import AGENT_API_BASE_URL
 from ..models.goal import LLCGoal
 from ..services.goal import GoalService
 from ..services.work_item_service import WorkItemService
@@ -95,7 +96,7 @@ class HeartbeatContextBuilder:
 
         return {
             "work_item_id": str(work_item_id),
-            "api_base": "http://localhost:8001/api",  # SSOT config
+            "api_base": AGENT_API_BASE_URL,
             "agent_api_key": "<injected-at-runtime>",
         }
 
@@ -135,6 +136,7 @@ class HeartbeatContextBuilder:
                 project_id=None,
                 agent_id=None,
                 work_item_id=work_item_id,
+                query_text=query_text,
             )
             if hasattr(self.rag_assembler, "assemble")
             else asyncio.sleep(0)
@@ -148,6 +150,7 @@ class HeartbeatContextBuilder:
                 project_id=project_id,
                 agent_id=None,
                 work_item_id=work_item_id,
+                query_text=query_text,
             )
             if project_id
             else asyncio.sleep(0)
@@ -161,6 +164,7 @@ class HeartbeatContextBuilder:
                 project_id=None,
                 agent_id=agent_id,
                 work_item_id=work_item_id,
+                query_text=query_text,
             )
             if hasattr(self.rag_assembler, "assemble")
             else asyncio.sleep(0)
@@ -239,6 +243,7 @@ class HeartbeatContextBuilder:
                 select(LLCWorkItem)
                 .where(LLCWorkItem.project_id == uuid.UUID(project_id))
                 .where(LLCWorkItem.status == WorkItemStatus.DONE.value)
+                .order_by(LLCWorkItem.updated_at.desc())
                 .limit(max_results)
             )
             result = await session.execute(stmt)

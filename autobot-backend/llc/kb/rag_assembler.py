@@ -61,6 +61,7 @@ class LLCRAGAssembler:
         project_id: Optional[str] = None,
         agent_id: Optional[str] = None,
         work_item_id: Optional[str] = None,
+        query_text: str = "",
     ) -> LLCContext:
         """Run parallel ChromaDB queries and return merged context (GH#8236).
 
@@ -73,17 +74,22 @@ class LLCRAGAssembler:
             project_id: Optional project scope filter.
             agent_id: Optional agent scope filter.
             work_item_id: Optional work item context for relevance ranking.
+            query_text: Query text for similarity search (e.g., work item title + description).
 
         Returns:
             LLCContext with merged chunks from all relevant collections.
         """
         try:
-            from utils.async_chromadb_client import get_async_chromadb_client
+            try:
+                from utils.async_chromadb_client import get_async_chromadb_client
+            except ImportError as e:
+                logger.error("ChromaDB client not available: %s", e)
+                raise
 
             client = await get_async_chromadb_client()
 
             # Determine query parameters based on profile
-            query_params = self._get_query_params(profile, project_id, agent_id)
+            query_params = self._get_query_params(profile, project_id, agent_id, query_text)
 
             # Build ChromaDB collection names (scope: company, project, agent)
             collections_to_query = []
@@ -140,6 +146,7 @@ class LLCRAGAssembler:
         profile: AssemblerProfile,
         project_id: Optional[str],
         agent_id: Optional[str],
+        query_text: str = "",
     ) -> Dict[str, Any]:
         """Get query parameters based on profile and scope.
 
@@ -147,12 +154,13 @@ class LLCRAGAssembler:
             profile: Query profile (HEARTBEAT, HANDOFF, SUGGESTION).
             project_id: Optional project scope.
             agent_id: Optional agent scope.
+            query_text: Query text for similarity search.
 
         Returns:
             Dict with query_text and n_results parameters.
         """
         params = {
-            "query_text": "",  # Will be filled by caller
+            "query_text": query_text,
             "n_results": 5,
         }
 
