@@ -9,7 +9,7 @@ Issue #7351: non-transformer models must not be compressed at the 4K/8K cap.
 
 import pytest
 
-from context_window_manager import ContextWindowManager, _NON_TRANSFORMER_FAMILIES
+from context_window_manager import _NON_TRANSFORMER_FAMILIES, ContextWindowManager
 
 # ---------------------------------------------------------------------------
 # Helpers

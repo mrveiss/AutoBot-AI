@@ -61,8 +61,8 @@ from .sub_workflow import (
     extract_sub_workflow_step,
     is_sub_workflow_step,
 )
-from .types import AgentInteraction, AgentProfile
 from .success_criteria import SuccessCriteriaEvaluator
+from .types import AgentInteraction, AgentProfile
 from .variable_resolver import StepOutput, VariableResolver
 from .workflow_memory import WorkflowMemory
 

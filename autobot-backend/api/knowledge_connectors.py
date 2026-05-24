@@ -47,10 +47,10 @@ from knowledge.schemas.connectors import (
     ConnectorCreateResponse,
     ConnectorDetailResponse,
     ConnectorHistoryResponse,
-    ConnectorsHealthResponse,
-    ConnectorsListResponse,
     ConnectorJobResponse,
     ConnectorLeaderResponse,
+    ConnectorsHealthResponse,
+    ConnectorsListResponse,
     ConnectorSyncResponse,
     ConnectorTestResponse,
     ConnectorTypesResponse,
@@ -384,9 +384,8 @@ async def get_scheduler_leader():
     Returns ``leader: null`` when no worker holds the lease (scheduler idle or
     between leader transitions).
     """
-    from knowledge.connectors.scheduler import _LEADER_KEY
-
     from autobot_shared.redis_client import get_async_redis_client
+    from knowledge.connectors.scheduler import _LEADER_KEY
 
     redis = await get_async_redis_client(database="knowledge")
     if redis is None:

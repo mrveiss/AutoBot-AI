@@ -481,8 +481,8 @@ async def _init_knowledge_base(app: FastAPI):
         # Issue #8392: Start CollectionTierManager background reaper.
         # Issue #8408: Pass the sync Redis client so all uvicorn workers share tier state.
         try:
-            from knowledge.tiering import get_tier_manager
             from autobot_shared.redis_client import get_redis_client as _get_sync_redis
+            from knowledge.tiering import get_tier_manager
 
             _tier_redis = _get_sync_redis(database="knowledge")
             await get_tier_manager(redis_client=_tier_redis).start()

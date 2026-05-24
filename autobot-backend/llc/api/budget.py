@@ -11,11 +11,10 @@ from pydantic import BaseModel
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from user_management.database import get_async_session
-
 from llc.exceptions import BudgetExhausted
 from llc.models.budget import LLCAgentBudget
 from llc.services.budget import BudgetService
+from user_management.database import get_async_session
 
 router = APIRouter(prefix="/budget", tags=["llc-budget"])
 

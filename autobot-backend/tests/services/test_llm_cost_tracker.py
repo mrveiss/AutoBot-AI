@@ -6,8 +6,6 @@
 from datetime import date, timedelta
 from unittest.mock import AsyncMock, patch
 
-from tests.fixtures.mocks import make_async_redis, make_redis_pipeline
-
 import pytest
 
 from constants.model_constants import (
@@ -49,6 +47,7 @@ from services.llm_cost_tracker import (
     LLMCostTracker,
     _check_pricing_staleness,
 )
+from tests.fixtures.mocks import make_async_redis, make_redis_pipeline
 
 
 class TestModelPricingCompleteness:

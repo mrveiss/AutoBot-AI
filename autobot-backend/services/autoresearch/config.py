@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+
 from autobot_shared.ssot_config import config
 
 

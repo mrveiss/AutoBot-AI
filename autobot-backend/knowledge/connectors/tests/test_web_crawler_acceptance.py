@@ -12,8 +12,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from knowledge.connectors.models import ConnectorConfig
-from knowledge.connectors.web_crawler import WebCrawlerConnector
 from knowledge.connectors.testing.acceptance import ConnectorAcceptanceTest
+from knowledge.connectors.web_crawler import WebCrawlerConnector
 from web_fetch import FetchResult
 
 

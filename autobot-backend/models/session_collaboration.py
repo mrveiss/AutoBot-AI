@@ -11,6 +11,7 @@ Part of Issue #872 - Session Collaboration API (#608 Phase 3).
 import uuid
 from datetime import datetime
 from enum import Enum
+
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column

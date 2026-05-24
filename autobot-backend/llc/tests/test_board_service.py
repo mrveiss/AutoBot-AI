@@ -11,7 +11,7 @@ import pytest
 
 from llc.exceptions import WipLimitExceeded
 from llc.models.enums import BoardType, WorkItemPriority, WorkItemStatus, WorkItemType
-from llc.services.board import BoardService, _DEFAULT_COLUMNS
+from llc.services.board import _DEFAULT_COLUMNS, BoardService
 
 # ---------------------------------------------------------------------------
 # Helpers

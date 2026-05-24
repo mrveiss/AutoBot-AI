@@ -28,7 +28,7 @@ try:
         RetryConfig,
         TimingConstants,
     )
-    from events.bus import publish_event, PersistStrategy
+    from events.bus import PersistStrategy, publish_event
 except ImportError as e:
     logging.warning(f"Import error in diagnostics: {e}")
 

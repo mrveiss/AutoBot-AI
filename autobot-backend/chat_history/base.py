@@ -13,6 +13,7 @@ Provides the foundation for the ChatHistoryManager composed class with:
 
 import os
 import threading
+
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client

@@ -343,7 +343,7 @@ class ApprovalGateService:
     ) -> None:
         """Publish WebSocket notification via get_event_manager()."""
         try:
-            from events.bus import publish_event, PersistStrategy
+            from events.bus import PersistStrategy, publish_event
 
             await publish_event(
                 "global",

@@ -10,6 +10,7 @@ Integration hooks for tracking terminal command execution activities.
 """
 
 import uuid
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger

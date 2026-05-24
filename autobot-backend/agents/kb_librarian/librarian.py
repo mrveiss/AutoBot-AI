@@ -15,7 +15,7 @@ from typing import Any, Dict, List
 
 from agents.web_researcher import WebResearcher as WebResearchAssistant
 from autobot_shared.logging_manager import get_logger
-from events.bus import publish_event, PersistStrategy
+from events.bus import PersistStrategy, publish_event
 from knowledge_base import KnowledgeBase
 
 from .formatters import ToolInfoFormatter

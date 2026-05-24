@@ -17,10 +17,9 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from user_management.database import get_async_session
-
 from llc.models.api_key import LLCApiKey
 from llc.services.api_key import ApiKeyService
+from user_management.database import get_async_session
 
 router = APIRouter(prefix="/agents", tags=["llc-api-keys"])
 _svc = ApiKeyService()

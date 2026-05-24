@@ -19,7 +19,7 @@ import yaml
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.threshold_constants import TimingConstants
-from events.bus import publish_event, PersistStrategy
+from events.bus import PersistStrategy, publish_event
 from models.npu_models import (
     LoadBalancingConfig,
     NPUWorkerConfig,

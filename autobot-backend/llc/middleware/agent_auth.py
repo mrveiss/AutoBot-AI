@@ -17,9 +17,8 @@ from sqlalchemy import select, update
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
-from user_management.database import get_async_session_factory
-
 from llc.models.api_key import LLCApiKey
+from user_management.database import get_async_session_factory
 
 logger = logging.getLogger(__name__)
 

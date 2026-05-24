@@ -63,7 +63,7 @@ def require_faiss():
 
 class TestFAISSIVFPQBuilderIndexPath:
     def test_index_path_contains_dim_and_nlist(self, tmp_index_dir):
-        from utils.faiss_ivfpq_builder import FAISSIVFPQBuilder, IVFPQ_NLIST
+        from utils.faiss_ivfpq_builder import IVFPQ_NLIST, FAISSIVFPQBuilder
 
         b = FAISSIVFPQBuilder(dim=768, index_dir=tmp_index_dir, collection_name="autobot_memory")
         path = b._index_path()
@@ -136,6 +136,7 @@ class TestBuildOrLoad:
     def test_insufficient_vectors_logs_warning(self, tmp_index_dir, caplog):
         """Warning is logged when fewer vectors than nlist * 39 are supplied."""
         import logging
+
         from utils.faiss_ivfpq_builder import FAISSIVFPQBuilder
 
         with (
@@ -225,6 +226,7 @@ class TestBenchmarkRecall:
     def test_flat_vs_flat_gives_perfect_recall(self, tmp_index_dir):
         """An exact flat index compared with itself must yield recall=1.0."""
         import faiss
+
         from utils.faiss_ivfpq_builder import FAISSIVFPQBuilder
 
         dim = 32
@@ -250,6 +252,7 @@ class TestBenchmarkRecall:
 class TestSearch:
     def test_search_returns_correct_shape(self, tmp_index_dir):
         import faiss
+
         from utils.faiss_ivfpq_builder import FAISSIVFPQBuilder
 
         dim = 32

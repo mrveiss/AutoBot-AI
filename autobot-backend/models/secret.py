@@ -11,6 +11,7 @@ Part of Issue #870 - User-Centric Session Tracking (#608 Phase 1-2).
 import uuid
 from datetime import datetime
 from enum import Enum
+
 from sqlalchemy import Boolean, DateTime, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column

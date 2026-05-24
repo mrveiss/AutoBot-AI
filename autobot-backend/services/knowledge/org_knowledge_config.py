@@ -25,6 +25,7 @@ unavailable.
 from __future__ import annotations
 
 import json
+
 from pydantic import BaseModel, Field
 
 from autobot_shared.logging_manager import get_logger

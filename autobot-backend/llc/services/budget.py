@@ -17,7 +17,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_constants import MODEL_PRICING_PER_1M_TOKENS
-
 from llc.exceptions import BudgetExhausted
 from llc.models.budget import LLCAgentBudget
 

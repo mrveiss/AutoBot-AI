@@ -18,8 +18,7 @@ from agents.classification_agent import ClassificationResult
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,

@@ -44,6 +44,8 @@ if "agents.agent_orchestration.rl_router" not in sys.modules:
     _rl_stub.RLRouter = type("RLRouter", (), {})  # type: ignore[attr-defined]
     sys.modules["agents.agent_orchestration.rl_router"] = _rl_stub
 
+from agents.agent_orchestration.routing import AgentRouter  # noqa: E402
+
 # Now import the real modules using normal package paths.
 from agents.agent_orchestration.topology import (  # noqa: E402
     AgentTopology,
@@ -51,7 +53,6 @@ from agents.agent_orchestration.topology import (  # noqa: E402
     InMemoryTopologyDB,
 )
 from agents.agent_orchestration.topology_routing import TopologyAwareRouter  # noqa: E402
-from agents.agent_orchestration.routing import AgentRouter  # noqa: E402
 from agents.agent_orchestration.types import (  # noqa: E402
     AgentCapabilityDescriptor,
     AgentType,

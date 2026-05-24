@@ -9,6 +9,7 @@ Provides tenant context management and common service patterns.
 
 import uuid
 from dataclasses import dataclass
+
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 

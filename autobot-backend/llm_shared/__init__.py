@@ -41,9 +41,6 @@ from .base_provider import BaseProvider
 # Issue #551: L1/L2 dual-tier caching
 from .cache import CachedResponse, LLMResponseCache, get_llm_cache
 
-# Issue #8168: Semantic similarity tier-3 cache
-from .semantic_cache import SemanticLLMCache
-
 # Hardware detection
 from .hardware import TORCH_AVAILABLE, HardwareDetector
 
@@ -70,6 +67,9 @@ from .providers import (
     OllamaProvider,
     TransformersProvider,
 )
+
+# Issue #8168: Semantic similarity tier-3 cache
+from .semantic_cache import SemanticLLMCache
 
 # Streaming management
 from .streaming import StreamingManager

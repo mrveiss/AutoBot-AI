@@ -9,6 +9,7 @@ Used in multi_company and provider deployment modes.
 """
 
 import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from api.schemas_agent import (

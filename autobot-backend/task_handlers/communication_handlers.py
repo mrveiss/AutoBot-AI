@@ -11,7 +11,7 @@ from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.task_result import task_pending_approval, task_success
-from events.bus import publish_event, PersistStrategy
+from events.bus import PersistStrategy, publish_event
 from models.task_context import TaskExecutionContext
 
 from .base import TaskHandler

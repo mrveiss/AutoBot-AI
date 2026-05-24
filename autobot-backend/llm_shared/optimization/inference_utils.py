@@ -14,6 +14,7 @@ Issue #1968: Only-last-logit optimization for autoregressive generation.
 
 from dataclasses import dataclass
 from enum import Enum
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

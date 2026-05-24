@@ -243,9 +243,10 @@ with _warnings.catch_warnings():
     # Suppress the DeprecationWarnings these modules emit at import time — they
     # are designed to warn external callers, not the canonical migration target.
     _warnings.simplefilter("ignore", DeprecationWarning)
-    from services.event_log import EventType  # noqa: E402
+    from knowledge.audit_log import AuditEventType
+    from knowledge.audit_log import KnowledgeAuditLog as _KnowledgeAuditLog  # noqa: E402
     from services.audit.audit_log import AuditAction  # noqa: E402
-    from knowledge.audit_log import AuditEventType, KnowledgeAuditLog as _KnowledgeAuditLog  # noqa: E402
+    from services.event_log import EventType  # noqa: E402
 
 
 # --- Drop-in replacements for services/event_log.emit() and query_events() -

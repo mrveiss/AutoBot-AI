@@ -22,11 +22,11 @@ from api.schemas_system import (
     AssessmentData,
     AssessmentFindingsData,
     AssessmentListData,
+    AssessmentMutationData,
     AssessmentPhaseData,
     AssessmentPhaseDefinitionsData,
     CreateAssessmentRequest,
     ParseToolOutputData,
-    AssessmentMutationData,
     ParseToolOutputRequest,
     RecoverErrorRequest,
 )

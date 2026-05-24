@@ -10,6 +10,15 @@ Note: Deployment tasks removed - now managed by SLM server (#729)
 System tasks (RBAC, updates) maintained as stubs for backward compatibility.
 """
 
+from .analytics_tasks import (
+    run_bug_prediction_analysis,
+    run_dashboard_analysis,
+    run_dependency_analysis,
+    run_duplicate_analysis,
+    run_import_tree_analysis,
+    run_pattern_analysis,
+    run_security_analysis,
+)
 from .knowledge_tasks import (
     cleanup_generated_files,
     cleanup_orphan_documents,
@@ -24,15 +33,6 @@ from .memory_tasks import (
     extract_facts_task,
     update_graph_task,
     write_verbatim_task,
-)
-from .analytics_tasks import (
-    run_bug_prediction_analysis,
-    run_dashboard_analysis,
-    run_dependency_analysis,
-    run_duplicate_analysis,
-    run_import_tree_analysis,
-    run_pattern_analysis,
-    run_security_analysis,
 )
 from .system_tasks import check_available_updates, initialize_rbac, run_system_update
 

@@ -18,6 +18,7 @@ from agents.development_speedup_agent import (
     get_development_speedup_agent,
 )
 from api.schemas_code import (
+    DevelopmentSpeedupAnalysisRequest,
     DevSpeedupAnalysisResultResponse,
     DevSpeedupDeadCodeResultResponse,
     DevSpeedupDuplicatesResultResponse,
@@ -28,7 +29,6 @@ from api.schemas_code import (
     DevSpeedupRecommendationsResultResponse,
     DevSpeedupRefactoringResultResponse,
     DevSpeedupStatusResultResponse,
-    DevelopmentSpeedupAnalysisRequest,
 )
 from api.schemas_common import DataResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling

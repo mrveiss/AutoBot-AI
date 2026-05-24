@@ -8,7 +8,8 @@ ML model training infrastructure for code completion.
 """
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.missing_dep import MissingDep as _MissingDep, optional_import
+from autobot_shared.missing_dep import MissingDep as _MissingDep
+from autobot_shared.missing_dep import optional_import
 
 logger = get_logger(__name__)
 

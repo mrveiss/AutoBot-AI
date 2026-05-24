@@ -19,10 +19,10 @@ from advanced_rag_optimizer import AdvancedRAGOptimizer, RAGMetrics, SearchResul
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_30_DAYS
+from events.bus import publish_event
 from events.event_types import RAG_RETRIEVAL
 from knowledge.search_components.query_classifier import get_query_classifier
 from knowledge.search_components.retrieval_learner import GLOBAL_USER, get_retrieval_learner
-from events.bus import publish_event
 from services.context_sufficiency import (
     SufficiencyVerdict,
     get_context_sufficiency_evaluator,

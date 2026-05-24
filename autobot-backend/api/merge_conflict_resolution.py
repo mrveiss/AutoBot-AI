@@ -17,29 +17,27 @@ Parent Epic: #217 - Advanced Code Intelligence
 import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.schemas_code import (
     ApplyResolutionRequest,
     ConflictAnalysisRequest,
     ConflictResolutionRequest,
-    RepositoryAnalysisRequest,
-)
-from api.schemas_code import (
     MergeConflictAnalyzeResponse,
     MergeConflictApplyResponse,
     MergeConflictCheckResponse,
     MergeConflictRepositoryAnalyzeResponse,
     MergeConflictResolveResponse,
     MergeConflictStrategiesResponse,
+    RepositoryAnalysisRequest,
 )
 from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
-from autobot_shared.time_utils import utc_timestamp
-from utils.response_helpers import create_success_response
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_path
+from autobot_shared.time_utils import utc_timestamp
 from code_intelligence.merge_conflict_resolver import (
     ConflictBlock,
     ConflictParser,
@@ -48,6 +46,7 @@ from code_intelligence.merge_conflict_resolver import (
     ResolutionStrategy,
     analyze_repository,
 )
+from utils.response_helpers import create_success_response
 
 logger = get_logger(__name__)
 

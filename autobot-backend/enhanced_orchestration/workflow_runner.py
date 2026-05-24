@@ -25,7 +25,7 @@ from enhanced_orchestration.execution_strategies import ExecutionStrategyHandler
 from enhanced_orchestration.success_criteria import SuccessCriteriaEvaluator
 from enhanced_orchestration.types import AgentTask, WorkflowDependencies, WorkflowPlan
 from enhanced_orchestration.workflow_planning import StrategyPlanner
-from events.bus import publish_event, PersistStrategy
+from events.bus import PersistStrategy, publish_event
 from orchestration.performance_tracker import PerformanceTracker
 
 logger = get_logger("workflow_runner")

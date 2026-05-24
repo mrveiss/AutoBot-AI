@@ -8,7 +8,7 @@ Reference implementation of ConnectorAcceptanceTest.  Uses a tmp_path
 populated with real text files so no external services are needed.
 """
 
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 

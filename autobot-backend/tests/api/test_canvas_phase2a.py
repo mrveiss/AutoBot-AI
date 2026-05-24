@@ -20,7 +20,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from api.canvas import router, _export_md, _export_json
+from api.canvas import _export_json, _export_md, router
 from canvas.models import Canvas, CanvasCell, CellState
 from canvas.vega_validation import validate_vegalite_spec
 
@@ -378,8 +378,9 @@ class TestExportJsonPhase2:
 class TestVegaRenderSmoke:
     @pytest.mark.asyncio
     async def test_render_raises_on_missing_node(self):
-        from canvas.vega_render import VegaRenderError, render_vegalite_to_svg
         import asyncio
+
+        from canvas.vega_render import VegaRenderError, render_vegalite_to_svg
 
         with patch("canvas.vega_render._SCRIPT_PATH", "/nonexistent/vega_render.mjs"):
             with patch("asyncio.create_subprocess_exec", side_effect=FileNotFoundError("node")):

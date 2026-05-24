@@ -8,8 +8,9 @@ Uses Celery's eager mode (CELERY_TASK_ALWAYS_EAGER=True) so tasks execute
 synchronously in-process without a broker or result backend.
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 @pytest.fixture(autouse=True)
@@ -65,9 +66,10 @@ class TestRunDashboardAnalysis:
         """celery_result_to_status converts SUCCESS state to 'completed'."""
         mock_run_async.return_value = {"status": "ok"}
 
+        from celery.result import AsyncResult
+
         from tasks.analytics_tasks import run_dashboard_analysis
         from utils.celery_task_status import celery_result_to_status
-        from celery.result import AsyncResult
 
         celery_result = run_dashboard_analysis.delay()
         status = celery_result_to_status(AsyncResult(celery_result.id))
@@ -82,11 +84,11 @@ class TestRunDashboardAnalysis:
         """Task failure maps to 'failed' in celery_result_to_status."""
         mock_run_async.side_effect = RuntimeError("boom")
 
-        from tasks.analytics_tasks import run_dashboard_analysis
-        from utils.celery_task_status import celery_result_to_status
         from celery.result import AsyncResult
 
         from celery_app import celery_app
+        from tasks.analytics_tasks import run_dashboard_analysis
+        from utils.celery_task_status import celery_result_to_status
 
         celery_app.conf.task_eager_propagates = False
         try:

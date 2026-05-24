@@ -15,10 +15,10 @@ from autobot_shared.error_boundaries import error_boundary
 from autobot_shared.logging_manager import get_logger
 from conversation_context import ConversationContext, ConversationContextAnalyzer
 from conversation_safety import ConversationSafetyGuards, SafetyCheckResult
+from intent_classifier import ConversationIntent, IntentClassification, IntentClassifier
 from middleware.base import HookContext
 from middleware.hooks import HookPoint
 from middleware.manager import get_extension_manager
-from intent_classifier import ConversationIntent, IntentClassification, IntentClassifier
 
 from .models import WorkflowSession
 

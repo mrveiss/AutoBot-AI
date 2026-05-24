@@ -12,6 +12,7 @@ pulling in the full dependency tree.
 
 import asyncio
 import threading
+
 from autobot_shared.logging_manager import get_logger
 from knowledge.base import KnowledgeBaseCore
 from knowledge.bulk import BulkOperationsMixin

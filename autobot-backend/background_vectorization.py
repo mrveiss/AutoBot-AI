@@ -13,6 +13,7 @@ Issue #285: Integrated with Embedding Pattern Analyzer for cost tracking.
 import asyncio
 import time
 from datetime import datetime, timezone
+
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.missing_dep import MissingDep as _MissingDep
 from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL

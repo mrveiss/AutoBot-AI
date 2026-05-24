@@ -41,7 +41,7 @@ from autobot_shared.redis_client import get_redis_client
 
 # Import the centralized ConfigManager and Redis client utility
 from config import config as global_config_manager
-from events.bus import publish_event, PersistStrategy
+from events.bus import PersistStrategy, publish_event
 from knowledge_base import KnowledgeBase
 from security_layer import SecurityLayer
 from services.llm_service import get_llm_service

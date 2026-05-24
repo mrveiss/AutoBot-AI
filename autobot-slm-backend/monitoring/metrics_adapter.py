@@ -10,6 +10,7 @@ Writes to both Prometheus and legacy systems during transition.
 
 import logging
 import threading
+
 from monitoring.prometheus_metrics import get_metrics_manager
 
 logger = logging.getLogger(__name__)

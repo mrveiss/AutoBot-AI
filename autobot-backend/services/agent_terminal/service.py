@@ -8,6 +8,7 @@ Main service class that composes all agent terminal functionality.
 """
 
 import time
+
 from autobot_logging.terminal_logger import TerminalLogger
 from autobot_shared.logging_manager import get_logger
 from chat_history import ChatHistoryManager

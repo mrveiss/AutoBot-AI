@@ -8,6 +8,7 @@ Integrates Docker-based Playwright into the main AutoBot application
 
 import asyncio
 from contextlib import asynccontextmanager
+
 import aiohttp
 
 from autobot_shared.http_client import get_http_client

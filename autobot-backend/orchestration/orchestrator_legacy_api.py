@@ -55,8 +55,8 @@ class _DeprecatedRequestMixin:
         .. deprecated::
             No live callers exist. Call execute_enhanced_workflow directly (GH#7423).
         """
-        from orchestrator import OrchestrationMode
         from autobot_shared.status_enums import Priority as TaskPriority
+        from orchestrator import OrchestrationMode
 
         if mode is None:
             mode = OrchestrationMode.ENHANCED

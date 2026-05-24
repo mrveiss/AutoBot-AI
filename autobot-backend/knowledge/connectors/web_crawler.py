@@ -15,8 +15,8 @@ Issue #8152: Added config_version=2 and migrate_config() (v1→v2: max_depth→c
 
 import hashlib
 import os
-from datetime import datetime
 from collections.abc import Awaitable, Callable
+from datetime import datetime
 from typing import List
 from urllib.parse import urlparse
 

@@ -24,16 +24,16 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 
 from api.schemas_analytics import (
+    AnalyticsCFGAnalyzeResponse,
+    AnalyticsCFGComplexityResponse,
+    AnalyticsCFGInfiniteLoopsResponse,
+    AnalyticsCFGUnreachableResponse,
     CFGAnalyzeFileRequest,
     CFGAnalyzeRequest,
     EdgeType,
     IssueSeverity,
     IssueType,
     NodeType,
-    AnalyticsCFGAnalyzeResponse,
-    AnalyticsCFGComplexityResponse,
-    AnalyticsCFGInfiniteLoopsResponse,
-    AnalyticsCFGUnreachableResponse,
 )
 from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission

@@ -357,8 +357,9 @@ async def _handle_canvas_cancel(data: dict, current_user_id: str) -> None:
             return
 
         # Verify ownership: only the cell owner may cancel their streaming task
-        from canvas.models import CanvasCell
         from sqlalchemy import select
+
+        from canvas.models import CanvasCell
         from user_management.database import db_session_context
 
         async with db_session_context() as session:

@@ -26,16 +26,18 @@ Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 
 from __future__ import annotations
 
-# AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
-# Author: mrveiss
-
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+
+
 
 logger = get_logger(__name__)
 

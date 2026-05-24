@@ -10,6 +10,7 @@ Handles integration between terminal output and chat history.
 import asyncio
 import time
 from pathlib import Path
+
 import aiofiles
 
 from autobot_shared.logging_manager import get_logger

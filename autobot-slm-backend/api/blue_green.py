@@ -8,6 +8,7 @@ Provides endpoints for zero-downtime deployments with role borrowing.
 """
 
 import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated

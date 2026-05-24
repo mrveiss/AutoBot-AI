@@ -15,7 +15,8 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from events.bus import PersistStrategy, publish_event as _bus_publish_event
+from events.bus import PersistStrategy
+from events.bus import publish_event as _bus_publish_event
 
 __all__ = ["publish_event", "PersistStrategy"]
 

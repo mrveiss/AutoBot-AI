@@ -17,6 +17,7 @@ Public functions
 import asyncio
 import sys
 from pathlib import Path
+
 from autobot_shared.logging_manager import get_logger
 
 from .indexing_executor import (

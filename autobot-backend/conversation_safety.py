@@ -18,6 +18,7 @@ Related Issue: #159 - Prevent Premature Conversation Endings
 """
 
 from dataclasses import dataclass
+
 from autobot_shared.logging_manager import get_logger
 from conversation_context import ConversationContext
 from intent_classifier import ConversationIntent, IntentClassification

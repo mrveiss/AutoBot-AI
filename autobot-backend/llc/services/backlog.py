@@ -5,8 +5,8 @@ expression so the DB handles sorting rather than Python.  Bulk sprint assignment
 is done in a single UPDATE … WHERE id = ANY(:ids) to avoid N round-trips.
 """
 
-import uuid
 import logging
+import uuid
 from typing import List, Optional, Sequence, Tuple
 
 from sqlalchemy import case, func, select, update

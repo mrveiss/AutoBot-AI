@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import logging
 import time
+
 from autobot_shared.redis_client import get_async_redis_client
 
 logger = logging.getLogger(__name__)

@@ -223,11 +223,6 @@ See Also:
 - docs/architecture/TERMINAL_ARCHITECTURE_DIAGRAM.md - System architecture
 """
 
-from autobot_shared.logging_manager import get_logger
-
-# Copyright (c) 2025 mrveiss
-# Author: mrveiss
-
 from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -262,11 +257,18 @@ from api.schemas_terminal import (
 )
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 from services.agent_terminal import AgentSessionState, AgentTerminalService
 from services.command_approval_manager import AgentRole
 from services.command_execution_queue import get_command_queue
+
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+
+
+
 
 logger = get_logger(__name__)
 

@@ -18,10 +18,9 @@ the model never sees tools it isn't allowed to call in its voice context.
 from dataclasses import dataclass, field
 from typing import Any
 
+from api.redis_mcp.rbac import filter_tools_for_bundle
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
-
-from api.redis_mcp.rbac import filter_tools_for_bundle
 
 logger = get_logger(__name__)
 

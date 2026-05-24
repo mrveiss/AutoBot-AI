@@ -34,6 +34,11 @@ This package contains:
 """
 
 from .agent_registry import AgentRegistry, get_default_agents
+from .causal_error_recovery import CausalErrorRecovery, RecoveryPlan, get_recovery_recommender
+from .causal_executor import CausalExecutor
+
+# GH #6816: causal subsystem — wired as recoverable execution mode in StepErrorHandler
+from .causal_models import CausalMetadata, EffectTrace
 from .dag_executor import (
     DAGExecutor,
     NodeType,
@@ -77,6 +82,7 @@ from .sub_workflow import (
     extract_sub_workflow_step,
     is_sub_workflow_step,
 )
+from .success_criteria import SuccessCriteriaEvaluator  # noqa: F401
 from .types import (
     AgentCapability,
     AgentInteraction,
@@ -88,15 +94,9 @@ from .types import (
 )
 from .variable_resolver import StepOutput, VariableResolver, resolve_variables
 from .workflow_documentation import WorkflowDocumenter
-from .success_criteria import SuccessCriteriaEvaluator  # noqa: F401
 from .workflow_executor import WorkflowExecutor
 from .workflow_memory import WorkflowMemory
 from .workflow_planner import WorkflowPlanner
-
-# GH #6816: causal subsystem — wired as recoverable execution mode in StepErrorHandler
-from .causal_models import CausalMetadata, EffectTrace
-from .causal_error_recovery import CausalErrorRecovery, RecoveryPlan, get_recovery_recommender
-from .causal_executor import CausalExecutor
 
 __all__ = [
     # Types and dataclasses

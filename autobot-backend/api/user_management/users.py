@@ -8,6 +8,7 @@ REST API for user management operations.
 """
 
 import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from api.schemas_agent import (

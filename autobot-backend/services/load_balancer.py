@@ -31,7 +31,7 @@ from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import RetryConfig, TimingConstants
-from events.bus import publish_event, PersistStrategy
+from events.bus import PersistStrategy, publish_event
 from npu_integration import NPUWorkerClient
 from type_defs.common import Metadata
 
