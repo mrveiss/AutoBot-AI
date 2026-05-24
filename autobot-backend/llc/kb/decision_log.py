@@ -73,9 +73,7 @@ class DecisionLogWriter:
         from ..models.enums import ApprovalStatus
 
         if approval.status == ApprovalStatus.PENDING.value:
-            raise ValueError(
-                f"Approval {approval.id} is still pending; cannot log undecided approval"
-            )
+            raise ValueError(f"Approval {approval.id} is still pending; cannot log undecided approval")
 
         company_id = str(approval.company_id)
         collection_name = _decisions_collection(company_id)
@@ -101,9 +99,7 @@ class DecisionLogWriter:
             # Upsert so re-runs are idempotent
             existing = await collection.get(ids=[doc_id])
             if existing and existing.get("ids"):
-                logger.info(
-                    "Decision already indexed — skipping: approval_id=%s", approval.id
-                )
+                logger.info("Decision already indexed — skipping: approval_id=%s", approval.id)
                 return
 
             await collection.add(
@@ -124,9 +120,7 @@ class DecisionLogWriter:
                 approval.id,
                 exc,
             )
-            raise RuntimeError(
-                f"Failed to index decision for approval {approval.id}"
-            ) from exc
+            raise RuntimeError(f"Failed to index decision for approval {approval.id}") from exc
 
 
 class DecisionLogReader:
