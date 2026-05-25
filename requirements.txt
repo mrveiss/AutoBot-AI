@@ -36,7 +36,7 @@ opentelemetry-proto==1.41.1
 opentelemetry-instrumentation-fastapi>=0.62b1
 opentelemetry-propagator-b3==1.41.1
 # Issue #697: Additional instrumentation for comprehensive tracing
-opentelemetry-instrumentation-redis>=0.62b1
+opentelemetry-instrumentation-redis>=0.63b1
 opentelemetry-instrumentation-aiohttp-client>=0.62b1
 
 # FAISS - Vector Similarity Search (Issue #387, #856)
