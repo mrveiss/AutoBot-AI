@@ -484,8 +484,8 @@ async def search_agents(
         List of matching agents with capability metadata.
     """
     try:
-        from llc.kb import AgentCapabilityIndexer
         from knowledge import get_knowledge_base
+        from llc.kb import AgentCapabilityIndexer
 
         indexer = AgentCapabilityIndexer()
         kb = await get_knowledge_base()
