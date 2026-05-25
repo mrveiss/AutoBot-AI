@@ -127,9 +127,7 @@ async def test_concurrent_pickup_only_one_wins(fake_redis):
     task_id = "task-race-1"
     n_agents = 10
 
-    results = await asyncio.gather(
-        *[claim_task(task_id, f"agent-{i}") for i in range(n_agents)]
-    )
+    results = await asyncio.gather(*[claim_task(task_id, f"agent-{i}") for i in range(n_agents)])
 
     winners = [i for i, r in enumerate(results) if r is True]
     assert len(winners) == 1, f"Expected exactly 1 winner, got {len(winners)}: {winners}"
