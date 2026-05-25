@@ -655,9 +655,11 @@ async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> N
         )
         return
 
-    # GH#8490: instantiate AutoBotAgentAdapter and invoke through the protocol.
+    # GH#8502: use run_blocking() so ProviderRateLimited propagates to _run_adapter
+    # and triggers exponential-backoff recovery.  _run_adapter is already a
+    # background task, so blocking here does not stall the poll loop.
     adapter = AutoBotAgentAdapter(agent_config=adapter_config)
-    await adapter.invoke(agent_config=adapter_config, context=dict(context, agent_id=agent["agent_id"]))
+    await adapter.run_blocking(dict(context, agent_id=agent["agent_id"]))
 
 
 async def _fetch_recent_decisions(company_id: str, n: int = 5) -> list[Dict[str, Any]]:

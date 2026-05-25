@@ -97,6 +97,7 @@ class TestRepopulateSchedule:
 
         with (
             patch.object(scheduler, "_load_enabled_agents", new=AsyncMock(return_value=[agent])),
+            patch.object(scheduler, "_restore_rate_limited_agents", new=AsyncMock()),
             patch(
                 "llc.scheduler.heartbeat_scheduler.get_async_redis_client",
                 new=AsyncMock(return_value=mock_redis),
@@ -108,7 +109,8 @@ class TestRepopulateSchedule:
         call_kwargs = mock_redis.zadd.call_args
         assert call_kwargs[0][0] == _SCHEDULE_KEY
         assert "agent-abc" in call_kwargs[0][1]
-        assert call_kwargs[1].get("nx") is True
+        # GH#8498 changed NX to GT so cron-expression updates take effect.
+        assert call_kwargs[1].get("gt") is True
 
     @pytest.mark.asyncio
     async def test_skips_invalid_cron(self):
@@ -118,6 +120,7 @@ class TestRepopulateSchedule:
 
         with (
             patch.object(scheduler, "_load_enabled_agents", new=AsyncMock(return_value=[agent])),
+            patch.object(scheduler, "_restore_rate_limited_agents", new=AsyncMock()),
             patch(
                 "llc.scheduler.heartbeat_scheduler.get_async_redis_client",
                 new=AsyncMock(return_value=mock_redis),
@@ -206,6 +209,7 @@ class TestHandleDueAgent:
 
         with (
             patch.object(scheduler, "_get_agent_config", new=AsyncMock(return_value=agent)),
+            patch.object(scheduler, "_find_rate_limited_run", new=AsyncMock(return_value=None)),
             patch.object(scheduler, "_create_run", new=AsyncMock(return_value=mock_run)),
             patch.object(scheduler, "_run_adapter", new=AsyncMock()),
             patch(
