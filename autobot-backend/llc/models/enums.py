@@ -146,6 +146,13 @@ class ContextMode(str, Enum):
     FAT = "fat"
 
 
+class CoWorkerType(str, Enum):
+    """Identifies whether the co-worker is an agent or human (GH#8230)."""
+
+    AGENT = "agent"
+    HUMAN = "human"
+
+
 class AssignmentType(str, Enum):
     """How a work item was assigned to an agent (GH#8230)."""
 
