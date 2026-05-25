@@ -190,6 +190,27 @@ Default behavior:
 
 ---
 
+## Code Review Agent Requirements (MANDATORY)
+
+**Before dispatching any parallel review agents:**
+
+Every finder and verifier agent prompt MUST contain all three of the following — refuse to dispatch if any is missing:
+
+1. **Exact file list** from the PR diff:
+   ```bash
+   gh pr diff $PR_NUMBER --name-only > /tmp/review-files.txt
+   cat /tmp/review-files.txt
+   ```
+   Pass the full output as a literal list in the agent prompt.
+
+2. **Scope restriction:** Include verbatim: *"Use Read on these paths only. Do NOT Glob for other files in the repo."*
+
+3. **Role description:** State the agent's specific angle (e.g., "You are a security reviewer. Focus on: authz bypasses, IDOR, injection, secrets.") AND its output format (structured JSON with file, line, severity, evidence).
+
+**Why:** Without the file list, agents verify against stale repo files instead of PR diff. Without scope restriction, agents Glob unrelated files and produce noise. Both failures were observed in production reviews.
+
+---
+
 ## Parallel Agents Strategy
 
 When spawning multiple agents for batch work with `/batch-implement`:
