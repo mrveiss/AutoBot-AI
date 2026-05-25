@@ -55,7 +55,6 @@
 
 import Icon from '@/components/ui/Icon.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
-import Icon from '@/components/ui/Icon.vue'
 
 interface CategoryOption {
   value: string | null
