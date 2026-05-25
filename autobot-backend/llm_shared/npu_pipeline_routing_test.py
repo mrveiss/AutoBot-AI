@@ -22,11 +22,11 @@ import types
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-
 # ---------------------------------------------------------------------------
 # Bootstrap: load real provider_registry module without triggering the
 # conftest.py stub that replaces the entire llm_shared package.
 # ---------------------------------------------------------------------------
+
 
 def _load_module_from_file(name: str, path: str) -> types.ModuleType:
     spec = importlib.util.spec_from_file_location(name, path)
@@ -38,12 +38,14 @@ def _load_module_from_file(name: str, path: str) -> types.ModuleType:
 
 def _bootstrap_provider_registry():
     import os
+
     backend = os.path.join(os.path.dirname(__file__), "..")
 
     # Minimal stubs for provider_registry's top-level imports that are heavy
     # or absent in the test venv.
     for heavy in [
-        "autobot_shared", "autobot_shared.ssot_config",
+        "autobot_shared",
+        "autobot_shared.ssot_config",
         "autobot_shared.logging_manager",
         "prepared_facts",
     ]:
@@ -58,6 +60,7 @@ def _bootstrap_provider_registry():
 
     # logging_manager.get_logger must return a real logger (pytest captures it)
     import logging
+
     log_stub = sys.modules["autobot_shared.logging_manager"]
     if not hasattr(log_stub, "get_logger"):
         log_stub.get_logger = logging.getLogger
@@ -108,11 +111,11 @@ _NPU_POOL_PROVIDER_NAME = _pr_mod._NPU_POOL_PROVIDER_NAME
 # Load real pipeline_dispatcher module
 # ---------------------------------------------------------------------------
 
+
 def _bootstrap_pipeline_dispatcher():
     import os
-    path = os.path.join(
-        os.path.dirname(__file__), "..", "services", "npu_pipeline", "pipeline_dispatcher.py"
-    )
+
+    path = os.path.join(os.path.dirname(__file__), "..", "services", "npu_pipeline", "pipeline_dispatcher.py")
     return _load_module_from_file("services.npu_pipeline.pipeline_dispatcher", path)
 
 
@@ -124,6 +127,7 @@ WorkerState = _pd_mod.WorkerState
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_request(model_bytes: int):
     req = MagicMock()
@@ -161,6 +165,7 @@ def _make_provider(name: str):
 # Tests
 # ---------------------------------------------------------------------------
 
+
 class TestNpuPipelineRouting(unittest.IsolatedAsyncioTestCase):
 
     def _make_registry_with_npu_provider(self, dispatcher):
@@ -176,13 +181,13 @@ class TestNpuPipelineRouting(unittest.IsolatedAsyncioTestCase):
     async def test_oversized_model_routes_to_pipeline(self):
         """Model bytes > max single-worker VRAM → PipelineDispatcher returned."""
         workers = [
-            _make_worker("w0", vram_bytes=8 * (1024 ** 3)),
-            _make_worker("w1", vram_bytes=8 * (1024 ** 3)),
+            _make_worker("w0", vram_bytes=8 * (1024**3)),
+            _make_worker("w1", vram_bytes=8 * (1024**3)),
         ]
         dispatcher = _make_dispatcher(workers, hop_latency_ms=2.5)
         registry, _ = self._make_registry_with_npu_provider(dispatcher)
 
-        request = _make_request(model_bytes=16 * (1024 ** 3))
+        request = _make_request(model_bytes=16 * (1024**3))
         result = await registry.get_provider_for_request(
             provider_name=_NPU_POOL_PROVIDER_NAME,
             request=request,
@@ -192,13 +197,13 @@ class TestNpuPipelineRouting(unittest.IsolatedAsyncioTestCase):
     async def test_single_worker_sized_model_routes_normally(self):
         """Model bytes ≤ max single-worker VRAM → regular provider returned."""
         workers = [
-            _make_worker("w0", vram_bytes=16 * (1024 ** 3)),
-            _make_worker("w1", vram_bytes=16 * (1024 ** 3)),
+            _make_worker("w0", vram_bytes=16 * (1024**3)),
+            _make_worker("w1", vram_bytes=16 * (1024**3)),
         ]
         dispatcher = _make_dispatcher(workers, hop_latency_ms=2.5)
         registry, npu_provider = self._make_registry_with_npu_provider(dispatcher)
 
-        request = _make_request(model_bytes=8 * (1024 ** 3))
+        request = _make_request(model_bytes=8 * (1024**3))
         result = await registry.get_provider_for_request(
             provider_name=_NPU_POOL_PROVIDER_NAME,
             request=request,
@@ -208,27 +213,25 @@ class TestNpuPipelineRouting(unittest.IsolatedAsyncioTestCase):
     async def test_latency_fallback_fires_on_high_latency_pair(self):
         """High hop latency exceeds threshold → _should_use_npu_pipeline returns False."""
         workers = [
-            _make_worker("w0", vram_bytes=8 * (1024 ** 3)),
-            _make_worker("w1", vram_bytes=8 * (1024 ** 3)),
+            _make_worker("w0", vram_bytes=8 * (1024**3)),
+            _make_worker("w1", vram_bytes=8 * (1024**3)),
         ]
         # hop=600 ms, baseline=200 ms, multiplier=2.0 → threshold=400 ms < 600 ms
         dispatcher = _make_dispatcher(workers, hop_latency_ms=600.0)
         registry, npu_provider = self._make_registry_with_npu_provider(dispatcher)
 
-        request = _make_request(model_bytes=16 * (1024 ** 3))
-        should_pipeline = await registry._should_use_npu_pipeline(
-            request, baseline_ttft_ms=200.0
-        )
+        request = _make_request(model_bytes=16 * (1024**3))
+        should_pipeline = await registry._should_use_npu_pipeline(request, baseline_ttft_ms=200.0)
         self.assertFalse(should_pipeline)
 
     async def test_pipeline_disabled_skips_pipeline(self):
         """npu_pipeline_enabled=False → regular provider returned even for oversized model."""
-        workers = [_make_worker("w0", 8 * (1024 ** 3)), _make_worker("w1", 8 * (1024 ** 3))]
+        workers = [_make_worker("w0", 8 * (1024**3)), _make_worker("w1", 8 * (1024**3))]
         dispatcher = _make_dispatcher(workers)
         registry, npu_provider = self._make_registry_with_npu_provider(dispatcher)
         registry._npu_pipeline_enabled = False
 
-        request = _make_request(model_bytes=16 * (1024 ** 3))
+        request = _make_request(model_bytes=16 * (1024**3))
         result = await registry.get_provider_for_request(
             provider_name=_NPU_POOL_PROVIDER_NAME,
             request=request,
@@ -237,7 +240,7 @@ class TestNpuPipelineRouting(unittest.IsolatedAsyncioTestCase):
 
     async def test_no_npu_model_bytes_skips_pipeline(self):
         """Request without npu_model_bytes metadata → route normally."""
-        workers = [_make_worker("w0", 8 * (1024 ** 3)), _make_worker("w1", 8 * (1024 ** 3))]
+        workers = [_make_worker("w0", 8 * (1024**3)), _make_worker("w1", 8 * (1024**3))]
         dispatcher = _make_dispatcher(workers)
         registry, npu_provider = self._make_registry_with_npu_provider(dispatcher)
 

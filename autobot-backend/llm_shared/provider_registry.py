@@ -48,9 +48,7 @@ _HEALTH_CACHE_TTL = 30.0
 
 # Multiplier applied to baseline single-worker TTFT when evaluating whether
 # cross-worker hop latency makes pipeline dispatch too expensive (MVA-1099).
-_NPU_PIPELINE_MAX_LATENCY_MULTIPLIER: float = float(
-    os.environ.get("NPU_PIPELINE_MAX_LATENCY_MULTIPLIER", "2.0")
-)
+_NPU_PIPELINE_MAX_LATENCY_MULTIPLIER: float = float(os.environ.get("NPU_PIPELINE_MAX_LATENCY_MULTIPLIER", "2.0"))
 
 # Provider name used for the NPU worker pool.
 _NPU_POOL_PROVIDER_NAME = "npu_pool"
@@ -238,9 +236,7 @@ class ProviderRegistry:
             return 0.0
         # Simulate a single cross-worker transfer to get the representative latency.
         try:
-            latency = await self._npu_pipeline_dispatcher._simulate_layer_transfer(
-                online[0], online[1]
-            )
+            latency = await self._npu_pipeline_dispatcher._simulate_layer_transfer(online[0], online[1])
         except Exception as exc:
             logger.debug("hop latency probe failed: %s", exc)
             return 0.0
