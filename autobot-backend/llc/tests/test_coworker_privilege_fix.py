@@ -17,7 +17,6 @@ import pytest
 
 from llc.services.work_item_service import resolve_actor_role
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -76,13 +75,11 @@ def test_coworker_set_request_has_no_caller_role_field():
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef) and node.name == "CoWorkerSetRequest":
             field_names = [
-                t.target.id
-                for t in node.body
-                if isinstance(t, ast.AnnAssign) and isinstance(t.target, ast.Name)
+                t.target.id for t in node.body if isinstance(t, ast.AnnAssign) and isinstance(t.target, ast.Name)
             ]
-            assert "caller_role" not in field_names, (
-                "CoWorkerSetRequest still defines caller_role — GH#8583 fix not applied"
-            )
+            assert (
+                "caller_role" not in field_names
+            ), "CoWorkerSetRequest still defines caller_role — GH#8583 fix not applied"
             return  # class found and checked
 
     raise AssertionError("CoWorkerSetRequest class not found in work_items.py")

@@ -2,6 +2,7 @@
 Tests for scripts/test_first_remediation.py — covers the limit-detection
 and safety-guard logic without requiring GitHub or a live Claude session.
 """
+
 import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -10,13 +11,14 @@ import pytest
 
 # Import the module under test
 import sys
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 import test_first_remediation as tfr
-
 
 # ---------------------------------------------------------------------------
 # Destructive command guard
 # ---------------------------------------------------------------------------
+
 
 class TestBlockedCommands:
     def test_rm_rf_is_blocked(self):
@@ -47,6 +49,7 @@ class TestBlockedCommands:
 # ---------------------------------------------------------------------------
 # run_pytest helper
 # ---------------------------------------------------------------------------
+
 
 class TestRunPytest:
     def test_returns_true_on_zero_exit(self, tmp_path):
@@ -82,18 +85,19 @@ class TestRunPytest:
 # RemediationResult
 # ---------------------------------------------------------------------------
 
+
 class TestRemediationResult:
     def test_success_result(self):
-        r = tfr.RemediationResult(issue_number=42, success=True, iterations=2,
-                                  pr_url="https://github.com/mrveiss/AutoBot-AI/pull/99")
+        r = tfr.RemediationResult(
+            issue_number=42, success=True, iterations=2, pr_url="https://github.com/mrveiss/AutoBot-AI/pull/99"
+        )
         assert r.success
         assert r.iterations == 2
         assert r.pr_url is not None
         assert r.failure_report is None
 
     def test_failure_result_has_report(self):
-        r = tfr.RemediationResult(issue_number=42, success=False, iterations=5,
-                                  failure_report="Exhausted attempts")
+        r = tfr.RemediationResult(issue_number=42, success=False, iterations=5, failure_report="Exhausted attempts")
         assert not r.success
         assert "Exhausted" in r.failure_report
 
@@ -105,6 +109,7 @@ class TestRemediationResult:
 # ---------------------------------------------------------------------------
 # dry_run path
 # ---------------------------------------------------------------------------
+
 
 class TestDryRun:
     @pytest.mark.asyncio

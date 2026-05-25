@@ -67,9 +67,7 @@ async def list_budgets(
     session: AsyncSession = Depends(get_async_session),
 ) -> List[Dict[str, Any]]:
     """List all per-agent budget rows for a company (GH#8551 CostDashboard)."""
-    result = await session.execute(
-        select(LLCAgentBudget).where(LLCAgentBudget.company_id == company_id)
-    )
+    result = await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.company_id == company_id))
     rows = result.scalars().all()
     svc = BudgetService()
     out: List[Dict[str, Any]] = []

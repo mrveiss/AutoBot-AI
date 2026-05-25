@@ -482,9 +482,7 @@ async def update_sprint(
     body: SprintUpdate,
     session: AsyncSession = Depends(get_async_session),
 ) -> LLCSprint:
-    result = await session.execute(
-        select(LLCSprint).where(LLCSprint.id == sprint_id).with_for_update()
-    )
+    result = await session.execute(select(LLCSprint).where(LLCSprint.id == sprint_id).with_for_update())
     sprint = result.scalar_one_or_none()
     if sprint is None:
         raise HTTPException(status_code=404, detail="Sprint not found")
