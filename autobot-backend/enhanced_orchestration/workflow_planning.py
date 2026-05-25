@@ -448,3 +448,58 @@ class StrategyPlanner:
             "failed": failed,
             "success_rate": completed / max(len(results), 1),
         }
+
+    # ------------------------------------------------------------------
+    # GH#7354 — GOAP plan builder
+    # ------------------------------------------------------------------
+
+    def build_goap_workflow_plan(
+        self,
+        goal: str,
+        goal_facts: Set[str],
+        initial_state: Set[str] | None = None,
+        strategy: ExecutionStrategy = ExecutionStrategy.SEQUENTIAL,
+        success_criteria: List[str] | None = None,
+        plan_id: str | None = None,
+    ) -> WorkflowPlan:
+        """Build a WorkflowPlan using GOAP A* search (GH#7354).
+
+        Unlike ``build_workflow_plan`` (which relies on LLM-generated
+        ``plan_data``), this method uses ``GOAPPlanner`` to search the
+        discrete fact-space for the cheapest action sequence that satisfies
+        ``goal_facts`` from ``initial_state``.
+
+        Raises ``ValueError`` when the goal is unreachable with the default
+        action library.
+
+        The returned plan carries ``is_goap_plan=True`` and ``goap_goal`` so
+        that ``WorkflowRunner`` can invoke adaptive replanning on step failure.
+        """
+        from orchestration.goap_planner import GOAPPlanner
+
+        planner = GOAPPlanner()
+        effective_plan_id = plan_id or str(uuid.uuid4())
+        task_dicts = planner.build_workflow_tasks(
+            goal_facts=frozenset(goal_facts),
+            initial_state=frozenset(initial_state or set()),
+            plan_id=effective_plan_id,
+        )
+        if task_dicts is None:
+            raise ValueError(
+                f"GOAP planner: goal {goal_facts!r} is unreachable from "
+                f"initial_state {initial_state!r} with the default action library."
+            )
+
+        tasks = [AgentTask.from_dict(d) for d in task_dicts]
+        dependencies_graph: Dict[str, List[str]] = {t["task_id"]: t["dependencies"] for t in task_dicts}
+
+        return WorkflowPlan(
+            plan_id=effective_plan_id,
+            goal=goal,
+            tasks=tasks,
+            strategy=strategy,
+            dependencies_graph=dependencies_graph,
+            success_criteria=success_criteria or ["All tasks completed"],
+            is_goap_plan=True,
+            goap_goal=sorted(goal_facts),
+        )
