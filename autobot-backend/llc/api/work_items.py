@@ -35,6 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
+from models.agent_org import AgentOrgNode
 from user_management.database import get_async_session_factory
 from user_management.models.user import User
 
@@ -219,53 +220,24 @@ class RelationDelete(BaseModel):
     actor_user_id: Optional[str] = None
 
 
-async def _resolve_user_display(
-    session: AsyncSession,
-    user_id: Any,
-) -> Dict[str, Optional[str]]:
-    """Resolve display_name and email for a user from user_management.users (GH#8476).
-
-    Query:
-        SELECT display_name, email FROM users WHERE id = :user_id
-    Returns a dict with keys ``display_name`` and ``email``, both None on miss.
-    """
-    try:
-        result = await session.execute(select(User.display_name, User.email).where(User.id == user_id))
-        row = result.one_or_none()
-        if row:
-            return {"display_name": row.display_name, "email": row.email}
-    except Exception:
-        pass
-    return {"display_name": None, "email": None}
-
-
-def _assignee_display(
-    item: Any,
-    resolved_user: Optional[Dict[str, Optional[str]]] = None,
-) -> Optional[Dict[str, Any]]:
-    """Return structured assignee display info (GH#8223, GH#8476).
-
-    Pass ``resolved_user`` (from ``_resolve_user_display``) to populate
-    display_name/email for user assignees.  Agent display_name resolution
-    requires the agent registry and is left as a future TODO.
-    """
+async def _assignee_display(item: Any, session: AsyncSession) -> Optional[Dict[str, Any]]:
+    """Return structured assignee display info resolved from user_management.users (GH#8476)."""
     if item.assignee_type == "user" and item.assignee_user_id:
-        display = resolved_user or {}
-        return {
-            "type": "user",
-            "id": str(item.assignee_user_id),
-            "display_name": display.get("display_name"),
-            "email": display.get("email"),
-            "name": display.get("display_name"),
-        }
+        row = (
+            await session.execute(
+                select(User.display_name, User.username).where(User.id == item.assignee_user_id)
+            )
+        ).one_or_none()
+        name = (row.display_name or row.username) if row else None
+        return {"type": "user", "id": str(item.assignee_user_id), "display_name": name, "name": name}
     if item.assignee_type == "agent" and item.assignee_agent_id:
-        # TODO(GH#8476): resolve display_name from agent registry
-        return {
-            "type": "agent",
-            "id": str(item.assignee_agent_id),
-            "display_name": None,
-            "name": None,
-        }
+        row = (
+            await session.execute(
+                select(AgentOrgNode.name).where(AgentOrgNode.id == item.assignee_agent_id)
+            )
+        ).one_or_none()
+        name = row.name if row else None
+        return {"type": "agent", "id": str(item.assignee_agent_id), "display_name": name, "name": name}
     return None
 
 
@@ -308,10 +280,7 @@ def _relations_to_list(item: Any) -> List[Dict[str, Any]]:
     return rows
 
 
-def _item_to_dict(
-    item: Any,
-    resolved_user: Optional[Dict[str, Optional[str]]] = None,
-) -> Dict[str, Any]:
+async def _item_to_dict(item: Any, session: AsyncSession) -> Dict[str, Any]:
     return {
         "id": str(item.id),
         "company_id": str(item.company_id),
@@ -331,7 +300,7 @@ def _item_to_dict(
         "assignee_agent_id": str(item.assignee_agent_id) if item.assignee_agent_id else None,
         "assignee_user_id": str(item.assignee_user_id) if item.assignee_user_id else None,
         "assignee_type": item.assignee_type,
-        "assignee_display": _assignee_display(item, resolved_user),
+        "assignee_display": await _assignee_display(item, session),
         "checkout_run_id": item.checkout_run_id,
         "checkout_locked_at": item.checkout_locked_at.isoformat() if item.checkout_locked_at else None,
         "version": item.version,
@@ -382,11 +351,7 @@ async def create_work_item(
     )
     await session.commit()
     await _kb_manager.ensure_collection(KbCollectionManager.WORK_ITEM_PREFIX, item.id)
-    # GH#8476: resolve user display_name/email for user assignees
-    resolved_user = None
-    if item.assignee_type == "user" and item.assignee_user_id:
-        resolved_user = await _resolve_user_display(session, item.assignee_user_id)
-    return _item_to_dict(item, resolved_user)
+    return await _item_to_dict(item, session)
 
 
 @router.get("")
@@ -422,14 +387,7 @@ async def list_work_items(
         limit=limit,
         offset=offset,
     )
-    # GH#8476: resolve user display_name/email for each item's user assignee
-    result = []
-    for i in items:
-        resolved_user = None
-        if i.assignee_type == "user" and i.assignee_user_id:
-            resolved_user = await _resolve_user_display(session, i.assignee_user_id)
-        result.append(_item_to_dict(i, resolved_user))
-    return result
+    return [await _item_to_dict(i, session) for i in items]
 
 
 @router.get("/{work_item_id}")
@@ -440,11 +398,7 @@ async def get_work_item(
     item = await _service().get(session, work_item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Work item not found")
-    # GH#8476: resolve user display_name/email for user assignees
-    resolved_user = None
-    if item.assignee_type == "user" and item.assignee_user_id:
-        resolved_user = await _resolve_user_display(session, item.assignee_user_id)
-    return _item_to_dict(item, resolved_user)
+    return await _item_to_dict(item, session)
 
 
 @router.patch("/{work_item_id}")
@@ -458,11 +412,7 @@ async def update_work_item(
     if item is None:
         raise HTTPException(status_code=404, detail="Work item not found")
     await session.commit()
-    # GH#8476: resolve user display_name/email for user assignees
-    resolved_user = None
-    if item.assignee_type == "user" and item.assignee_user_id:
-        resolved_user = await _resolve_user_display(session, item.assignee_user_id)
-    return _item_to_dict(item, resolved_user)
+    return await _item_to_dict(item, session)
 
 
 @router.delete("/{work_item_id}", status_code=204)
@@ -491,7 +441,7 @@ async def checkout_work_item(
             run_id=body.run_id,
         )
         await session.commit()
-        return _item_to_dict(item)
+        return await _item_to_dict(item, session)
     except CheckoutConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
@@ -510,7 +460,7 @@ async def release_work_item(
         redis = await get_async_redis_client()
         if redis is not None:
             await redis.delete(f"llc:checkout:{work_item_id}")
-        return _item_to_dict(item)
+        return await _item_to_dict(item, session)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -526,7 +476,7 @@ async def transition_work_item(
         await session.commit()
         if item.status == WorkItemStatus.DONE:
             await _kb_manager.archive_collection(KbCollectionManager.WORK_ITEM_PREFIX, item.id)
-        return _item_to_dict(item)
+        return await _item_to_dict(item, session)
     except InvalidTransition as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     except ValueError as exc:
@@ -547,7 +497,7 @@ async def claim_work_item(
             company_id=body.company_id,
         )
         await session.commit()
-        return _item_to_dict(item)
+        return await _item_to_dict(item, session)
     except CheckoutConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
@@ -568,7 +518,7 @@ async def unclaim_work_item(
             company_id=body.company_id,
         )
         await session.commit()
-        return _item_to_dict(item)
+        return await _item_to_dict(item, session)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -708,7 +658,7 @@ async def handoff_to_human(
             agent_notes=body.agent_notes,
         )
         await session.commit()
-        return _item_to_dict(item)
+        return await _item_to_dict(item, session)
     except HandoffNotAllowed as exc:
         raise HTTPException(status_code=403, detail=str(exc))
     except ValueError as exc:
@@ -729,7 +679,7 @@ async def review_approve(
             company_id=body.company_id,
         )
         await session.commit()
-        return _item_to_dict(item)
+        return await _item_to_dict(item, session)
     except HandoffNotAllowed as exc:
         raise HTTPException(status_code=403, detail=str(exc))
     except ValueError as exc:
@@ -752,7 +702,7 @@ async def review_request_changes(
             return_to_agent_id=body.return_to_agent_id,
         )
         await session.commit()
-        return _item_to_dict(item)
+        return await _item_to_dict(item, session)
     except HandoffNotAllowed as exc:
         raise HTTPException(status_code=403, detail=str(exc))
     except ValueError as exc:

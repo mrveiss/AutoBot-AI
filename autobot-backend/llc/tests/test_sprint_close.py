@@ -11,7 +11,7 @@ import uuid
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -174,7 +174,7 @@ async def test_execute_close_happy_path() -> None:
     assert closed.status == SprintStatus.CLOSED.value
     assert closed.actual_points == 13
     assert closed.pending_close_approval_id is None
-    mock_summarizer.summarize_and_merge.assert_called_once_with(sprint.id)
+    mock_summarizer.summarize_and_merge.assert_called_once_with(sprint.id, session=ANY)
 
 
 @pytest.mark.asyncio

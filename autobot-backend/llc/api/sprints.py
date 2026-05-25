@@ -187,9 +187,9 @@ class SprintResponse(BaseModel):
     status: str
     committed_points: int
     actual_points: int
-    # GH#8474: sprint planning analytics columns (migration 007)
-    velocity_actual: Optional[float] = None
-    capacity_points: Optional[int] = None
+    velocity_actual: int = 0
+    capacity_points: int = 0
+    projection: Optional[float] = None
     pending_close_approval_id: Optional[uuid.UUID]
     kb_summary: Optional[str] = None
     created_at: datetime
@@ -473,6 +473,9 @@ async def get_sprint(
     return sprint
 
 
+_LIFECYCLE_STATUSES = frozenset([SprintStatus.ACTIVE, SprintStatus.CLOSED])
+
+
 @router.patch("/sprints/{sprint_id}", response_model=SprintResponse)
 async def update_sprint(
     sprint_id: uuid.UUID,
@@ -485,6 +488,14 @@ async def update_sprint(
     sprint = result.scalar_one_or_none()
     if sprint is None:
         raise HTTPException(status_code=404, detail="Sprint not found")
+    if body.status is not None and body.status in _LIFECYCLE_STATUSES:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Status '{body.status.value}' is managed by the sprint lifecycle. "
+                "Use POST /sprints/{id}/close (with an approved SprintCloseRequest) instead."
+            ),
+        )
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(sprint, field, value if not hasattr(value, "value") else value.value)
     await session.commit()

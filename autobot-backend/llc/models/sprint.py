@@ -180,9 +180,9 @@ class LLCSprint(Base):
     )
     committed_points: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     actual_points: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    # GH#8474: sprint planning analytics columns (added by migration 007)
-    velocity_actual: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    capacity_points: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    velocity_actual: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    capacity_points: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    projection: Mapped[Optional[float]] = mapped_column(sa.Numeric(10, 2), nullable=True)
     # Stores the approval_id once a sprint_close gate is requested.
     pending_close_approval_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
     # LLM-generated KB summary stored on sprint close (GH#8238).
