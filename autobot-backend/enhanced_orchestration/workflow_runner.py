@@ -307,8 +307,6 @@ class WorkflowRunner:
         """
         try:
             from orchestration.goap_planner import GOAPPlanner
-            from autobot_shared.workflow import WorkflowPlan as SharedWorkflowPlan
-            from autobot_shared.workflow import WorkflowTask
         except ImportError as exc:
             logger.error("GOAP replanning unavailable: %s", exc)
             return None
@@ -331,7 +329,6 @@ class WorkflowRunner:
             logger.warning("GOAP replan: no alternative path found for goal %s", goal_facts)
             return None
 
-        import uuid as _uuid
         new_plan_id = f"{plan.plan_id}-replan-{_depth}"
         task_dicts = planner.build_workflow_tasks(
             goal_facts=goal_facts,
@@ -341,7 +338,7 @@ class WorkflowRunner:
         if not task_dicts:
             return None
 
-        new_tasks = [WorkflowTask.from_dict(d) for d in task_dicts]
+        new_tasks = [AgentTask.from_dict(d) for d in task_dicts]
         # Avoid re-executing the exact same plan (cycle guard).
         new_action_names = [t.action for t in new_tasks]
         original_action_names = [t.action for t in plan.tasks if t.status != "completed"]
@@ -349,8 +346,7 @@ class WorkflowRunner:
             logger.warning("GOAP replan: produced identical remaining steps, skipping")
             return None
 
-        # Build a new GOAP plan inheriting the parent's metadata.
-        replan = SharedWorkflowPlan(
+        replan = WorkflowPlan(
             plan_id=new_plan_id,
             goal=plan.goal,
             tasks=new_tasks,
