@@ -282,14 +282,12 @@ async def _count_agents_missing_instructions() -> int:
     try:
         factory = get_async_session_factory()
         async with factory() as session:
-            result = await session.execute(
-                text("""
+            result = await session.execute(text("""
                     SELECT agent_id, instructions_file_path
                     FROM agent_org_nodes
                     WHERE heartbeat_enabled = true
                       AND adapter_type = 'claude_code'
-                """)
-            )
+                """))
             rows = result.fetchall()
 
         missing = 0

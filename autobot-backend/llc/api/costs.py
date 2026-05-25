@@ -150,8 +150,7 @@ async def costs_by_agent_model(
 
     try:
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT
                     agent_id,
                     COALESCE(agent_id, 'unknown') AS agent_name,
@@ -171,8 +170,7 @@ async def costs_by_agent_model(
                 WHERE company_id = :company_id
                 GROUP BY agent_id, model, provider
                 ORDER BY agent_id, model
-                """
-            ),
+                """),
             {"company_id": effective_company_id},
         )
         rows = result.fetchall()
@@ -219,14 +217,12 @@ async def quota_windows(
     if effective_company_id:
         try:
             result = await session.execute(
-                text(
-                    """
+                text("""
                     SELECT DISTINCT provider
                     FROM llc_cost_events
                     WHERE company_id = :company_id
                       AND provider IS NOT NULL
-                    """
-                ),
+                    """),
                 {"company_id": effective_company_id},
             )
             active_providers = {row[0] for row in result.fetchall() if row[0]}

@@ -258,11 +258,7 @@ async def costs_by_agent_model(
     out: List[AgentModelCostRow] = []
     for row in rows:
         total_in = int(row["input_tokens"]) + int(row["cached_input_tokens"])
-        cache_hit_rate = (
-            round(int(row["cached_input_tokens"]) / total_in, 4)
-            if total_in > 0
-            else 0.0
-        )
+        cache_hit_rate = round(int(row["cached_input_tokens"]) / total_in, 4) if total_in > 0 else 0.0
         out.append(
             AgentModelCostRow(
                 agent_id=row["agent_id"],

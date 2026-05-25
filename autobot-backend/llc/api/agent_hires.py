@@ -197,10 +197,7 @@ async def _fetch_company_model_overrides(
 ) -> Optional[Dict[str, Any]]:
     try:
         result = await session.execute(
-            text(
-                "SELECT settings->'model_tier_overrides' FROM organizations "
-                "WHERE id = :company_id LIMIT 1"
-            ),
+            text("SELECT settings->'model_tier_overrides' FROM organizations " "WHERE id = :company_id LIMIT 1"),
             {"company_id": company_id},
         )
         row = result.fetchone()
@@ -223,9 +220,7 @@ async def create_agent_hire(
     ctx: TenantContext = Depends(lambda: None),
 ) -> AgentHireRead:
     """Create an assistant agent with auto-resolved cheap model (GH#8487)."""
-    effective_company_id = str(body.company_id) if body.company_id else (
-        str(ctx.org_id) if ctx else None
-    )
+    effective_company_id = str(body.company_id) if body.company_id else (str(ctx.org_id) if ctx else None)
     if not effective_company_id:
         raise HTTPException(status_code=400, detail="company_id is required")
 
@@ -417,7 +412,11 @@ async def hire_agent(
 
     logger.info(
         "Hired agent %s (name=%r model=%r company=%s reports_to=%s)",
-        agent_id, body.agent_name, resolved_model, company_id, body.reports_to,
+        agent_id,
+        body.agent_name,
+        resolved_model,
+        company_id,
+        body.reports_to,
     )
 
     return AgentHireResponse(

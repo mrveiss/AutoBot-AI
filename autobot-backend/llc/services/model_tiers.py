@@ -45,7 +45,7 @@ _MODEL_PREFIX_TO_PROVIDER: list[tuple[str, str]] = [
     ("gemini-", "google"),
     ("mistral-", "mistral"),
     ("mixtral-", "mistral"),
-    ("llama-", "groq"),           # Groq serves Llama by default
+    ("llama-", "groq"),  # Groq serves Llama by default
     ("meta-llama/", "together"),
 ]
 
@@ -116,9 +116,7 @@ class ModelTierService:
         provider = self.detect_provider(senior_model)
 
         if not provider:
-            logger.warning(
-                "Cannot detect provider from senior model %r — no assistant model resolved", senior_model
-            )
+            logger.warning("Cannot detect provider from senior model %r — no assistant model resolved", senior_model)
             return None
 
         # Level 2: per-company override

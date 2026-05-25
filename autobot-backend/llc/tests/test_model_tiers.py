@@ -58,21 +58,15 @@ class TestDetectProvider:
 
 class TestResolveAssistantModel:
     def test_anthropic_resolves_haiku(self, svc):
-        result = svc.resolve_assistant_model(
-            senior_agent_adapter_config={"model": "claude-sonnet-4-6"}
-        )
+        result = svc.resolve_assistant_model(senior_agent_adapter_config={"model": "claude-sonnet-4-6"})
         assert result == "claude-haiku-4-5-20251001"
 
     def test_openai_resolves_mini(self, svc):
-        result = svc.resolve_assistant_model(
-            senior_agent_adapter_config={"model": "gpt-4o"}
-        )
+        result = svc.resolve_assistant_model(senior_agent_adapter_config={"model": "gpt-4o"})
         assert result == "gpt-4o-mini"
 
     def test_google_resolves_flash(self, svc):
-        result = svc.resolve_assistant_model(
-            senior_agent_adapter_config={"model": "gemini-1.5-pro"}
-        )
+        result = svc.resolve_assistant_model(senior_agent_adapter_config={"model": "gemini-1.5-pro"})
         assert result == "gemini-1.5-flash"
 
     def test_per_agent_override_wins(self, svc):
@@ -103,9 +97,7 @@ class TestResolveAssistantModel:
         assert result == "agent-override"
 
     def test_unknown_provider_returns_none(self, svc):
-        result = svc.resolve_assistant_model(
-            senior_agent_adapter_config={"model": "totally-unknown-model"}
-        )
+        result = svc.resolve_assistant_model(senior_agent_adapter_config={"model": "totally-unknown-model"})
         assert result is None
 
     def test_empty_adapter_config_returns_none(self, svc):
