@@ -7,8 +7,6 @@ Routes:
   GET  /api/llc/agent/context/{item_id}  — get assembled heartbeat context
 """
 
-import gzip
-import json
 import uuid
 from typing import Any, Dict
 

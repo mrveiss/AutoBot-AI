@@ -4,12 +4,12 @@
 """Adaptive execution strategy (GH #6830)."""
 
 import asyncio
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Dict, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.workflow import ExecutionStrategy
 
-from ..types import AgentTask, WorkflowPlan
+from ..types import WorkflowPlan
 from ._base import BaseExecutionStrategy
 
 logger = get_logger(__name__)

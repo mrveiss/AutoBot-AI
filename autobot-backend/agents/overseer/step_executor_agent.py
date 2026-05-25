@@ -21,7 +21,7 @@ Execution: Uses PTY integration for commands to appear in user's terminal.
 import asyncio
 import time
 from datetime import datetime, timezone
-from typing import AsyncGenerator, Tuple, Union
+from typing import AsyncGenerator, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from security.command_patterns import check_dangerous_patterns, is_safe_command

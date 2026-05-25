@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
 
-from ..models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
+from ..models.enums import WorkItemStatus, WorkItemType
 from ..models.work_item import LLCWorkItem
 from ..services.backlog import BacklogService
 

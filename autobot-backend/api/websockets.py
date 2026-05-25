@@ -10,7 +10,6 @@ between the backend and frontend clients.
 
 import asyncio
 import json
-import logging
 import uuid
 from typing import Callable, Dict, Optional, Tuple
 

@@ -9,8 +9,7 @@ with document merging support for ephemeral entities (sprints, work items).
 """
 
 import uuid
-from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Optional
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc

@@ -13,7 +13,7 @@ Revises: 20260324_016
 Issue #2153 — Secret management for workflow credentials.
 """
 
-from typing import Sequence, Union
+from typing import Sequence
 
 import sqlalchemy as sa
 from alembic import op

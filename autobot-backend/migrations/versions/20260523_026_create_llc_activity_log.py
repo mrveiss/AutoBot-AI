@@ -8,7 +8,7 @@ GH#8216: Immutable activity log — company-scoped, all-mutations coverage.
 Append-only table (no UPDATE/DELETE at service layer).
 """
 
-from typing import Sequence, Union
+from typing import Sequence
 
 import sqlalchemy as sa
 from alembic import op

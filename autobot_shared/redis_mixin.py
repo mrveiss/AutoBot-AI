@@ -21,7 +21,7 @@ Usage::
 """
 
 import asyncio
-from typing import Any, Union
+from typing import Any
 
 from autobot_shared.redis_client import get_async_redis_client
 

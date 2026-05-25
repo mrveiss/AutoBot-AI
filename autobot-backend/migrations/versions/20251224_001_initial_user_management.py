@@ -8,7 +8,7 @@ Revises:
 Create Date: 2024-12-24
 """
 
-from typing import Sequence, Union
+from typing import Sequence
 
 import sqlalchemy as sa
 from alembic import op

@@ -10,7 +10,7 @@ import gc
 import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 

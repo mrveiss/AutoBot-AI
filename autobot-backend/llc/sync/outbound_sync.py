@@ -25,7 +25,6 @@ import uuid
 from typing import Any, Dict, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.ssot_config import config
 
 logger = logging.getLogger(__name__)
 

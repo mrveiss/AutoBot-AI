@@ -17,13 +17,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.time_utils import now_utc
 from llc.models.enums import LLCCompanyStatus
 from llc.models.export import LLCExportArtifact
 from llc.models.goal import LLCGoal
 from llc.models.routine import LLCRoutine
 from llc.models.secret import LLCSecret
-from llc.models.sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint
+from llc.models.sprint import LLCPortfolio, LLCProject, LLCSprint
 from llc.models.work_item import LLCWorkItem
 from user_management.models.organization import Organization
 

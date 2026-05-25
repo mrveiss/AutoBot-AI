@@ -18,7 +18,7 @@ New code should import directly from ``llm_shared.providers``:
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 

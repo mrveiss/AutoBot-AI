@@ -23,7 +23,7 @@ Three read-only analytics methods:
 import logging
 import uuid
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession

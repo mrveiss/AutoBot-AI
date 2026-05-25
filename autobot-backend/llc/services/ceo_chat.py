@@ -281,7 +281,7 @@ class CeoChatService(LLCServiceBase):
                     return "goal", uuid.UUID(goal_id)
 
             if intent == "request_approval":
-                from ..models.enums import ApprovalStatus, ApprovalType
+                from ..models.enums import ApprovalType
                 from .approval import ApprovalService
 
                 appr_svc = ApprovalService()

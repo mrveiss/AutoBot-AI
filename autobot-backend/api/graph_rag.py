@@ -36,7 +36,6 @@ from api.system_health import register_app_state_probe
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.time_utils import utc_timestamp
 from services.graph_rag_service import GraphRAGService
 from type_defs.common import Metadata
 from utils.request_utils import generate_request_id

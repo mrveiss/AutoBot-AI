@@ -115,7 +115,7 @@ ALLOWED_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".json", ".csv", ".html"}
 
 # Import RAG Agent for enhanced search capabilities
 try:
-    from agents.rag_agent import get_rag_agent
+    pass
 
     RAG_AVAILABLE = True
 except ImportError:

@@ -10,7 +10,6 @@ collection ``company:{company_id}:agents`` so they can be discovered via RAG que
 On agent capability update or termination, documents are updated or deleted.
 """
 
-import logging
 from typing import Any, Dict, Optional
 
 from autobot_shared.logging_manager import get_logger

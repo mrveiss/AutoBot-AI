@@ -19,7 +19,6 @@ The schedule is registered in celery_app.py so that beat picks it up.
 import logging
 
 from celery import shared_task
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from user_management.database import get_async_session_factory
 

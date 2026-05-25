@@ -3,7 +3,6 @@
 # Author: mrveiss
 """Unit tests for orchestration/primitives/retry.py (#5060)."""
 
-import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest

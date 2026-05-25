@@ -7,7 +7,7 @@ Task Storage Implementation - Task execution history management
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List
 
 import aiosqlite
 

@@ -22,7 +22,6 @@ from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
 
 from ..exceptions import WipLimitExceeded
-from ..models.enums import BoardType
 from ..services.board import BoardService
 from ..services.work_item_service import InvalidTransition
 

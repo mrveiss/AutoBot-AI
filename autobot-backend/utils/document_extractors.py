@@ -30,7 +30,7 @@ Usage:
 import asyncio
 import json
 from pathlib import Path
-from typing import Dict, List, Union
+from typing import Dict, List
 
 import aiofiles
 import numpy as np

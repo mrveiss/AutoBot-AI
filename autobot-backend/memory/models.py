@@ -8,7 +8,7 @@ Memory Manager Data Models - Structured data classes
 import json
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Tuple
 
 from .enums import MemoryCategory, TaskPriority, TaskStatus
 

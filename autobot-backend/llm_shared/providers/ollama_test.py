@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
 
 from llm_shared.models import LLMRequest, LLMSettings, ToolCall, ToolDefinition
 from llm_shared.providers.ollama import OllamaProvider, _model_supports_tools

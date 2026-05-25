@@ -16,7 +16,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Tuple
 
 from services.tool_output_filter import _dedup_consecutive, _strip_ansi
 

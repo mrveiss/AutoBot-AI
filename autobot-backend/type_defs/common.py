@@ -7,7 +7,7 @@ Common Type Definitions for AutoBot
 Provides reusable type definitions to replace generic Dict[str, Any] patterns.
 """
 
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List
 
 # Type alias for timestamp strings (ISO 8601 format)
 TimestampStr = str

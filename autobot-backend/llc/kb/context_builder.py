@@ -8,8 +8,6 @@ similar past work items. Queries happen in parallel for performance (P95 ≤ 2s)
 """
 
 import asyncio
-import gzip
-import json
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -18,7 +16,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.logging_manager import get_logger
 
 from ..config import AGENT_API_BASE_URL
-from ..models.goal import LLCGoal
 from ..services.goal import GoalService
 from ..services.work_item_service import WorkItemService
 from .inheritance import KbInheritanceResolver

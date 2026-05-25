@@ -8,7 +8,7 @@ General Storage Implementation - Category-based memory management
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List
 
 import aiosqlite
 

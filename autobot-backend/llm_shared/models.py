@@ -9,7 +9,7 @@ Extracted from llm_interface.py as part of Issue #381 god class refactoring.
 
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict

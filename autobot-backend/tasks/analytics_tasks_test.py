@@ -8,7 +8,7 @@ Uses Celery's eager mode (CELERY_TASK_ALWAYS_EAGER=True) so tasks execute
 synchronously in-process without a broker or result backend.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 

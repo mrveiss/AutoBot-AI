@@ -331,7 +331,6 @@ async def test_strict_mode_no_match_sets_pending_id_and_blocks(strict_planner, p
 def test_workflow_plan_state_ready_on_pending_plan() -> None:
     """WorkflowPlan.state returns READY when status is 'pending'."""
     from autobot_shared.workflow.types import WorkflowPlan, WorkflowPlanState
-    from enhanced_orchestration.types import ExecutionStrategy
 
     plan = WorkflowPlan(plan_id="p1", goal="g", tasks=[], status="pending")
     assert plan.state is WorkflowPlanState.READY

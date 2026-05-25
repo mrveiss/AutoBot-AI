@@ -12,7 +12,7 @@ When all candidates have zero cost (local models) it falls back to complexity
 scoring so routing is still meaningful.
 """
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import MODEL_PRICING_PER_1M_TOKENS

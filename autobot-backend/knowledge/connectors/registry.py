@@ -75,7 +75,6 @@ class ConnectorRegistry:
             ValueError: If ``config.connector_type`` is not registered or
                         migration raises an exception.
         """
-        import json
 
         klass = cls._connectors.get(config.connector_type)
         if klass is None:

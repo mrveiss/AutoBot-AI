@@ -7,7 +7,7 @@ API Response Type Definitions for AutoBot
 Provides strongly-typed API response structures to replace Dict[str, Any] patterns.
 """
 
-from typing import Generic, List, TypeVar, Union
+from typing import Generic, List, TypeVar
 
 from pydantic import BaseModel, Field
 

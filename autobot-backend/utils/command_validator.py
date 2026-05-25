@@ -19,7 +19,7 @@ Security Features:
 import re
 import shlex
 from dataclasses import dataclass
-from typing import Dict, List, Pattern, Union
+from typing import Dict, List, Pattern
 
 from autobot_shared.logging_manager import get_logger
 

@@ -5,7 +5,7 @@
 Tests for connector config schema versioning and migration (Issue #8152).
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -39,7 +39,7 @@ async def test_create_migration_called_on_version_mismatch():
     """When stored_version < config_version, migrate_config() is called."""
     cfg = _make_config(config={"urls": ["https://example.com"], "max_depth": 3, "_version": 1})
     with patch.object(ConnectorRegistry, "_persist_config", new=AsyncMock()) as mock_persist:
-        instance = await ConnectorRegistry.create(cfg)
+        await ConnectorRegistry.create(cfg)
     assert "crawl_depth" in cfg.config
     assert cfg.config.get("crawl_depth") == 3
     assert "max_depth" not in cfg.config
@@ -61,7 +61,7 @@ async def test_no_version_key_treated_as_version_1():
     """Configs without _version key are treated as version 1 (backward compat)."""
     cfg = _make_config(config={"urls": ["https://example.com"], "max_depth": 2})
     with patch.object(ConnectorRegistry, "_persist_config", new=AsyncMock()) as mock_persist:
-        instance = await ConnectorRegistry.create(cfg)
+        await ConnectorRegistry.create(cfg)
     assert cfg.config.get("_version") == 2
     assert cfg.config.get("crawl_depth") == 2
     mock_persist.assert_called_once()

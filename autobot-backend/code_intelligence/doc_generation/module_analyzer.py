@@ -12,7 +12,7 @@ Part of god class refactoring initiative.
 
 import ast
 import os
-from typing import List, Set, Union
+from typing import List, Set
 
 import code_intelligence.doc_generation.helpers as helpers  # direct submodule (#1210)
 from autobot_shared.logging_manager import get_logger

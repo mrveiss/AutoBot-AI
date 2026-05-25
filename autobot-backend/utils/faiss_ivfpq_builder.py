@@ -4,7 +4,6 @@
 """FAISS IVFPQ index builder with training, persistence, and recall benchmarking."""
 
 import asyncio
-import os
 from pathlib import Path
 from typing import Any, Optional, Tuple
 

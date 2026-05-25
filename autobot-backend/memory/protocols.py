@@ -5,7 +5,7 @@
 Memory Manager Protocols - Interface Segregation Principle
 """
 
-from typing import Any, Dict, List, Protocol, Union
+from typing import Any, Dict, List, Protocol
 
 from .enums import MemoryCategory
 from .models import MemoryEntry, TaskExecutionRecord

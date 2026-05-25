@@ -13,7 +13,7 @@ Part of Issue #381 god class refactoring - extracted from DocGenerator.
 import ast
 import os
 import re
-from typing import FrozenSet, List, Tuple, Union
+from typing import FrozenSet, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 

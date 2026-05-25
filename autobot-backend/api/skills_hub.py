@@ -13,7 +13,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from autobot_shared.logging_manager import get_logger
-from skills.hub import InstalledSkill, SkillHub, SkillListing, SkillUpdate, get_skill_hub
+from skills.hub import InstalledSkill, SkillListing, get_skill_hub
 
 logger = get_logger(__name__)
 

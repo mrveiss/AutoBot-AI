@@ -41,7 +41,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from user_management.database import get_async_session
 
 from ..kb.collections import KbCollectionManager
-from ..models.enums import ApprovalStatus, ApprovalType, SprintStatus
+from ..models.enums import SprintStatus
 from ..models.sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint
 from ..services.approval import ApprovalNotFoundError, ApprovalService, ApprovalStateError
 from ..services.sprint_autoclose import SprintAutoCloseService

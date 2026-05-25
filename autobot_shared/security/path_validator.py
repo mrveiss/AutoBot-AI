@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Sequence, Union
+from typing import Sequence
 
 _DEFAULT_ALLOWED_ROOTS: tuple[str, ...] = (
     "/opt/autobot",

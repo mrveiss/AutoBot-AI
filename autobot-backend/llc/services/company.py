@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
-from llc.models.company import CompanyCreate, CompanyRead, CompanyTreeNode, CompanyUpdate
+from llc.models.company import CompanyCreate, CompanyTreeNode, CompanyUpdate
 from llc.models.enums import LLCCompanyStatus
 from user_management.models.organization import Organization
 

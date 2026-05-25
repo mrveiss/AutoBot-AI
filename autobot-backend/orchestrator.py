@@ -61,7 +61,6 @@ from orchestration import (
     AgentProfile,
     AgentRegistry,
     CausalErrorRecovery,
-    CausalExecutor,
     DocumentationType,
     WorkflowDocumentation,
     WorkflowDocumenter,
@@ -75,7 +74,6 @@ from orchestration.orchestrator_config import OrchestratorConfig
 from orchestration.orchestrator_legacy_api import _DeprecatedRequestMixin
 from orchestration.orchestrator_prompts import build_planning_prompt
 from orchestration.orchestrator_stubs import (
-    AGENT_MANAGER_AVAILABLE,
     CLASSIFICATION_AVAILABLE,
     WORKFLOW_TYPES_AVAILABLE,
     AgentManager,

@@ -15,7 +15,6 @@ Features:
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from api.schemas_system import (
-    HealthStatusResponse,
     ServiceOperationResponse,
     ServiceStatusResponse,
 )

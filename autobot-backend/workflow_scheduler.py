@@ -20,7 +20,7 @@ import json
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Callable, Dict, List, Union
+from typing import Any, Callable, Dict, List
 from uuid import uuid4
 
 from autobot_shared.singleton_factory import lazy_singleton

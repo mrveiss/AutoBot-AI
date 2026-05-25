@@ -103,7 +103,6 @@ def run_import_tree_analysis(self) -> dict:
     _progress(self, "Scanning project files", 10.0, started)
 
     async def _work():
-        from pathlib import Path
         from typing import Dict, List
 
         from api.codebase_analytics.endpoints.import_tree import (

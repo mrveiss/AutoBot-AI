@@ -13,16 +13,15 @@ Redis keys:
 """
 
 import logging
-import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import select, text, update
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
 
-from ..models.enums import LLCAgentStatus, SprintStatus
+from ..models.enums import LLCAgentStatus
 from .activity_log import ActivityEventType, LLCActivityLogService
 
 logger = logging.getLogger(__name__)

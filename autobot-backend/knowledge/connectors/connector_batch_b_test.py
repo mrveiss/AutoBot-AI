@@ -12,7 +12,6 @@ Covers:
   - SyncResult source counters populated correctly (#8148/#8149)
 """
 
-import asyncio
 import os
 import sys
 import types
@@ -59,7 +58,6 @@ from knowledge.connectors.models import (
     ChangeInfo,
     ConnectorConfig,
     ContentResult,
-    SourceInfo,
     SyncResult,
 )
 from knowledge.connectors.web_crawler import WebCrawlerConnector

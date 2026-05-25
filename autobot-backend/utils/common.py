@@ -13,7 +13,7 @@ import logging
 import re
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 

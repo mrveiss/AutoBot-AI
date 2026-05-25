@@ -37,7 +37,6 @@ from starlette.websockets import WebSocketState
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config
 from services.tts_client import get_tts_client
 
 logger = get_logger(__name__)

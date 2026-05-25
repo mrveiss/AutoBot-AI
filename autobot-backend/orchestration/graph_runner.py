@@ -72,13 +72,11 @@ from typing import (
     Dict,
     Generic,
     List,
-    Optional,
     Protocol,
     Set,
     Tuple,
     Type,
     TypeVar,
-    Union,
     runtime_checkable,
 )
 

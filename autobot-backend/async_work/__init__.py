@@ -248,7 +248,6 @@ class PeriodicScheduler:
                 interval string (``"@hourly"``, ``"*/15"``)
             callback: Zero-arg callable; will be wrapped as a Celery task
         """
-        from celery.schedules import crontab
 
         from celery_app import celery_app
 

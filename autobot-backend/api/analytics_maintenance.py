@@ -23,7 +23,6 @@ from api.schemas_analytics import (
     MaintenanceByCategoryResponse,
     MaintenanceCustomReportResponse,
     MaintenanceDashboardResponse,
-    MaintenanceHealthStatusResponse,
     MaintenanceInsightsResponse,
     MaintenanceRecommendationsResponse,
     MaintenanceSummaryResponse,

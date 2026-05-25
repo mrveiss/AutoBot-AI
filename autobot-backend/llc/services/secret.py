@@ -20,8 +20,7 @@ import base64
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List
 
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes

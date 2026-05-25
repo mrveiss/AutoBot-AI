@@ -8,13 +8,12 @@ All subprocess calls are mocked -- no real connector packages are required.
 """
 
 import json
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from knowledge.connectors.external_adapter import ExternalConnectorAdapter
-from knowledge.connectors.models import ConnectorConfig, SyncResult
+from knowledge.connectors.models import ConnectorConfig
 
 
 def _adapter_config(extra_config: dict | None = None) -> ConnectorConfig:

@@ -18,7 +18,6 @@ import asyncio
 import json
 import os
 import signal
-from typing import Any
 
 from autobot_shared.logging_manager import get_logger
 

@@ -34,7 +34,6 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import socket
-from typing import Union
 from urllib.parse import urlparse
 
 # TLDs that are never public — rejected before DNS resolution.

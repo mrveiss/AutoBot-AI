@@ -8,7 +8,6 @@ Provides backward compatibility for existing code while transitioning to async R
 
 import threading
 import warnings
-from typing import Union
 
 from redis.exceptions import RedisError
 

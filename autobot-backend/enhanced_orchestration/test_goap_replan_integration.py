@@ -14,14 +14,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent))
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from autobot_shared.workflow import ExecutionStrategy
 from enhanced_orchestration.types import AgentTask, WorkflowPlan
 from enhanced_orchestration.workflow_runner import WorkflowRunner
-from orchestration.goap_planner import GOAPAction, GOAPPlanner
 
 # ---------------------------------------------------------------------------
 # Helpers

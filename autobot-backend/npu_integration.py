@@ -13,7 +13,7 @@ communication with HMAC-SHA256 signatures.
 import asyncio
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, List, Set, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Set
 
 import yaml
 

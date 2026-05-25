@@ -13,7 +13,7 @@ in one place.
 """
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable, Dict, FrozenSet, List
+from typing import TYPE_CHECKING, Callable, FrozenSet, List
 
 if TYPE_CHECKING:
     from orchestration.success_criteria import SuccessCriteria
@@ -21,7 +21,6 @@ if TYPE_CHECKING:
 from autobot_shared.workflow import ExecutionStrategy as ExecutionStrategy  # noqa: F401  # re-export
 from autobot_shared.workflow import WorkflowPlan as _SharedWorkflowPlan
 from autobot_shared.workflow import WorkflowTask
-from orchestration.types import AgentCapability
 from orchestration.types import AgentPerformance as AgentPerformance  # noqa: F401  # re-export
 
 # Module-level frozenset for fallback tier checks

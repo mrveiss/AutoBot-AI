@@ -3,7 +3,6 @@
 # Author: mrveiss
 """Pytest tests for voice-context toolset bundles (#7344)."""
 
-import pytest
 
 from api.redis_mcp.rbac import (
     TOOL_ACCESS_MATRIX,

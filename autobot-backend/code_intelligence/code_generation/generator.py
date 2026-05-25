@@ -11,7 +11,7 @@ Contains LLMCodeGenerator class for LLM-powered code refactoring.
 import asyncio
 import hashlib
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 

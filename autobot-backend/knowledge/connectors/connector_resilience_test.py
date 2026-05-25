@@ -16,7 +16,6 @@ Covers:
   - Connection-level failures (status_code=None) trigger retry (#8286)
 """
 
-import asyncio
 from datetime import datetime
 from typing import List
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -36,7 +35,6 @@ from knowledge.connectors.models import (
     ConnectorConfig,
     ContentResult,
     SourceInfo,
-    SyncResult,
 )
 
 # ---------------------------------------------------------------------------

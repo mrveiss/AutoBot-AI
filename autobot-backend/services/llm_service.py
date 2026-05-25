@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Any, AsyncIterator, Dict, List, Union
+from typing import Any, AsyncIterator, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.tracing import get_tracer

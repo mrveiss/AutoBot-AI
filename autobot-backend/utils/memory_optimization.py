@@ -14,7 +14,7 @@ import weakref
 from functools import wraps
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Set, TypeVar, Union
+from typing import Any, Callable, Dict, List, Set, TypeVar
 
 import psutil
 

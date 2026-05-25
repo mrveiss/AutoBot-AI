@@ -32,7 +32,6 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from fastapi.responses import JSONResponse
 
 from api.schemas_workflows import (
     CodebaseIndexingRequest,

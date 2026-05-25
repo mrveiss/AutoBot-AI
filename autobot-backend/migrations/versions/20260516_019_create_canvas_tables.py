@@ -9,7 +9,7 @@ Schema includes version + locked_by from day 1 for Phase 3 multi-user
 forward-compatibility (no concurrency enforcement in Phase 1).
 """
 
-from typing import Sequence, Union
+from typing import Sequence
 
 import sqlalchemy as sa
 from alembic import op

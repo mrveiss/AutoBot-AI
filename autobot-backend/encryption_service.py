@@ -18,7 +18,6 @@ Security Features:
 import base64
 import hashlib
 import secrets
-from typing import Union
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM

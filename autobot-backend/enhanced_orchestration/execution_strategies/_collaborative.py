@@ -8,7 +8,7 @@ from typing import Any, Callable, Dict
 
 from autobot_shared.logging_manager import get_logger
 
-from ..types import AgentTask, WorkflowPlan
+from ..types import WorkflowPlan
 from ._base import BaseExecutionStrategy
 
 logger = get_logger(__name__)

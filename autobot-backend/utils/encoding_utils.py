@@ -14,7 +14,7 @@ import json
 import re
 import subprocess  # nosec B404 - required for shell detection
 from pathlib import Path
-from typing import Any, List, Union
+from typing import Any, List
 
 import aiofiles
 

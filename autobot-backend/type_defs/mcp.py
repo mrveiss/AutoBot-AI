@@ -7,7 +7,7 @@ MCP (Model Context Protocol) Type Definitions for AutoBot
 Provides strongly-typed MCP tool and response structures.
 """
 
-from typing import Any, Dict, List, Literal, Union
+from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 

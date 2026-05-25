@@ -6,7 +6,7 @@
 import uuid
 from decimal import Decimal
 
-from sqlalchemy import Float, Index, Numeric, String, Uuid
+from sqlalchemy import Float, Numeric, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from user_management.models.base import Base

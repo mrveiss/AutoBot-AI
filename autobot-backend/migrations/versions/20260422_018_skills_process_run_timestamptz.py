@@ -12,7 +12,7 @@ Revises: 20260324_017
 Issue #5538 — DateTime(timezone=True) for skills and process_run models.
 """
 
-from typing import Sequence, Union
+from typing import Sequence
 
 import sqlalchemy as sa
 from alembic import op

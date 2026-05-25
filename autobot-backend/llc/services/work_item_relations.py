@@ -10,7 +10,7 @@ Transition guard (enforced in WorkItemService.transition_status):
 
 import logging
 import uuid
-from typing import List, Optional, Sequence
+from typing import Optional, Sequence
 
 import sqlalchemy as sa
 from sqlalchemy import select

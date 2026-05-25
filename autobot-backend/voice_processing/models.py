@@ -9,7 +9,7 @@ Extracted from voice_processing_system.py as part of Issue #381 god class refact
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List
 
 import numpy as np
 

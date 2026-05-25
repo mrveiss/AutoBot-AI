@@ -93,7 +93,7 @@ import logging
 
 # Thread safety support for concurrent access patterns
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator, Dict, Union
+from typing import Any, AsyncGenerator, Dict
 
 import redis
 import redis.asyncio as async_redis

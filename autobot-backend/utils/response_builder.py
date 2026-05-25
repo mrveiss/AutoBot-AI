@@ -37,7 +37,7 @@ Usage:
             return error_response("Internal server error", status_code=500)
 """
 
-from typing import Any, Dict, List, TypeVar, Union
+from typing import Any, Dict, List, TypeVar
 
 from fastapi.responses import JSONResponse
 

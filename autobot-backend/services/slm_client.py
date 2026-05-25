@@ -139,10 +139,6 @@ class ServiceDiscoveryCache:
 # #6702: SSL context creation moved to autobot_shared/tls.py — single canonical
 # implementation shared across slm_client, dag_executor, celery_app, and
 # notification_service. Re-exported here for one-cycle backward compatibility.
-from autobot_shared.tls import (
-    _LOOPBACK_HOSTS,
-    _is_loopback_target,
-)
 from autobot_shared.tls import get_internal_tls_context as _create_permissive_ssl_context
 
 

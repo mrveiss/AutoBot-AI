@@ -9,7 +9,7 @@ Only members (any role) may claim work items as human assignees.
 
 import logging
 import uuid
-from typing import List, Optional, Sequence
+from typing import Optional, Sequence
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession

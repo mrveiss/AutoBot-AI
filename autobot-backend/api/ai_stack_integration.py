@@ -11,7 +11,6 @@ from VM4 (uses NetworkConstants.AI_STACK_VM_IP) with the main AutoBot backend.
 from typing import Any, Awaitable, Callable, Dict, List
 
 from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse
 
 from api.schemas_agent import (
     ComprehensiveResearchData,
@@ -19,7 +18,6 @@ from api.schemas_agent import (
     MultiAgentQueryData,
 )
 from api.schemas_ai_stack import (
-    AIStackAgentPayload,
     AIStackAgentsData,
     ClassificationResult,
     CodeSearchResult,
@@ -46,7 +44,6 @@ from api.system_health import register_singleton_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.time_utils import utc_timestamp
 from dependencies import get_knowledge_base
 from services.ai_stack_client import AIStackError, get_ai_stack_client
 from type_defs.common import Metadata

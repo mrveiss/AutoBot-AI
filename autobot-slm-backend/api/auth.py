@@ -11,7 +11,6 @@ Consolidated from legacy auth.py and slm_auth.py in Issue #1922.
 
 import logging
 from datetime import timedelta
-from typing import Union
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession

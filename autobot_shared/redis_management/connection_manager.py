@@ -26,7 +26,7 @@ import weakref
 from contextlib import asynccontextmanager
 from datetime import datetime
 from threading import Lock
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List
 
 import redis
 import redis.asyncio as async_redis

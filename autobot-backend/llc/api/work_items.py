@@ -24,7 +24,6 @@ Routes:
   DELETE /api/llc/work-items/{work_item_id}/attachments/{attachment_id}          (GH#8253)
 """
 
-import uuid
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -43,7 +42,6 @@ from user_management.models.user import User
 from ..kb.collections import KbCollectionManager
 from ..models.enums import WorkItemPriority, WorkItemRelationType, WorkItemStatus, WorkItemType
 from ..services.attachment_service import (
-    LLC_ATTACHMENT_MAX_BYTES,
     AttachmentNotFound,
     AttachmentService,
     AttachmentTooLarge,
