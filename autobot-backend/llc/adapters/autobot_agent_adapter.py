@@ -32,12 +32,62 @@ from typing import Any, Callable, Dict, Optional
 
 from agents.base_agent import AgentRequest
 from autobot_shared.redis_client import get_async_redis_client
-from llc.exceptions import BudgetExhausted
+from llc.exceptions import BudgetExhausted, ProviderRateLimited
 from llc.models.enums import LLCRunStatus
 
 from .base import AdapterRunStatus
 
 logger = logging.getLogger(__name__)
+
+# Keywords that identify a provider rate-limit or quota error in an error string.
+_RL_KEYWORDS: frozenset[str] = frozenset({
+    "rate_limit_error",
+    "rate limit",
+    "too many requests",
+    "quota",
+    "overloaded",
+    "capacity_error",
+    "429",
+    "529",
+})
+
+# ── Rate-limit detection helpers (GH#8502) ────────────────────────────────────
+
+
+def _is_rate_limit_error_str(error_str: str | None) -> bool:
+    """Return True if *error_str* contains a provider rate-limit signal."""
+    if not error_str:
+        return False
+    lower = error_str.lower()
+    return any(kw in lower for kw in _RL_KEYWORDS)
+
+
+def _extract_retry_after(exc: BaseException) -> int:
+    """Return retry-after seconds hint from *exc*, or 0 if unknown."""
+    if hasattr(exc, "response") and hasattr(exc.response, "headers"):
+        try:
+            return int(exc.response.headers.get("retry-after", 0))
+        except (ValueError, TypeError):
+            pass
+    return 0
+
+
+def _is_rate_limit_exc(exc: BaseException) -> tuple[bool, int]:
+    """Return (is_rate_limit, retry_after_seconds) for an exception.
+
+    Checks HTTP status codes (429, 503, 529) on httpx-style response errors
+    and falls back to keyword matching on the exception message string.
+    """
+    status = getattr(exc, "status_code", None)
+    if status in (429, 503, 529):
+        return True, _extract_retry_after(exc)
+    resp = getattr(exc, "response", None)
+    if resp is not None and getattr(resp, "status_code", None) in (429, 503, 529):
+        return True, _extract_retry_after(exc)
+    if _is_rate_limit_error_str(str(exc)):
+        return True, 0
+    return False, 0
+
 
 # ── Per-task log capture (async-safe) ─────────────────────────────────────────
 # asyncio.create_task() copies the current Context, so each task gets its own
@@ -248,6 +298,17 @@ class AutoBotAgentAdapter:
                 run_id,
             )
 
+    async def run_blocking(self, context: Dict[str, Any]) -> None:
+        """Run the agent to completion, propagating ProviderRateLimited.
+
+        Unlike ``invoke()``, this awaits ``_run_agent`` directly so exceptions
+        (including ``ProviderRateLimited``) propagate to the caller.  Used by
+        the heartbeat scheduler's ``_dispatch_adapter`` so rate-limit errors can
+        trigger exponential-backoff recovery (GH#8502).
+        """
+        run_id = str(uuid.uuid4())
+        await self._run_agent(run_id, context)
+
     # ──────────────────────────────────────────────────────────────────────
     # Internal helpers
     # ──────────────────────────────────────────────────────────────────────
@@ -277,6 +338,10 @@ class AutoBotAgentAdapter:
             )
             if _resp_status == "error":
                 _err = response.get("error") if isinstance(response, dict) else getattr(response, "error", None)
+                # GH#8502: propagate rate-limit response errors so the scheduler
+                # can apply exponential backoff and auto-resume.
+                if _is_rate_limit_error_str(_err):
+                    raise ProviderRateLimited(provider="", retry_after_seconds=0)
                 final_status = AdapterRunStatus(status=LLCRunStatus.FAILED, exit_code=1, error=_err)
             else:
                 final_status = AdapterRunStatus(status=LLCRunStatus.COMPLETED, exit_code=0)
@@ -284,7 +349,17 @@ class AutoBotAgentAdapter:
         except asyncio.CancelledError:
             final_status = AdapterRunStatus(status=LLCRunStatus.CANCELLED)
             raise
+        except ProviderRateLimited:
+            final_status = AdapterRunStatus(status=LLCRunStatus.FAILED, error="provider rate-limited")
+            raise
         except Exception as exc:
+            # GH#8502: convert provider-level rate-limit exceptions (e.g. httpx
+            # RateLimitError with status 429) to ProviderRateLimited so the
+            # scheduler's backoff logic activates instead of marking the run failed.
+            is_rl, retry_after = _is_rate_limit_exc(exc)
+            if is_rl:
+                final_status = AdapterRunStatus(status=LLCRunStatus.FAILED, error=str(exc))
+                raise ProviderRateLimited(provider="", retry_after_seconds=retry_after) from exc
             final_status = AdapterRunStatus(status=LLCRunStatus.FAILED, error=str(exc))
             raise
         finally:
