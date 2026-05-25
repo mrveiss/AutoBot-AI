@@ -231,7 +231,6 @@ import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useInitialFocus } from '@/composables/useInitialFocus'
 import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
-import Icon from '@/components/ui/Icon.vue'
 
 const props = defineProps<{
   isOpen: boolean
