@@ -249,14 +249,16 @@ async def search_peer_agents(
             docs = results.get("documents", [[]])[0] if results.get("documents") else []
             metadatas = results.get("metadatas", [[]])[0] if results.get("metadatas") else []
             for idx, (doc_id, metadata) in enumerate(zip(results["ids"][0], metadatas)):
-                agents.append(PeerAgent(
-                    agent_id=metadata.get("agent_id", ""),
-                    agent_name=metadata.get("agent_name", ""),
-                    title=metadata.get("title", ""),
-                    role=metadata.get("role", ""),
-                    capabilities=docs[idx] if idx < len(docs) else "",
-                    manager_name=metadata.get("manager_name"),
-                ))
+                agents.append(
+                    PeerAgent(
+                        agent_id=metadata.get("agent_id", ""),
+                        agent_name=metadata.get("agent_name", ""),
+                        title=metadata.get("title", ""),
+                        role=metadata.get("role", ""),
+                        capabilities=docs[idx] if idx < len(docs) else "",
+                        manager_name=metadata.get("manager_name"),
+                    )
+                )
 
         return {"agents": agents, "count": len(agents), "query": q, "querying_agent": agent_id}
     except Exception as e:

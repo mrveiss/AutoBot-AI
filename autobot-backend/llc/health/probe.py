@@ -40,6 +40,7 @@ from ..models.enums import ApprovalStatus
 try:
     from autobot_shared.singleton_factory import lazy_singleton as _lazy_singleton
     from ..scheduler.liveness_monitor import LivenessMonitor as _LivenessMonitor
+
     _get_lm = _lazy_singleton(_LivenessMonitor)
 except ImportError:
     _get_lm = None
@@ -221,13 +222,17 @@ async def _budget_counts() -> tuple[int, int]:
         async with factory() as session:
             result = await session.execute(
                 select(
-                    func.count().filter(
+                    func.count()
+                    .filter(
                         LLCAgentBudget.budget_spent >= LLCAgentBudget.budget_limit * _BUDGET_WARNING_RATIO,
                         LLCAgentBudget.budget_spent < LLCAgentBudget.budget_limit,
-                    ).label("warning"),
-                    func.count().filter(
+                    )
+                    .label("warning"),
+                    func.count()
+                    .filter(
                         LLCAgentBudget.budget_spent >= LLCAgentBudget.budget_limit,
-                    ).label("exhausted"),
+                    )
+                    .label("exhausted"),
                 )
             )
             row = result.fetchone()

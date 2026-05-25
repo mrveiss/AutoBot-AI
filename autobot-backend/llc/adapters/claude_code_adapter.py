@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import pathlib
 import shutil
 import signal
 import time
@@ -248,7 +249,11 @@ class ClaudeCodeAdapter:
     @staticmethod
     def _load_state(state_file: str) -> Optional[dict]:
         try:
-            with open(state_file, encoding="utf-8") as fh:
+            resolved = pathlib.Path(state_file).resolve()
+            expected_dir = pathlib.Path(state_file).parent.resolve()
+            if not resolved.is_relative_to(expected_dir):
+                return None
+            with open(resolved, encoding="utf-8") as fh:
                 return json.load(fh)
         except (FileNotFoundError, json.JSONDecodeError):
             return None

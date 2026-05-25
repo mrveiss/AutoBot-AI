@@ -26,8 +26,7 @@ async def _fetch_agent_row(agent_id: str, company_id: str) -> Optional[Dict[str,
 
     factory = get_async_session_factory()
     async with factory() as session:
-        result = await session.execute(
-            text("""
+        result = await session.execute(text("""
                 SELECT aon.agent_id, aon.name, aon.title, aon.org_role,
                        aon.capabilities, aon.reports_to,
                        mgr.name AS manager_name
@@ -35,8 +34,7 @@ async def _fetch_agent_row(agent_id: str, company_id: str) -> Optional[Dict[str,
                 LEFT JOIN agent_org_nodes mgr ON mgr.agent_id = aon.reports_to
                 WHERE aon.agent_id = :agent_id
                   AND aon.company_id = :company_id
-            """).bindparams(agent_id=agent_id, company_id=company_id)
-        )
+            """).bindparams(agent_id=agent_id, company_id=company_id))
         row = result.mappings().first()
         return dict(row) if row else None
 

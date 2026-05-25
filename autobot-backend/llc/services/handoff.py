@@ -469,7 +469,11 @@ class HandoffService(LLCServiceBase):
                     select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
                 )
                 item = result.scalar_one_or_none()
-                if item is not None and item.status == WorkItemStatus.READY and str(item.assignee_agent_id) == target_agent_id:
+                if (
+                    item is not None
+                    and item.status == WorkItemStatus.READY
+                    and str(item.assignee_agent_id) == target_agent_id
+                ):
                     item.review_brief = brief
                     item.version += 1
                     await session.commit()

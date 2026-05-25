@@ -7,7 +7,6 @@ import pytest
 
 from llc.kb.capability_indexer import AgentCapabilityIndexer
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -55,9 +54,7 @@ async def test_index_creates_capability_document(indexer, company_id, agent_id):
     """Index should create a capability document in the company agents collection."""
     mock_collection = AsyncMock()
     mock_kb = MagicMock()
-    mock_kb._async_chroma_client.get_or_create_collection = AsyncMock(
-        return_value=mock_collection
-    )
+    mock_kb._async_chroma_client.get_or_create_collection = AsyncMock(return_value=mock_collection)
 
     with patch("llc.kb.capability_indexer.get_knowledge_base", return_value=mock_kb):
         doc_id = await indexer.index(
@@ -88,9 +85,7 @@ async def test_index_without_manager_name(indexer, company_id, agent_id):
     """Index should work without manager_name."""
     mock_collection = AsyncMock()
     mock_kb = MagicMock()
-    mock_kb._async_chroma_client.get_or_create_collection = AsyncMock(
-        return_value=mock_collection
-    )
+    mock_kb._async_chroma_client.get_or_create_collection = AsyncMock(return_value=mock_collection)
 
     with patch("llc.kb.capability_indexer.get_knowledge_base", return_value=mock_kb):
         await indexer.index(
@@ -113,9 +108,7 @@ async def test_index_without_manager_name(indexer, company_id, agent_id):
 async def test_index_handles_kb_failure(indexer, company_id, agent_id):
     """Index should handle KB failures gracefully and log."""
     mock_kb = MagicMock()
-    mock_kb._async_chroma_client.get_or_create_collection = AsyncMock(
-        side_effect=RuntimeError("KB connection failed")
-    )
+    mock_kb._async_chroma_client.get_or_create_collection = AsyncMock(side_effect=RuntimeError("KB connection failed"))
 
     with patch("llc.kb.capability_indexer.get_knowledge_base", return_value=mock_kb):
         with patch("llc.kb.capability_indexer.logger") as mock_logger:
@@ -129,9 +122,7 @@ async def test_index_handles_kb_failure(indexer, company_id, agent_id):
             )
 
             mock_logger.exception.assert_called_once()
-            assert "Failed to upsert agent capability" in str(
-                mock_logger.exception.call_args
-            )
+            assert "Failed to upsert agent capability" in str(mock_logger.exception.call_args)
 
 
 # ---------------------------------------------------------------------------
@@ -144,16 +135,12 @@ async def test_remove_deletes_capability_document(indexer, company_id, agent_id)
     """Remove should delete the agent capability document from the collection."""
     mock_collection = AsyncMock()
     mock_kb = MagicMock()
-    mock_kb._async_chroma_client.get_collection = AsyncMock(
-        return_value=mock_collection
-    )
+    mock_kb._async_chroma_client.get_collection = AsyncMock(return_value=mock_collection)
 
     with patch("llc.kb.capability_indexer.get_knowledge_base", return_value=mock_kb):
         await indexer.remove(agent_id=agent_id, company_id=company_id)
 
-    mock_kb._async_chroma_client.get_collection.assert_called_once_with(
-        f"company:{company_id}:agents"
-    )
+    mock_kb._async_chroma_client.get_collection.assert_called_once_with(f"company:{company_id}:agents")
     mock_collection.delete.assert_called_once_with(ids=[f"agent:{agent_id}"])
 
 
@@ -161,9 +148,7 @@ async def test_remove_deletes_capability_document(indexer, company_id, agent_id)
 async def test_remove_handles_missing_collection(indexer, company_id, agent_id):
     """Remove should handle missing collection gracefully."""
     mock_kb = MagicMock()
-    mock_kb._async_chroma_client.get_collection = AsyncMock(
-        side_effect=Exception("Collection not found")
-    )
+    mock_kb._async_chroma_client.get_collection = AsyncMock(side_effect=Exception("Collection not found"))
 
     with patch("llc.kb.capability_indexer.get_knowledge_base", return_value=mock_kb):
         with patch("llc.kb.capability_indexer.logger") as mock_logger:
@@ -179,18 +164,14 @@ async def test_remove_handles_delete_failure(indexer, company_id, agent_id):
     mock_collection = AsyncMock()
     mock_collection.delete = AsyncMock(side_effect=RuntimeError("Delete failed"))
     mock_kb = MagicMock()
-    mock_kb._async_chroma_client.get_collection = AsyncMock(
-        return_value=mock_collection
-    )
+    mock_kb._async_chroma_client.get_collection = AsyncMock(return_value=mock_collection)
 
     with patch("llc.kb.capability_indexer.get_knowledge_base", return_value=mock_kb):
         with patch("llc.kb.capability_indexer.logger") as mock_logger:
             await indexer.remove(agent_id=agent_id, company_id=company_id)
 
             mock_logger.exception.assert_called_once()
-            assert "Failed to delete agent capability" in str(
-                mock_logger.exception.call_args
-            )
+            assert "Failed to delete agent capability" in str(mock_logger.exception.call_args)
 
 
 # ---------------------------------------------------------------------------
@@ -203,12 +184,8 @@ async def test_index_and_remove_lifecycle(indexer, company_id, agent_id):
     """Full lifecycle: index an agent, then remove it."""
     mock_collection = AsyncMock()
     mock_kb = MagicMock()
-    mock_kb._async_chroma_client.get_or_create_collection = AsyncMock(
-        return_value=mock_collection
-    )
-    mock_kb._async_chroma_client.get_collection = AsyncMock(
-        return_value=mock_collection
-    )
+    mock_kb._async_chroma_client.get_or_create_collection = AsyncMock(return_value=mock_collection)
+    mock_kb._async_chroma_client.get_collection = AsyncMock(return_value=mock_collection)
 
     with patch("llc.kb.capability_indexer.get_knowledge_base", return_value=mock_kb):
         # Index the agent

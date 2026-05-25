@@ -13,10 +13,7 @@ from llc.kb.sprint_summarizer import SprintKbSummarizer, _SUMMARIZE_THRESHOLD
 
 
 def _make_docs(n: int) -> list:
-    return [
-        {"id": f"doc-{i}", "document": f"content {i}", "metadata": {}, "embedding": None}
-        for i in range(n)
-    ]
+    return [{"id": f"doc-{i}", "document": f"content {i}", "metadata": {}, "embedding": None} for i in range(n)]
 
 
 @pytest.mark.asyncio
@@ -135,9 +132,7 @@ async def test_no_project_id_archives_and_skips_merge(summarizer, km_mock):
         result = await summarizer.summarize_and_merge(sprint_id, session=MagicMock())
 
     assert result is None
-    km_mock.archive_collection.assert_called_once_with(
-        KbCollectionManager.SPRINT_PREFIX, sprint_id
-    )
+    km_mock.archive_collection.assert_called_once_with(KbCollectionManager.SPRINT_PREFIX, sprint_id)
 
 
 @pytest.mark.asyncio
@@ -174,9 +169,7 @@ async def test_archive_always_called_on_success(summarizer, km_mock):
     ):
         await summarizer.summarize_and_merge(sprint_id, session=MagicMock())
 
-    km_mock.archive_collection.assert_called_once_with(
-        KbCollectionManager.SPRINT_PREFIX, sprint_id
-    )
+    km_mock.archive_collection.assert_called_once_with(KbCollectionManager.SPRINT_PREFIX, sprint_id)
     assert km_mock.archive_collection.call_count == 1
 
 
