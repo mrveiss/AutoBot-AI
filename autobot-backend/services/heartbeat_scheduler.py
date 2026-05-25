@@ -33,6 +33,7 @@ from models.heartbeat import (
     WakeupTrigger,
 )
 from services.run_jwt import get_run_jwt_scopes, mint_run_jwt, revoke_run_jwt_async
+from services.task_claim import renew_claim
 
 logger = get_logger(__name__)
 
@@ -218,6 +219,10 @@ class HeartbeatScheduler:
             agent_row = agent_result.scalar_one_or_none()
             agent_type = agent_row.agent_type if agent_row else "worker"
             await session.commit()
+
+        # Renew Redis task claim on each heartbeat tick (GH#6468)
+        if state.current_task_id:
+            await renew_claim(state.current_task_id, agent_id)
 
         # Mint run-scoped JWT with minimum required scopes (SEC-2 #6473, MVA-204)
         try:

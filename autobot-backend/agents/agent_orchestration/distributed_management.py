@@ -23,6 +23,7 @@ from .state_persistence import (
     persist_task_reassignment,
 )
 from .types import CircuitState, DistributedAgentInfo
+from services.task_claim import claim_task, is_claim_alive, release_claim, renew_claim
 
 if TYPE_CHECKING:
     from agents.base_agent import AgentHealth, BaseAgent
@@ -397,23 +398,39 @@ class DistributedAgentManager:
         """Get info for a specific agent."""
         return self.distributed_agents.get(agent_id)
 
-    async def add_active_task(self, agent_id: str, task_id: str) -> None:
-        """Add an active task to an agent and record its assignment timestamp.
+    async def add_active_task(self, agent_id: str, task_id: str) -> bool:
+        """Add an active task to an agent if the atomic Redis claim is granted.
+
+        Returns True when the claim was granted and the task was added.
+        Returns False when another agent already holds the claim — the caller
+        must not proceed with the task (double-pickup guard, GH#6468).
 
         Issue #2109: records assigned_at for stale-detection.
         Issue #6479: persists assigned_at to Redis (write-through cache).
+        Issue #6468: atomic claim via Redis SET NX EX.
         """
+        claimed = await claim_task(task_id, agent_id)
+        if not claimed:
+            logger.warning(
+                "add_active_task: task %s already claimed by another agent — agent %s skipping",
+                task_id,
+                agent_id,
+            )
+            return False
+
         if agent_id in self.distributed_agents:
             self.distributed_agents[agent_id].active_tasks.add(task_id)
             assigned_at = now_utc()
             self._task_assigned_at[task_id] = assigned_at
             await persist_task_assigned(self._deployment_id, task_id, assigned_at)
+        return True
 
     async def remove_active_task(self, agent_id: str, task_id: str) -> None:
         """Remove an active task from an agent and clean up tracking state.
 
         Issue #2109: clears assigned_at / progress / reassignment metadata.
         Issue #6479: deletes Redis hash entries for the task.
+        Issue #6468: releases the atomic Redis claim.
         """
         if agent_id in self.distributed_agents:
             self.distributed_agents[agent_id].active_tasks.discard(task_id)
@@ -421,19 +438,23 @@ class DistributedAgentManager:
         self._task_last_progress.pop(task_id, None)
         self._task_reassignment_count.pop(task_id, None)
         await delete_task_state(self._deployment_id, task_id)
+        await release_claim(task_id, agent_id)
 
-    async def report_task_progress(self, task_id: str) -> None:
+    async def report_task_progress(self, task_id: str, agent_id: str = "") -> None:
         """Record that a task has made progress, resetting its stale timer.
 
-        Call this from the agent when partial results arrive so the
-        work-stealer does not reclaim an actively-running task.
+        Also renews the Redis claim TTL so the task is not freed while the
+        agent is actively working.
 
         Issue #2109: progress-protection guard rail.
         Issue #6479: persists last_progress to Redis.
+        Issue #6468: renews claim TTL on each progress heartbeat.
         """
         progress_at = now_utc()
         self._task_last_progress[task_id] = progress_at
         await persist_task_progress(self._deployment_id, task_id, progress_at)
+        if agent_id:
+            await renew_claim(task_id, agent_id)
 
     # ------------------------------------------------------------------
     # Work-stealing helpers (Issue #2109)
@@ -442,12 +463,15 @@ class DistributedAgentManager:
     def _is_task_stale(self, task_id: str, now: datetime) -> bool:
         """Return True when a task has exceeded the stale timeout.
 
-        Guards:
+        Guards (checked in order):
         - grace period: task assigned less than grace_period_seconds ago → not stale
-        - progress protection: task reported progress within progress_ttl_seconds → not stale
         - max reassignments exceeded → not stale (stop trying)
+        - progress protection: task reported progress within progress_ttl_seconds → not stale
+        - falls through to time-based check (age >= stale_task_timeout_seconds)
 
         Issue #2109.
+        Issue #6468: Redis claim TTL expiry is checked asynchronously via
+        _collect_stale_tasks to supplement in-memory timestamps.
         """
         assigned_at = self._task_assigned_at.get(task_id)
         if assigned_at is None:
@@ -468,15 +492,31 @@ class DistributedAgentManager:
 
         return age_seconds >= self.stale_task_timeout_seconds
 
-    def _collect_stale_tasks(self, now: datetime) -> List[Tuple[str, str]]:
+    async def _collect_stale_tasks(self, now: datetime) -> List[Tuple[str, str]]:
         """Return list of (agent_id, task_id) pairs where the task is stale.
 
+        A task is stale when either:
+        - its in-memory timestamps breach the timeout thresholds, or
+        - its Redis claim key has expired (agent died without releasing).
+
         Issue #2109: extracted helper keeps _detect_stale_tasks short.
+        Issue #6468: Redis claim TTL expiry supplements in-memory timestamps.
         """
         stale: List[Tuple[str, str]] = []
         for agent_id, agent_info in self.distributed_agents.items():
             for task_id in list(agent_info.active_tasks):
                 if self._is_task_stale(task_id, now):
+                    stale.append((agent_id, task_id))
+                    continue
+                # Also reclaim tasks whose Redis claim key has expired but
+                # whose in-memory timestamp has not yet breached the threshold
+                # (e.g. agent crashed mid-grace-period).
+                if not await is_claim_alive(task_id):
+                    logger.info(
+                        "task_claim: Redis claim expired for task=%s agent=%s — marking stale",
+                        task_id,
+                        agent_id,
+                    )
                     stale.append((agent_id, task_id))
         return stale
 
@@ -555,7 +595,7 @@ class DistributedAgentManager:
         Issue #2109: called once per health-monitor cycle.
         """
         now = now_utc()
-        stale_pairs = self._collect_stale_tasks(now)
+        stale_pairs = await self._collect_stale_tasks(now)
         if not stale_pairs:
             return 0
 
