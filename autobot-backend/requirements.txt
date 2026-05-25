@@ -20,7 +20,7 @@ aiosqlite>=0.21.0
 
 # AI/ML
 openai>=2.32.0
-anthropic>=0.87.0
+anthropic>=0.104.1
 chromadb>=1.5.9,<2.0.0             # upper bound guards against breaking API changes; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
 protobuf>=5.29.6,<8.0.0           # required floor for chromadb 1.5.5+ opentelemetry exporter; resolves googleapis-common-protos conflict (#4061)
 sentence-transformers>=5.4.1
