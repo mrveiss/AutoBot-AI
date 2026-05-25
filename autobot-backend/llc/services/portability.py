@@ -25,9 +25,10 @@ from llc.models.routine import LLCRoutine
 from llc.models.secret import LLCSecret
 from llc.models.sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint
 from llc.models.work_item import LLCWorkItem
+from user_management.models.organization import Organization
+
 from .activity_log import ActivityEventType, LLCActivityLogService
 from .base import LLCServiceBase
-from user_management.models.organization import Organization
 
 logger = get_logger(__name__)
 

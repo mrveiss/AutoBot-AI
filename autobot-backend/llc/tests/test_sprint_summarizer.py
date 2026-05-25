@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from llc.kb.collections import KbCollectionManager
-from llc.kb.sprint_summarizer import SprintKbSummarizer, _SUMMARIZE_THRESHOLD
+from llc.kb.sprint_summarizer import _SUMMARIZE_THRESHOLD, SprintKbSummarizer
 
 
 def _make_docs(n: int) -> list:

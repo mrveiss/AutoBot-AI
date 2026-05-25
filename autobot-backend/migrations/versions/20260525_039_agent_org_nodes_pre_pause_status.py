@@ -5,6 +5,7 @@ Revises: 20260523_038
 """
 
 from typing import Sequence, Union
+
 import sqlalchemy as sa
 from alembic import op
 

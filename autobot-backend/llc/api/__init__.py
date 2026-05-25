@@ -6,16 +6,17 @@ from .activity import router as activity_router
 from .agent_api import router as agent_router
 from .agent_hires import router as agent_hires_router
 from .agents import router as agents_router
-from .costs import router as costs_router
 from .api_keys import router as api_keys_router
 from .approvals import router as approvals_router
 from .backlog import router as backlog_router
 from .boards import router as boards_router
-from .budget import cost_events_router, costs_by_model_router, router as budget_router
+from .budget import cost_events_router, costs_by_model_router
+from .budget import router as budget_router
 from .ceo_chat import router as ceo_chat_router
 from .companies import router as companies_router
 from .context import router as context_router
 from .controls import router as controls_router
+from .costs import router as costs_router
 from .decisions import router as decisions_router
 from .goals import router as goals_router
 from .health import router as health_router

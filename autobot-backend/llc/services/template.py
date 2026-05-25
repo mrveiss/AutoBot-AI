@@ -26,6 +26,7 @@ from llc.models.template import (
     TemplateRead,
     TemplateSearchResult,
 )
+
 from .activity_log import ActivityEventType, ActorType, LLCActivityLogService
 
 logger = logging.getLogger(__name__)

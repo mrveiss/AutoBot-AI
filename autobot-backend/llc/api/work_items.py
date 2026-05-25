@@ -27,13 +27,13 @@ Routes:
 import uuid
 from typing import Any, Dict, List, Optional
 
-from api.user_management.dependencies import get_current_user
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.user_management.dependencies import get_current_user
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from models.agent_org import AgentOrgNode

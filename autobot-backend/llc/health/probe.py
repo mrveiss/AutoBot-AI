@@ -39,6 +39,7 @@ from ..models.enums import ApprovalStatus
 # environments where the scheduler package is not yet available.
 try:
     from autobot_shared.singleton_factory import lazy_singleton as _lazy_singleton
+
     from ..scheduler.liveness_monitor import LivenessMonitor as _LivenessMonitor
 
     _get_lm = _lazy_singleton(_LivenessMonitor)

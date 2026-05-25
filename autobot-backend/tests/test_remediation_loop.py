@@ -4,13 +4,13 @@ and safety-guard logic without requiring GitHub or a live Claude session.
 """
 
 import subprocess
+
+# Import the module under test
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-# Import the module under test
-import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 import test_first_remediation as tfr

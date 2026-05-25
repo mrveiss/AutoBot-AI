@@ -67,8 +67,9 @@ def test_falsy_zero_completion_tokens_not_shadowed():
 @pytest.mark.asyncio
 async def test_update_limit_uses_decimal_not_str() -> None:
     """GH#8462: budget_limit must be sent as Decimal, not str, to the DB update."""
-    from llc.models.budget import LLCAgentBudget
     from sqlalchemy import update
+
+    from llc.models.budget import LLCAgentBudget
 
     row = MagicMock(spec=LLCAgentBudget)
     row.agent_id = "agent-x"

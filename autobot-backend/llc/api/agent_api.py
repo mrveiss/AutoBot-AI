@@ -225,8 +225,9 @@ async def search_peer_agents(
     agent_id, company_id = _agent_context(request)
     try:
         from autobot_shared.logging_manager import get_logger
-        from ..kb import AgentCapabilityIndexer
         from knowledge import get_knowledge_base
+
+        from ..kb import AgentCapabilityIndexer
 
         logger_inner = get_logger(__name__)
         indexer = AgentCapabilityIndexer()

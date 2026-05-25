@@ -450,8 +450,9 @@ class HandoffService(LLCServiceBase):
         Also caches in Redis for low-latency repeated reads.
         """
         try:
-            from ..kb.handoff_brief import HandoffBriefGenerator
             from user_management.database import get_async_session_factory
+
+            from ..kb.handoff_brief import HandoffBriefGenerator
 
             generator = HandoffBriefGenerator()
             brief = await generator.generate_human_to_agent_brief(
