@@ -62,6 +62,11 @@ class AgentRuntimeState(Base):
     session_params = Column(JSONB, nullable=True)
     last_heartbeat_at = Column(DateTime, nullable=True)
     extra = Column(JSONB, nullable=True)
+    # Budget hard-stop pause fields (GH#6470)
+    status = Column(String(32), nullable=False, default="active", index=True)
+    paused_reason = Column(Text, nullable=True)
+    paused_at = Column(DateTime, nullable=True)
+    paused_by = Column(String(255), nullable=True)
 
     runs = relationship(
         "HeartbeatRun",

@@ -743,10 +743,21 @@ async def _init_heartbeat_scheduler(app: FastAPI) -> None:
         from services.heartbeat_scheduler import HeartbeatScheduler
         from user_management.database import get_async_session_factory
 
-        scheduler = HeartbeatScheduler(get_async_session_factory())
+        session_factory = get_async_session_factory()
+        scheduler = HeartbeatScheduler(session_factory)
         await scheduler.start()
         app.state.heartbeat_scheduler = scheduler
         configure_scheduler(scheduler)
+
+        # Wire budget policy enforcement — must run after session factory is ready (GH#6470)
+        from services.budget_policy import configure_session_factory as _cfg_bp, seed_default_policies
+
+        _cfg_bp(session_factory)
+        try:
+            await seed_default_policies()
+        except Exception as bp_seed_err:
+            logger.warning("Budget policy seed failed (non-critical): %s", bp_seed_err)
+
         logger.info("Heartbeat: Legacy scheduler started")
     except Exception as hb_error:
         logger.warning("Heartbeat scheduler initialization failed: %s", hb_error)
