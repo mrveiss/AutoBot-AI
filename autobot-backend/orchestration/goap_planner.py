@@ -106,7 +106,9 @@ DEFAULT_ACTIONS: tuple[GOAPAction, ...] = (
     # ── documentation / knowledge ───────────────────────────────────────────
     _action("write_documentation", ["analysis_done"], ["docs_written"], 1.5, AgentCapability.DOCUMENTATION),
     _action("write_docs_from_summary", ["summary_written"], ["docs_written"], 1.5, AgentCapability.DOCUMENTATION),
-    _action("store_in_knowledge_base", ["docs_written"], ["knowledge_stored"], 0.5, AgentCapability.KNOWLEDGE_MANAGEMENT),
+    _action(
+        "store_in_knowledge_base", ["docs_written"], ["knowledge_stored"], 0.5, AgentCapability.KNOWLEDGE_MANAGEMENT
+    ),
     # ── orchestration ───────────────────────────────────────────────────────
     _action("coordinate_agents", [], ["agents_coordinated"], 1.0, AgentCapability.WORKFLOW_COORDINATION),
     _action("process_data", ["research_done"], ["data_processed"], 1.0, AgentCapability.DATA_PROCESSING),
@@ -160,9 +162,7 @@ class GOAPPlanner:
         # heap entries: (f_score, g_score, tie_counter, state, path)
         counter = 0
         h0 = len(goal_fs - start)
-        heap: list[tuple[float, float, int, frozenset, list[GOAPAction]]] = [
-            (float(h0), 0.0, counter, start, [])
-        ]
+        heap: list[tuple[float, float, int, frozenset, list[GOAPAction]]] = [(float(h0), 0.0, counter, start, [])]
         # state → best g already expanded at this state (closed list)
         visited: Dict[frozenset, float] = {}
 

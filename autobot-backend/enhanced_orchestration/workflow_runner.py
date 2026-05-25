@@ -295,9 +295,7 @@ class WorkflowRunner:
                 logger.error("Fallback plan failed: %s", fe)
         return {"plan_id": plan.plan_id, "success": False, "error": str(error), "results": results}
 
-    async def _try_goap_replan(
-        self, plan: WorkflowPlan, results: Dict[str, Any], _depth: int
-    ) -> Dict[str, Any] | None:
+    async def _try_goap_replan(self, plan: WorkflowPlan, results: Dict[str, Any], _depth: int) -> Dict[str, Any] | None:
         """Attempt GOAP adaptive replanning after a step failure (GH#7354).
 
         Derives the current world-state from effects of completed tasks, then

@@ -23,7 +23,6 @@ from enhanced_orchestration.types import AgentTask, WorkflowPlan
 from enhanced_orchestration.workflow_runner import WorkflowRunner
 from orchestration.goap_planner import GOAPAction, GOAPPlanner
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -59,7 +58,9 @@ def _make_runner() -> WorkflowRunner:
     )
 
 
-def _goap_task(task_id: str, action: str, effects: list, dependencies: list = None, status: str = "pending") -> AgentTask:
+def _goap_task(
+    task_id: str, action: str, effects: list, dependencies: list = None, status: str = "pending"
+) -> AgentTask:
     t = AgentTask(
         task_id=task_id,
         agent_type="test_agent",
@@ -128,9 +129,7 @@ async def test_goap_replan_on_step_failure():
     replanned_tasks = replan_called_with.get("tasks", [])
     # The replanned path must start differently from the failed step (run_tests).
     # It may still use run_tests later — but must take a different first action.
-    assert replanned_tasks[0] != "run_tests", (
-        f"Replan should not start with the failed action; got: {replanned_tasks}"
-    )
+    assert replanned_tasks[0] != "run_tests", f"Replan should not start with the failed action; got: {replanned_tasks}"
     # The replan must terminate with a step that achieves pr_opened.
     assert replanned_tasks[-1] in {"open_pr", "open_pr_without_tests"}
 
@@ -196,9 +195,7 @@ async def test_goap_replan_unreachable_falls_back_to_fallback_chain():
     )
     goap_plan.fallback_plans = [fallback_plan]
 
-    result = await runner._handle_workflow_execution_failure(
-        goap_plan, RuntimeError("unreachable"), {}, _depth=0
-    )
+    result = await runner._handle_workflow_execution_failure(goap_plan, RuntimeError("unreachable"), {}, _depth=0)
 
     assert result["success"] is True
     assert "fallback-1" in fallback_reached

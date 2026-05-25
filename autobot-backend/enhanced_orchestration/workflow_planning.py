@@ -491,9 +491,7 @@ class StrategyPlanner:
             )
 
         tasks = [AgentTask.from_dict(d) for d in task_dicts]
-        dependencies_graph: Dict[str, List[str]] = {
-            t["task_id"]: t["dependencies"] for t in task_dicts
-        }
+        dependencies_graph: Dict[str, List[str]] = {t["task_id"]: t["dependencies"] for t in task_dicts}
 
         return WorkflowPlan(
             plan_id=effective_plan_id,
