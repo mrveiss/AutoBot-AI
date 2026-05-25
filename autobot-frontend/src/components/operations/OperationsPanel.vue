@@ -56,7 +56,6 @@ import { useI18n } from 'vue-i18n'
 import type { Operation, OperationsFilter } from '@/types/operations'
 import OperationsList from './OperationsList.vue'
 import OperationDetail from './OperationDetail.vue'
-import Icon from '@/components/ui/Icon.vue'
 
 interface Props {
   operations: Operation[]

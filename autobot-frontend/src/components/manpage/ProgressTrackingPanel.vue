@@ -86,7 +86,6 @@ import { computed } from 'vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
-import Icon from '@/components/ui/Icon.vue'
 
 interface ProgressMessage {
   text: string

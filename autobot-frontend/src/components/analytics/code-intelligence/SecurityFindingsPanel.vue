@@ -21,7 +21,6 @@
 import Icon from '@/components/ui/Icon.vue'
 import FindingsTable from './FindingsTable.vue'
 import type { SecurityFinding } from '@/types/codeIntelligence'
-import Icon from '@/components/ui/Icon.vue'
 
 defineProps<{
   findings: SecurityFinding[]

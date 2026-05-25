@@ -37,7 +37,6 @@ import SpriteText from 'three-spritetext'
 import * as THREE from 'three'
 import { getCssVar } from '@/composables/useCssVars'
 import { createLogger } from '@/utils/debugUtils'
-import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('KnowledgeGraph3D')
 

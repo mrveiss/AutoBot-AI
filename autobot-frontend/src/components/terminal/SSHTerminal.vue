@@ -28,7 +28,6 @@ import '@xterm/xterm/css/xterm.css'
 import { createLogger } from '@/utils/debugUtils'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useWebSocket } from '@/composables/useWebSocket'
-import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('SSHTerminal')
 

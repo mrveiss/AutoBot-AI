@@ -90,7 +90,6 @@ import {
   createDefaultCacheConfig,
   createCacheActivityItem
 } from '@/types/settings'
-import Icon from '@/components/ui/Icon.vue'
 import type {
   SettingsStructure,
   SettingsTab,

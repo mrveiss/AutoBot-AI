@@ -44,7 +44,6 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useTerminalStore, AVAILABLE_HOSTS, type HostConfig } from '@/composables/useTerminalStore'
 import { createLogger } from '@/utils/debugUtils'
 import { useHostSelection } from '@/composables/useHostSelection'
-import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('HostSelector')
 

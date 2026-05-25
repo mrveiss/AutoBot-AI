@@ -106,7 +106,6 @@ import SecurityFindingsPanel from '@/components/analytics/code-intelligence/Secu
 import PerformanceFindingsPanel from '@/components/analytics/code-intelligence/PerformanceFindingsPanel.vue'
 import RedisFindingsPanel from '@/components/analytics/code-intelligence/RedisFindingsPanel.vue'
 import FileScanModal from '@/components/analytics/code-intelligence/FileScanModal.vue'
-import Icon from '@/components/ui/Icon.vue'
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const { t } = useI18n()

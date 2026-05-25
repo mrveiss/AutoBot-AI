@@ -129,7 +129,6 @@ import { computed } from 'vue'
 import { useGroupingMemo } from '@/composables/useComputedMemo'
 import { useExpansion } from '@/composables/useExpansion'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import Icon from '@/components/ui/Icon.vue'
 
 interface CodeSmell {
   severity: string

@@ -155,7 +155,6 @@
 import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import type { AuditFilter, AuditResult } from '@/types/audit'
-import Icon from '@/components/ui/Icon.vue'
 
 interface Props {
   filter: AuditFilter

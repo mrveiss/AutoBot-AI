@@ -74,7 +74,6 @@ import { ref } from 'vue'
 import SummarySearch from './SummarySearch.vue'
 import DocumentOverview from './DocumentOverview.vue'
 import DrillDownViewer from './DrillDownViewer.vue'
-import Icon from '@/components/ui/Icon.vue'
 
 const view = ref<'search' | 'overview'>('search')
 const documentId = ref('')

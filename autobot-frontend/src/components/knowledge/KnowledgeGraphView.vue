@@ -95,7 +95,6 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useKnowledgeGraph } from '@/composables/useKnowledgeGraph'
-import Icon from '@/components/ui/Icon.vue'
 
 const route = useRoute()
 const router = useRouter()

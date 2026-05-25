@@ -142,7 +142,6 @@ import VisualBrowserPanel from '@/components/chat/VisualBrowserPanel.vue'  // Is
 import HostSelector from '@/components/ui/HostSelector.vue'  // Issue #715: Dynamic host selection
 import SSHTerminal from '@/components/terminal/SSHTerminal.vue'    // Issue #715: SSH terminal component
 import DesktopInterface from '@/components/desktop/DesktopInterface.vue'  // Issue #4977: full VNC component
-import Icon from '@/components/ui/Icon.vue'
 
 /**
  * Infrastructure host type for SSH/VNC connections.
