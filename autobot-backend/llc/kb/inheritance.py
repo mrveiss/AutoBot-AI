@@ -29,11 +29,12 @@ class KbInheritanceResolver:
     grandparent (0.36), etc. (configurable multiplier, default 0.6 per level).
     """
 
-    def __init__(self, rag_assembler: LLCRAGAssembler):
-        """Initialize resolver with RAG assembler.
+    def __init__(self, rag_assembler: Optional[LLCRAGAssembler] = None):
+        """Initialize resolver with optional RAG assembler.
 
         Args:
-            rag_assembler: RAG service for KB queries
+            rag_assembler: RAG service for KB queries (required only for search_with_inheritance
+                and search_with_collections; not needed for get_query_collections alone).
         """
         self.rag_assembler = rag_assembler
 
@@ -64,7 +65,6 @@ class KbInheritanceResolver:
 
             from user_management.models.organization import Organization
 
-            # Fetch company
             company_uuid = uuid.UUID(company_id)
             stmt = select(Organization).where(Organization.id == company_uuid)
             result = await session.execute(stmt)
@@ -73,7 +73,6 @@ class KbInheritanceResolver:
             if not company:
                 raise ValueError(f"Company {company_id} not found")
 
-            # Walk parent chain from company to root
             collections = []
             current = company
             weight = 1.0
@@ -83,9 +82,7 @@ class KbInheritanceResolver:
                 weight_multiplier = current.kb_inheritance_weight
                 collections.append((f"{str(current.id)}:company", weight))
 
-                # Move to parent if exists
                 if current.parent_org_id:
-                    # Cycle detection: break if we've seen this org before
                     if current.parent_org_id in visited:
                         logger.warning(
                             "Circular parent_org_id detected for company %s, stopping traversal",
@@ -115,6 +112,100 @@ class KbInheritanceResolver:
             logger.error("Failed to resolve KB collections for company %s: %s", company_id, e)
             raise
 
+    async def search_with_collections(
+        self,
+        collections: List[Tuple[str, float]],
+        query_text: str,
+        top_k: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """Search KB across pre-fetched collection chain and re-rank by weight.
+
+        Runs parallel RAG queries without a DB session — call get_query_collections()
+        first to obtain the list. Uses coroutines directly in asyncio.gather to avoid
+        orphaned tasks on cancellation (GH#8569).
+
+        Args:
+            collections: List of (collection_name, weight) from get_query_collections()
+            query_text: Query text for similarity search
+            top_k: Number of top results to return
+
+        Returns:
+            List of merged KbResult-like dicts with source_company_id annotation,
+            sorted by weighted score (descending).
+        """
+        if not self.rag_assembler:
+            raise RuntimeError("rag_assembler required for search_with_collections")
+
+        if not collections:
+            return []
+
+        # Build (coroutine, source_company_id, weight) triples — coroutines, not Tasks,
+        # so cancellation of the gather also cancels each query (GH#8569).
+        coro_specs = [
+            (
+                self.rag_assembler.assemble(
+                    company_id=collection_name.split(":")[0],
+                    profile=AssemblerProfile.HEARTBEAT,
+                    query_text=query_text,
+                ),
+                collection_name.split(":")[0],
+                weight,
+            )
+            for collection_name, weight in collections
+        ]
+
+        results = await asyncio.gather(
+            *[coro for coro, _, _ in coro_specs],
+            return_exceptions=True,
+        )
+
+        merged: Dict[str, Any] = {}
+
+        for (_, source_company_id, weight), result in zip(coro_specs, results):
+            if isinstance(result, Exception):
+                logger.warning("Query failed for collection %s: %s", source_company_id, result)
+                continue
+
+            if hasattr(result, "chunks"):
+                chunks = result.chunks
+            elif isinstance(result, dict) and "chunks" in result:
+                chunks = result["chunks"]
+            else:
+                chunks = []
+
+            for chunk in chunks:
+                doc_id = chunk.get("id", chunk.get("metadata", {}).get("id"))
+                if not doc_id:
+                    continue
+
+                score = chunk.get("similarity_score", chunk.get("score", 0.0))
+                weighted_score = score * weight
+
+                if doc_id not in merged or merged[doc_id]["weighted_score"] < weighted_score:
+                    merged[doc_id] = {
+                        "id": doc_id,
+                        "content": chunk.get("content", ""),
+                        "score": score,
+                        "weight": weight,
+                        "weighted_score": weighted_score,
+                        "source_company_id": source_company_id,
+                        "metadata": chunk.get("metadata", {}),
+                    }
+
+        sorted_results = sorted(
+            merged.values(),
+            key=lambda x: x["weighted_score"],
+            reverse=True,
+        )[:top_k]
+
+        logger.debug(
+            "Merged %d results from %d collections, returning top %d",
+            len(merged),
+            len(collections),
+            len(sorted_results),
+        )
+        return sorted_results
+
     async def search_with_inheritance(
         self,
         session: AsyncSession,
@@ -124,11 +215,12 @@ class KbInheritanceResolver:
     ) -> List[Dict[str, Any]]:
         """Search KB across company hierarchy and re-rank by weight.
 
-        Issues parallel RAG queries across all collections in the inheritance
-        chain, then merges and re-ranks results by score * weight.
+        Resolves the collection chain from DB sequentially, then issues parallel
+        RAG queries via search_with_collections. The DB session is not passed to
+        any concurrent task (GH#8566 fix).
 
         Args:
-            session: DB session
+            session: DB session (used only for the sequential collection lookup)
             company_id: Company UUID to search from
             query_text: Query text for similarity search
             top_k: Number of top results to return
@@ -138,89 +230,13 @@ class KbInheritanceResolver:
             sorted by weighted score (descending).
         """
         try:
-            # Get collections with weights
             collections = await self.get_query_collections(session, company_id)
 
             if not collections:
                 logger.warning("No KB collections found for company %s", company_id)
                 return []
 
-            # Issue parallel queries across all collections
-            tasks = []
-            for collection_name, weight in collections:
-                # Extract company_id from collection_name (format: "comp-uuid:company")
-                source_company_id = collection_name.split(":")[0]
-
-                task = asyncio.create_task(
-                    self.rag_assembler.assemble(
-                        company_id=source_company_id,
-                        profile=AssemblerProfile.HEARTBEAT,
-                        query_text=query_text,
-                    )
-                )
-                tasks.append((task, source_company_id, weight))
-
-            # Gather results
-            results = await asyncio.gather(
-                *[task for task, _, _ in tasks],
-                return_exceptions=True,
-            )
-
-            # Merge and re-rank by weighted score
-            merged = {}  # doc_id -> {score, weight, source_company_id, ...}
-
-            for (task, source_company_id, weight), result in zip(tasks, results):
-                if isinstance(result, Exception):
-                    logger.warning(
-                        "Query failed for collection %s: %s",
-                        source_company_id,
-                        result,
-                    )
-                    continue
-
-                # Extract chunks from result (result is LLCContext)
-                if hasattr(result, "chunks"):
-                    chunks = result.chunks
-                elif isinstance(result, dict) and "chunks" in result:
-                    chunks = result["chunks"]
-                else:
-                    chunks = []
-
-                for chunk in chunks:
-                    doc_id = chunk.get("id", chunk.get("metadata", {}).get("id"))
-                    if not doc_id:
-                        continue
-
-                    # Use similarity_score from production (fallback to score for tests)
-                    score = chunk.get("similarity_score", chunk.get("score", 0.0))
-                    weighted_score = score * weight
-
-                    if doc_id not in merged or merged[doc_id]["weighted_score"] < weighted_score:
-                        merged[doc_id] = {
-                            "id": doc_id,
-                            "content": chunk.get("content", ""),
-                            "score": score,
-                            "weight": weight,
-                            "weighted_score": weighted_score,
-                            "source_company_id": source_company_id,
-                            "metadata": chunk.get("metadata", {}),
-                        }
-
-            # Sort by weighted_score descending and return top_k
-            sorted_results = sorted(
-                merged.values(),
-                key=lambda x: x["weighted_score"],
-                reverse=True,
-            )[:top_k]
-
-            logger.debug(
-                "Merged %d results from %d collections for company %s, returning top %d",
-                len(merged),
-                len(collections),
-                company_id,
-                len(sorted_results),
-            )
-            return sorted_results
+            return await self.search_with_collections(collections, query_text, top_k)
 
         except Exception as e:
             logger.error("Failed to search KB with inheritance for company %s: %s", company_id, e)
