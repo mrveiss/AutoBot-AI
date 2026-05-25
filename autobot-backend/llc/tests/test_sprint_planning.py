@@ -34,8 +34,8 @@ def _make_sprint(**kwargs) -> LLCSprint:
         "name": "Sprint 1",
         "goal": "Ship planning APIs",
         "status": SprintStatus.ACTIVE,
-        "start_date": _NOW - timedelta(days=7),
-        "end_date": _NOW + timedelta(days=7),
+        "start_date": (_NOW - timedelta(days=7)).date(),
+        "end_date": (_NOW + timedelta(days=7)).date(),
         "committed_points": 40,
     }
     defaults.update(kwargs)
@@ -169,13 +169,13 @@ class TestGetVelocityHistory:
             id=uuid.uuid4(),
             name="Sprint 3",
             status=SprintStatus.CLOSED,
-            end_date=_NOW - timedelta(days=1),
+            end_date=(_NOW - timedelta(days=1)).date(),
         )
         s2 = _make_sprint(
             id=uuid.uuid4(),
             name="Sprint 2",
             status=SprintStatus.CLOSED,
-            end_date=_NOW - timedelta(days=15),
+            end_date=(_NOW - timedelta(days=15)).date(),
         )
 
         # First call returns sprint list; second call returns GROUP BY velocity rows
@@ -246,8 +246,8 @@ class TestGetVelocityHistory:
 
 class TestGetBurndown:
     async def test_full_series_from_start_to_today(self, service):
-        start = _NOW - timedelta(days=3)
-        end = _NOW + timedelta(days=4)
+        start = (_NOW - timedelta(days=3)).date()
+        end = (_NOW + timedelta(days=4)).date()
         sprint = _make_sprint(start_date=start, end_date=end, status=SprintStatus.ACTIVE)
 
         # 3 items: 10 pts (completed day-1), 5 pts (completed day-2), 5 pts (open)
@@ -255,12 +255,12 @@ class TestGetBurndown:
             _make_item(
                 story_points=10,
                 status=WorkItemStatus.DONE,
-                completed_at=start + timedelta(days=1),
+                completed_at=_NOW - timedelta(days=2),
             ),
             _make_item(
                 story_points=5,
                 status=WorkItemStatus.DONE,
-                completed_at=start + timedelta(days=2),
+                completed_at=_NOW - timedelta(days=1),
             ),
             _make_item(story_points=5, status=WorkItemStatus.IN_PROGRESS, completed_at=None),
         ]
@@ -284,14 +284,14 @@ class TestGetBurndown:
         assert result["total_points"] == 20
         series = {entry["date"]: entry["remaining"] for entry in result["series"]}
 
-        # Day 0 (start): 0 done → 20 remaining
-        assert series[start.date().isoformat()] == 20
-        # Day 1: 10 done → 10 remaining
-        assert series[(start + timedelta(days=1)).date().isoformat()] == 10
-        # Day 2: 15 done → 5 remaining
-        assert series[(start + timedelta(days=2)).date().isoformat()] == 5
+        # Day 0 (start = 3 days ago): nothing done yet → 20 remaining
+        assert series[start.isoformat()] == 20
+        # Day 1 (2 days ago): 10 done → 10 remaining
+        assert series[(start + timedelta(days=1)).isoformat()] == 10
+        # Day 2 (1 day ago): 15 done → 5 remaining
+        assert series[(start + timedelta(days=2)).isoformat()] == 5
         # Day 3 (today): still 5 remaining (open item)
-        assert series[(start + timedelta(days=3)).date().isoformat()] == 5
+        assert series[(start + timedelta(days=3)).isoformat()] == 5
 
     async def test_no_start_date_returns_error(self, service):
         sprint = _make_sprint(start_date=None)
@@ -318,8 +318,8 @@ class TestGetBurndown:
             await service.get_burndown(session, str(uuid.uuid4()))
 
     async def test_remaining_never_goes_below_zero(self, service):
-        start = _NOW - timedelta(days=1)
-        end = _NOW + timedelta(days=1)
+        start = (_NOW - timedelta(days=1)).date()
+        end = (_NOW + timedelta(days=1)).date()
         sprint = _make_sprint(start_date=start, end_date=end)
 
         # Item completed before sprint started (anomaly) — should not produce negative
@@ -327,12 +327,12 @@ class TestGetBurndown:
             _make_item(
                 story_points=5,
                 status=WorkItemStatus.DONE,
-                completed_at=start,
+                completed_at=_NOW - timedelta(days=2),  # before sprint start
             ),
             _make_item(
                 story_points=3,
                 status=WorkItemStatus.DONE,
-                completed_at=start,
+                completed_at=_NOW - timedelta(days=2),  # before sprint start
             ),
         ]
 
