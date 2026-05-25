@@ -21,6 +21,9 @@ router = APIRouter(prefix="/budget", tags=["llc-budget"])
 # Separate router for /cost-events so it doesn't inherit the /budget prefix
 cost_events_router = APIRouter(prefix="/cost-events", tags=["llc-cost-events"])
 
+# Separate router for per-company cost breakdown (GH#8486)
+costs_by_model_router = APIRouter(prefix="/companies", tags=["llc-costs-by-model"])
+
 
 class BudgetResponse(BaseModel):
     agent_id: str
@@ -185,3 +188,91 @@ async def list_cost_events(
         }
         for row in rows
     ]
+
+
+# ---------------------------------------------------------------------------
+# GET /companies/{company_id}/costs/by-agent-model — Haiku token dashboard
+# (GH#8486 — item 4)
+# ---------------------------------------------------------------------------
+
+
+class AgentModelCostRow(BaseModel):
+    """Per-agent + per-model token breakdown row."""
+
+    agent_id: str
+    agent_name: str
+    model: str
+    input_tokens: int
+    cached_input_tokens: int
+    output_tokens: int
+    cache_hit_rate: float
+    cost_usd: str
+
+
+@costs_by_model_router.get(
+    "/{company_id}/costs/by-agent-model",
+    response_model=List[AgentModelCostRow],
+    summary="Token breakdown per agent+model with cache hit rate (GH#8486)",
+)
+async def costs_by_agent_model(
+    company_id: str,
+    session: AsyncSession = Depends(get_async_session),
+) -> List[AgentModelCostRow]:
+    """Return token usage broken down by agent and model for a company.
+
+    Required fields: agentId, agentName, model, inputTokens,
+    cachedInputTokens, outputTokens, cacheHitRate.
+
+    Cache hit rate = cachedInputTokens / totalInputTokens.  A low rate
+    signals session churn — the agent is not benefiting from prompt caching.
+
+    Data is sourced from ``agent_org_nodes`` (for model + name) joined to
+    ``llc_heartbeat_runs`` (for token usage).  Rows without any heartbeat
+    runs are included with zero token counts so the roster is always complete.
+
+    Note: ``llc_heartbeat_runs`` does not yet have ``input_tokens`` /
+    ``cached_input_tokens`` columns.  The query returns zeros for those until
+    a future migration adds the columns.  The endpoint is intentionally
+    available from day one so dashboards can start wiring up immediately.
+    """
+    result = await session.execute(
+        text("""
+            SELECT
+                aon.agent_id,
+                aon.name                                   AS agent_name,
+                COALESCE(aon.model, 'claude-sonnet-4-6')   AS model,
+                COALESCE(SUM(hr.tokens_in), 0)             AS input_tokens,
+                0                                          AS cached_input_tokens,
+                COALESCE(SUM(hr.tokens_out), 0)            AS output_tokens
+            FROM agent_org_nodes aon
+            LEFT JOIN llc_heartbeat_runs hr
+                   ON hr.agent_id = aon.agent_id
+            WHERE aon.company_id = :company_id
+            GROUP BY aon.agent_id, aon.name, aon.model
+            ORDER BY output_tokens DESC
+        """),
+        {"company_id": company_id},
+    )
+    rows = result.mappings().all()
+
+    out: List[AgentModelCostRow] = []
+    for row in rows:
+        total_in = int(row["input_tokens"]) + int(row["cached_input_tokens"])
+        cache_hit_rate = (
+            round(int(row["cached_input_tokens"]) / total_in, 4)
+            if total_in > 0
+            else 0.0
+        )
+        out.append(
+            AgentModelCostRow(
+                agent_id=row["agent_id"],
+                agent_name=row["agent_name"],
+                model=row["model"],
+                input_tokens=int(row["input_tokens"]),
+                cached_input_tokens=int(row["cached_input_tokens"]),
+                output_tokens=int(row["output_tokens"]),
+                cache_hit_rate=cache_hit_rate,
+                cost_usd="0.00",  # populated by a future cost calculation pass
+            )
+        )
+    return out

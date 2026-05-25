@@ -99,6 +99,7 @@ async def _collect_metrics() -> dict:
     agents_overdue_degraded, agents_overdue_critical = await _count_overdue_agents()
     budget_warning_companies, budget_exhausted_companies = await _budget_counts()
     pending_approvals_critical = await _pending_approvals_critical()
+    agents_missing_instructions = await _count_agents_missing_instructions()
 
     return {
         "heartbeat_scheduler_running": heartbeat_scheduler_running,
@@ -109,6 +110,7 @@ async def _collect_metrics() -> dict:
         "budget_warning_companies": budget_warning_companies,
         "budget_exhausted_companies": budget_exhausted_companies,
         "pending_approvals_critical": pending_approvals_critical,
+        "agents_missing_instructions": agents_missing_instructions,
     }
 
 
@@ -125,6 +127,7 @@ def _compute_status(metrics: dict) -> str:
         or not metrics["liveness_monitor_running"]
         or metrics["pending_approvals_critical"] > 0
         or metrics["budget_warning_companies"] > 0
+        or metrics.get("agents_missing_instructions", 0) > 0
     ):
         return "degraded"
     return "ok"
@@ -259,4 +262,42 @@ async def _pending_approvals_critical() -> int:
             return int(result.scalar_one_or_none() or 0)
     except Exception:
         logger.debug("Could not query pending approvals", exc_info=True)
+        return 0
+
+
+async def _count_agents_missing_instructions() -> int:
+    """Count heartbeat-enabled claude_code agents whose AGENTS.md is missing on disk (GH#8486).
+
+    An agent running without an instructions file has no role definition or
+    safety constraints — discovered in production on Paperclip (GH#8486, item 3).
+    The probe flags these agents as degraded so operators can repair them via
+    ``doctor --repair``.
+
+    Returns the count of affected agents.  Falls back to 0 on any error so
+    the probe does not crash when the column does not yet exist (pre-migration
+    environments).
+    """
+    import os
+
+    try:
+        factory = get_async_session_factory()
+        async with factory() as session:
+            result = await session.execute(
+                text("""
+                    SELECT agent_id, instructions_file_path
+                    FROM agent_org_nodes
+                    WHERE heartbeat_enabled = true
+                      AND adapter_type = 'claude_code'
+                """)
+            )
+            rows = result.fetchall()
+
+        missing = 0
+        for row in rows:
+            path = row[1]  # instructions_file_path
+            if not path or not os.path.isfile(path):
+                missing += 1
+        return missing
+    except Exception:
+        logger.debug("Could not query agents missing instructions", exc_info=True)
         return 0
