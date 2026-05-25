@@ -294,6 +294,16 @@
       @close="showVisionModal = false"
       @send-to-chat="handleVisionSendToChat"
     />
+
+    <!-- GH#4449: Slash command preset autocomplete dropdown -->
+    <SlashCommandDropdown
+      :show="showSlashDropdown"
+      :suggestions="slashSuggestions"
+      :selected-index="slashSelectedIndex"
+      :anchor-el="messageInput ?? null"
+      @select="applySlashPreset"
+      @update:selected-index="setSlashIndex"
+    />
   </div>
 </template>
 
@@ -307,12 +317,15 @@ import ProgressBar from '@/components/ui/ProgressBar.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import VisionAnalysisModal from './VisionAnalysisModal.vue'
 import TranslationShortcutPanel from './TranslationShortcutPanel.vue'
+import SlashCommandDropdown from './SlashCommandDropdown.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
 import { getFileIconByMimeType } from '@/utils/iconMappings'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import type { MultiModalResponse } from '@/utils/VisionMultimodalApiClient'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
+import { useSlashCommands } from '@/composables/useSlashCommands'
+import type { SlashCommandPreset } from '@/types/api'
 
 const { t } = useI18n()
 const logger = createLogger('ChatInput')
@@ -327,6 +340,30 @@ const submitOverseerQuery = inject<(query: string) => Promise<boolean>>('submitO
 
 const store = useChatStore()
 const controller = useChatController()
+
+// GH#4449: Slash command preset autocomplete
+const {
+  suggestions: slashSuggestions,
+  showDropdown: showSlashDropdown,
+  selectedIndex: slashSelectedIndex,
+  onInput: onSlashInput,
+  moveUp: slashMoveUp,
+  moveDown: slashMoveDown,
+  applyPreset,
+  confirmSelection,
+  setSelectedIndex,
+  close: closeSlashDropdown,
+  fetchPresets,
+} = useSlashCommands(messageText)
+
+const applySlashPreset = (preset: SlashCommandPreset) => {
+  messageText.value = applyPreset(preset)
+  closeSlashDropdown()
+}
+
+const setSlashIndex = (idx: number) => {
+  setSelectedIndex(idx)
+}
 
 // Refs
 const messageInput = ref<HTMLTextAreaElement>()
@@ -418,6 +455,34 @@ const isTypingIndicatorVisible = computed(() => {
 
 // Methods
 const handleKeydown = (event: KeyboardEvent) => {
+  // GH#4449: Slash command dropdown keyboard navigation
+  if (showSlashDropdown.value) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      slashMoveDown()
+      return
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      slashMoveUp()
+      return
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      closeSlashDropdown()
+      return
+    }
+    if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey)) {
+      const preset = confirmSelection()
+      if (preset) {
+        event.preventDefault()
+        messageText.value = applyPreset(preset)
+        closeSlashDropdown()
+        return
+      }
+    }
+  }
+
   if (event.key === 'Enter' && canSend.value) {
     // Shift+Enter creates new line, Enter sends message
     if (!event.shiftKey) {
@@ -448,6 +513,9 @@ const handleInput = (event: Event) => {
 
   // Update typing indicator
   updateTypingIndicator()
+
+  // GH#4449: slash command autocomplete
+  onSlashInput()
 }
 
 const sendMessage = async () => {
@@ -912,6 +980,9 @@ onMounted(() => {
   nextTick(() => {
     messageInput.value?.focus()
   })
+
+  // GH#4449: preload presets for instant autocomplete
+  fetchPresets()
 })
 
 onUnmounted(() => {
