@@ -348,6 +348,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["heartbeat", "agents"],
         "heartbeat",
     ),
+    # Issue #6470: Budget policy CRUD API and hard-stop auto-pause
+    (
+        "api.budget_policies",
+        "/api",
+        ["budget-policies"],
+        "budget_policies",
+    ),
     # Long-running and validation
     # Moved back from core_routers — has _OPERATIONS_AVAILABLE graceful degradation (Issue #6306)
     (
