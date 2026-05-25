@@ -59,9 +59,7 @@ class LLCNotificationRouter:
         try:
             redis = await get_async_redis_client(database="main")
             if redis is not None:
-                acquired = await redis.set(
-                    _ROUTER_LOCK_KEY, "1", nx=True, ex=_ROUTER_LOCK_TTL
-                )
+                acquired = await redis.set(_ROUTER_LOCK_KEY, "1", nx=True, ex=_ROUTER_LOCK_TTL)
                 if not acquired:
                     logger.info("LLC notification router: lock held by another worker, skipping")
                     return

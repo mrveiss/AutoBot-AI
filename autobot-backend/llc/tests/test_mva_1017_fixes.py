@@ -12,7 +12,6 @@ import pytest
 
 from llc.models.enums import SprintStatus
 
-
 # ---------------------------------------------------------------------------
 # GH#8493 — falsy-zero token metadata lookup
 # ---------------------------------------------------------------------------
@@ -150,9 +149,7 @@ def test_lifecycle_guard_blocks_active_and_closed_in_source() -> None:
     import ast
     import os
 
-    src_path = os.path.join(
-        os.path.dirname(__file__), "..", "api", "sprints.py"
-    )
+    src_path = os.path.join(os.path.dirname(__file__), "..", "api", "sprints.py")
     with open(src_path) as f:
         tree = ast.parse(f.read())
 

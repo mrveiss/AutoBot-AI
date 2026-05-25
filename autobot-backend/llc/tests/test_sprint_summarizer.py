@@ -126,9 +126,7 @@ async def test_no_project_id_archives_and_skips_merge(summarizer, km_mock):
     """Bug 2 fix: archive must be called even when project_id is None."""
     sprint_id = uuid.uuid4()
 
-    with (
-        patch.object(summarizer, "_load_sprint_context", new=AsyncMock(return_value=(None, None))),
-    ):
+    with (patch.object(summarizer, "_load_sprint_context", new=AsyncMock(return_value=(None, None))),):
         result = await summarizer.summarize_and_merge(sprint_id, session=MagicMock())
 
     assert result is None
@@ -181,9 +179,7 @@ async def test_llm_empty_content_falls_back_to_direct_merge(summarizer, km_mock)
     sprint_id = uuid.uuid4()
     project_id = uuid.uuid4()
     docs = _make_docs(20)
-    dst_collection = KbCollectionManager.collection_name(
-        KbCollectionManager.PROJECT_PREFIX, project_id
-    )
+    dst_collection = KbCollectionManager.collection_name(KbCollectionManager.PROJECT_PREFIX, project_id)
 
     llm_response = MagicMock()
     llm_response.error = None
@@ -199,9 +195,7 @@ async def test_llm_empty_content_falls_back_to_direct_merge(summarizer, km_mock)
         patch.dict(sys.modules, {"services.llm_service": fake_llm_module}),
         patch.object(summarizer, "_direct_merge", new=AsyncMock()) as dm,
     ):
-        result = await summarizer._llm_summarize_and_index(
-            docs, dst_collection, sprint_id, project_id
-        )
+        result = await summarizer._llm_summarize_and_index(docs, dst_collection, sprint_id, project_id)
 
     dm.assert_called_once()
     assert result == "[direct-merged: LLM returned empty content]"
@@ -212,9 +206,7 @@ async def test_fetch_documents_reraises_non_notfound_exception(summarizer, km_mo
     """Fix 2: transient ChromaDB errors must propagate, not silently return []."""
     kb_mock = AsyncMock()
     kb_mock._async_chroma_client = AsyncMock()
-    kb_mock._async_chroma_client.get_collection = AsyncMock(
-        side_effect=RuntimeError("connection refused")
-    )
+    kb_mock._async_chroma_client.get_collection = AsyncMock(side_effect=RuntimeError("connection refused"))
 
     import sys
 
@@ -230,9 +222,7 @@ async def test_no_session_skips_load_sprint_context(summarizer, km_mock):
     """Fix 3: calling without session must skip _load_sprint_context and archive."""
     sprint_id = uuid.uuid4()
 
-    with patch.object(
-        summarizer, "_load_sprint_context", new=AsyncMock()
-    ) as load_mock:
+    with patch.object(summarizer, "_load_sprint_context", new=AsyncMock()) as load_mock:
         result = await summarizer.summarize_and_merge(sprint_id)
 
     assert load_mock.call_count == 0

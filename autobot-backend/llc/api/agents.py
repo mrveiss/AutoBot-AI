@@ -63,8 +63,7 @@ async def list_agents(
         select(LLCHeartbeatRun)
         .join(
             subq,
-            (LLCHeartbeatRun.agent_id == subq.c.agent_id)
-            & (LLCHeartbeatRun.created_at == subq.c.latest_at),
+            (LLCHeartbeatRun.agent_id == subq.c.agent_id) & (LLCHeartbeatRun.created_at == subq.c.latest_at),
         )
         .order_by(LLCHeartbeatRun.agent_id)
     )
@@ -77,9 +76,9 @@ async def list_agents(
             "heartbeat_enabled": True,
             "last_heartbeat_at": run.started_at.isoformat() if run.started_at else None,
             "last_run_status": run.status,
-            "current_run_started_at": run.started_at.isoformat()
-            if run.status == "running" and run.started_at
-            else None,
+            "current_run_started_at": (
+                run.started_at.isoformat() if run.status == "running" and run.started_at else None
+            ),
         }
         for run in rows
     ]

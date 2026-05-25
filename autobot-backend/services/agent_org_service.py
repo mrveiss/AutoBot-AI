@@ -218,6 +218,7 @@ class AgentOrgService:
         if effective_company_id:
             try:
                 from llc.kb import AgentCapabilityIndexer
+
                 await AgentCapabilityIndexer().index_from_db(agent_id, effective_company_id)
             except Exception:
                 logger.exception("Capability re-index failed for agent %s (non-fatal)", agent_id)
@@ -285,6 +286,7 @@ class AgentOrgService:
         if effective_company_id:
             try:
                 from llc.kb import AgentCapabilityIndexer
+
                 await AgentCapabilityIndexer().index_from_db(agent_id, effective_company_id)
             except Exception:
                 logger.exception("Capability index failed for agent %s (non-fatal)", agent_id)

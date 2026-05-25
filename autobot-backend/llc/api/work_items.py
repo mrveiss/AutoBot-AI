@@ -27,6 +27,7 @@ Routes:
 import uuid
 from typing import Any, Dict, List, Optional
 
+from api.user_management.dependencies import get_current_user
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
@@ -54,6 +55,7 @@ from ..services.work_item_service import (
     CoWorkingPermissionError,
     InvalidTransition,
     WorkItemService,
+    resolve_actor_role,
 )
 from ..services.work_product_service import WorkProductService
 
@@ -224,17 +226,13 @@ async def _assignee_display(item: Any, session: AsyncSession) -> Optional[Dict[s
     """Return structured assignee display info resolved from user_management.users (GH#8476)."""
     if item.assignee_type == "user" and item.assignee_user_id:
         row = (
-            await session.execute(
-                select(User.display_name, User.username).where(User.id == item.assignee_user_id)
-            )
+            await session.execute(select(User.display_name, User.username).where(User.id == item.assignee_user_id))
         ).one_or_none()
         name = (row.display_name or row.username) if row else None
         return {"type": "user", "id": str(item.assignee_user_id), "display_name": name, "name": name}
     if item.assignee_type == "agent" and item.assignee_agent_id:
         row = (
-            await session.execute(
-                select(AgentOrgNode.name).where(AgentOrgNode.id == item.assignee_agent_id)
-            )
+            await session.execute(select(AgentOrgNode.name).where(AgentOrgNode.id == item.assignee_agent_id))
         ).one_or_none()
         name = row.name if row else None
         return {"type": "agent", "id": str(item.assignee_agent_id), "display_name": name, "name": name}
@@ -524,12 +522,17 @@ async def unclaim_work_item(
 
 
 class CoWorkerSetRequest(BaseModel):
+    """Set co-worker on a work item (GH#8230).
+
+    caller_role is resolved server-side from auth context — not supplied
+    by the client (GH#8583: removed client-supplied caller_role to prevent privilege escalation).
+    """
+
     co_worker_type: str
     company_id: str
     co_worker_agent_id: Optional[str] = None
     co_worker_user_id: Optional[str] = None
     actor_id: Optional[str] = None
-    caller_role: str = "member"
 
 
 class CoWorkerClearRequest(BaseModel):
@@ -542,13 +545,18 @@ async def set_coworker(
     work_item_id: str,
     body: CoWorkerSetRequest,
     session: AsyncSession = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """Set co-worker fields for a work item (GH#8230, GH#8517).
+    """Set co-worker fields for a work item (GH#8230, GH#8517, GH#8583).
 
     Returns 404 when the work item is not found, 403 when the caller lacks
     permission, and 422 for invalid co-worker identity values.
     """
+    actor_id = current_user.get("id") or current_user.get("user_id")
+    if not actor_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
     try:
+        caller_role = await resolve_actor_role(session, actor_id, body.company_id)
         item = await _service().enable_coworking(
             session,
             work_item_id=work_item_id,
@@ -556,11 +564,11 @@ async def set_coworker(
             company_id=body.company_id,
             co_worker_agent_id=body.co_worker_agent_id,
             co_worker_user_id=body.co_worker_user_id,
-            actor_id=body.actor_id,
-            caller_role=body.caller_role,
+            actor_id=actor_id,
+            caller_role=caller_role,
         )
         await session.commit()
-        return _item_to_dict(item)
+        return await _item_to_dict(item, session)
     except CoWorkingPermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc))
     except ValueError as exc:
