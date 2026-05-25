@@ -11,6 +11,9 @@ FROM node:20-bookworm-slim AS builder
 WORKDIR /app
 
 # Install dependencies first (better layer caching)
+# autobot-plugins/ must be present at /autobot-plugins/ before npm ci because
+# package-lock.json references file:../autobot-plugins/terminal and ../vnc
+COPY autobot-plugins/ /autobot-plugins/
 COPY autobot-frontend/package.json autobot-frontend/package-lock.json ./
 RUN npm ci
 
