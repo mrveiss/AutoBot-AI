@@ -13,6 +13,7 @@ import { ref, computed, watch } from 'vue'
 import type { ChatMessage } from '@/stores/useChatStore'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { useVoiceProfiles } from '@/composables/useVoiceProfiles'
+import { useRealtimeVoice } from '@/composables/useRealtimeVoice'
 import { useChatController } from '@/models/controllers'
 import { useChatStore } from '@/stores/useChatStore'
 import { usePreferences } from '@/composables/usePreferences'
@@ -22,7 +23,7 @@ import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useVoiceConversation')
 
-export type ConversationMode = 'walkie-talkie' | 'hands-free' | 'full-duplex'
+export type ConversationMode = 'walkie-talkie' | 'hands-free' | 'full-duplex' | 'realtime-webrtc'
 export type ConversationState =
   | 'idle'
   | 'listening'
@@ -39,6 +40,8 @@ export interface VoiceBubble {
 // Module-level singletons — shared across all component instances (#1037)
 const state = ref<ConversationState>('idle')
 const mode = ref<ConversationMode>('walkie-talkie')
+// Realtime WebRTC singleton (#7345) — lazy-initialised on first use
+const _realtimeVoice = useRealtimeVoice()
 const currentTranscript = ref('')
 const bubbles = ref<VoiceBubble[]>([])
 const isActive = ref(false)
@@ -703,6 +706,13 @@ export function useVoiceConversation() {
   const isProcessing = computed(() => state.value === 'processing')
 
   const stateLabel = computed(() => {
+    if (mode.value === 'realtime-webrtc') {
+      const rtcState = _realtimeVoice.connectionState.value
+      if (rtcState === 'connecting') return 'Connecting...'
+      if (rtcState === 'connected') return 'Realtime — speak anytime'
+      if (rtcState === 'failed') return 'Connection failed'
+      return 'Realtime WebRTC'
+    }
     const auto = mode.value === 'full-duplex' || mode.value === 'hands-free'
     switch (state.value) {
       case 'idle':
@@ -731,6 +741,8 @@ export function useVoiceConversation() {
       _startListeningInternal()
     } else if (mode.value === 'hands-free') {
       await _startHandsFree()
+    } else if (mode.value === 'realtime-webrtc') {
+      await _realtimeVoice.connect()
     }
     logger.debug('Voice conversation activated, mode:', mode.value)
   }
@@ -742,6 +754,9 @@ export function useVoiceConversation() {
     _teardownVad()
     stopSpeaking()
     if (_ttsCooldownTimer) { clearTimeout(_ttsCooldownTimer); _ttsCooldownTimer = null }
+    if (mode.value === 'realtime-webrtc') {
+      _realtimeVoice.disconnect()
+    }
     isActive.value = false
     state.value = 'idle'
     currentTranscript.value = ''
@@ -798,6 +813,9 @@ export function useVoiceConversation() {
       _teardownVad()
       stopSpeaking()
       if (_ttsCooldownTimer) { clearTimeout(_ttsCooldownTimer); _ttsCooldownTimer = null }
+      if (mode.value === 'realtime-webrtc') {
+        _realtimeVoice.disconnect()
+      }
       state.value = 'idle'
       currentTranscript.value = ''
     }
@@ -809,6 +827,8 @@ export function useVoiceConversation() {
       _initVad().then(() => _startListeningInternal())
     } else if (wasActive && newMode === 'hands-free') {
       _startHandsFree()
+    } else if (wasActive && newMode === 'realtime-webrtc') {
+      void _realtimeVoice.connect()
     }
     logger.debug('Mode switched to:', newMode)
   }
@@ -853,6 +873,7 @@ export function useVoiceConversation() {
     isListening,
     isProcessing,
     stateLabel,
+    realtimeConnectionState: _realtimeVoice.connectionState,
     activate,
     deactivate,
     startListening,
