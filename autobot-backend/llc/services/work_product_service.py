@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.enums import WorkProductType
 from ..models.work_product import LLCWorkProduct
-from . import LLCServiceBase
+from .base import LLCServiceBase
 
 
 class WorkProductService(LLCServiceBase):
