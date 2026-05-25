@@ -167,6 +167,11 @@ class WorkflowTask:
     # skill-binding step.
     pending_skill_id: str | None = None
 
+    # GOAP planner fields (GH#7354). Populated by GOAPPlanner.build_workflow_tasks();
+    # empty sets on capability-mapping plans so existing code needs no changes.
+    preconditions: List[str] = field(default_factory=list)
+    effects: List[str] = field(default_factory=list)
+
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     # ------------------------------------------------------------------
@@ -294,6 +299,15 @@ class WorkflowPlan:
     approved: bool = False
     status: str = "pending"
 
+    # GOAP planner metadata (GH#7354). ``is_goap_plan`` distinguishes plans
+    # produced by GOAPPlanner from capability-mapping plans — WorkflowRunner
+    # only invokes the replanner on GOAP-produced plans.  ``goap_goal`` is
+    # the frozenset of goal facts used at plan time; stored as a list for
+    # JSON compatibility.  Both default to non-GOAP values so existing plans
+    # (and tests) require no changes.
+    is_goap_plan: bool = False
+    goap_goal: List[str] = field(default_factory=list)
+
     created_at_epoch: float | None = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -338,6 +352,8 @@ class WorkflowPlan:
             "approval_required": self.approval_required,
             "approved": self.approved,
             "status": self.status,
+            "is_goap_plan": self.is_goap_plan,
+            "goap_goal": self.goap_goal,
             "created_at_epoch": self.created_at_epoch,
             "metadata": self.metadata,
         }

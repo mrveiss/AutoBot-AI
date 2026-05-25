@@ -278,12 +278,94 @@ class WorkflowRunner:
         if _depth >= 5:
             logger.error("Max fallback depth (5) reached, aborting fallback chain")
             return {"plan_id": plan.plan_id, "success": False, "error": str(error), "results": results}
+
+        # GH#7354: GOAP adaptive replanning.  When the plan was produced by
+        # GOAPPlanner, derive the current world-state from completed tasks and
+        # ask the planner for an alternative path to the original goal.
+        # Capability-mapping plans keep the existing fallback-chain behaviour.
+        if plan.is_goap_plan and plan.goap_goal:
+            replan_result = await self._try_goap_replan(plan, results, _depth)
+            if replan_result is not None:
+                return replan_result
+
         for fallback in plan.fallback_plans or []:
             try:
                 return await self.execute_workflow(fallback, _depth + 1)
             except Exception as fe:
                 logger.error("Fallback plan failed: %s", fe)
         return {"plan_id": plan.plan_id, "success": False, "error": str(error), "results": results}
+
+    async def _try_goap_replan(
+        self, plan: WorkflowPlan, results: Dict[str, Any], _depth: int
+    ) -> Dict[str, Any] | None:
+        """Attempt GOAP adaptive replanning after a step failure (GH#7354).
+
+        Derives the current world-state from effects of completed tasks, then
+        calls GOAPPlanner.replan().  Returns a new execution result dict when
+        a valid replan is found and successfully executed; returns None when
+        replanning is impossible or produces an equivalent plan (avoid loop).
+        """
+        try:
+            from orchestration.goap_planner import GOAPPlanner
+            from autobot_shared.workflow import WorkflowPlan as SharedWorkflowPlan
+            from autobot_shared.workflow import WorkflowTask
+        except ImportError as exc:
+            logger.error("GOAP replanning unavailable: %s", exc)
+            return None
+
+        # Accumulate world state from completed task effects.
+        current_state: set[str] = set()
+        for task in plan.tasks:
+            if task.status == "completed" and task.effects:
+                current_state.update(task.effects)
+
+        goal_facts: set[str] = set(plan.goap_goal)
+        if goal_facts.issubset(current_state):
+            # Goal already satisfied — treat as success.
+            logger.info("GOAP replan: goal already satisfied by completed tasks")
+            return {"plan_id": plan.plan_id, "success": True, "results": results}
+
+        planner = GOAPPlanner()
+        new_actions = planner.replan(current_state, goal_facts)
+        if not new_actions:
+            logger.warning("GOAP replan: no alternative path found for goal %s", goal_facts)
+            return None
+
+        import uuid as _uuid
+        new_plan_id = f"{plan.plan_id}-replan-{_depth}"
+        task_dicts = planner.build_workflow_tasks(
+            goal_facts=goal_facts,
+            initial_state=current_state,
+            plan_id=new_plan_id,
+        )
+        if not task_dicts:
+            return None
+
+        new_tasks = [WorkflowTask.from_dict(d) for d in task_dicts]
+        # Avoid re-executing the exact same plan (cycle guard).
+        new_action_names = [t.action for t in new_tasks]
+        original_action_names = [t.action for t in plan.tasks if t.status != "completed"]
+        if new_action_names == original_action_names:
+            logger.warning("GOAP replan: produced identical remaining steps, skipping")
+            return None
+
+        # Build a new GOAP plan inheriting the parent's metadata.
+        replan = SharedWorkflowPlan(
+            plan_id=new_plan_id,
+            goal=plan.goal,
+            tasks=new_tasks,
+            strategy=plan.strategy,
+            success_criteria=plan.success_criteria,
+            is_goap_plan=True,
+            goap_goal=list(goal_facts),
+            metadata={**plan.metadata, "replanned_from": plan.plan_id},
+        )
+        logger.info(
+            "GOAP replan: executing %d-step alternative plan %s",
+            len(new_tasks),
+            new_plan_id,
+        )
+        return await self.execute_workflow(replan, _depth + 1)
 
     async def _handle_task_timeout(self, task: AgentTask, context: Dict[str, Any]) -> Dict[str, Any]:
         task.fail_execution("Timeout")
