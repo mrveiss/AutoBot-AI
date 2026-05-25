@@ -53,9 +53,15 @@ class ApprovalRequest(BaseModel):
     payload: Dict[str, Any] = {}
 
 
+_BOARD_SENTINEL = uuid.UUID("00000000-0000-0000-0000-000000000001")
+
+
 class ApprovalDecision(BaseModel):
     decision: ApprovalStatus
-    decided_by_agent_id: uuid.UUID
+    # Optional: callers may pass the deciding user/agent UUID.  Board UI
+    # decision-makers are human users whose IDs are passed here; falls back to
+    # the board sentinel so the field is never null in the DB (GH#8552).
+    decided_by_agent_id: Optional[uuid.UUID] = None
 
 
 class ApprovalResponse(BaseModel):
@@ -133,7 +139,7 @@ async def decide_approval(
                 session,
                 approval_id=aid,
                 decision=body.decision,
-                decided_by=body.decided_by_agent_id,
+                decided_by=body.decided_by_agent_id or _BOARD_SENTINEL,
             )
     except ApprovalNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

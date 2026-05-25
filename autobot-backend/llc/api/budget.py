@@ -4,9 +4,9 @@
 """LLC per-agent budget API routes (GH#8215)."""
 
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +17,9 @@ from llc.services.budget import BudgetService
 from user_management.database import get_async_session
 
 router = APIRouter(prefix="/budget", tags=["llc-budget"])
+
+# Separate router for /cost-events so it doesn't inherit the /budget prefix
+cost_events_router = APIRouter(prefix="/cost-events", tags=["llc-cost-events"])
 
 
 class BudgetResponse(BaseModel):
@@ -56,6 +59,34 @@ def _build_response(row: LLCAgentBudget, remaining: Decimal, is_over: bool, aler
         is_over_limit=is_over,
         alert_triggered=alert,
     )
+
+
+@router.get("", response_model=List[Dict[str, Any]])
+async def list_budgets(
+    company_id: str = Query(..., description="Filter by company UUID"),
+    session: AsyncSession = Depends(get_async_session),
+) -> List[Dict[str, Any]]:
+    """List all per-agent budget rows for a company (GH#8551 CostDashboard)."""
+    result = await session.execute(
+        select(LLCAgentBudget).where(LLCAgentBudget.company_id == company_id)
+    )
+    rows = result.scalars().all()
+    svc = BudgetService()
+    out: List[Dict[str, Any]] = []
+    for row in rows:
+        remaining, is_over, alert = await svc.check_budget(session, row.agent_id)
+        out.append(
+            {
+                "agent_id": row.agent_id,
+                "budget_limit": str(row.budget_limit),
+                "budget_spent": str(row.budget_spent),
+                "remaining": str(remaining),
+                "is_over_limit": is_over,
+                "alert_triggered": alert,
+                "alert_threshold": row.alert_threshold,
+            }
+        )
+    return out
 
 
 @router.get("/{agent_id}", response_model=BudgetResponse)
@@ -118,3 +149,41 @@ async def update_limit(
     svc = BudgetService()
     remaining, is_over, alert = await svc.check_budget(session, agent_id)
     return _build_response(row, remaining, is_over, alert)
+
+
+# ---------------------------------------------------------------------------
+# /cost-events — CostDashboard list endpoint (GH#8551)
+# ---------------------------------------------------------------------------
+
+
+@cost_events_router.get("", response_model=List[Dict[str, Any]])
+async def list_cost_events(
+    company_id: str = Query(..., description="Filter by company UUID"),
+    limit: int = Query(100, ge=1, le=500),
+    session: AsyncSession = Depends(get_async_session),
+) -> List[Dict[str, Any]]:
+    """Return per-agent budget spend summary as cost events (GH#8551).
+
+    Returns one entry per agent with non-zero spend in the given company.
+    A dedicated cost-event store is not yet implemented; this derives the
+    data from LLCAgentBudget rows.
+    """
+    result = await session.execute(
+        select(LLCAgentBudget)
+        .where(LLCAgentBudget.company_id == company_id)
+        .order_by(LLCAgentBudget.agent_id)
+        .limit(limit)
+    )
+    rows = result.scalars().all()
+    return [
+        {
+            "agent_id": row.agent_id,
+            "event_type": "budget_summary",
+            "tokens_in": 0,
+            "tokens_out": 0,
+            "cost_usd": str(row.budget_spent),
+            "model": "unknown",
+            "ts": None,
+        }
+        for row in rows
+    ]

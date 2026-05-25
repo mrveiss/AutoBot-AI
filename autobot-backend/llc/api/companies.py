@@ -189,6 +189,9 @@ async def update_company(
     except CompanyBudgetError as exc:
         await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    except CompanyCycleError as exc:
+        await svc.session.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     except Exception:
         await svc.session.rollback()
         raise

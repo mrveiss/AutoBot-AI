@@ -9,7 +9,7 @@ from .api_keys import router as api_keys_router
 from .approvals import router as approvals_router
 from .backlog import router as backlog_router
 from .boards import router as boards_router
-from .budget import router as budget_router
+from .budget import cost_events_router, router as budget_router
 from .ceo_chat import router as ceo_chat_router
 from .companies import router as companies_router
 from .context import router as context_router
@@ -33,6 +33,7 @@ router.include_router(boards_router)
 router.include_router(approvals_router)
 router.include_router(backlog_router)
 router.include_router(budget_router)
+router.include_router(cost_events_router)
 router.include_router(companies_router)
 router.include_router(goals_router)
 router.include_router(health_router)

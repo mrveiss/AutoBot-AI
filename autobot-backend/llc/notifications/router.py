@@ -54,6 +54,20 @@ class LLCNotificationRouter:
     async def start(self) -> None:
         if self._task and not self._task.done():
             return
+        # Acquire a distributed lock before subscribing so only one uvicorn
+        # worker runs the router, preventing 4× duplicate events (GH#8547).
+        try:
+            redis = await get_async_redis_client(database="main")
+            if redis is not None:
+                acquired = await redis.set(
+                    _ROUTER_LOCK_KEY, "1", nx=True, ex=_ROUTER_LOCK_TTL
+                )
+                if not acquired:
+                    logger.info("LLC notification router: lock held by another worker, skipping")
+                    return
+        except Exception as exc:
+            logger.warning("LLC notification router: lock check failed (%s), starting anyway", exc)
+
         self._stop_event.clear()
         self._task = asyncio.create_task(self._run(), name="llc-notification-router")
         logger.info("LLC notification router started")
@@ -66,6 +80,12 @@ class LLCNotificationRouter:
                 await self._task
             except asyncio.CancelledError:
                 pass
+        try:
+            redis = await get_async_redis_client(database="main")
+            if redis is not None:
+                await redis.delete(_ROUTER_LOCK_KEY)
+        except Exception:
+            pass
         logger.info("LLC notification router stopped")
 
     async def _run(self) -> None:
@@ -111,7 +131,7 @@ class LLCNotificationRouter:
             return
         try:
             data = json.loads(raw) if isinstance(raw, (str, bytes)) else raw
-        except (json.JSONDecodeError, TypeError):
+        except (json.JSONDecodeError, TypeError, UnicodeDecodeError):
             logger.debug("LLC router: unparseable message on %s", message.get("channel"))
             return
 
@@ -142,8 +162,17 @@ class LLCNotificationRouter:
 
 _router_instance: Optional[LLCNotificationRouter] = None
 
+_ROUTER_LOCK_KEY = "llc:notification_router:leader"
+_ROUTER_LOCK_TTL = 30  # seconds; renewed by the running task
+
 
 def get_llc_notification_router() -> LLCNotificationRouter:
+    """Return the process-local router singleton.
+
+    The router acquires a Redis distributed lock on start() so only one
+    uvicorn worker actually subscribes to the pub/sub patterns, preventing
+    4× duplicate events across workers (GH#8547).
+    """
     global _router_instance
     if _router_instance is None:
         _router_instance = LLCNotificationRouter()

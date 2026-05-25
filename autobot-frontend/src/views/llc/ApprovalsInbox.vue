@@ -138,9 +138,11 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { useUserStore } from '@/stores/useUserStore'
 
 const logger = createLogger('ApprovalsInbox')
 const api = useApiClient()
+const userStore = useUserStore()
 
 const props = defineProps<{ companyId?: string }>()
 const companyId = computed(() => props.companyId ?? '00000000-0000-0000-0000-000000000000')
@@ -235,7 +237,7 @@ async function decide(id: string, decision: string, note?: string) {
   try {
     await api.post<unknown>(`/api/llc/approvals/${id}/decide`, {
       decision,
-      decided_by_agent_id: '00000000-0000-0000-0000-000000000001',
+      decided_by_agent_id: userStore.currentUser?.id ?? undefined,
       ...(note ? { note } : {}),
     })
     await fetchApprovals()
