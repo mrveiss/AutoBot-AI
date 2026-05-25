@@ -1,0 +1,42 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Provider-agnostic model tier map (GH#8487).
+#
+# Each provider entry declares:
+#   senior:    the high-capability "planning" model
+#   assistant: the cheap "execution" model (used by Haiku-style assistants)
+#
+# Company admins can override per-company via the model_tier_overrides column
+# in the organizations table (JSON, same schema, provider-keyed).
+# Agent configs can further override per-agent via adapterConfig.model_tier.
+#
+# Precedence (highest → lowest):
+#   1. adapterConfig.model_tier  (per-agent override)
+#   2. company model_tier_overrides (per-company override)
+#   3. this file (platform defaults)
+
+anthropic:
+  senior: claude-sonnet-4-6
+  assistant: claude-haiku-4-5-20251001
+
+openai:
+  senior: gpt-4o
+  assistant: gpt-4o-mini
+
+google:
+  senior: gemini-1.5-pro
+  assistant: gemini-1.5-flash
+
+mistral:
+  senior: mistral-large-latest
+  assistant: mistral-small-latest
+
+groq:
+  senior: llama-3.3-70b-versatile
+  assistant: llama-3.1-8b-instant
+
+together:
+  senior: meta-llama/Llama-3-70b-chat-hf
+  assistant: meta-llama/Llama-3-8b-chat-hf

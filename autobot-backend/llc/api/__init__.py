@@ -4,7 +4,9 @@ from fastapi import APIRouter
 
 from .activity import router as activity_router
 from .agent_api import router as agent_router
+from .agent_hires import router as agent_hires_router
 from .agents import router as agents_router
+from .costs import router as costs_router
 from .api_keys import router as api_keys_router
 from .approvals import router as approvals_router
 from .backlog import router as backlog_router
@@ -53,6 +55,8 @@ router.include_router(context_router)
 router.include_router(controls_router)
 router.include_router(labels_router)
 router.include_router(templates_router)
+router.include_router(agent_hires_router)
+router.include_router(costs_router)
 
 
 @router.get("/health")
