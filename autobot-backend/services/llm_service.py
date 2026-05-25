@@ -39,6 +39,7 @@ import time
 import uuid
 from typing import Any, AsyncIterator, Dict, List, Union
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.tracing import get_tracer
 from llm_shared import ProviderRegistry, get_provider_registry
 from llm_shared.cache import CachedResponse, get_llm_cache

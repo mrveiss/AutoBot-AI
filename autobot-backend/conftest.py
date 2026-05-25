@@ -212,9 +212,23 @@ if "llm_shared" not in sys.modules:
         "llm_shared.tiered_routing",
         "llm_shared.tiered_routing.tier_router",
         "llm_shared.optimization",
+        "llm_shared.cache",
     ]:
         if _llm_sub not in sys.modules:
             sys.modules[_llm_sub] = _make_pkg_stub(_llm_sub)
+
+    # llm_shared.cache — provide symbols consumed by services.llm_service
+    _cache_stub = sys.modules["llm_shared.cache"]
+    _cache_stub.CachedResponse = MagicMock()  # type: ignore[attr-defined]
+    _cache_stub.LLMResponseCache = MagicMock()  # type: ignore[attr-defined]
+    _cache_stub.get_llm_cache = MagicMock()  # type: ignore[attr-defined]
+
+    # llm_shared.adapters.registry — provide get_adapter_registry for api.adapters
+    if "llm_shared.adapters.registry" not in sys.modules:
+        _adapters_registry_stub = _make_pkg_stub("llm_shared.adapters.registry")
+        _adapters_registry_stub.get_adapter_registry = MagicMock()  # type: ignore[attr-defined]
+        _adapters_registry_stub.AdapterRegistry = MagicMock()  # type: ignore[attr-defined]
+        sys.modules["llm_shared.adapters.registry"] = _adapters_registry_stub
 
     # Provide a real tiered_router.get_tiered_router MagicMock
     _tr_stub = sys.modules.get("llm_shared.tiered_routing.tier_router") or _make_pkg_stub(
@@ -348,6 +362,49 @@ for _causal_mod in [
 ]:
     if _causal_mod not in sys.modules:
         sys.modules[_causal_mod] = _make_pkg_stub(_causal_mod)
+
+# code_intelligence submodule stubs — code_intelligence itself is stubbed above
+# (its __init__ has Python-3.10-incompatible annotations), so submodule imports
+# from api/*.py need their own stubs with the right symbol names.
+_ci_anti_stub = _make_pkg_stub("code_intelligence.anti_pattern_detector")
+_ci_anti_stub.AntiPatternDetector = MagicMock()  # type: ignore[attr-defined]
+_ci_anti_stub.AntiPatternSeverity = MagicMock()  # type: ignore[attr-defined]
+_ci_anti_stub.AntiPatternResult = MagicMock()  # type: ignore[attr-defined]
+sys.modules["code_intelligence.anti_pattern_detector"] = _ci_anti_stub
+
+_ci_merge_stub = _make_pkg_stub("code_intelligence.merge_conflict_resolver")
+_ci_merge_stub.ConflictBlock = MagicMock()  # type: ignore[attr-defined]
+_ci_merge_stub.ConflictParser = MagicMock()  # type: ignore[attr-defined]
+_ci_merge_stub.ConflictSeverity = MagicMock()  # type: ignore[attr-defined]
+_ci_merge_stub.MergeConflictResolver = MagicMock()  # type: ignore[attr-defined]
+_ci_merge_stub.ResolutionStrategy = MagicMock()  # type: ignore[attr-defined]
+_ci_merge_stub.analyze_repository = MagicMock()  # type: ignore[attr-defined]
+sys.modules["code_intelligence.merge_conflict_resolver"] = _ci_merge_stub
+
+for _ci_sub in [
+    "code_intelligence.performance_analyzer",
+    "code_intelligence.redis_optimizer",
+    "code_intelligence.security_analyzer",
+    "code_intelligence.code_evolution_miner",
+    "code_intelligence.bug_predictor",
+    "code_intelligence.llm_pattern_analyzer",
+    "code_intelligence.log_pattern_miner",
+    "code_intelligence.multi_language_scanner",
+    "code_intelligence.pattern_analysis",
+    "code_intelligence.precommit_analyzer",
+    "code_intelligence.shell_analyzer",
+    "code_intelligence.test_pattern_analyzer",
+    "code_intelligence.typescript_analyzer",
+    "code_intelligence.vue_analyzer",
+    "code_intelligence.doc_generator",
+    "code_intelligence.llm_code_generator",
+    "code_intelligence.code_fingerprinting",
+    "code_intelligence.code_review_engine",
+    "code_intelligence.base_analyzer",
+    "code_intelligence.conversation_flow_analyzer",
+]:
+    if _ci_sub not in sys.modules:
+        sys.modules[_ci_sub] = _make_pkg_stub(_ci_sub)
 
 # Ensure CausalErrorRecovery / RecoveryPlan / get_recovery_recommender are
 # resolvable from the stub so orchestration/__init__.py's wildcard import

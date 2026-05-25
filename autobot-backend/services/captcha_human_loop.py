@@ -44,6 +44,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
 

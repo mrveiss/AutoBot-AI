@@ -24,6 +24,7 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)

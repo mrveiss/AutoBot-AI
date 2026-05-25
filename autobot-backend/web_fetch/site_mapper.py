@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as ET  # nosec B405 — sitemap XML from crawled URLs; XXE risk accepted
 from typing import List
+from autobot_shared.logging_manager import get_logger
 from urllib.parse import urlparse
 
 logger = get_logger(__name__)

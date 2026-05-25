@@ -14,7 +14,7 @@ from typing import Any
 import httpx
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config as ssot_config
+from autobot_shared.ssot_config import config as ssot_config, config
 
 # TLS verification for outbound calls to internal vision/browser services.
 # Set AUTOBOT_SKIP_TLS_VERIFY=true ONLY in dev/test environments that use

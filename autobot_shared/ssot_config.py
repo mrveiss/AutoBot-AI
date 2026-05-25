@@ -1164,6 +1164,8 @@ class MiscConfig(BaseSettings):
     autoresearch_timeout: int = Field(default=0, alias="AUTOBOT_AUTORESEARCH_TIMEOUT")
     cache_enabled: bool = Field(default=False, alias="AUTOBOT_CACHE_ENABLED")
     cache_size: int = Field(default=0, alias="AUTOBOT_CACHE_SIZE")
+    cache_l1_size: int = Field(default=100, alias="AUTOBOT_CACHE_L1_SIZE", description="L1 in-memory LLM response cache size")
+    cache_l2_ttl: int = Field(default=300, alias="AUTOBOT_CACHE_L2_TTL", description="L2 Redis LLM response cache TTL in seconds")
     celery_result_expires: str = Field(default="", alias="AUTOBOT_CELERY_RESULT_EXPIRES")
     celery_visibility_timeout: int = Field(default=0, alias="AUTOBOT_CELERY_VISIBILITY_TIMEOUT")
     chats_directory: str = Field(default="", alias="AUTOBOT_CHATS_DIRECTORY")
@@ -1753,6 +1755,138 @@ class AutoBotConfig(BaseSettings):
             "ai-stack": self.vm.aistack,
             "browser": self.vm.browser,
         }
+
+    # Convenience top-level properties for commonly accessed sub-config fields.
+    # These were previously accessed as top-level config attributes but live in
+    # sub-configs after the config reorganisation. Properties restore backward compat.
+
+    @property
+    def base_dir(self) -> str:
+        """Backward-compat: config.base_dir → config.path.base_dir."""
+        return self.path.base_dir
+
+    @property
+    def tts_worker_host(self) -> str:
+        """Backward-compat: config.tts_worker_host → config.vm.tts."""
+        return self.vm.tts
+
+    @property
+    def tts_worker_port(self) -> int:
+        """Backward-compat: config.tts_worker_port → config.port.tts."""
+        return self.port.tts
+
+    @property
+    def user_mode(self) -> str:
+        """Backward-compat: config.user_mode → config.misc.user_mode."""
+        return self.misc.user_mode
+
+    @property
+    def redis_node_id(self) -> str:
+        """Backward-compat: config.redis_node_id → config.misc.redis_node_id."""
+        return self.misc.redis_node_id
+
+    @property
+    def mcp_registry_cache_enabled(self) -> bool:
+        """Backward-compat: config.mcp_registry_cache_enabled → config.misc.mcp_registry_cache_enabled."""
+        return self.misc.mcp_registry_cache_enabled
+
+    @property
+    def chat_ssot_strict(self) -> str:
+        """Backward-compat: config.chat_ssot_strict → config.misc.chat_ssot_strict."""
+        return self.misc.chat_ssot_strict
+
+    @property
+    def concurrent_limiter_timeout(self) -> int:
+        """Backward-compat: config.concurrent_limiter_timeout → config.misc.concurrent_limiter_timeout."""
+        return self.misc.concurrent_limiter_timeout
+
+    @property
+    def postgres_host(self) -> str:
+        """Backward-compat: config.postgres_host → config.misc.postgres_host."""
+        return self.misc.postgres_host
+
+    @property
+    def postgres_port(self) -> int:
+        """Backward-compat: config.postgres_port → config.misc.postgres_port."""
+        return self.misc.postgres_port
+
+    @property
+    def postgres_user(self) -> str:
+        """Backward-compat: config.postgres_user → config.misc.postgres_user."""
+        return self.misc.postgres_user
+
+    @property
+    def postgres_password(self) -> str:
+        """Backward-compat: config.postgres_password → config.misc.postgres_password."""
+        return self.misc.postgres_password
+
+    @property
+    def postgres_db(self) -> str:
+        """Backward-compat: config.postgres_db → config.misc.postgres_db."""
+        return self.misc.postgres_db
+
+    @property
+    def data_db(self) -> str:
+        """Backward-compat: config.data_db → config.misc.data_db."""
+        return self.misc.data_db
+
+    @property
+    def encryption_key(self) -> str:
+        """Backward-compat: config.encryption_key → config.misc.encryption_key."""
+        return self.misc.encryption_key
+
+    @property
+    def mcp_registry_cache_ttl(self) -> str:
+        """Backward-compat: config.mcp_registry_cache_ttl → config.misc.mcp_registry_cache_ttl."""
+        return self.misc.mcp_registry_cache_ttl
+
+    @property
+    def skip_tls_verify(self) -> str:
+        """Backward-compat: config.skip_tls_verify → config.misc.skip_tls_verify."""
+        return self.misc.skip_tls_verify
+
+    @property
+    def llm_provider(self) -> str:
+        """Backward-compat: config.llm_provider → config.llm.provider."""
+        return self.llm.provider
+
+    @property
+    def default_llm_model(self) -> str:
+        """Backward-compat: config.default_llm_model → config.llm.default_model."""
+        return self.llm.default_model
+
+    @property
+    def llm_timeout(self) -> int:
+        """Backward-compat: config.llm_timeout → config.llm.timeout."""
+        return self.llm.timeout
+
+    @property
+    def llm_temperature(self) -> float:
+        """Backward-compat: config.llm_temperature with float default 0.7."""
+        raw = self.misc.llm_temperature
+        return float(raw) if raw else 0.7
+
+    def __getattr__(self, name: str):
+        """Fall back to misc/sub-configs for unmapped top-level attribute access.
+
+        Many legacy call sites use config.X where X was a MiscConfig or sub-config
+        field. Delegate unknown lookups to llm/timeout/misc etc. in priority order.
+        """
+        _sub_config_names = ("llm", "timeout", "vm", "port", "redis", "cache",
+                             "tls", "feature", "permission", "database_pool", "auth", "path", "misc")
+        if name in _sub_config_names:
+            raise AttributeError(f"'AutoBotConfig' object has no attribute {name!r}")
+        for sub_name in _sub_config_names:
+            try:
+                sub = object.__getattribute__(self, sub_name)
+                val = getattr(sub, name)
+                # Skip empty-string fallbacks from MiscConfig for numeric attrs
+                if sub_name == "misc" and val == "" and name.endswith(("_timeout", "_port", "_size", "_ttl", "_max", "_min")):
+                    continue
+                return val
+            except AttributeError:
+                continue
+        raise AttributeError(f"'AutoBotConfig' object has no attribute {name!r}")
 
 
 @lru_cache(maxsize=1)

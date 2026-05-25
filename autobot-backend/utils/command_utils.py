@@ -30,6 +30,7 @@ from asyncio import Queue as AsyncQueue
 from dataclasses import dataclass
 from typing import Any, AsyncGenerator, Callable, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp as get_timestamp
 
 # Issue #765: Use centralized strip_ansi_codes from encoding_utils

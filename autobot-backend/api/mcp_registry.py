@@ -69,8 +69,8 @@ router = APIRouter(
 # ============================================================================
 
 # Load cache configuration from environment
-CACHE_ENABLED = config.mcp_registry_cache_enabled.lower() == "true"
-CACHE_TTL_SECONDS = int(config.mcp_registry_cache_ttl)
+CACHE_ENABLED = bool(config.mcp_registry_cache_enabled)
+CACHE_TTL_SECONDS = int(config.mcp_registry_cache_ttl or "300")
 
 logger.info("MCP Registry Cache: enabled=%s, TTL=%ss", CACHE_ENABLED, CACHE_TTL_SECONDS)
 
