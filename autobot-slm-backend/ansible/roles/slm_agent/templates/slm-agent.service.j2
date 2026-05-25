@@ -21,6 +21,8 @@ Description=SLM Agent - Service Lifecycle Manager
 Documentation=https://github.com/mrveiss/AutoBot-AI
 After=network-online.target
 Wants=network-online.target
+# Guard: skip start (no crash loop) if agent files not yet deployed by Ansible (#MVA-1036)
+ConditionPathExists={{ slm_agent_dir }}/slm/agent/agent.py
 
 [Service]
 Type=simple
