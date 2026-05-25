@@ -67,13 +67,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-
-interface CodePayload {
-  payloadType: 'code'
-  code: string
-  language?: string
-  executable?: boolean
-}
+import type { CodePayload } from '@/types/canvas'
 
 const props = defineProps<{
   richPayload: CodePayload | null

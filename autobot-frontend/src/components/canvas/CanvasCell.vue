@@ -30,13 +30,13 @@
 
     <!-- Rich artifact rendering (Phase 2) -->
     <ChartCell
-      v-if="cell.contentType === 'chart' && cell.richPayload"
-      :rich-payload="cell.richPayload"
+      v-if="chartPayload"
+      :rich-payload="chartPayload"
       data-testid="chart-cell"
     />
     <CodeCell
-      v-else-if="cell.contentType === 'code' && cell.richPayload"
-      :rich-payload="cell.richPayload"
+      v-else-if="codePayload"
+      :rich-payload="codePayload"
       data-testid="code-cell"
     />
 
@@ -160,7 +160,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { CanvasCell } from '@/types/canvas'
+import type { CanvasCell, ChartPayload, CodePayload } from '@/types/canvas'
 import ChartCell from './ChartCell.vue'
 import CodeCell from './CodeCell.vue'
 
@@ -177,6 +177,16 @@ const emit = defineEmits<{
 }>()
 
 const isAgentCell = computed(() => props.cell.owner === 'agent')
+
+const chartPayload = computed<ChartPayload | null>(() => {
+  const p = props.cell.richPayload
+  return p?.payloadType === 'vega-lite' ? (p as ChartPayload) : null
+})
+
+const codePayload = computed<CodePayload | null>(() => {
+  const p = props.cell.richPayload
+  return p?.payloadType === 'code' ? (p as CodePayload) : null
+})
 
 const prefersReducedMotion = typeof window !== 'undefined'
   ? window.matchMedia('(prefers-reduced-motion: reduce)').matches

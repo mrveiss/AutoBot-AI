@@ -1,7 +1,6 @@
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
-import { watch } from 'vue'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useCanvasStore } from '@/stores/useCanvasStore'
 import { getBackendUrl } from '@/config/ssot-config'
@@ -14,16 +13,9 @@ export function useCanvasWebSocket(canvasId: string) {
   const store = useCanvasStore()
   const wsUrl = `${getBackendUrl().replace(/^http/, 'ws')}/api/canvas/${canvasId}/ws`
 
-  const { messages, connect, disconnect, status } = useWebSocket(wsUrl, {
-    autoConnect: true,
-    autoReconnect: true,
-  })
-
-  watch(messages, (msgs) => {
-    const latest = msgs[msgs.length - 1]
-    if (!latest) return
+  function handleMessage(data: unknown) {
     try {
-      const msg = JSON.parse(latest as string) as CanvasWsMessage
+      const msg = JSON.parse(data as string) as CanvasWsMessage
       if (msg.type !== 'canvas_cell') return
 
       if (store.conflict?.cellId === msg.cellId) {
@@ -37,7 +29,13 @@ export function useCanvasWebSocket(canvasId: string) {
     } catch (err) {
       logger.error('WS parse error', err)
     }
+  }
+
+  const { connect, disconnect, isConnected } = useWebSocket(wsUrl, {
+    autoConnect: true,
+    autoReconnect: true,
+    onMessage: handleMessage,
   })
 
-  return { connect, disconnect, status }
+  return { connect, disconnect, isConnected }
 }
