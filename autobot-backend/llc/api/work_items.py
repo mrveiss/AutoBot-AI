@@ -54,6 +54,7 @@ from ..services.work_item_service import (
     CoWorkingPermissionError,
     InvalidTransition,
     WorkItemService,
+    resolve_actor_role,
 )
 from ..services.work_product_service import WorkProductService
 
@@ -524,12 +525,17 @@ async def unclaim_work_item(
 
 
 class CoWorkerSetRequest(BaseModel):
+    """Set co-worker on a work item (GH#8230).
+
+    caller_role is resolved server-side from auth context — not supplied
+    by the client (GH#8583: removed client-supplied caller_role to prevent privilege escalation).
+    """
+
     co_worker_type: str
     company_id: str
     co_worker_agent_id: Optional[str] = None
     co_worker_user_id: Optional[str] = None
     actor_id: Optional[str] = None
-    caller_role: str = "member"
 
 
 class CoWorkerClearRequest(BaseModel):
@@ -543,12 +549,13 @@ async def set_coworker(
     body: CoWorkerSetRequest,
     session: AsyncSession = Depends(get_session),
 ) -> Dict[str, Any]:
-    """Set co-worker fields for a work item (GH#8230, GH#8517).
+    """Set co-worker fields for a work item (GH#8230, GH#8517, GH#8583).
 
     Returns 404 when the work item is not found, 403 when the caller lacks
     permission, and 422 for invalid co-worker identity values.
     """
     try:
+        caller_role = await resolve_actor_role(session, body.actor_id, body.company_id)
         item = await _service().enable_coworking(
             session,
             work_item_id=work_item_id,
@@ -557,7 +564,7 @@ async def set_coworker(
             co_worker_agent_id=body.co_worker_agent_id,
             co_worker_user_id=body.co_worker_user_id,
             actor_id=body.actor_id,
-            caller_role=body.caller_role,
+            caller_role=caller_role,
         )
         await session.commit()
         return _item_to_dict(item)
