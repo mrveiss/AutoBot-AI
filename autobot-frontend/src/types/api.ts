@@ -85,6 +85,34 @@ export interface ChatMessage {
   sources?: RagSource[];
 }
 
+/** A user-defined slash command preset (GH#4449). */
+export interface SlashCommandPreset {
+  /** Unique identifier (UUID). */
+  id: string;
+  /** Slash command trigger, e.g. "summarize" (no leading slash). */
+  name: string;
+  /** Short description shown in the autocomplete dropdown. */
+  description: string;
+  /** Full prompt text inserted into the chat input when the command is triggered. */
+  content: string;
+  /** ISO timestamp of creation. */
+  createdAt: string;
+  /** ISO timestamp of last update. */
+  updatedAt: string;
+}
+
+export interface SlashCommandPresetCreate {
+  name: string;
+  description: string;
+  content: string;
+}
+
+export interface SlashCommandPresetUpdate {
+  name?: string;
+  description?: string;
+  content?: string;
+}
+
 export interface ChatSession {
   id: string;
   chatId: string;
