@@ -592,7 +592,10 @@
       "hintResponding": "AutoBot is responding...",
       "hintRespondingShort": "Responding...",
       "hintAutoStart": "Listening will start automatically",
-      "hintTapToSpeak": "Tap to speak"
+      "hintTapToSpeak": "Tap to speak",
+      "realtimeWebrtc": "Realtime WebRTC",
+      "realtimeConnecting": "Connecting to Realtime...",
+      "realtimeConnected": "Realtime — speak anytime"
     },
     "typing": {
       "aiAssistant": "AI Assistant",

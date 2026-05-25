@@ -24,6 +24,7 @@
           <option value="walkie-talkie">{{ $t('chat.voice.walkieTalkie') }}</option>
           <option value="hands-free">{{ $t('chat.voice.handsFree') }}</option>
           <option value="full-duplex">{{ $t('chat.voice.fullDuplex') }}</option>
+          <option value="realtime-webrtc">{{ $t('chat.voice.realtimeWebrtc') }}</option>
         </select>
 
         <!-- Language indicator (#1334) -->
@@ -39,8 +40,16 @@
         <div
           v-if="voiceConversation.mode.value === 'full-duplex'"
           class="voice-panel__ws-dot"
-          :class="{ 'voice-panel__ws-dot--connected': voiceConversation.wsConnected.value }"
-          :title="voiceConversation.wsConnected.value ? $t('chat.voice.connected') : $t('chat.voice.disconnected')"
+          :class="{ 'voice-panel__ws-dot--connected': voiceConversation.wsConnected?.value }"
+          :title="voiceConversation.wsConnected?.value ? $t('chat.voice.connected') : $t('chat.voice.disconnected')"
+        ></div>
+
+        <!-- RTC connection indicator (realtime-webrtc) -->
+        <div
+          v-if="voiceConversation.mode.value === 'realtime-webrtc'"
+          class="voice-panel__ws-dot"
+          :class="{ 'voice-panel__ws-dot--connected': voiceConversation.realtimeConnectionState.value === 'connected' }"
+          :title="voiceConversation.realtimeConnectionState.value === 'connected' ? $t('chat.voice.connected') : $t('chat.voice.disconnected')"
         ></div>
 
         <!-- Close -->
@@ -162,6 +171,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { computed, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useVoiceConversation } from '@/composables/useVoiceConversation'
+import type { ConversationMode } from '@/composables/useVoiceConversation'
 
 const emit = defineEmits<{
   (e: 'close'): void
@@ -176,8 +186,11 @@ const isFullDuplex = computed(
 const isHandsFree = computed(
   () => voiceConversation.mode.value === 'hands-free',
 )
+const isRealtimeWebrtc = computed(
+  () => voiceConversation.mode.value === 'realtime-webrtc',
+)
 const isAutoMode = computed(
-  () => isFullDuplex.value || isHandsFree.value,
+  () => isFullDuplex.value || isHandsFree.value || isRealtimeWebrtc.value,
 )
 
 const showInsecureContextWarning = computed(
@@ -245,9 +258,7 @@ function handleMicClick(): void {
 
 function handleModeChange(event: Event): void {
   const target = event.target as HTMLSelectElement
-  voiceConversation.setMode(
-    target.value as 'walkie-talkie' | 'hands-free' | 'full-duplex',
-  )
+  voiceConversation.setMode(target.value as ConversationMode)
 }
 
 function close(): void {
