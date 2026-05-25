@@ -63,7 +63,7 @@
     "dompurify": "^3.4.5",
     "highlight.js": "^11.10.0",
     "npm-normalize-package-bin": "^5.0.0",
-    "vega-embed": "^6.25.0",
+    "vega-embed": "^7.1.0",
     "onnxruntime-web": "^1.26.0",
     "pinia": "^3.0.4",
     "pinia-plugin-persistedstate": "^4.7.1",
