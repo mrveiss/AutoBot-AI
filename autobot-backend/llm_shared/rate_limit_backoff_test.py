@@ -2,6 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Tests for GH#8502 rate-limit backoff / auto-resume module."""
+
 from __future__ import annotations
 
 import pytest
@@ -58,9 +59,7 @@ class TestExtractRateLimitInfo:
         assert retry_after == 30.0
 
     def test_retry_after_from_provider_metadata(self):
-        is_rl, retry_after = extract_rate_limit_info(
-            _resp("rate limit", metadata={"retry_after": "45"})
-        )
+        is_rl, retry_after = extract_rate_limit_info(_resp("rate limit", metadata={"retry_after": "45"}))
         assert is_rl
         assert retry_after == 45.0
 

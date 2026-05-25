@@ -40,16 +40,18 @@ from .base import AdapterRunStatus
 logger = logging.getLogger(__name__)
 
 # Keywords that identify a provider rate-limit or quota error in an error string.
-_RL_KEYWORDS: frozenset[str] = frozenset({
-    "rate_limit_error",
-    "rate limit",
-    "too many requests",
-    "quota",
-    "overloaded",
-    "capacity_error",
-    "429",
-    "529",
-})
+_RL_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "rate_limit_error",
+        "rate limit",
+        "too many requests",
+        "quota",
+        "overloaded",
+        "capacity_error",
+        "429",
+        "529",
+    }
+)
 
 # ── Rate-limit detection helpers (GH#8502) ────────────────────────────────────
 
