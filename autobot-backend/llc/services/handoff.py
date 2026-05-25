@@ -456,7 +456,6 @@ class HandoffService(LLCServiceBase):
             generator = HandoffBriefGenerator()
             brief = await generator.generate_human_to_agent_brief(
                 work_item_id=work_item_id,
-                agent_id=target_agent_id,
                 human_notes=human_notes,
                 company_id=company_id,
                 project_id=project_id,

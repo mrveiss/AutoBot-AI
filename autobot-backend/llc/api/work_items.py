@@ -27,6 +27,7 @@ Routes:
 import uuid
 from typing import Any, Dict, List, Optional
 
+from api.user_management.dependencies import get_current_user
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
@@ -548,14 +549,18 @@ async def set_coworker(
     work_item_id: str,
     body: CoWorkerSetRequest,
     session: AsyncSession = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Set co-worker fields for a work item (GH#8230, GH#8517, GH#8583).
 
     Returns 404 when the work item is not found, 403 when the caller lacks
     permission, and 422 for invalid co-worker identity values.
     """
+    actor_id = current_user.get("id") or current_user.get("user_id")
+    if not actor_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
     try:
-        caller_role = await resolve_actor_role(session, body.actor_id, body.company_id)
+        caller_role = await resolve_actor_role(session, actor_id, body.company_id)
         item = await _service().enable_coworking(
             session,
             work_item_id=work_item_id,
@@ -563,11 +568,11 @@ async def set_coworker(
             company_id=body.company_id,
             co_worker_agent_id=body.co_worker_agent_id,
             co_worker_user_id=body.co_worker_user_id,
-            actor_id=body.actor_id,
+            actor_id=actor_id,
             caller_role=caller_role,
         )
         await session.commit()
-        return _item_to_dict(item)
+        return await _item_to_dict(item, session)
     except CoWorkingPermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc))
     except ValueError as exc:

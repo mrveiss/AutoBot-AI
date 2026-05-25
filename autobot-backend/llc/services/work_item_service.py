@@ -129,7 +129,9 @@ async def resolve_actor_role(session: AsyncSession, actor_id: Optional[str], com
         if node is not None:
             org_role = node.org_role.value if hasattr(node.org_role, "value") else str(node.org_role)
             return _AGENT_ORG_ROLE_TO_COWORKER_ROLE.get(org_role, "member")
-    except (ValueError, AttributeError, ImportError):
+    except ImportError as exc:
+        logger.warning("AgentOrgNode model unavailable; defaulting actor_role to member: %s", exc)
+    except (ValueError, AttributeError):
         pass
 
     return "member"

@@ -238,8 +238,23 @@ class HandoffBriefGenerator:
         }
 
     def _parse_llm_text_response(self, text: str) -> Dict[str, Any]:
-        """Attempt to parse LLM text response when JSON parsing fails."""
-        return {}
+        """Attempt to extract JSON from LLM text when direct parse fails.
+
+        Tries markdown code-fenced JSON (```json ... ```) and bare JSON
+        objects/arrays embedded in prose. Raises ValueError if no JSON found,
+        so the outer handler falls through to the appropriate fallback.
+        """
+        import re
+
+        fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+        if fence_match:
+            return json.loads(fence_match.group(1))
+
+        obj_match = re.search(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)?\}", text, re.DOTALL)
+        if obj_match:
+            return json.loads(obj_match.group(0))
+
+        raise ValueError("No JSON object found in LLM text response")
 
 
 __all__ = ["HandoffBriefGenerator"]

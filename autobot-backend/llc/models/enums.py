@@ -175,6 +175,7 @@ class MembershipRole(str, Enum):
 
     OWNER = "owner"
     ADMIN = "admin"
+    LEAD = "lead"
     MEMBER = "member"
     GUEST = "guest"
 
