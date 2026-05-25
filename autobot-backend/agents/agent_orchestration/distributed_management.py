@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Tuple
 
 from constants.threshold_constants import TimingConstants, WorkStealingConfig
+from services.task_claim import claim_task, is_claim_alive, release_claim, renew_claim
 
 from .state_persistence import (
     delete_task_state,
@@ -23,7 +24,6 @@ from .state_persistence import (
     persist_task_reassignment,
 )
 from .types import CircuitState, DistributedAgentInfo
-from services.task_claim import claim_task, is_claim_alive, release_claim, renew_claim
 
 if TYPE_CHECKING:
     from agents.base_agent import AgentHealth, BaseAgent

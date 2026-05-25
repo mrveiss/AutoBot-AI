@@ -30,10 +30,10 @@ import re
 from typing import Any
 from uuid import uuid4
 
-from autobot_shared.logging_manager import get_logger
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
+from autobot_shared.logging_manager import get_logger
 from type_defs.common import Metadata
 from utils.path_validation import contains_injection_patterns
 
