@@ -1164,8 +1164,12 @@ class MiscConfig(BaseSettings):
     autoresearch_timeout: int = Field(default=0, alias="AUTOBOT_AUTORESEARCH_TIMEOUT")
     cache_enabled: bool = Field(default=False, alias="AUTOBOT_CACHE_ENABLED")
     cache_size: int = Field(default=0, alias="AUTOBOT_CACHE_SIZE")
-    cache_l1_size: int = Field(default=100, alias="AUTOBOT_CACHE_L1_SIZE", description="L1 in-memory LLM response cache size")
-    cache_l2_ttl: int = Field(default=300, alias="AUTOBOT_CACHE_L2_TTL", description="L2 Redis LLM response cache TTL in seconds")
+    cache_l1_size: int = Field(
+        default=100, alias="AUTOBOT_CACHE_L1_SIZE", description="L1 in-memory LLM response cache size"
+    )
+    cache_l2_ttl: int = Field(
+        default=300, alias="AUTOBOT_CACHE_L2_TTL", description="L2 Redis LLM response cache TTL in seconds"
+    )
     celery_result_expires: str = Field(default="", alias="AUTOBOT_CELERY_RESULT_EXPIRES")
     celery_visibility_timeout: int = Field(default=0, alias="AUTOBOT_CELERY_VISIBILITY_TIMEOUT")
     chats_directory: str = Field(default="", alias="AUTOBOT_CHATS_DIRECTORY")
@@ -1872,8 +1876,21 @@ class AutoBotConfig(BaseSettings):
         Many legacy call sites use config.X where X was a MiscConfig or sub-config
         field. Delegate unknown lookups to llm/timeout/misc etc. in priority order.
         """
-        _sub_config_names = ("llm", "timeout", "vm", "port", "redis", "cache",
-                             "tls", "feature", "permission", "database_pool", "auth", "path", "misc")
+        _sub_config_names = (
+            "llm",
+            "timeout",
+            "vm",
+            "port",
+            "redis",
+            "cache",
+            "tls",
+            "feature",
+            "permission",
+            "database_pool",
+            "auth",
+            "path",
+            "misc",
+        )
         if name in _sub_config_names:
             raise AttributeError(f"'AutoBotConfig' object has no attribute {name!r}")
         for sub_name in _sub_config_names:
@@ -1881,7 +1898,11 @@ class AutoBotConfig(BaseSettings):
                 sub = object.__getattribute__(self, sub_name)
                 val = getattr(sub, name)
                 # Skip empty-string fallbacks from MiscConfig for numeric attrs
-                if sub_name == "misc" and val == "" and name.endswith(("_timeout", "_port", "_size", "_ttl", "_max", "_min")):
+                if (
+                    sub_name == "misc"
+                    and val == ""
+                    and name.endswith(("_timeout", "_port", "_size", "_ttl", "_max", "_min"))
+                ):
                     continue
                 return val
             except AttributeError:
