@@ -16,7 +16,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 
-from ..models.work_item import LLCWorkItem
 from .rag_assembler import AssemblerProfile, LLCRAGAssembler
 
 logger = get_logger(__name__)
@@ -61,8 +60,9 @@ class KbInheritanceResolver:
             ValueError: If company_id not found
         """
         try:
-            from user_management.models.organization import Organization
             from sqlalchemy import select
+
+            from user_management.models.organization import Organization
 
             # Fetch company
             company_uuid = uuid.UUID(company_id)
