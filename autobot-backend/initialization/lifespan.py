@@ -750,7 +750,8 @@ async def _init_heartbeat_scheduler(app: FastAPI) -> None:
         configure_scheduler(scheduler)
 
         # Wire budget policy enforcement — must run after session factory is ready (GH#6470)
-        from services.budget_policy import configure_session_factory as _cfg_bp, seed_default_policies
+        from services.budget_policy import configure_session_factory as _cfg_bp
+        from services.budget_policy import seed_default_policies
 
         _cfg_bp(session_factory)
         try:
