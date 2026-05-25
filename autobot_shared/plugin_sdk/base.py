@@ -11,6 +11,8 @@ Issue #730 - Plugin SDK for extensible tool architecture.
 Issue #6971 - PluginLoadError for declarative required_env validation.
 """
 
+from __future__ import annotations
+
 import logging
 import re
 from abc import ABC, abstractmethod

@@ -11,6 +11,8 @@ Issue #730 - Plugin SDK for extensible tool architecture.
 Issue #6970 - Hook registry with signatures and validation.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import warnings

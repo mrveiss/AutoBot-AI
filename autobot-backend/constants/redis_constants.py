@@ -10,8 +10,6 @@ MIGRATION (Issue #GH7440):
 """
 
 from autobot_shared.ssot_constants import (  # noqa: F401,F403
-    REDIS_CONFIG,
     REDIS_KEY,
-    RedisConnectionConfig,
     RedisKeyConstants,
 )

@@ -5,6 +5,8 @@
 Analytics, cost, budget, usage, and metrics schemas.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 from enum import Enum
 from typing import Annotated, Any, Dict, List
@@ -1123,7 +1125,7 @@ class BugPredictionAnalysisResponse(BaseModel):
     total_files: int | None = None
     analyzed_files: int | None = None
     high_risk_count: int | None = None
-    files: List["FileRisk"] | None = None  # type: ignore[name-defined]
+    files: List[FileRisk] | None = None  # type: ignore[name-defined]
     from_cache: bool | None = None
     # no_data shape
     message: str | None = None
@@ -1142,7 +1144,7 @@ class BugPredictionCachedResponse(BaseModel):
     total_files: int | None = None
     analyzed_files: int | None = None
     high_risk_count: int | None = None
-    files: List["FileRisk"] | None = None  # type: ignore[name-defined]
+    files: List[FileRisk] | None = None  # type: ignore[name-defined]
     from_cache: bool | None = None
     message: str | None = None
 
@@ -1154,7 +1156,7 @@ class BugPredictionHighRiskResponse(BaseModel):
 
     status: str | None = None
     timestamp: str | None = None
-    files: List["FileRisk"] | None = None  # type: ignore[name-defined]
+    files: List[FileRisk] | None = None  # type: ignore[name-defined]
     high_risk_count: int | None = None
     message: str | None = None
 
@@ -1166,7 +1168,7 @@ class BugPredictionFileResponse(BaseModel):
 
     status: str | None = None
     timestamp: str | None = None
-    file: "FileRisk" | None = None  # type: ignore[name-defined]
+    file: FileRisk | None = None  # type: ignore[name-defined]
     message: str | None = None
 
 

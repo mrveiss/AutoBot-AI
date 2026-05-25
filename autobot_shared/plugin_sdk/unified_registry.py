@@ -7,6 +7,8 @@ UnifiedRegistry (GH#7369)
 Single registry for all manifest types: plugins, skills, and extensions.
 """
 
+from __future__ import annotations
+
 import logging
 import threading
 

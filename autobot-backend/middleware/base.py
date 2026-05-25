@@ -8,6 +8,8 @@ Issue #658: Implements Agent Zero's extension pattern where extensions
 can hook into 22 lifecycle points to modify agent behavior.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
