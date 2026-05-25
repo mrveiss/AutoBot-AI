@@ -272,9 +272,9 @@ async def get_kb_ancestry_collections(
     a sub-company agent inherits.
     """
     from llc.kb.inheritance import KbInheritanceResolver
-    from llc.kb.rag_assembler import LLCRAGAssembler
 
-    resolver = KbInheritanceResolver(rag_assembler=LLCRAGAssembler())
+    # get_query_collections only needs the session; no RAG assembler required (GH#8570).
+    resolver = KbInheritanceResolver()
     try:
         chain = await resolver.get_query_collections(session, str(company_id))
     except ValueError as exc:
@@ -484,8 +484,8 @@ async def search_agents(
         List of matching agents with capability metadata.
     """
     try:
-        from llc.kb import AgentCapabilityIndexer
         from knowledge import get_knowledge_base
+        from llc.kb import AgentCapabilityIndexer
 
         indexer = AgentCapabilityIndexer()
         kb = await get_knowledge_base()

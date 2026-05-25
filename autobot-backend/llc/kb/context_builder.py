@@ -112,11 +112,9 @@ class HeartbeatContextBuilder:
     ) -> Dict[str, Any]:
         """Build rich context with parallel RAG queries (GH#8236).
 
-        Parallel queries:
-        - company:{company_id} top 5 docs matching work_item.title + description
-        - project:{project_id} top 8 docs matching work_item.title
-        - agent:{agent_id} top 5 docs matching work_item.title (agent memory)
-        - project:{project_id} filtered by status=done, top 3 similar items
+        DB-dependent steps run sequentially first to avoid sharing an AsyncSession
+        across concurrent tasks (GH#8566). RAG queries (no session) then run in
+        parallel for performance (P95 ≤ 2s total).
 
         Returns:
             Dict with goal_ancestry, company_context, project_context, agent_memory,
@@ -128,23 +126,30 @@ class HeartbeatContextBuilder:
 
         company_id = str(work_item.company_id)
         project_id = str(work_item.project_id) if work_item.project_id else None
-
-        # Start parallel tasks (P95 ≤ 2s per task, 4 tasks → ≤ 2s total)
         query_text = f"{work_item.title}\n{work_item.description or ''}"
 
-        # Task 1: Company context with inheritance (top 5, GH#8241)
+        # Step 1: Resolve inheritance collection chain from DB (sequential — session safety).
+        company_collections: List = []
+        if hasattr(self.inheritance_resolver, "get_query_collections"):
+            try:
+                company_collections = await self.inheritance_resolver.get_query_collections(session, company_id)
+            except Exception as e:
+                logger.warning("Failed to resolve KB collections for company %s: %s", company_id, e)
+
+        # Step 2: Fetch similar completed items from DB (sequential — session safety).
+        past_work = await self._get_similar_completed_items(session, project_id, query_text, max_results=3)
+
+        # Step 3: Parallel RAG queries — no session needed after this point (GH#8566).
         company_task = (
-            self.inheritance_resolver.search_with_inheritance(
-                session=session,
-                company_id=company_id,
+            self.inheritance_resolver.search_with_collections(
+                collections=company_collections,
                 query_text=query_text,
                 top_k=5,
             )
-            if hasattr(self.inheritance_resolver, "search_with_inheritance")
+            if company_collections and hasattr(self.inheritance_resolver, "search_with_collections")
             else asyncio.sleep(0)
         )
 
-        # Task 2: Project context (top 8) — optional if no project
         project_task = (
             self.rag_assembler.assemble(
                 company_id=company_id,
@@ -158,7 +163,6 @@ class HeartbeatContextBuilder:
             else asyncio.sleep(0)
         )
 
-        # Task 3: Agent memory (top 5)
         agent_task = (
             self.rag_assembler.assemble(
                 company_id=company_id,
@@ -172,25 +176,21 @@ class HeartbeatContextBuilder:
             else asyncio.sleep(0)
         )
 
-        # Task 4: Similar past work (top 3, status=done)
-        past_work_task = self._get_similar_completed_items(session, project_id, query_text, max_results=3)
-
-        # Run all queries in parallel
-        results = await asyncio.gather(
+        rag_results = await asyncio.gather(
             company_task,
             project_task,
             agent_task,
-            past_work_task,
             return_exceptions=True,
         )
 
-        company_ctx_raw = results[0] if not isinstance(results[0], Exception) else None
-        project_ctx = results[1] if not isinstance(results[1], Exception) else None
-        agent_mem = results[2] if not isinstance(results[2], Exception) else None
-        past_work = results[3] if not isinstance(results[3], Exception) else []
+        company_ctx_raw = rag_results[0] if not isinstance(rag_results[0], Exception) else None
+        project_ctx_raw = rag_results[1] if not isinstance(rag_results[1], Exception) else None
+        agent_mem_raw = rag_results[2] if not isinstance(rag_results[2], Exception) else None
 
-        # Format company_context from inheritance results (GH#8241)
+        # Normalize all three contexts to the same {chunks, sources} dict shape (GH#8567).
         company_ctx = self._format_inherited_context(company_ctx_raw)
+        project_ctx = self._normalize_rag_context(project_ctx_raw)
+        agent_mem = self._normalize_rag_context(agent_mem_raw)
 
         # Build goal ancestry
         goal_ancestry = []
@@ -210,9 +210,9 @@ class HeartbeatContextBuilder:
                 "acceptance_criteria": work_item.acceptance_criteria,
             },
             "goal_ancestry": goal_ancestry,
-            "company_context": company_ctx or {"chunks": [], "sources": []},
-            "project_context": project_ctx or {"chunks": [], "sources": []},
-            "agent_memory": agent_mem or {"chunks": [], "sources": []},
+            "company_context": company_ctx,
+            "project_context": project_ctx,
+            "agent_memory": agent_mem,
             "similar_past_work": past_work,
             "api_base": "http://localhost:8001/api",
             "agent_api_key": "<injected-at-runtime>",
@@ -249,6 +249,22 @@ class HeartbeatContextBuilder:
         return {
             "chunks": chunks,
             "sources": list(sources_set),
+        }
+
+    def _normalize_rag_context(self, result: Any) -> Dict[str, Any]:
+        """Normalize LLCContext or dict from rag_assembler.assemble() to {chunks, sources} (GH#8567).
+
+        Ensures project_context and agent_memory have the same shape as company_context,
+        regardless of whether assemble() returns an LLCContext object or a raw dict.
+        """
+        if result is None:
+            return {"chunks": [], "sources": []}
+        if isinstance(result, dict):
+            return {"chunks": result.get("chunks", []), "sources": result.get("sources", [])}
+        # LLCContext dataclass
+        return {
+            "chunks": getattr(result, "chunks", []),
+            "sources": getattr(result, "sources", []),
         }
 
     async def _get_similar_completed_items(
