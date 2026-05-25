@@ -53,10 +53,14 @@ def _run(cmd: list[str], *, cwd: Path | None = None, check: bool = True) -> subp
     return subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, check=check)
 
 
+REPO_ROOT = Path(__file__).parent.parent
+
+
 def create_worktree(issue_number: int) -> Path:
     branch = f"issue-{issue_number}"
     worktree_path = WORKTREE_BASE / branch
-    _run(["git", "worktree", "add", str(worktree_path), "-b", branch, "origin/Dev_new_gui"])
+    _run(["git", "worktree", "add", str(worktree_path), "-b", branch, "origin/Dev_new_gui"],
+         cwd=REPO_ROOT)
     _run(["git", "-C", str(worktree_path), "branch", "--unset-upstream"])
     return worktree_path
 
@@ -65,11 +69,11 @@ def cleanup_worktree(worktree_path: Path) -> None:
     branch = worktree_path.name
     subprocess.run(
         ["git", "worktree", "remove", str(worktree_path), "--force"],
-        capture_output=True,
+        capture_output=True, cwd=REPO_ROOT,
     )
     subprocess.run(
         ["git", "branch", "-D", branch],
-        capture_output=True,
+        capture_output=True, cwd=REPO_ROOT,
     )
 
 
@@ -91,6 +95,32 @@ def run_pytest(worktree: Path, test_path: str | None = None) -> tuple[bool, str]
         cmd.append(test_path)
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=worktree)
     return result.returncode == 0, result.stdout + result.stderr
+
+
+def run_pytest_baseline(worktree: Path) -> set[str]:
+    """Run full suite without -x; return set of FAILED test node IDs."""
+    cmd = ["python3", "-m", "pytest", "--tb=no", "-q", "--no-header"]
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=worktree)
+    failures: set[str] = set()
+    for line in (result.stdout + result.stderr).splitlines():
+        if line.startswith("FAILED "):
+            failures.add(line.split()[1])
+    return failures
+
+
+def has_new_failures(worktree: Path, baseline: set[str]) -> tuple[bool, str]:
+    """Return (has_regressions, output). True only if failures grew beyond baseline."""
+    cmd = ["python3", "-m", "pytest", "--tb=short", "-q", "--no-header"]
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=worktree)
+    output = result.stdout + result.stderr
+    if result.returncode == 0:
+        return False, output
+    current: set[str] = set()
+    for line in output.splitlines():
+        if line.startswith("FAILED "):
+            current.add(line.split()[1])
+    new = current - baseline
+    return bool(new), output if new else f"[baseline failures only, no regressions]\n{output}"
 
 
 # ---------------------------------------------------------------------------
@@ -238,6 +268,9 @@ async def remediate_issue(issue: dict, dry_run: bool = False) -> RemediationResu
         # Commit the failing test (first commit)
         git_commit(worktree, f"test(#{issue_number}): add failing repro test", [test_file])
 
+        # Snapshot pre-existing failures so the regression check only catches new ones.
+        baseline_failures = run_pytest_baseline(worktree)
+
         # Phase 2: iterate fixes
         for iteration in range(1, MAX_FIX_ITERATIONS + 1):
             claude_fix(issue, worktree, test_file, iteration, output)
@@ -251,9 +284,9 @@ async def remediate_issue(issue: dict, dry_run: bool = False) -> RemediationResu
                 _run(["git", "-C", str(worktree), "checkout", "HEAD", "--", test_file])
                 continue
 
-            # Target passes — check for regressions
-            all_passed, regression_output = run_pytest(worktree)
-            if not all_passed:
+            # Target passes — check for regressions beyond the pre-fix baseline
+            regressed, regression_output = has_new_failures(worktree, baseline_failures)
+            if regressed:
                 _run(["git", "-C", str(worktree), "checkout", "--", "."])
                 _run(["git", "-C", str(worktree), "checkout", "HEAD", "--", test_file])
                 output = f"Regression detected:\n{regression_output}"
