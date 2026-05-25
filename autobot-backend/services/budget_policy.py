@@ -139,7 +139,7 @@ async def list_all_policies() -> List[BudgetPolicy]:
         # Skip index keys
         if not key.startswith(f"{_POLICY_NS}:") or key.startswith(f"{_POLICY_IDX_NS}"):
             continue
-        pid = key[len(f"{_POLICY_NS}:"):]
+        pid = key[len(f"{_POLICY_NS}:") :]
         # Index entries have extra colons — skip them
         if ":" in pid:
             continue
@@ -296,7 +296,8 @@ async def apply_action(result: PolicyEvalResult, agent_id: str) -> None:
 
 async def _emit_breach_audit(result: PolicyEvalResult, agent_id: str) -> None:
     try:
-        from services.audit.unified_audit import AuditCategory, AuditEvent, record as record_unified_event
+        from services.audit.unified_audit import AuditCategory, AuditEvent
+        from services.audit.unified_audit import record as record_unified_event
 
         event = AuditEvent(
             category=AuditCategory.GOVERNANCE,
@@ -332,9 +333,7 @@ async def pause_agent(agent_id: str, reason: str, paused_by: str = "budget_polic
     and emit governance audit event (GH#6470).
     """
     if _session_factory is None:
-        logger.error(
-            "pause_agent called before configure_session_factory; cannot pause agent=%s", agent_id
-        )
+        logger.error("pause_agent called before configure_session_factory; cannot pause agent=%s", agent_id)
         return
 
     try:
@@ -372,7 +371,8 @@ async def pause_agent(agent_id: str, reason: str, paused_by: str = "budget_polic
         logger.warning("Agent %s PAUSED — %s", agent_id, reason)
 
         try:
-            from services.audit.unified_audit import AuditCategory, AuditEvent, record as record_unified_event
+            from services.audit.unified_audit import AuditCategory, AuditEvent
+            from services.audit.unified_audit import record as record_unified_event
 
             await record_unified_event(
                 AuditEvent(
@@ -399,9 +399,7 @@ async def resume_agent(agent_id: str, approved_by: str) -> bool:
     Returns True if the agent was paused and is now active.
     """
     if _session_factory is None:
-        logger.error(
-            "resume_agent called before configure_session_factory; cannot resume agent=%s", agent_id
-        )
+        logger.error("resume_agent called before configure_session_factory; cannot resume agent=%s", agent_id)
         return False
 
     try:
@@ -422,7 +420,8 @@ async def resume_agent(agent_id: str, approved_by: str) -> bool:
         logger.info("Agent %s RESUMED by %s", agent_id, approved_by)
 
         try:
-            from services.audit.unified_audit import AuditCategory, AuditEvent, record as record_unified_event
+            from services.audit.unified_audit import AuditCategory, AuditEvent
+            from services.audit.unified_audit import record as record_unified_event
 
             await record_unified_event(
                 AuditEvent(

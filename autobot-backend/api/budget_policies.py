@@ -263,9 +263,7 @@ async def get_agent_pause_status(
 ) -> PauseStatusResponse:
     """Get the pause status of an agent."""
     try:
-        result = await session.execute(
-            select(AgentRuntimeState).where(AgentRuntimeState.agent_id == agent_id)
-        )
+        result = await session.execute(select(AgentRuntimeState).where(AgentRuntimeState.agent_id == agent_id))
         state = result.scalar_one_or_none()
 
         if state is None or state.status != "paused":

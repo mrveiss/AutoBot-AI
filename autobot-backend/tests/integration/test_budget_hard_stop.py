@@ -15,15 +15,16 @@ from datetime import datetime, timezone
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from models.heartbeat import AgentRuntimeState, AgentWakeupRequest
 from services.budget_policy import (
-    BudgetPolicy,
     PERIOD_DAY,
     PERIOD_MONTH,
     SCOPE_AGENT,
     SCOPE_TENANT,
+    BudgetPolicy,
+    configure_session_factory,
     create_policy,
     delete_policy,
     get_policy,
@@ -32,7 +33,6 @@ from services.budget_policy import (
     patch_policy,
     pause_agent,
     resume_agent,
-    configure_session_factory,
 )
 
 
@@ -233,9 +233,7 @@ class TestPauseResume:
         await pause_agent(agent_id, reason="Budget hard-stop test")
 
         # Verify the state was created
-        result = await async_db_session.execute(
-            select(AgentRuntimeState).where(AgentRuntimeState.agent_id == agent_id)
-        )
+        result = await async_db_session.execute(select(AgentRuntimeState).where(AgentRuntimeState.agent_id == agent_id))
         state = result.scalar_one_or_none()
         assert state is not None
         assert state.status == "paused"
@@ -311,9 +309,7 @@ class TestPauseResume:
         assert success is True
 
         # Verify the state is cleared
-        result = await async_db_session.execute(
-            select(AgentRuntimeState).where(AgentRuntimeState.agent_id == agent_id)
-        )
+        result = await async_db_session.execute(select(AgentRuntimeState).where(AgentRuntimeState.agent_id == agent_id))
         resumed_state = result.scalar_one_or_none()
         assert resumed_state is not None
         assert resumed_state.status == "active"
