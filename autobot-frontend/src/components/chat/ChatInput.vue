@@ -161,6 +161,18 @@
               <Icon name="eye" />
             </BaseButton>
 
+            <!-- Preset Management Button (#8596) -->
+            <BaseButton
+              variant="ghost"
+              size="xs"
+              @click="showPresetsModal = true"
+              class="action-btn"
+              :disabled="isDisabled"
+              :aria-label="$t('chat.input.managePresets')"
+            >
+              <Icon name="bookmark" />
+            </BaseButton>
+
             <!-- Voice Input Button -->
             <BaseButton
               variant="ghost"
@@ -304,6 +316,12 @@
       @select="applySlashPreset"
       @update:selected-index="setSlashIndex"
     />
+
+    <!-- Preset Management Modal (#8596) -->
+    <PresetManagementModal
+      v-model="showPresetsModal"
+      @close="showPresetsModal = false"
+    />
   </div>
 </template>
 
@@ -316,6 +334,7 @@ import { useChatController } from '@/models/controllers'
 import ProgressBar from '@/components/ui/ProgressBar.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import VisionAnalysisModal from './VisionAnalysisModal.vue'
+import PresetManagementModal from './PresetManagementModal.vue'
 import TranslationShortcutPanel from './TranslationShortcutPanel.vue'
 import SlashCommandDropdown from './SlashCommandDropdown.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
@@ -379,6 +398,7 @@ const isSending = ref(false)
 const showEmojiPicker = ref(false)
 const showVisionModal = ref(false)
 const showTranslatePanel = ref(false)
+const showPresetsModal = ref(false)
 
 // Issue #249: Knowledge-Enhanced Chat (RAG) toggle
 const useKnowledge = ref(true) // Default enabled
