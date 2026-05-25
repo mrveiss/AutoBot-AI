@@ -26,10 +26,7 @@ import asyncio
 import json
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict
-
-if TYPE_CHECKING:
-    from orchestration.causal_error_recovery import CausalErrorRecovery as _CausalErrorRecovery
+from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
