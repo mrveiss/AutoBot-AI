@@ -70,14 +70,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import type { TopLevelSpec } from 'vega-lite'
-
-interface ChartPayload {
-  payloadType: 'vega-lite'
-  specVersion: '5'
-  spec: TopLevelSpec
-  executable?: boolean
-}
+import type { ChartPayload } from '@/types/canvas'
 
 const props = defineProps<{
   richPayload: ChartPayload | null
