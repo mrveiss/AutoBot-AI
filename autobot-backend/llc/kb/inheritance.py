@@ -16,7 +16,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 
-from ..models.work_item import LLCWorkItem
 from .rag_assembler import AssemblerProfile, LLCRAGAssembler
 
 logger = get_logger(__name__)
