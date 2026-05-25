@@ -36,6 +36,9 @@ FROM node:20-bookworm-slim AS slm-builder
 WORKDIR /app
 
 # Install dependencies
+# autobot-plugins/ must be at /autobot-plugins/ because package-lock.json
+# references file:../autobot-plugins/terminal and ../vnc (resolved from /app/)
+COPY autobot-plugins/ /autobot-plugins/
 COPY autobot-slm-frontend/package.json autobot-slm-frontend/package-lock.json ./
 # Copy shared module (referenced by @shared alias)
 COPY autobot_shared/ /autobot_shared/
