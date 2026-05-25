@@ -947,11 +947,11 @@ export const routes: RouteRecordRaw[] = [
     name: 'llc-kanban-board',
     component: () => import('@/views/llc/KanbanBoardView.vue'),
       title: 'Kanban Board',
-  // LLC module routes — GH#8249
-  { path: '/llc/approvals', name: 'llc-approvals', component: () => import('@/views/llc/ApprovalsInbox.vue'), meta: { title: 'Approvals Inbox', requiresAuth: true } },
-  { path: '/llc/costs', name: 'llc-costs', component: () => import('@/views/llc/CostDashboard.vue'), meta: { title: 'Cost Dashboard', requiresAuth: true } },
-  { path: '/llc/heartbeat', name: 'llc-heartbeat', component: () => import('@/views/llc/HeartbeatMonitor.vue'), meta: { title: 'Heartbeat Monitor', requiresAuth: true } },
-  { path: '/llc/ceo-chat', name: 'llc-ceo-chat', component: () => import('@/views/llc/CeoChatView.vue'), meta: { title: 'CEO Chat', requiresAuth: true } },
+  // LLC module routes — GH#8249 (companyId added via GH#8550)
+  { path: '/llc/companies/:companyId/approvals', name: 'llc-approvals', component: () => import('@/views/llc/ApprovalsInbox.vue'), props: true, meta: { title: 'Approvals Inbox', requiresAuth: true } },
+  { path: '/llc/companies/:companyId/costs', name: 'llc-costs', component: () => import('@/views/llc/CostDashboard.vue'), props: true, meta: { title: 'Cost Dashboard', requiresAuth: true } },
+  { path: '/llc/companies/:companyId/heartbeat', name: 'llc-heartbeat', component: () => import('@/views/llc/HeartbeatMonitor.vue'), props: true, meta: { title: 'Heartbeat Monitor', requiresAuth: true } },
+  { path: '/llc/companies/:companyId/ceo-chat', name: 'llc-ceo-chat', component: () => import('@/views/llc/CeoChatView.vue'), props: true, meta: { title: 'CEO Chat', requiresAuth: true } },
     path: '/:pathMatch(.*)*',
     name: 'not-found',
     component: NotFoundView,

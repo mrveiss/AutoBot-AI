@@ -190,6 +190,20 @@ class SprintAutoCloseService(LLCServiceBase):
                 f"Sprint {sprint_id} pending approval is " f"{sprint.pending_close_approval_id!r}, got {approval_id!r}"
             )
 
+        # -- Validate the approval itself is APPROVED (GH#8473) --
+        from ..models.approval import LLCApproval as _LLCApproval
+
+        approval_row = await session.execute(
+            select(_LLCApproval).where(_LLCApproval.id == approval_id)
+        )
+        approval_obj = approval_row.scalar_one_or_none()
+        if approval_obj is None:
+            raise ValueError(f"Approval {approval_id} not found")
+        if approval_obj.status != ApprovalStatus.APPROVED.value:
+            raise ValueError(
+                f"Approval {approval_id} has status {approval_obj.status!r}; expected approved"
+            )
+
         # -- Compute actual_points from DONE items --
         points_result = await session.execute(
             select(func.coalesce(func.sum(LLCWorkItem.story_points), 0)).where(

@@ -573,6 +573,54 @@ async def unclaim_work_item(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+class CoWorkerSetRequest(BaseModel):
+    co_worker_type: str
+    company_id: str
+    co_worker_agent_id: Optional[str] = None
+    co_worker_user_id: Optional[str] = None
+    actor_id: Optional[str] = None
+    caller_role: str = "member"
+
+
+class CoWorkerClearRequest(BaseModel):
+    company_id: str
+    actor_id: Optional[str] = None
+
+
+@router.post("/{work_item_id}/coworker", status_code=200)
+async def set_coworker(
+    work_item_id: str,
+    body: CoWorkerSetRequest,
+    session: AsyncSession = Depends(get_session),
+) -> Dict[str, Any]:
+    """Set co-worker fields for a work item (GH#8230, GH#8517).
+
+    Returns 404 when the work item is not found, 403 when the caller lacks
+    permission, and 422 for invalid co-worker identity values.
+    """
+    try:
+        item = await _service().enable_coworking(
+            session,
+            work_item_id=work_item_id,
+            co_worker_type=body.co_worker_type,
+            company_id=body.company_id,
+            co_worker_agent_id=body.co_worker_agent_id,
+            co_worker_user_id=body.co_worker_user_id,
+            actor_id=body.actor_id,
+            caller_role=body.caller_role,
+        )
+        await session.commit()
+        return _item_to_dict(item)
+    except CoWorkingPermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except ValueError as exc:
+        msg = str(exc)
+        # "not found" errors → 404; identity/type validation errors → 422
+        if "not found" in msg.lower():
+            raise HTTPException(status_code=404, detail=msg)
+        raise HTTPException(status_code=422, detail=msg)
+
+
 @router.post("/{work_item_id}/comments", status_code=201)
 async def add_comment(
     work_item_id: str,

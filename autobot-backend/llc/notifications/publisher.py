@@ -73,6 +73,7 @@ class LLCWebSocketPublisher:
 
         try:
             if get_event_manager is not None:
-                await get_event_manager().publish_event(f"llc:{event_type}", envelope)
+                # EventManager uses publish(), not publish_event() (GH#8544)
+                await get_event_manager().publish(f"llc:{event_type}", envelope)
         except Exception as exc:
             logger.warning("LLC publisher: EventManager push failed: %s", exc)

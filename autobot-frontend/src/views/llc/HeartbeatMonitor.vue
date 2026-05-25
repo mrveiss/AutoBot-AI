@@ -91,6 +91,9 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 
+const props = defineProps<{ companyId?: string }>()
+const companyId = computed(() => props.companyId ?? '')
+
 const logger = createLogger('HeartbeatMonitor')
 const api = useApiClient()
 
@@ -162,7 +165,8 @@ function toggleRun(id: string) {
 async function fetchAgents() {
   isLoading.value = true
   try {
-    const data = await api.get<Agent[] | { items: Agent[] }>('/api/llc/agents')
+    const qs = companyId.value ? `?company_id=${companyId.value}` : ''
+    const data = await api.get<Agent[] | { items: Agent[] }>(`/api/llc/agents${qs}`)
     agents.value = Array.isArray(data) ? data : (data as { items: Agent[] }).items ?? []
   } catch (err) {
     logger.error('Failed to fetch agents', err)

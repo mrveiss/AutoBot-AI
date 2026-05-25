@@ -75,10 +75,14 @@ async def get_run(
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
     """Get a single heartbeat run with context snapshot."""
+    try:
+        run_uuid = uuid.UUID(run_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid run_id UUID format")
     result = await session.execute(
         select(LLCHeartbeatRun).where(
             LLCHeartbeatRun.agent_id == agent_id,
-            LLCHeartbeatRun.id == run_id,
+            LLCHeartbeatRun.id == run_uuid,
             LLCHeartbeatRun.company_id == ctx.org_id,
         )
     )
@@ -103,10 +107,14 @@ async def cancel_run(
     Sets run status = cancelled, calls adapter.cancel() best-effort,
     and releases the Redis checkout lock when a work item was held.
     """
+    try:
+        run_uuid = uuid.UUID(run_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid run_id UUID format")
     result = await session.execute(
         select(LLCHeartbeatRun).where(
             LLCHeartbeatRun.agent_id == agent_id,
-            LLCHeartbeatRun.id == run_id,
+            LLCHeartbeatRun.id == run_uuid,
             LLCHeartbeatRun.company_id == ctx.org_id,
         )
     )

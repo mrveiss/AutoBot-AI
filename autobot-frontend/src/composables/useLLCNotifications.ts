@@ -68,10 +68,26 @@ export function useLLCNotifications(companyId: string) {
   function _handleMessage(data: unknown) {
     const msg = data as Record<string, unknown>
     if (typeof msg !== 'object' || msg === null) return
-    // Filter to this company only
-    if (msg.company_id !== companyId) return
 
-    const event = msg as LLCNotificationEvent
+    // LiveEventManager wraps the publisher envelope in a "payload" key (GH#8545).
+    // Check both the wrapper level and the payload level for company_id.
+    const payloadData = (msg.payload as Record<string, unknown> | null | undefined) ?? msg
+    const eventCompanyId = (payloadData.company_id ?? msg.company_id) as string | undefined
+    if (!eventCompanyId || eventCompanyId !== companyId) return
+
+    const eventType = (msg.event_type ?? payloadData.event_type) as string
+    if (!eventType || !LLC_EVENT_TYPES.includes(eventType)) return
+
+    const event: LLCNotificationEvent = {
+      event_type: eventType,
+      company_id: eventCompanyId,
+      entity_type: (payloadData.entity_type ?? '') as string,
+      entity_id: String(payloadData.entity_id ?? ''),
+      payload: (payloadData.payload ?? {}) as Record<string, unknown>,
+      actor_id: payloadData.actor_id as string | undefined,
+      ts: (payloadData.ts ?? new Date().toISOString()) as string,
+    }
+
     events.value.push(event)
 
     const specific = handlers.get(event.event_type)
@@ -81,18 +97,15 @@ export function useLLCNotifications(companyId: string) {
     if (wildcards) wildcards.forEach((cb) => cb(event))
   }
 
-  // Subscribe to each LLC event type on the global WS
-  for (const evtType of LLC_EVENT_TYPES) {
-    unsubscribers.push(globalWebSocketService.on(evtType, _handleMessage))
-  }
-
-  // Also listen on generic 'message' for LLC events emitted without a top-level type
+  // LiveEventManager emits WS messages with type="live_event"; subscribe there
+  // and also on generic "message" for any LLC events forwarded without wrapping.
+  unsubscribers.push(globalWebSocketService.on('live_event', _handleMessage))
   unsubscribers.push(
     globalWebSocketService.on('message', (data: unknown) => {
       const msg = data as Record<string, unknown>
       if (typeof msg !== 'object' || msg === null) return
-      const evtType = msg.event_type as string | undefined
-      if (!evtType || !LLC_EVENT_TYPES.includes(evtType)) return
+      // Skip if already handled via the live_event path
+      if (msg.type === 'live_event') return
       _handleMessage(data)
     }),
   )
