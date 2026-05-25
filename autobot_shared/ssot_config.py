@@ -1770,6 +1770,16 @@ class AutoBotConfig(BaseSettings):
         return self.path.base_dir
 
     @property
+    def npu_worker_host(self) -> str:
+        """Backward-compat: config.npu_worker_host → config.vm.npu."""
+        return self.vm.npu
+
+    @property
+    def npu_worker_port(self) -> int:
+        """Backward-compat: config.npu_worker_port → config.port.npu."""
+        return self.port.npu
+
+    @property
     def tts_worker_host(self) -> str:
         """Backward-compat: config.tts_worker_host → config.vm.tts."""
         return self.vm.tts
