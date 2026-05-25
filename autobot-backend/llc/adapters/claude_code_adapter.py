@@ -156,7 +156,7 @@ class ClaudeCodeAdapter:
     async def _status(self, agent_config: dict, run_id: str) -> AdapterRunStatus:
         cfg = agent_config.get("adapter_config", {})
         output_dir: str = cfg.get("output_dir", _DEFAULT_OUTPUT_DIR)
-        state = self._load_state(_state_path(output_dir, run_id))
+        state = self._load_state(_state_path(output_dir, run_id), output_dir)
 
         if state is None:
             try:
@@ -247,11 +247,11 @@ class ClaudeCodeAdapter:
         return "\n\n".join(parts)
 
     @staticmethod
-    def _load_state(state_file: str) -> Optional[dict]:
+    def _load_state(state_file: str, safe_dir: str = _DEFAULT_OUTPUT_DIR) -> Optional[dict]:
         try:
             resolved = pathlib.Path(state_file).resolve()
-            expected_dir = pathlib.Path(state_file).parent.resolve()
-            if not resolved.is_relative_to(expected_dir):
+            base = pathlib.Path(safe_dir).resolve()
+            if not resolved.is_relative_to(base):
                 return None
             with open(resolved, encoding="utf-8") as fh:
                 return json.load(fh)

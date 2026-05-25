@@ -35,6 +35,7 @@ def upgrade() -> None:
         "ix_agent_org_nodes_company_id",
         "agent_org_nodes",
         ["company_id"],
+        if_not_exists=True,
     )
 
 

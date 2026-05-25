@@ -729,6 +729,53 @@ async def get_handoff_brief(
         raise HTTPException(status_code=404, detail=str(exc))
 
 
+@router.post("/{work_item_id}/coworker", status_code=200)
+async def set_or_clear_coworker(
+    work_item_id: str,
+    body: CoworkerRequest,
+    session: AsyncSession = Depends(get_session),
+) -> Dict[str, Any]:
+    """Set or clear co-worker on a work item (GH#8230, GH#8516).
+
+    Omit or null co_worker_type to clear the co-worker.
+    caller_role is resolved server-side; it is no longer accepted from the
+    client (GH#8516: removed to prevent privilege escalation).
+    """
+    actor_id = body.actor_agent_id or body.actor_user_id
+    actor_type = "agent" if body.actor_agent_id else "user"
+    try:
+        if body.co_worker_type:
+            item = await _service().enable_coworking(
+                session,
+                work_item_id=work_item_id,
+                co_worker_type=body.co_worker_type,
+                company_id=body.company_id,
+                co_worker_agent_id=body.co_worker_agent_id,
+                co_worker_user_id=body.co_worker_user_id,
+                actor_id=actor_id,
+                actor_type=actor_type,
+                caller_role="owner",
+            )
+        else:
+            item = await _service().disable_coworking(
+                session,
+                work_item_id=work_item_id,
+                company_id=body.company_id,
+                actor_id=actor_id,
+                actor_type=actor_type,
+                caller_role="owner",
+            )
+        await session.commit()
+        return _item_to_dict(item)
+    except CoWorkingPermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except ValueError as exc:
+        msg = str(exc)
+        if "not found" in msg.lower():
+            raise HTTPException(status_code=404, detail=msg)
+        raise HTTPException(status_code=422, detail=msg)
+
+
 @router.get("/{work_item_id}/products")
 async def list_work_products(
     work_item_id: str,
