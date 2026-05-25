@@ -51,6 +51,12 @@ def _make_pkg_stub(name: str) -> types.ModuleType:
         return mock_attr
 
     mod.__getattr__ = _getattr  # type: ignore[attr-defined]
+    mod.pytest_plugins = []  # prevent MagicMock __getattr__ leaking into pytest plugin scan
+    # Prevent _get_first_non_fixture_func from picking up MagicMock as setup/teardown hooks
+    mod.setUpModule = None  # type: ignore[attr-defined]
+    mod.setup_module = None  # type: ignore[attr-defined]
+    mod.tearDownModule = None  # type: ignore[attr-defined]
+    mod.teardown_module = None  # type: ignore[attr-defined]
     sys.modules[name] = mod
     return mod
 
