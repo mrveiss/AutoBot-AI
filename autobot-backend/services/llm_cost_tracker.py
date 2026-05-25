@@ -541,6 +541,14 @@ class LLMCostTracker(AsyncRedisClientMixin):
             self._store_usage_record(record),
             self._check_budget_alerts(cost),
         )
+        # Budget policy evaluation — fire-and-forget background task (GH#6470)
+        if record.agent_id:
+            try:
+                from services.budget_policy import trigger_budget_evaluation
+
+                trigger_budget_evaluation(agent_id=record.agent_id)
+            except Exception:
+                pass  # never let policy evaluation block cost tracking
         logger.debug(
             "Tracked LLM usage: %s/%s - %din/%dout = $%.6f",
             provider,

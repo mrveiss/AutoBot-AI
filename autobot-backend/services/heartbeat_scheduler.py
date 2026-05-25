@@ -188,9 +188,22 @@ class HeartbeatScheduler:
 
     async def _run_once(self, agent_id: str, trigger: WakeupTrigger) -> None:
         """Execute one heartbeat run for agent_id (#1407)."""
+        # Skip paused agents — budget hard-stop (GH#6470)
+        if await self._is_agent_paused(agent_id):
+            logger.info("Skipping heartbeat for budget-paused agent %s", agent_id)
+            return
         run_id, state_id, timeout, run_jwt = await self._start_run(agent_id, trigger)
         final_status, error_msg, usage = await self._invoke_agent(agent_id, state_id, run_id, timeout, run_jwt)
         await self._finalize_run(agent_id, run_id, state_id, final_status, error_msg, usage, run_jwt)
+
+    async def _is_agent_paused(self, agent_id: str) -> bool:
+        """Return True if AgentRuntimeState.status is 'paused' (GH#6470)."""
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(AgentRuntimeState.status).where(AgentRuntimeState.agent_id == agent_id)
+            )
+            status = result.scalar_one_or_none()
+            return status == "paused"
 
     async def _start_run(self, agent_id: str, trigger: WakeupTrigger) -> Tuple[uuid.UUID, uuid.UUID, int, str]:
         """Create HeartbeatRun row; consume any pending wakeup request; mint run JWT (#1407, SEC-2)."""
