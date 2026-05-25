@@ -60,8 +60,9 @@ class KbInheritanceResolver:
             ValueError: If company_id not found
         """
         try:
-            from user_management.models.organization import Organization
             from sqlalchemy import select
+
+            from user_management.models.organization import Organization
 
             # Fetch company
             company_uuid = uuid.UUID(company_id)
