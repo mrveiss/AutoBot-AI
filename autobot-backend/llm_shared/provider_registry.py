@@ -29,9 +29,11 @@ from autobot_shared.logging_manager import get_logger
 from __future__ import annotations
 
 import asyncio
+import os
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from llm_shared.model_param_registry import apply_model_defaults, apply_prompt_prefix
 from llm_shared.models import LLMRequest
@@ -43,6 +45,15 @@ logger = get_logger(__name__)
 
 # Cache health results for 30 s to avoid a health check on every request.
 _HEALTH_CACHE_TTL = 30.0
+
+# Multiplier applied to baseline single-worker TTFT when evaluating whether
+# cross-worker hop latency makes pipeline dispatch too expensive (MVA-1099).
+_NPU_PIPELINE_MAX_LATENCY_MULTIPLIER: float = float(
+    os.environ.get("NPU_PIPELINE_MAX_LATENCY_MULTIPLIER", "2.0")
+)
+
+# Provider name used for the NPU worker pool.
+_NPU_POOL_PROVIDER_NAME = "npu_pool"
 
 
 class ProviderRegistry:
@@ -62,6 +73,9 @@ class ProviderRegistry:
         self._health_lock = asyncio.Lock()
         self._initialized = False
         self._provider_facts: Dict[str, ProviderRuntimeFact] = {}
+        # Optional PipelineDispatcher wired in by set_npu_pipeline_dispatcher() (MVA-1099).
+        self._npu_pipeline_dispatcher: Optional[Any] = None
+        self._npu_pipeline_enabled: bool = False
 
     # ------------------------------------------------------------------
     # Registration
@@ -201,6 +215,88 @@ class ProviderRegistry:
         return request
 
     # ------------------------------------------------------------------
+    # NPU pipeline dispatch (MVA-1099)
+    # ------------------------------------------------------------------
+
+    def set_npu_pipeline_dispatcher(self, dispatcher: Any, *, enabled: bool = True) -> None:
+        """Attach a PipelineDispatcher and enable pipeline routing for oversized models."""
+        self._npu_pipeline_dispatcher = dispatcher
+        self._npu_pipeline_enabled = enabled
+        logger.info("NPU pipeline dispatcher registered (enabled=%s)", enabled)
+
+    async def _probe_hop_latency_ms(self) -> float:
+        """Return estimated cross-worker hop latency in ms from the dispatcher's workers.
+
+        Falls back to 0.0 when the dispatcher has fewer than two online workers.
+        """
+        if self._npu_pipeline_dispatcher is None:
+            return 0.0
+        from services.npu_pipeline.pipeline_dispatcher import WorkerState as WS
+
+        online = [w for w in self._npu_pipeline_dispatcher.workers if w.state == WS.ONLINE]
+        if len(online) < 2:
+            return 0.0
+        # Simulate a single cross-worker transfer to get the representative latency.
+        try:
+            latency = await self._npu_pipeline_dispatcher._simulate_layer_transfer(
+                online[0], online[1]
+            )
+        except Exception as exc:
+            logger.debug("hop latency probe failed: %s", exc)
+            return 0.0
+        return latency
+
+    async def _should_use_npu_pipeline(
+        self,
+        request: LLMRequest | None,
+        baseline_ttft_ms: float = 500.0,
+    ) -> bool:
+        """Return True when pipeline dispatch is appropriate for *request*.
+
+        Conditions (all must hold):
+        - Pipeline is enabled via :meth:`set_npu_pipeline_dispatcher`
+        - *request* carries a ``npu_model_bytes`` metadata key larger than the
+          maximum single-worker VRAM in the registered dispatcher pool
+        - Estimated cross-worker hop latency would not inflate TTFT beyond
+          ``NPU_PIPELINE_MAX_LATENCY_MULTIPLIER × baseline_ttft_ms``
+        """
+        if not self._npu_pipeline_enabled or self._npu_pipeline_dispatcher is None:
+            return False
+        if request is None:
+            return False
+
+        model_bytes: int = request.metadata.get("npu_model_bytes", 0)
+        if model_bytes <= 0:
+            return False
+
+        from services.npu_pipeline.pipeline_dispatcher import WorkerState as WS
+
+        online = [w for w in self._npu_pipeline_dispatcher.workers if w.state == WS.ONLINE]
+        if not online:
+            return False
+
+        max_single_vram = max(w.vram_bytes for w in online)
+        if model_bytes <= max_single_vram:
+            # Model fits on a single worker — no need for pipeline.
+            return False
+
+        # Latency guard: don't pipeline if hop cost exceeds the threshold.
+        hop_ms = await self._probe_hop_latency_ms()
+        # Each pipeline stage adds one hop; there are len(online)-1 hops total.
+        total_hop_ms = hop_ms * max(0, len(online) - 1)
+        threshold_ms = _NPU_PIPELINE_MAX_LATENCY_MULTIPLIER * baseline_ttft_ms
+        if total_hop_ms > threshold_ms:
+            logger.warning(
+                "NPU pipeline hop latency %.1f ms exceeds threshold %.1f ms — "
+                "falling back to single-worker dispatch",
+                total_hop_ms,
+                threshold_ms,
+            )
+            return False
+
+        return True
+
+    # ------------------------------------------------------------------
     # Provider selection
     # ------------------------------------------------------------------
 
@@ -268,6 +364,15 @@ class ProviderRegistry:
                         name,
                         primary,
                     )
+                # NPU pipeline hook (MVA-1099): when the chosen provider is the
+                # NPU pool and the model is oversized for a single worker, route
+                # through PipelineDispatcher instead.
+                if name == _NPU_POOL_PROVIDER_NAME and await self._should_use_npu_pipeline(request):
+                    logger.info(
+                        "NPU pipeline dispatch activated for model_bytes=%s",
+                        request.metadata.get("npu_model_bytes") if request else "n/a",
+                    )
+                    return self._npu_pipeline_dispatcher  # type: ignore[return-value]
                 return provider
 
         logger.error("All providers unavailable or not configured")
