@@ -268,6 +268,7 @@ class TestTieredModelRouter:
         """Test getting model for specific tier."""
         assert router.get_model_for_tier("simple") == "gemma2:2b"
         assert router.get_model_for_tier("complex") == DEFAULT_LLM_MODEL
+        assert router.get_model_for_tier("long_context") == DEFAULT_LLM_MODEL
 
         with pytest.raises(ValueError):
             router.get_model_for_tier("unknown")
@@ -276,6 +277,122 @@ class TestTieredModelRouter:
         """Test fallback logic."""
         assert router.should_fallback("simple") is True
         assert router.should_fallback("complex") is False
+
+
+class TestLongContextTier:
+    """Tests for the long_context tier routing (GH#7349)."""
+
+    @pytest.fixture
+    def config(self):
+        # Use complexity_threshold=2.5 so clearly technical messages score as complex.
+        return TierConfig(
+            models=TierModels(
+                simple="gemma2:2b",
+                complex=DEFAULT_LLM_MODEL,
+                long_context=DEFAULT_LLM_MODEL,
+            ),
+            complexity_threshold=2.5,
+            long_context_threshold=100,
+        )
+
+    @pytest.fixture
+    def router(self, config):
+        return TieredModelRouter(config)
+
+    def _make_long_messages(self, token_count: int) -> list:
+        """Build a message list whose total char count implies ~token_count tokens."""
+        content = "word " * (token_count * 4)
+        return [{"role": "user", "content": content}]
+
+    def test_short_low_complexity_routes_to_simple(self, router):
+        """Short input with low complexity → simple tier."""
+        messages = [{"role": "user", "content": "What time is it?"}]
+        model, result = router.route(messages)
+        assert result.tier == "simple"
+        assert model == "gemma2:2b"
+
+    def test_short_high_complexity_routes_to_complex(self, router):
+        """Short input with high complexity → complex tier."""
+        messages = [
+            {
+                "role": "user",
+                "content": (
+                    "Design a microservices architecture using Kubernetes, "
+                    "Redis caching, OAuth2 authentication, and JWT tokens."
+                ),
+            }
+        ]
+        model, result = router.route(messages)
+        assert result.tier == "complex"
+        assert model == DEFAULT_LLM_MODEL
+
+    def test_long_low_complexity_routes_to_long_context(self, config, router):
+        """Long input with low complexity → long_context tier (GH#7349)."""
+        messages = self._make_long_messages(config.long_context_threshold + 10)
+        model, result = router.route(messages)
+        assert result.tier == "long_context"
+        assert model == config.models.long_context
+        assert result.is_long_context is True
+
+    def test_long_high_complexity_routes_to_long_context(self, config, router):
+        """Long input with high complexity → long_context tier takes precedence (GH#7349)."""
+        long_prefix = "word " * ((config.long_context_threshold + 10) * 4)
+        complex_suffix = (
+            " Design a microservices architecture using Kubernetes, Redis, OAuth2, JWT, "
+            "async functions, database migrations, and encryption algorithms."
+        )
+        messages = [{"role": "user", "content": long_prefix + complex_suffix}]
+        model, result = router.route(messages)
+        assert result.tier == "long_context"
+        assert model == config.models.long_context
+
+    def test_long_context_tier_not_triggered_below_threshold(self, config, router):
+        """Input just below threshold does NOT route to long_context."""
+        messages = self._make_long_messages(config.long_context_threshold - 10)
+        model, result = router.route(messages)
+        assert result.tier != "long_context"
+
+    def test_long_context_custom_model(self):
+        """long_context tier uses its configured model."""
+        config = TierConfig(
+            models=TierModels(
+                simple="gemma2:2b",
+                complex=DEFAULT_LLM_MODEL,
+                long_context="jamba:large",
+            ),
+            long_context_threshold=50,
+        )
+        router = TieredModelRouter(config)
+        messages = [{"role": "user", "content": "x " * (50 * 4 + 4)}]
+        model, result = router.route(messages)
+        assert result.tier == "long_context"
+        assert model == "jamba:large"
+
+    def test_metrics_track_long_context_requests(self, router, config):
+        """Metrics correctly count long_context tier requests."""
+        messages = self._make_long_messages(config.long_context_threshold + 10)
+        router.route(messages)
+        metrics = router.get_metrics()
+        assert metrics["long_context_tier_requests"] == 1
+        assert metrics["total_requests"] == 1
+
+    def test_tier_models_default_long_context(self):
+        """TierModels carries long_context field with a default."""
+        models = TierModels()
+        assert hasattr(models, "long_context")
+        assert models.long_context == DEFAULT_LLM_MODEL
+
+    def test_tier_config_default_long_context_threshold(self):
+        """TierConfig has long_context_threshold defaulting to 16000."""
+        config = TierConfig()
+        assert config.long_context_threshold == 16000
+
+    def test_complexity_result_is_long_context_property(self):
+        """ComplexityResult.is_long_context returns True for long_context tier."""
+        result = ComplexityResult(score=1.0, factors={}, tier="long_context", reasoning="long", input_tokens=20000)
+        assert result.is_long_context is True
+        assert result.is_simple is False
+        assert result.is_complex is False
 
 
 if __name__ == "__main__":

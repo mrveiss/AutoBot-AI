@@ -52,7 +52,22 @@ class ComplexityRouter:
             )
 
         result = self.scorer.score(messages)
-        selected_model = self.config.models.simple if result.is_simple else self.config.models.complex
+
+        # Long-context check takes precedence over complexity score.
+        if result.input_tokens > self.config.long_context_threshold:
+            result = ComplexityResult(
+                score=result.score,
+                factors=result.factors,
+                tier="long_context",
+                reasoning=f"Input tokens ({result.input_tokens}) exceed long_context_threshold ({self.config.long_context_threshold})",
+                input_tokens=result.input_tokens,
+            )
+            selected_model = self.config.models.long_context
+        elif result.is_simple:
+            selected_model = self.config.models.simple
+        else:
+            selected_model = self.config.models.complex
+
         self._metrics.record(result)
 
         if self.config.logging.log_routing_decisions:
@@ -172,6 +187,8 @@ class ComplexityRouter:
             return self.config.models.simple
         if tier == "complex":
             return self.config.models.complex
+        if tier == "long_context":
+            return self.config.models.long_context
         raise ValueError(f"Unknown tier: {tier}")
 
     def should_fallback(self, tier: str) -> bool:
