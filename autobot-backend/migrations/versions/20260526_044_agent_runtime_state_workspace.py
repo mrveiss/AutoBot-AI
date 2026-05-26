@@ -1,7 +1,7 @@
 """Add workspace fields to agent_runtime_state (GH#6471).
 
 Revision ID: 20260526_044
-Revises: 20260525_043
+Revises: 20260525_043b
 """
 
 from typing import Sequence, Union
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20260526_044"
-down_revision: Union[str, None] = "20260525_043"
+down_revision: Union[str, None] = "20260525_043b"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
