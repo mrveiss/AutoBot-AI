@@ -320,9 +320,7 @@ class TaskContext:
     # Rolling token-vocabulary window (last 50 observations) for novelty scoring.
     # Bounded to prevent common tokens from saturating the vocabulary on long tasks
     # and causing false stagnation detections (#6627 P1).
-    _token_windows: "deque[frozenset[str]]" = field(
-        default_factory=lambda: deque(maxlen=50), repr=False
-    )
+    _token_windows: "deque[frozenset[str]]" = field(default_factory=lambda: deque(maxlen=50), repr=False)
 
     def record_observation(self, content: Any, iteration: int) -> "ObservationFingerprint":
         """Fingerprint a tool result and append it to observation_fingerprints.
