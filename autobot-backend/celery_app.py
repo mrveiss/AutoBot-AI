@@ -208,4 +208,10 @@ celery_app.conf.beat_schedule = {
         "task": "workers.audit_claims",
         "schedule": crontab(hour=3, minute=0, day_of_week=1),  # Monday 03:00 UTC
     },
+    # GH#6471: nightly eviction of stale per-task git worktree workspaces
+    "workspace-cleanup-nightly": {
+        "task": "tasks.cleanup_stale_workspaces",
+        "schedule": crontab(hour=2, minute=0),
+        "kwargs": {"max_age_days": 7},
+    },
 }

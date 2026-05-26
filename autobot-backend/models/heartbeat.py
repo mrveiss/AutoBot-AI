@@ -67,6 +67,10 @@ class AgentRuntimeState(Base):
     paused_reason = Column(Text, nullable=True)
     paused_at = Column(DateTime, nullable=True)
     paused_by = Column(String(255), nullable=True)
+    # Per-task worktree workspace (GH#6471)
+    workspace_dir = Column(String(1024), nullable=True)
+    preview_url = Column(String(512), nullable=True)
+    preview_port = Column(Integer, nullable=True)
 
     runs = relationship(
         "HeartbeatRun",

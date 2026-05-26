@@ -35,6 +35,7 @@ from .memory_tasks import (
     write_verbatim_task,
 )
 from .system_tasks import check_available_updates, initialize_rbac, run_system_update
+from .workspace_cleanup import cleanup_stale_workspaces
 
 __all__ = [
     # system tasks
@@ -57,6 +58,8 @@ __all__ = [
     "run_bug_prediction_analysis",
     "run_security_analysis",
     "run_dashboard_analysis",
+    # workspace cleanup (GH#6471)
+    "cleanup_stale_workspaces",
     # memory tasks
     "write_verbatim_task",
     "extract_facts_task",

@@ -34,6 +34,7 @@ from models.heartbeat import (
 )
 from services.run_jwt import get_run_jwt_scopes, mint_run_jwt, revoke_run_jwt_async
 from services.task_claim import renew_claim
+from services import task_workspace
 
 logger = get_logger(__name__)
 
@@ -192,8 +193,10 @@ class HeartbeatScheduler:
         if await self._is_agent_paused(agent_id):
             logger.info("Skipping heartbeat for budget-paused agent %s", agent_id)
             return
-        run_id, state_id, timeout, run_jwt = await self._start_run(agent_id, trigger)
-        final_status, error_msg, usage = await self._invoke_agent(agent_id, state_id, run_id, timeout, run_jwt)
+        run_id, state_id, timeout, run_jwt, workspace_dir = await self._start_run(agent_id, trigger)
+        final_status, error_msg, usage = await self._invoke_agent(
+            agent_id, state_id, run_id, timeout, run_jwt, workspace_dir
+        )
         await self._finalize_run(agent_id, run_id, state_id, final_status, error_msg, usage, run_jwt)
 
     async def _is_agent_paused(self, agent_id: str) -> bool:
@@ -205,8 +208,15 @@ class HeartbeatScheduler:
             status = result.scalar_one_or_none()
             return status == "paused"
 
-    async def _start_run(self, agent_id: str, trigger: WakeupTrigger) -> Tuple[uuid.UUID, uuid.UUID, int, str]:
-        """Create HeartbeatRun row; consume any pending wakeup request; mint run JWT (#1407, SEC-2)."""
+    async def _start_run(
+        self, agent_id: str, trigger: WakeupTrigger
+    ) -> Tuple[uuid.UUID, uuid.UUID, int, str, str | None]:
+        """Create HeartbeatRun row; consume any pending wakeup request; mint run JWT (#1407, SEC-2).
+
+        Returns (run_id, state_id, timeout, run_jwt, workspace_dir) where
+        workspace_dir is the absolute path to the allocated worktree or None
+        when no task is active (GH#6471).
+        """
         async with self._session_factory() as session:
             state = await _get_or_create_state(session, agent_id)
             wakeup_req = await _consume_top_wakeup(session, agent_id)
@@ -231,6 +241,29 @@ class HeartbeatScheduler:
             agent_result = await session.execute(select(Agent).where(Agent.agent_id == agent_id))
             agent_row = agent_result.scalar_one_or_none()
             agent_type = agent_row.agent_type if agent_row else "worker"
+
+            # Allocate per-task worktree workspace (GH#6471)
+            workspace_dir: str | None = None
+            if state.current_task_id:
+                try:
+                    task_id_for_ws = state.current_task_id
+                    ws_info = await asyncio.get_running_loop().run_in_executor(
+                        None,
+                        lambda: task_workspace.allocate(task_id_for_ws, agent_id),
+                    )
+                    workspace_dir = ws_info.worktree_path
+                    state.workspace_dir = workspace_dir
+                except Exception as exc:
+                    # Clear stale workspace_dir so the adapter does not run
+                    # in a deleted or invalid worktree (GH#6471 review finding).
+                    state.workspace_dir = None
+                    logger.warning(
+                        "Workspace allocation failed for task=%s agent=%s: %s",
+                        state.current_task_id,
+                        agent_id,
+                        exc,
+                    )
+
             await session.commit()
 
         # Renew Redis task claim on each heartbeat tick (GH#6468)
@@ -258,7 +291,7 @@ class HeartbeatScheduler:
             HEARTBEAT_RUN_STARTED,
             {"run_id": str(run_id), "agent_id": agent_id, "trigger": trigger.value},
         )
-        return run_id, state_id, timeout, run_jwt
+        return run_id, state_id, timeout, run_jwt, workspace_dir
 
     async def _invoke_agent(
         self,
@@ -267,10 +300,14 @@ class HeartbeatScheduler:
         run_id: uuid.UUID,
         timeout: int,
         run_jwt: str,
+        workspace_dir: str | None = None,
     ) -> Tuple[str, str | None, Dict[str, Any]]:
         """Run _execute_agent with timeout; return (status, error, usage) (#1407)."""
         try:
-            result = await asyncio.wait_for(self._execute_agent(agent_id, state_id, run_id, run_jwt), timeout=timeout)
+            result = await asyncio.wait_for(
+                self._execute_agent(agent_id, state_id, run_id, run_jwt, workspace_dir),
+                timeout=timeout,
+            )
             return HeartbeatRunStatus.COMPLETED.value, None, result or {}
         except asyncio.TimeoutError:
             logger.warning("Heartbeat run %s timed out for agent %s", run_id, agent_id)
@@ -338,17 +375,30 @@ class HeartbeatScheduler:
         logger.info("Run %s finished: status=%s agent=%s", run_id, final_status, agent_id)
 
     async def _execute_agent(
-        self, agent_id: str, state_id: uuid.UUID, run_id: uuid.UUID, run_jwt: str
+        self,
+        agent_id: str,
+        state_id: uuid.UUID,
+        run_id: uuid.UUID,
+        run_jwt: str,
+        workspace_dir: str | None = None,
     ) -> Dict[str, Any]:
         """
         Execute agent work for one heartbeat tick (#1407).
 
         Integration point for process adapter execution (see #1406).
         Passes run-scoped JWT via AUTOBOT_RUN_JWT env var (SEC-2 #6473).
+        Passes workspace_dir via AUTOBOT_WORKSPACE_DIR env var (GH#6471) so the
+        adapter subprocess has an isolated working tree.
         Returns dict with optional: tokens_used, cost_usd, model, provider, session_params.
         """
-        logger.debug("Agent %s tick (run %s) - no adapter bound", agent_id, run_id)
-        # Adapter execution will pass run_jwt via AUTOBOT_RUN_JWT env var
+        logger.debug(
+            "Agent %s tick (run %s) workspace=%s - no adapter bound",
+            agent_id,
+            run_id,
+            workspace_dir,
+        )
+        # Adapter execution will pass run_jwt via AUTOBOT_RUN_JWT and
+        # workspace_dir via AUTOBOT_WORKSPACE_DIR env vars.
         return {}
 
 
