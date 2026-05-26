@@ -2,7 +2,7 @@
 # Includes LangChain, LlamaIndex and related packages with compatible versions
 
 # Core AI Frameworks
-langchain>=1.2.13,<2.0.0         # Issue #2808: upper bound unified with backend canonical
+langchain>=1.2.24,<2.0.0         # Issue #2808: upper bound unified; GH#8675: floor bumped to 1.2.24 (PVE-2026-88512)
 langchain-core>=1.2.22,<2.0.0   # Issue #2808: upper bound unified with backend canonical
 langchain-community>=0.4.1,<0.5.0  # Issue #2808: upper bound unified with backend canonical
 llama-index>=0.14.21,<0.15.0
