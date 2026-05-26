@@ -38,9 +38,4 @@ def downgrade() -> None:
         sa.Column("heartbeat_enabled", sa.Boolean(), nullable=False, server_default=sa.false()),
     )
     conn = op.get_bind()
-    conn.execute(
-        sa.text(
-            "UPDATE agent_runtime_state SET heartbeat_enabled = true "
-            "WHERE status = 'active'"
-        )
-    )
+    conn.execute(sa.text("UPDATE agent_runtime_state SET heartbeat_enabled = true " "WHERE status = 'active'"))

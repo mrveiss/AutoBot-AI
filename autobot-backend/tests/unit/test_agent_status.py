@@ -22,7 +22,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Stub helpers (mirrors test_heartbeat_coalescing.py pattern)
 # ---------------------------------------------------------------------------
@@ -59,9 +58,7 @@ def _load_models_and_scheduler():
 
     backend_root = Path(__file__).parents[3] / "autobot-backend"
 
-    hb_spec = importlib.util.spec_from_file_location(
-        "models.heartbeat", backend_root / "models" / "heartbeat.py"
-    )
+    hb_spec = importlib.util.spec_from_file_location("models.heartbeat", backend_root / "models" / "heartbeat.py")
     assert hb_spec and hb_spec.loader
     hb_mod = importlib.util.module_from_spec(hb_spec)
     sys.modules.setdefault("models", types.ModuleType("models"))
