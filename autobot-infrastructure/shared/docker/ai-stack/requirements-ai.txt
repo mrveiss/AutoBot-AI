@@ -41,7 +41,7 @@ requests>=2.33.0
 
 # Data Processing
 pandas>=3.0.1
-pydantic>=2.12.5
+pydantic>=2.13.4
 
 # Utilities
 async-timeout>=5.0.1
