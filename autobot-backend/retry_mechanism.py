@@ -8,6 +8,7 @@ Handles transient failures in network requests, database operations, and externa
 """
 
 import asyncio
+import logging  # stdlib: avoids circular import — retry_mechanism is on the config-manager init path (GH#7765 pattern)
 import random
 import threading
 import time
@@ -15,8 +16,6 @@ from dataclasses import dataclass
 from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Dict
-
-import logging  # stdlib: avoids circular import — retry_mechanism is on the config-manager init path (GH#7765 pattern)
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.singleton_factory import lazy_singleton
