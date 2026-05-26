@@ -18,6 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from api.schemas_system import (
+    AgentPauseRequest,
+    AgentResumeRequest,
+    AgentTerminateRequest,
     HeartbeatConfigRequest,
     HeartbeatConfigResponse,
     HeartbeatRunResponse,
@@ -31,8 +34,10 @@ from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import now_utc
 from models.heartbeat import (
     AgentRuntimeState,
+    AgentStatus,
     AgentWakeupRequest,
     HeartbeatRun,
     HeartbeatRunEvent,
@@ -92,10 +97,12 @@ async def update_config(
     scheduler: HeartbeatScheduler = Depends(_get_scheduler),
     _user=Depends(get_current_user),
 ) -> HeartbeatConfigResponse:
-    """Update heartbeat config for an agent and sync the scheduler (#1407)."""
+    """Update heartbeat config for an agent and sync the scheduler (#1407, GH#6476)."""
     state = await _get_or_create_state(session, agent_id)
+    if state.status == AgentStatus.TERMINATED.value:
+        raise HTTPException(status_code=409, detail="Agent is terminated and cannot be reconfigured")
     was_enabled = state.heartbeat_enabled
-    state.heartbeat_enabled = body.heartbeat_enabled
+    state.heartbeat_enabled = body.heartbeat_enabled  # drives status via hybrid setter
     state.heartbeat_interval_seconds = body.heartbeat_interval_seconds
     state.max_run_duration_seconds = body.max_run_duration_seconds
     await session.commit()
@@ -248,11 +255,125 @@ async def trigger_manual(
     return {"agent_id": agent_id, "status": "triggered"}
 
 
+@router.post("/{agent_id}/pause", response_model=HeartbeatConfigResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="pause_agent",
+    error_code_prefix="HEARTBEAT",
+)
+async def pause_agent(
+    agent_id: str,
+    body: AgentPauseRequest,
+    session: AsyncSession = Depends(get_db_session),
+    scheduler: HeartbeatScheduler = Depends(_get_scheduler),
+    _user=Depends(get_current_user),
+) -> HeartbeatConfigResponse:
+    """Pause an agent's heartbeat (GH#6476).
+
+    Transitions status to PAUSED, cancels the scheduler loop, and records
+    who paused it and why.  Does not affect TERMINATED agents.
+    """
+    state = await _get_or_create_state(session, agent_id)
+    if state.status == AgentStatus.TERMINATED.value:
+        raise HTTPException(status_code=409, detail="Agent is terminated; cannot pause")
+    if state.status == AgentStatus.PAUSED.value:
+        return _state_to_response(state)
+    state.status = AgentStatus.PAUSED.value
+    state.paused_reason = body.reason
+    state.paused_at = now_utc()
+    state.paused_by = body.paused_by or "user"
+    await session.commit()
+    await session.refresh(state)
+    await scheduler.disable_agent(agent_id)
+    logger.info("Agent %s paused by %s: %s", agent_id, state.paused_by, state.paused_reason)
+    return _state_to_response(state)
+
+
+@router.post("/{agent_id}/resume", response_model=HeartbeatConfigResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="resume_agent",
+    error_code_prefix="HEARTBEAT",
+)
+async def resume_agent(
+    agent_id: str,
+    body: AgentResumeRequest,
+    session: AsyncSession = Depends(get_db_session),
+    scheduler: HeartbeatScheduler = Depends(_get_scheduler),
+    _user=Depends(get_current_user),
+) -> HeartbeatConfigResponse:
+    """Resume a paused agent's heartbeat (GH#6476).
+
+    Transitions PAUSED → ACTIVE.  System-paused agents (paused_by starts with
+    "system:") require admin role; user-paused agents can be resumed freely.
+    DISABLED and TERMINATED agents are not affected — use PUT /config instead.
+    """
+    state = await _get_or_create_state(session, agent_id)
+    if state.status == AgentStatus.TERMINATED.value:
+        raise HTTPException(status_code=409, detail="Agent is terminated; cannot resume")
+    if state.status != AgentStatus.PAUSED.value:
+        raise HTTPException(status_code=409, detail=f"Agent is not paused (status={state.status})")
+    # System-enforced pauses require admin approval (GH#6476)
+    paused_by = state.paused_by or ""
+    if paused_by.startswith("system:"):
+        user_roles = getattr(_user, "roles", []) or []
+        if "admin" not in user_roles:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Agent was paused by {paused_by}; admin approval required to resume",
+            )
+    state.status = AgentStatus.ACTIVE.value
+    state.paused_reason = None
+    state.paused_at = None
+    state.paused_by = None
+    await session.commit()
+    await session.refresh(state)
+    await scheduler.enable_agent(agent_id, state.heartbeat_interval_seconds)
+    logger.info("Agent %s resumed", agent_id)
+    return _state_to_response(state)
+
+
+@router.post("/{agent_id}/terminate", response_model=HeartbeatConfigResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="terminate_agent",
+    error_code_prefix="HEARTBEAT",
+)
+async def terminate_agent(
+    agent_id: str,
+    body: AgentTerminateRequest,
+    session: AsyncSession = Depends(get_db_session),
+    scheduler: HeartbeatScheduler = Depends(_get_scheduler),
+    _user=Depends(get_current_user),
+) -> HeartbeatConfigResponse:
+    """Permanently terminate an agent's heartbeat (GH#6476).
+
+    Transitions status to TERMINATED, stops the scheduler loop, and records the
+    reason.  Terminated agents cannot be re-enabled via any endpoint.
+    """
+    state = await _get_or_create_state(session, agent_id)
+    if state.status == AgentStatus.TERMINATED.value:
+        return _state_to_response(state)
+    state.status = AgentStatus.TERMINATED.value
+    state.paused_reason = body.reason
+    state.paused_at = now_utc()
+    state.paused_by = getattr(_user, "id", "user")
+    await session.commit()
+    await session.refresh(state)
+    await scheduler.disable_agent(agent_id)
+    logger.info("Agent %s terminated: %s", agent_id, body.reason)
+    return _state_to_response(state)
+
+
 def _state_to_response(state: AgentRuntimeState) -> HeartbeatConfigResponse:
-    """Convert AgentRuntimeState ORM row to Pydantic response (#1407)."""
+    """Convert AgentRuntimeState ORM row to Pydantic response (#1407, GH#6476)."""
     return HeartbeatConfigResponse(
         agent_id=state.agent_id,
         heartbeat_enabled=state.heartbeat_enabled,
+        status=state.status,
+        paused_reason=state.paused_reason,
+        paused_at=(state.paused_at.isoformat() if state.paused_at else None),
+        paused_by=state.paused_by,
         heartbeat_interval_seconds=state.heartbeat_interval_seconds,
         max_run_duration_seconds=state.max_run_duration_seconds,
         current_task_id=state.current_task_id,

@@ -26,6 +26,7 @@ from events.event_types import HEARTBEAT_RUN_COMPLETED, HEARTBEAT_RUN_STARTED
 from models.agent import Agent
 from models.heartbeat import (
     AgentRuntimeState,
+    AgentStatus,
     AgentWakeupRequest,
     HeartbeatRun,
     HeartbeatRunEvent,
@@ -63,7 +64,9 @@ class HeartbeatScheduler:
             return
         self._running = True
         async with self._session_factory() as session:
-            rows = await session.execute(select(AgentRuntimeState).where(AgentRuntimeState.heartbeat_enabled.is_(True)))
+            rows = await session.execute(
+                select(AgentRuntimeState).where(AgentRuntimeState.status == AgentStatus.ACTIVE.value)
+            )
             states = rows.scalars().all()
         for state in states:
             self._spawn_task(state.agent_id, state.heartbeat_interval_seconds)
