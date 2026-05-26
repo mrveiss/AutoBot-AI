@@ -214,4 +214,9 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=2, minute=0),
         "kwargs": {"max_age_days": 7},
     },
+    # GH#6480: daily pricing refresh from provider sources into Redis (02:15 UTC)
+    "pricing-refresh-daily": {
+        "task": "pricing.refresh_daily",
+        "schedule": crontab(hour=2, minute=15),
+    },
 }
