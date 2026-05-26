@@ -276,6 +276,16 @@ const createRipple = (event: TouchEvent) => {
   background-color: var(--color-error-hover);
 }
 
+.btn-error {
+  background-color: var(--color-error);
+  color: var(--text-on-error);
+  font-weight: 500;
+}
+
+.btn-error:hover {
+  background-color: var(--color-error-hover);
+}
+
 .btn-warning {
   background-color: var(--color-warning);
   color: var(--text-on-warning);
