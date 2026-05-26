@@ -340,16 +340,15 @@ async function loadUsers(): Promise<void> {
 }
 
 function loadUserBundles(userList: UserRecord[]): void {
-  for (const user of userList) {
-    // Mark as loading (undefined = in-flight, null = no assignment, string = assigned)
-    if (userBundles.value[user.id] === undefined) {
-      getUserBundle(user.id).then((assignment) => {
-        userBundles.value[user.id] = assignment?.bundle_name ?? null
-      }).catch(() => {
-        userBundles.value[user.id] = null
-      })
-    }
-  }
+  const toFetch = userList.filter(u => userBundles.value[u.id] === undefined)
+  if (toFetch.length === 0) return
+  Promise.all(
+    toFetch.map(user =>
+      getUserBundle(user.id)
+        .then(assignment => { userBundles.value[user.id] = assignment?.bundle_name ?? null })
+        .catch(() => { userBundles.value[user.id] = null })
+    )
+  )
 }
 
 function openBundleModal(user: UserRecord): void {
