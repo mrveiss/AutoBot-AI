@@ -6,7 +6,6 @@ Enterprise Features API - Phase 4 Implementation
 Provides API endpoints for managing enterprise-grade features.
 """
 
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
