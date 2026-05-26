@@ -130,7 +130,6 @@ def _make_worker(shared_redis: _FakeRedis, namespace: str = "integration_ns") ->
     async def _fake_client(database: str = "main") -> _FakeRedis:  # type: ignore[override]
         return shared_redis
 
-
     bag.get = lambda key: _patched_get(bag, shared_redis, key)  # type: ignore[method-assign]
     bag.set = lambda key, value, ttl_s=None: _patched_set(bag, shared_redis, key, value, ttl_s)  # type: ignore[method-assign]
     return bag

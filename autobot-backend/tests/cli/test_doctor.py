@@ -6,8 +6,6 @@
 Issue #7371: each repair is a discrete idempotent function with a unit test.
 """
 
-
-
 from cli.doctor import (
     CheckResult,
     check_env_file,

@@ -9,7 +9,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # GH#8493 — falsy-zero token metadata lookup
 # ---------------------------------------------------------------------------

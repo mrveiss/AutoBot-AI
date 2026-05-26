@@ -429,7 +429,6 @@ class TestTransitionToDone:
         log_svc = AsyncMock()
         log_svc.record = AsyncMock()
 
-
         svc = WorkItemService(activity_log=log_svc)
         await svc.transition_to_done(
             session,

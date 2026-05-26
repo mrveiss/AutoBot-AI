@@ -32,7 +32,6 @@ import types as _types
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-
 _BACKEND = Path(__file__).resolve().parent.parent
 
 
