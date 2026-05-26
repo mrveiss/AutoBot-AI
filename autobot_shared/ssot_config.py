@@ -1243,6 +1243,16 @@ class MiscConfig(BaseSettings):
     voice_toolset_bundle: str = Field(default="voice_safe", alias="AUTOBOT_VOICE_TOOLSETS")
     voice_disabled_tools: str = Field(default="", alias="AUTOBOT_VOICE_DISABLED_TOOLS")
     voice_realtime_model: str = Field(default="gpt-realtime-2", alias="AUTOBOT_VOICE_REALTIME_MODEL")
+    voice_realtime_max_seconds: int = Field(
+        default=1800,
+        alias="AUTOBOT_VOICE_REALTIME_MAX_SECONDS",
+        description="Soft-cap: auto-disconnect Realtime sessions exceeding this wall-clock seconds. Default 30 min.",
+    )
+    voice_realtime_max_cost_usd: float = Field(
+        default=5.0,
+        alias="AUTOBOT_VOICE_REALTIME_MAX_COST_USD",
+        description="Soft-cap: auto-disconnect Realtime sessions exceeding this estimated USD cost. Default $5.00.",
+    )
     memory_log_threshold_mb: int = Field(default=0, alias="AUTOBOT_MEMORY_LOG_THRESHOLD_MB")
     memory_pool_size: int = Field(default=0, alias="AUTOBOT_MEMORY_POOL_SIZE")
     memory_threshold_mb: int = Field(default=0, alias="AUTOBOT_MEMORY_THRESHOLD_MB")

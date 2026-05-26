@@ -276,8 +276,12 @@ class RealtimeMCPBridge:
 
         Errors from the transport surface as ``is_error=True`` with the
         original message in ``content`` so the model can self-correct verbally.
-        An audit log entry is written for every invocation.
+        An audit log entry is written for every invocation.  Per-session
+        telemetry is emitted via VoiceRealtimeTelemetry when session_id is set
+        (GH#7421).
         """
+        import time
+
         entry = self._registry.get(name)
 
         audit_details: dict[str, Any] = {
@@ -301,9 +305,11 @@ class RealtimeMCPBridge:
                 is_error=True,
             )
 
+        start = time.monotonic()
         try:
             raw_result = await self._call_via_transport(entry, arguments)
             content = self._format_result(raw_result)
+            latency_s = time.monotonic() - start
             await _audit_log(
                 "voice.realtime.tool_call",
                 result="success",
@@ -312,9 +318,18 @@ class RealtimeMCPBridge:
                 resource=name,
                 details=audit_details,
             )
+            if session_id:
+                try:
+                    from services.voice_realtime_telemetry import get_voice_realtime_telemetry
+                    await get_voice_realtime_telemetry().record_tool_call(
+                        session_id=session_id, tool=name, latency_s=latency_s, outcome="success",
+                    )
+                except Exception as _te:
+                    logger.debug("voice_realtime telemetry emit failed: %s", _te)
             return RealtimeToolResult(content=content, is_error=False)
 
         except Exception as exc:  # noqa: BLE001
+            latency_s = time.monotonic() - start
             logger.warning(
                 "realtime_mcp_bridge.call_tool error tool=%s (%s): %s",
                 name, type(exc).__name__, exc,
@@ -327,6 +342,14 @@ class RealtimeMCPBridge:
                 resource=name,
                 details={**audit_details, "error": str(exc)},
             )
+            if session_id:
+                try:
+                    from services.voice_realtime_telemetry import get_voice_realtime_telemetry
+                    await get_voice_realtime_telemetry().record_tool_call(
+                        session_id=session_id, tool=name, latency_s=latency_s, outcome="error",
+                    )
+                except Exception as _te:
+                    logger.debug("voice_realtime telemetry emit failed: %s", _te)
             return RealtimeToolResult(content=str(exc), is_error=True)
 
     # ------------------------------------------------------------------

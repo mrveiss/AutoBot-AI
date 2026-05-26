@@ -41,6 +41,13 @@
         My Usage
       </button>
       <button
+        class="tab-btn"
+        :class="{ active: activeTab === 'realtime' }"
+        @click="activeTab = 'realtime'; loadRealtimeSessions()"
+      >
+        Realtime Sessions
+      </button>
+      <button
         v-if="isAdmin"
         class="tab-btn"
         :class="{ active: activeTab === 'admin' }"
@@ -108,6 +115,69 @@
         </div>
       </template>
       <div v-else class="empty-row">No personal usage data available.</div>
+    </template>
+
+    <!-- Realtime Sessions Tab (Issue #7421) -->
+    <template v-if="activeTab === 'realtime'">
+      <div v-if="realtimeLoading" class="loading-row">
+        <Icon name="sync-alt" :spin="true" /> Loading Realtime sessions...
+      </div>
+      <template v-else>
+        <div class="summary-grid">
+          <div class="stat-card">
+            <div class="stat-label">Sessions</div>
+            <div class="stat-value">{{ realtimeSessions.length }}</div>
+            <div class="stat-sub">Last {{ limit }} loaded</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Duration</div>
+            <div class="stat-value">{{ fmtSeconds(realtimeTotalDuration) }}</div>
+            <div class="stat-sub">Audio in + out</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Estimated Cost</div>
+            <div class="stat-value">${{ realtimeTotalCost.toFixed(4) }}</div>
+            <div class="stat-sub">Audio + token charges</div>
+          </div>
+        </div>
+
+        <div class="table-section">
+          <h3 class="section-title">Realtime Sessions</h3>
+          <table v-if="realtimeSessions.length" class="usage-table">
+            <thead>
+              <tr>
+                <th>Started</th>
+                <th>Model</th>
+                <th>Duration</th>
+                <th>Audio In</th>
+                <th>Audio Out</th>
+                <th>Tokens In</th>
+                <th>Tokens Out</th>
+                <th>Tool Calls</th>
+                <th>Cost (USD)</th>
+                <th>Ended</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="s in realtimeSessions" :key="s.session_id">
+                <td>{{ fmtDate(s.started_at) }}</td>
+                <td>{{ s.model }}</td>
+                <td>{{ fmtSeconds(s.duration_s) }}</td>
+                <td>{{ fmtSeconds(s.audio_in_s) }}</td>
+                <td>{{ fmtSeconds(s.audio_out_s) }}</td>
+                <td>{{ s.input_tokens.toLocaleString() }}</td>
+                <td>{{ s.output_tokens.toLocaleString() }}</td>
+                <td>{{ s.tool_calls }}</td>
+                <td>${{ s.estimated_cost_usd.toFixed(4) }}</td>
+                <td :class="{ 'text-warning': s.disconnect_reason !== 'normal' }">
+                  {{ s.disconnect_reason }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-else class="empty-row">No Realtime session history found.</div>
+        </div>
+      </template>
     </template>
 
     <!-- Admin Tab -->
@@ -216,7 +286,24 @@ interface RecentRequest {
   cost_usd?: number
 }
 
-const activeTab = ref<'personal' | 'admin'>('personal')
+// Issue #7421: Realtime session record type (mirrors SessionSummary on backend)
+interface RealtimeSession {
+  session_id: string
+  user_id: string | null
+  model: string
+  started_at: string
+  ended_at: string | null
+  duration_s: number
+  audio_in_s: number
+  audio_out_s: number
+  input_tokens: number
+  output_tokens: number
+  tool_calls: number
+  estimated_cost_usd: number
+  disconnect_reason: string
+}
+
+const activeTab = ref<'personal' | 'admin' | 'realtime'>('personal')
 const days = ref(30)
 const loading = ref(false)
 const csvLoading = ref(false)
@@ -225,6 +312,13 @@ const summary = ref<UsageSummary | null>(null)
 const users = ref<UserUsage[]>([])
 const personal = ref<PersonalUsage | null>(null)
 const personalRecent = computed<RecentRequest[]>(() => personal.value?.recent_requests ?? [])
+
+// Issue #7421: Realtime sessions state
+const realtimeSessions = ref<RealtimeSession[]>([])
+const realtimeLoading = ref(false)
+const limit = 20
+const realtimeTotalDuration = computed(() => realtimeSessions.value.reduce((s, r) => s + r.duration_s, 0))
+const realtimeTotalCost = computed(() => realtimeSessions.value.reduce((s, r) => s + r.estimated_cost_usd, 0))
 
 async function load() {
   loading.value = true
@@ -267,6 +361,31 @@ async function downloadCsv() {
   } finally {
     csvLoading.value = false
   }
+}
+
+// Issue #7421: load recent Realtime sessions
+async function loadRealtimeSessions() {
+  realtimeLoading.value = true
+  try {
+    const res = await fetchWithAuth(`${getApiBase()}/voice/realtime/sessions?limit=${limit}`)
+    if (!res.ok) throw new Error(`${res.status}`)
+    realtimeSessions.value = (await res.json()) as RealtimeSession[]
+  } catch (e) {
+    logger.error('Failed to load Realtime sessions:', e)
+  } finally {
+    realtimeLoading.value = false
+  }
+}
+
+function fmtSeconds(s: number): string {
+  if (s < 60) return `${s.toFixed(0)}s`
+  const m = Math.floor(s / 60)
+  const sec = Math.round(s % 60)
+  return `${m}m ${sec}s`
+}
+
+function fmtDate(iso: string): string {
+  return new Date(iso).toLocaleString()
 }
 
 onMounted(load)
@@ -455,5 +574,10 @@ onMounted(load)
   text-align: center;
   color: var(--text-secondary);
   font-size: var(--text-sm);
+}
+
+.text-warning {
+  color: var(--color-warning, #f59e0b);
+  font-weight: var(--font-medium);
 }
 </style>
