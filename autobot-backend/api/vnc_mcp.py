@@ -13,6 +13,15 @@ from typing import List
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException
+from services.mcp_bridge_manifest import MCPBridgeManifest
+
+MANIFEST = MCPBridgeManifest(
+    name="vnc_mcp",
+    version="1.0.0",
+    description="VNC Observation and Browser Context",
+    features=["vnc_status", "observe_activity", "browser_context"],
+    endpoint="/api/vnc/mcp/tools",
+)
 
 from api.schemas_system import (
     BrowserVncContextResponse,

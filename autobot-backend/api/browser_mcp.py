@@ -63,7 +63,16 @@ from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from constants.network_constants import NetworkConstants
+from services.mcp_bridge_manifest import MCPBridgeManifest
 from type_defs.common import Metadata
+
+MANIFEST = MCPBridgeManifest(
+    name="browser_mcp",
+    version="1.0.0",
+    description="Browser Automation - Secure Web Interaction via Playwright",
+    features=["navigate", "click", "fill", "screenshot", "evaluate", "wait", "scraping"],
+    endpoint="/api/browser/mcp/tools",
+)
 
 logger = get_logger(__name__)
 router = APIRouter(

@@ -18,8 +18,17 @@ import asyncio
 from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
+from services.mcp_bridge_manifest import MCPBridgeManifest
 
 from api.schemas_common import DataResponse
+
+MANIFEST = MCPBridgeManifest(
+    name="sequential_thinking_mcp",
+    version="1.0.0",
+    description="Sequential Thinking - Dynamic Problem-Solving Framework",
+    features=["sequential_thinking", "thought_tracking", "branching", "revision"],
+    endpoint="/api/sequential_thinking/mcp/tools",
+)
 from api.schemas_workflows import (
     SequentialThinkingClearData,
     SequentialThinkingMCPTool,
