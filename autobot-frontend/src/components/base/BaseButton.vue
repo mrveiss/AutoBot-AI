@@ -21,9 +21,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, useSlots, Comment } from 'vue'
+import { computed, ref, onMounted, watchEffect, useSlots, Comment } from 'vue'
 import type { ButtonVariant, ComponentSize } from '@/types/component-props'
+import { size as SIZE_VALUES } from '@/design-tokens/tokens'
 import { createLogger } from '@/utils/debugUtils'
+
+const BUTTON_VARIANTS: ButtonVariant[] = [
+  'primary', 'secondary', 'success', 'error', 'warning', 'info',
+  'light', 'dark', 'outline-solid', 'ghost', 'link',
+]
 
 const logger = createLogger('BaseButton')
 
@@ -70,6 +76,15 @@ if (import.meta.env.DEV) {
         'Icon-only button rendered without ariaLabel prop. ' +
         'This is a WCAG 4.1.2 failure. Add :ariaLabel="$t(\'common.actionName\')" to the button.'
       )
+    }
+  })
+
+  watchEffect(() => {
+    if (props.size !== undefined && !(SIZE_VALUES as readonly string[]).includes(props.size)) {
+      logger.warn(`Invalid "size" prop: "${props.size}". Expected: ${SIZE_VALUES.join(' | ')}`)
+    }
+    if (props.variant !== undefined && !BUTTON_VARIANTS.includes(props.variant)) {
+      logger.warn(`Invalid "variant" prop: "${props.variant}". Expected: ${BUTTON_VARIANTS.join(' | ')}`)
     }
   })
 }

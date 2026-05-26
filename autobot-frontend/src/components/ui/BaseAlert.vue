@@ -37,8 +37,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { createLogger } from '@/utils/debugUtils'
+
+const ALERT_VARIANTS = ['success', 'info', 'warning', 'error', 'critical'] as const
+const ALERT_SIZES = ['default', 'compact'] as const
+
+const logger = createLogger('BaseAlert')
 import {
   CheckCircleIcon,
   InformationCircleIcon,
@@ -122,6 +128,17 @@ onMounted(() => {
     }, props.autoDismiss)
   }
 })
+
+if (import.meta.env.DEV) {
+  watchEffect(() => {
+    if (props.variant !== undefined && !(ALERT_VARIANTS as readonly string[]).includes(props.variant)) {
+      logger.warn(`Invalid "variant" prop: "${props.variant}". Expected: ${ALERT_VARIANTS.join(' | ')}`)
+    }
+    if (props.size !== undefined && !(ALERT_SIZES as readonly string[]).includes(props.size)) {
+      logger.warn(`Invalid "size" prop: "${props.size}". Expected: ${ALERT_SIZES.join(' | ')}`)
+    }
+  })
+}
 </script>
 
 <style scoped>

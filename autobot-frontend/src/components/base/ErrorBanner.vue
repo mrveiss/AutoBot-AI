@@ -26,9 +26,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, useSlots } from 'vue'
+import { computed, watchEffect, useSlots } from 'vue'
 import BaseButton from './BaseButton.vue'
 import Icon, { type IconName } from '@/components/ui/Icon.vue'
+import { createLogger } from '@/utils/debugUtils'
+
+const BANNER_VARIANTS = ['error', 'warning', 'info'] as const
+
+const logger = createLogger('ErrorBanner')
 
 interface Props {
   message?: string | null
@@ -61,6 +66,14 @@ const iconName = computed<IconName>(() => {
 
 const handleDismiss = () => {
   emit('dismiss')
+}
+
+if (import.meta.env.DEV) {
+  watchEffect(() => {
+    if (props.variant !== undefined && !(BANNER_VARIANTS as readonly string[]).includes(props.variant)) {
+      logger.warn(`Invalid "variant" prop: "${props.variant}". Expected: ${BANNER_VARIANTS.join(' | ')}`)
+    }
+  })
 }
 </script>
 

@@ -62,8 +62,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { createLogger } from '@/utils/debugUtils'
+
+const INPUT_SIZES = ['sm', 'md', 'lg'] as const
+const INPUT_TYPES = ['text', 'email', 'password', 'number', 'tel', 'url', 'search'] as const
+
+const logger = createLogger('BaseInput')
 
 interface Props {
   modelValue?: string | number
@@ -152,6 +158,17 @@ defineExpose({
   focus: () => inputRef.value?.focus(),
   blur: () => inputRef.value?.blur()
 })
+
+if (import.meta.env.DEV) {
+  watchEffect(() => {
+    if (props.size !== undefined && !(INPUT_SIZES as readonly string[]).includes(props.size)) {
+      logger.warn(`Invalid "size" prop: "${props.size}". Expected: ${INPUT_SIZES.join(' | ')}`)
+    }
+    if (props.type !== undefined && !(INPUT_TYPES as readonly string[]).includes(props.type)) {
+      logger.warn(`Invalid "type" prop: "${props.type}". Expected: ${INPUT_TYPES.join(' | ')}`)
+    }
+  })
+}
 </script>
 
 <style scoped>
