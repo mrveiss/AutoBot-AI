@@ -35,6 +35,7 @@ def _load_tw():
 _tw = _load_tw()
 allocate = _tw.allocate
 release = _tw.release
+cleanup_stale = _tw.cleanup_stale
 
 
 @pytest.fixture()
@@ -171,3 +172,78 @@ class TestHeartbeatResume:
     ) -> None:
         with pytest.raises(ValueError, match="Invalid task_id"):
             release(bad_id, repo_root=git_repo)
+
+
+class TestActiveLock:
+    """active-lock file prevents eviction of running worktrees (MVA-1154)."""
+
+    def test_allocate_writes_lock_file(self, git_repo: Path) -> None:
+        task_id = "eeeeeee0-0000-0000-0000-000000000001"
+        ws = allocate(task_id, "agent-lock", repo_root=git_repo)
+        assert (Path(ws.worktree_path) / ".active-lock").exists()
+
+    def test_resume_refreshes_lock_file(self, git_repo: Path) -> None:
+        task_id = "eeeeeee0-0000-0000-0000-000000000002"
+        ws = allocate(task_id, "agent-lock", repo_root=git_repo)
+        lock_file = Path(ws.worktree_path) / ".active-lock"
+        lock_file.unlink()
+        assert not lock_file.exists()
+        allocate(task_id, "agent-lock", repo_root=git_repo)
+        assert lock_file.exists()
+
+    def test_release_removes_entire_workspace(self, git_repo: Path) -> None:
+        task_id = "eeeeeee0-0000-0000-0000-000000000003"
+        ws = allocate(task_id, "agent-lock", repo_root=git_repo)
+        assert (Path(ws.worktree_path) / ".active-lock").exists()
+        release(task_id, repo_root=git_repo)
+        assert not Path(ws.worktree_path).exists()
+
+    def test_enforce_limit_skips_locked_evicts_unlocked(self, git_repo: Path) -> None:
+        old_task = "eeeeeee0-0000-0000-0000-000000000010"
+        active_task = "eeeeeee0-0000-0000-0000-000000000011"
+        new_task = "eeeeeee0-0000-0000-0000-000000000012"
+
+        ws_old = allocate(old_task, "agent-evict", repo_root=git_repo, max_per_agent=2)
+        ws_active = allocate(active_task, "agent-evict", repo_root=git_repo, max_per_agent=2)
+
+        # Simulate ws_old's subprocess finishing without calling release()
+        (Path(ws_old.worktree_path) / ".active-lock").unlink()
+
+        # Third allocation must evict the unlocked ws_old, not the locked ws_active
+        allocate(new_task, "agent-evict", repo_root=git_repo, max_per_agent=2)
+
+        assert not Path(ws_old.worktree_path).exists(), "unlocked worktree must be evicted"
+        assert Path(ws_active.worktree_path).exists(), "locked active worktree must be preserved"
+
+    def test_enforce_limit_preserves_all_locked_worktrees(self, git_repo: Path) -> None:
+        task_a = "eeeeeee0-0000-0000-0000-000000000020"
+        task_b = "eeeeeee0-0000-0000-0000-000000000021"
+        task_c = "eeeeeee0-0000-0000-0000-000000000022"
+
+        ws_a = allocate(task_a, "agent-noevict", repo_root=git_repo, max_per_agent=2)
+        ws_b = allocate(task_b, "agent-noevict", repo_root=git_repo, max_per_agent=2)
+        # Both locked; _enforce_limit finds no eviction candidates — all survive
+        ws_c = allocate(task_c, "agent-noevict", repo_root=git_repo, max_per_agent=2)
+
+        assert Path(ws_a.worktree_path).exists(), "locked worktree A must not be evicted"
+        assert Path(ws_b.worktree_path).exists(), "locked worktree B must not be evicted"
+        assert Path(ws_c.worktree_path).exists(), "new worktree C must exist"
+
+    def test_cleanup_stale_skips_locked_worktree(self, git_repo: Path) -> None:
+        import json as _json
+
+        task_id = "eeeeeee0-0000-0000-0000-000000000030"
+        ws = allocate(task_id, "agent-stale", repo_root=git_repo)
+        workspace_dir = Path(ws.worktree_path)
+
+        # Backdate metadata so the worktree looks ancient
+        meta_file = workspace_dir / ".workspace-meta.json"
+        meta = _json.loads(meta_file.read_text())
+        meta["created_at"] = "2000-01-01T00:00:00+00:00"
+        meta_file.write_text(_json.dumps(meta))
+
+        # Lock is still present — stale cleanup must skip this worktree
+        cleaned = cleanup_stale(max_age_days=0, repo_root=git_repo)
+
+        assert task_id not in cleaned
+        assert workspace_dir.exists()
