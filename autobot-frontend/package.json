@@ -118,7 +118,7 @@
     "@types/tough-cookie": "^4.0.5",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vitejs/plugin-vue-jsx": "^5.1.5",
-    "@vitest/coverage-v8": "^4.1.2",
+    "@vitest/coverage-v8": "^4.1.7",
     "@vitest/eslint-plugin": "^1.6.15",
     "@vitest/ui": "^4.1.2",
     "@vue/eslint-config-prettier": "^10.2.0",
