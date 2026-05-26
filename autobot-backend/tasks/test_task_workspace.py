@@ -35,6 +35,7 @@ def _load_tw():
 _tw = _load_tw()
 allocate = _tw.allocate
 release = _tw.release
+release_for_task = _tw.release_for_task
 
 
 @pytest.fixture()
@@ -171,3 +172,65 @@ class TestHeartbeatResume:
     ) -> None:
         with pytest.raises(ValueError, match="Invalid task_id"):
             release(bad_id, repo_root=git_repo)
+
+
+class TestReleaseForTask:
+    """release_for_task clears workspace_dir and removes the filesystem worktree (MVA-1152)."""
+
+    def test_clears_workspace_dir_and_removes_worktree(self, git_repo: Path) -> None:
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+
+        task_id = "dddddddd-0000-0000-0000-000000000001"
+        ws_info = allocate(task_id, "agent-close", repo_root=git_repo)
+        assert Path(ws_info.worktree_path).exists()
+
+        state = MagicMock()
+        state.workspace_dir = ws_info.worktree_path
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = state
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_session.flush = AsyncMock()
+
+        asyncio.run(release_for_task(task_id, mock_session, repo_root=git_repo))
+
+        assert state.workspace_dir is None
+        mock_session.flush.assert_called_once()
+        assert not Path(ws_info.worktree_path).exists()
+
+    def test_noop_when_no_state_found(self, git_repo: Path) -> None:
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+
+        task_id = "dddddddd-0000-0000-0000-000000000002"
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_session.flush = AsyncMock()
+
+        asyncio.run(release_for_task(task_id, mock_session, repo_root=git_repo))
+
+        mock_session.flush.assert_not_called()
+
+    def test_noop_when_workspace_dir_already_null(self, git_repo: Path) -> None:
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+
+        task_id = "dddddddd-0000-0000-0000-000000000003"
+
+        state = MagicMock()
+        state.workspace_dir = None
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = state
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_session.flush = AsyncMock()
+
+        asyncio.run(release_for_task(task_id, mock_session, repo_root=git_repo))
+
+        mock_session.flush.assert_not_called()

@@ -678,6 +678,19 @@ class WorkItemService(LLCServiceBase):
         if new_status == WorkItemStatus.DONE:
             await self._trigger_artifact_ingest(session, item)
 
+        # Release per-task workspace on terminal transitions (MVA-1152)
+        if new_status in {WorkItemStatus.DONE, WorkItemStatus.CANCELLED}:
+            try:
+                from services.task_workspace import release_for_task
+                await release_for_task(work_item_id, session)
+            except Exception:
+                logger.warning(
+                    "workspace release skipped for task=%s new_status=%s",
+                    work_item_id,
+                    new_status.value,
+                    exc_info=True,
+                )
+
         return item
 
     # ------------------------------------------------------------------
@@ -753,6 +766,13 @@ class WorkItemService(LLCServiceBase):
         await session.flush()
 
         await self._trigger_artifact_ingest(session, item)
+
+        # Release per-task workspace (MVA-1152)
+        try:
+            from services.task_workspace import release_for_task
+            await release_for_task(work_item_id, session)
+        except Exception:
+            logger.warning("workspace release skipped for task=%s", work_item_id, exc_info=True)
 
         if self.activity_log:
             try:

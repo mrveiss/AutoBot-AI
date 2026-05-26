@@ -11,9 +11,11 @@ on the same task resume into the existing worktree.
 Key functions:
   allocate(task_id, agent_id)   – create or resume a worktree
   release(task_id)              – remove the worktree when a task closes
+  release_for_task(task_id, session) – async hook: clear workspace_dir + release on task close (MVA-1152)
   cleanup_stale(max_age_days)   – Celery beat hook to evict aged workspaces
 """
 
+import asyncio
 import json
 import os
 import re
@@ -21,7 +23,7 @@ import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from autobot_shared.logging_manager import get_logger
 
@@ -230,6 +232,50 @@ def cleanup_stale(
 
     logger.info("Stale workspace cleanup: removed %d worktrees", len(cleaned))
     return cleaned
+
+
+async def release_for_task(
+    task_id: str,
+    session: Any,
+    repo_root: Optional[Path] = None,
+) -> None:
+    """
+    Clear AgentRuntimeState.workspace_dir and remove the git worktree (MVA-1152).
+
+    Called on task completion or cancellation so worktrees are reclaimed promptly
+    instead of waiting for the nightly Celery sweep (GH#6471 follow-up).
+
+    Steps:
+      1. Locate the AgentRuntimeState row whose current_task_id matches task_id.
+      2. Null out workspace_dir and flush within the caller's transaction.
+      3. Run the filesystem release (git worktree remove) in a thread-pool executor.
+
+    Best-effort: any error is logged as a warning and swallowed so the caller's
+    status transition is never blocked by workspace cleanup.
+    """
+    try:
+        from sqlalchemy import select  # local import — avoids heavy dep at module load
+        from models.heartbeat import AgentRuntimeState
+
+        result = await session.execute(
+            select(AgentRuntimeState).where(
+                AgentRuntimeState.current_task_id == task_id
+            )
+        )
+        state = result.scalar_one_or_none()
+        if state is None or state.workspace_dir is None:
+            return
+
+        state.workspace_dir = None
+        await session.flush()
+
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            None,
+            lambda: release(task_id, repo_root=repo_root, keep_on_failure=True),
+        )
+    except Exception:
+        logger.warning("release_for_task failed for task=%s", task_id, exc_info=True)
 
 
 # ---------------------------------------------------------------------------
