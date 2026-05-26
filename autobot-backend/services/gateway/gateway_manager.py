@@ -4,8 +4,9 @@
 """
 Unified Multi-Platform Message Gateway
 
-Central gateway that normalizes messages from 5+ platforms (Web, Slack, Discord,
-WhatsApp, Teams) into a unified schema. Enables single agent serving all channels.
+Central gateway that normalizes messages from 9+ platforms (Web, Slack, Discord,
+WhatsApp, Teams, Telegram, Signal, Matrix, iMessage) into a unified schema.
+Enables a single agent to serve all channels.
 
 Features:
 - Unified message schema: {user_id, platform, channel_id, message, metadata}
@@ -13,6 +14,8 @@ Features:
 - Rate limiting per platform (Slack 1 req/s, Discord 10 req/s, etc.)
 - Message queue with async processing
 - Performance target: normalize + route <50ms
+- Optional adapters gated by env flags: Signal (AUTOBOT_SIGNAL_ENABLED),
+  iMessage (AUTOBOT_IMESSAGE_ENABLED, macOS-only)
 """
 
 import time
@@ -23,9 +26,13 @@ from autobot_shared.logging_manager import get_logger
 from .adapters import (
     BaseAdapter,
     DiscordAdapter,
+    IMessageAdapter,
+    MatrixAdapter,
     NormalizedResponse,
+    SignalAdapter,
     SlackAdapter,
     TeamsAdapter,
+    TelegramAdapter,
     UnifiedMessage,
     WebAdapter,
     WhatsAppAdapter,
@@ -61,6 +68,10 @@ class GatewayManager:
             DiscordAdapter(),
             WhatsAppAdapter(),
             TeamsAdapter(),
+            TelegramAdapter(),
+            SignalAdapter(),
+            MatrixAdapter(),
+            IMessageAdapter(),
         ]
 
         for adapter in adapters:
