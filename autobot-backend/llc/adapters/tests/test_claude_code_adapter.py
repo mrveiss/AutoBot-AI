@@ -237,15 +237,17 @@ class TestInvoke:
         adapter = ClaudeCodeAdapter()
         fake_proc = _make_fake_proc(77)
         call_count = 0
+        context = {"workspace_dir": "/deleted/worktree", "task_id": "t1"}
+        fake_fh = MagicMock()
+        captured_envs: list[dict] = []
 
         async def exec_raising_first(*args, **kwargs):
             nonlocal call_count
             call_count += 1
+            captured_envs.append(dict(kwargs.get("env", {})))
             if call_count == 1:
                 raise FileNotFoundError("No such directory")
             return fake_proc
-
-        context = {"workspace_dir": "/deleted/worktree", "task_id": "t1"}
 
         with tempfile.TemporaryDirectory() as td:
             cfg = _agent_cfg(output_dir=td)
@@ -255,13 +257,16 @@ class TestInvoke:
                     "llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None
                 ),
                 patch("asyncio.create_subprocess_exec", side_effect=exec_raising_first),
-                patch("builtins.open", MagicMock(return_value=MagicMock())),
+                patch("builtins.open", MagicMock(return_value=fake_fh)),
             ):
                 run_id = await adapter.invoke(cfg, context)
 
         assert call_count == 2
         assert "workspace_dir" not in context
         assert run_id.startswith("77/")
+        fake_fh.close.assert_called_once()
+        assert "AUTOBOT_WORKSPACE_DIR" in captured_envs[0]
+        assert "AUTOBOT_WORKSPACE_DIR" not in captured_envs[1]
 
     async def test_workspace_dir_missing_no_retry_when_unset(self) -> None:
         """FileNotFoundError propagates unchanged when workspace_dir is not in context."""

@@ -139,6 +139,7 @@ class ClaudeCodeAdapter:
                     workspace_dir,
                 )
                 context.pop("workspace_dir", None)
+                env.pop("AUTOBOT_WORKSPACE_DIR", None)
                 workspace_dir = None
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
