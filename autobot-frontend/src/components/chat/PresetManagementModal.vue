@@ -6,7 +6,7 @@
   <BaseModal
     :model-value="modelValue"
     :title="$t('chat.presets.modalTitle')"
-    size="medium"
+    size="md"
     :scrollable="true"
     @update:model-value="emit('update:modelValue', $event)"
     @close="emit('close')"
@@ -114,7 +114,7 @@
             <Icon name="edit" />
           </BaseButton>
           <BaseButton
-            variant="danger"
+            variant="error"
             size="xs"
             :aria-label="$t('chat.presets.deleteAriaLabel', { name: preset.name })"
             :disabled="isSaving || deletingId === preset.id"
@@ -143,7 +143,7 @@
             {{ $t('chat.presets.cancel') }}
           </BaseButton>
           <BaseButton
-            variant="danger"
+            variant="error"
             size="sm"
             :loading="deletingId === deleteConfirm.id"
             @click="executeDelete(deleteConfirm.id)"

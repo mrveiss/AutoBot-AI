@@ -99,6 +99,37 @@ export default defineConfigWithVueTs(
       // Issue #7085: forbid console.* in production code — use createLogger from @/utils/debugUtils instead.
       // eslint-disable-next-line suppression of this rule is also blocked by reportUnusedDisableDirectives.
       'no-console': 'error',
+      // MVA-192 design-token spec — Phase 4: block re-introduction of deprecated size/color tokens.
+      // Use canonical tokens instead: size → sm|md|lg, danger → error.
+      // See src/design-tokens/tokens.ts for the full token registry.
+      'vue/no-restricted-static-attribute': [
+        'error',
+        { key: 'size', value: 'small',  message: "Deprecated size token 'small' — use 'sm' (MVA-192)." },
+        { key: 'size', value: 'medium', message: "Deprecated size token 'medium' — use 'md' (MVA-192)." },
+        { key: 'size', value: 'large',  message: "Deprecated size token 'large' — use 'lg' (MVA-192)." },
+        { key: 'variant', value: 'danger', message: "Deprecated color token 'danger' — use 'error' (MVA-192)." },
+      ],
+      // Catches the same deprecated values passed as bound string literals, e.g. :size="'small'".
+      // Scoped to VExpressionContainer inside VAttribute (template attribute expressions only).
+      'vue/no-restricted-syntax': [
+        'error',
+        {
+          selector: "VAttribute[directive=true] > VExpressionContainer > Literal[value='small']",
+          message: "Deprecated size token 'small' — use 'sm' (MVA-192).",
+        },
+        {
+          selector: "VAttribute[directive=true] > VExpressionContainer > Literal[value='medium']",
+          message: "Deprecated size token 'medium' — use 'md' (MVA-192).",
+        },
+        {
+          selector: "VAttribute[directive=true] > VExpressionContainer > Literal[value='large']",
+          message: "Deprecated size token 'large' — use 'lg' (MVA-192).",
+        },
+        {
+          selector: "VAttribute[directive=true] > VExpressionContainer > Literal[value='danger']",
+          message: "Deprecated color token 'danger' — use 'error' (MVA-192).",
+        },
+      ],
     },
   },
   {
