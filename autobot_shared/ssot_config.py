@@ -1338,7 +1338,7 @@ class MiscConfig(BaseSettings):
     display: str = Field(default="", alias="DISPLAY")
     display_height: str = Field(default="", alias="DISPLAY_HEIGHT")
     display_width: str = Field(default="", alias="DISPLAY_WIDTH")
-    encryption_key: str = Field(default="", alias="ENCRYPTION_KEY")
+    encryption_key: str = Field(default="", alias="ENCRYPTION_KEY")  # type: ignore[no-redef]  # GH#7105
     file_cache_ttl_seconds: int = Field(default=0, alias="FILE_CACHE_TTL_SECONDS")
     gateway_enable_sandbox: str = Field(default="", alias="GATEWAY_ENABLE_SANDBOX")
     gateway_heartbeat_interval: str = Field(default="", alias="GATEWAY_HEARTBEAT_INTERVAL")
@@ -1376,7 +1376,7 @@ class MiscConfig(BaseSettings):
     nous_api_key: str = Field(default="", alias="NOUS_API_KEY")
     nous_default_model: str = Field(default="", alias="NOUS_DEFAULT_MODEL")
     ollama_host: str = Field(default="", alias="OLLAMA_HOST")
-    ollama_url: str = Field(default="", alias="OLLAMA_URL")
+    ollama_url: str = Field(default="", alias="OLLAMA_URL")  # type: ignore[no-redef]  # GH#7105
     openai_api_base_url: str = Field(default="", alias="OPENAI_API_BASE_URL")
     openrouter_api_base_url: str = Field(default="", alias="OPENROUTER_API_BASE_URL")
     openrouter_api_key: str = Field(default="", alias="OPENROUTER_API_KEY")
