@@ -78,7 +78,7 @@ aiohttp>=3.13.4         # Async HTTP client - SECURITY UPDATE
 httpx>=0.28.1           # Issue #4412: hub registry fetches (async HTTP)
 beautifulsoup4>=4.14.3  # HTML parsing for link pipeline
 Pillow>=12.1.1          # Image processing - SECURITY UPDATE (OOB write fix)
-jsonschema>=4.23.0      # Issue #7405: JSON Schema validation for /knowledge/extract
+jsonschema>=4.26.0      # Issue #7405: JSON Schema validation for /knowledge/extract
 # Optional (install separately for full media support):
 # opencv-python>=4.8.0   # Frame extraction for video pipeline
 # transformers>=4.30.0   # Whisper transcription for audio pipeline
