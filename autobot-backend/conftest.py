@@ -157,7 +157,30 @@ for _svc_mod in [
 ]:
     if _svc_mod not in sys.modules:
         _svc_stub = _make_pkg_stub(_svc_mod)
+        # Prevent pytest from calling __getattr__("pytest_plugins") which would
+        # return a MagicMock and cause a UsageError during test collection.
+        _svc_stub.pytest_plugins = []  # type: ignore[attr-defined]
         sys.modules[_svc_mod] = _svc_stub
+
+# npu_pipeline — stub the package and its sub-modules so that the __init__.py
+# import chain (which pulls in Redis/config) doesn't break test collection.
+# pytest_plugins must be explicitly set to [] so that pytest doesn't call
+# __getattr__("pytest_plugins") on the stub which returns a MagicMock and
+# triggers a UsageError. (MVA-1096/1097)
+_NPU_PKG_DIR = backend_root / "services" / "npu_pipeline"
+for _npu_mod in [
+    "services.npu_pipeline",
+    "services.npu_pipeline.shard_planner",
+    "services.npu_pipeline.plan_cache",
+    "services.npu_pipeline.invalidation",
+    "services.npu_pipeline.dispatcher",
+]:
+    if _npu_mod not in sys.modules:
+        _npu_stub = _make_pkg_stub(_npu_mod)
+        _npu_stub.pytest_plugins = []  # type: ignore[attr-defined]
+        if _npu_mod == "services.npu_pipeline":
+            _npu_stub.__path__ = [str(_NPU_PKG_DIR)]
+        sys.modules[_npu_mod] = _npu_stub
 # Provide the SUPPORTED_LANGUAGES symbol consumed by api.schemas_agent
 if not hasattr(sys.modules.get("services.personality_service", object()), "SUPPORTED_LANGUAGES"):
     sys.modules["services.personality_service"].SUPPORTED_LANGUAGES = {}  # type: ignore[attr-defined]
@@ -258,7 +281,7 @@ if "llm_shared" not in sys.modules:
     # and LLMResponse are real instantiatable dataclasses (tests call them).
     try:
         _load_llm_sub("llm_shared.models", "models.py")
-    except Exception as _models_exc:
+    except Exception:
         # Fall back to a MagicMock stub if models.py has import issues
         _models_stub = _make_pkg_stub("llm_shared.models")
         _models_stub.LLMRequest = MagicMock()  # type: ignore[attr-defined]
@@ -295,7 +318,7 @@ if "auth_middleware" not in sys.modules:
 # do ``redis = await get_async_redis_client()`` fall back to in-process logic
 # instead of awaiting a MagicMock (which raises TypeError).
 if "autobot_shared.redis_client" not in sys.modules:
-    import asyncio as _asyncio_stub
+    pass
 
     _redis_client_mod = types.ModuleType("autobot_shared.redis_client")
 
