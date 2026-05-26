@@ -608,6 +608,31 @@
       "formulating": "Formulating response...",
       "crafting": "Crafting detailed answer...",
       "reviewing": "Reviewing response quality..."
+    },
+    "presets": {
+      "modalTitle": "Slash Command Presets",
+      "newPreset": "New Preset",
+      "editPreset": "Edit Preset",
+      "fieldName": "Name",
+      "namePlaceholder": "my-preset",
+      "fieldDescription": "Description",
+      "descriptionPlaceholder": "What this preset does",
+      "fieldContent": "Content",
+      "contentPlaceholder": "Enter the prompt text...",
+      "cancel": "Cancel",
+      "create": "Create",
+      "update": "Update",
+      "delete": "Delete",
+      "listLabel": "Your presets",
+      "loading": "Loading presets...",
+      "empty": "No presets yet. Create one above.",
+      "editAriaLabel": "Edit preset {name}",
+      "deleteAriaLabel": "Delete preset {name}",
+      "deleteConfirmTitle": "Delete preset",
+      "deleteConfirmMessage": "Delete /{name}? This cannot be undone.",
+      "nameRequired": "Name is required",
+      "nameInvalid": "Only letters, numbers, hyphens, and underscores are allowed",
+      "contentRequired": "Content is required"
     }
   },
   "settings": {
