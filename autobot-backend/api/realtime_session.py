@@ -49,6 +49,7 @@ class ToolCallRequest(BaseModel):
     call_id: str
     name: str
     arguments: dict[str, Any] = Field(default_factory=dict)
+    session_id: str | None = None
 
 
 class SessionSummary(BaseModel):
@@ -222,7 +223,7 @@ async def call_realtime_tool(body: ToolCallRequest) -> dict:
     """Route a Realtime tool call through the MCP bridge (#7343 stub)."""
     from services.realtime_mcp_bridge import get_realtime_bridge
     bridge = await get_realtime_bridge()
-    result = await bridge.call_tool(name=body.name, arguments=body.arguments)
+    result = await bridge.call_tool(name=body.name, arguments=body.arguments, session_id=body.session_id)
     return {"call_id": body.call_id, "content": result.content, "is_error": result.is_error}
 
 

@@ -102,15 +102,10 @@ class RealtimeMCPBridge:
         )
         latency_s = time.monotonic() - start
 
-        # Issue #7421: emit per-tool metrics
-        try:
-            from autobot_shared.monitoring.prometheus_metrics import PrometheusMetricsManager
-            m = PrometheusMetricsManager()
-            outcome = "error" if result.is_error else "success"
-            m._voice_realtime.tool_calls_total.labels(tool=name, outcome=outcome).inc()
-            m._voice_realtime.tool_call_duration.labels(tool=name).observe(latency_s)
-
-            if session_id:
+        # Issue #7421: emit per-tool metrics; record_tool_call handles Prometheus + Redis
+        outcome = "error" if result.is_error else "success"
+        if session_id:
+            try:
                 from services.voice_realtime_telemetry import get_voice_realtime_telemetry
                 await get_voice_realtime_telemetry().record_tool_call(
                     session_id=session_id,
@@ -118,8 +113,8 @@ class RealtimeMCPBridge:
                     latency_s=latency_s,
                     outcome=outcome,
                 )
-        except Exception as exc:  # metrics must never break the tool call path
-            logger.debug("voice_realtime metrics emit failed: %s", exc)
+            except Exception as exc:  # metrics must never break the tool call path
+                logger.debug("voice_realtime metrics emit failed: %s", exc)
 
         return result
 

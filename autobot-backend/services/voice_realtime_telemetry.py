@@ -25,6 +25,7 @@ from typing import Any
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc
 
@@ -371,12 +372,4 @@ def _parse_iso(iso_str: str):
     return dt
 
 
-_telemetry_singleton: VoiceRealtimeTelemetry | None = None
-
-
-def get_voice_realtime_telemetry() -> VoiceRealtimeTelemetry:
-    """Return the module-level singleton (lazy init)."""
-    global _telemetry_singleton
-    if _telemetry_singleton is None:
-        _telemetry_singleton = VoiceRealtimeTelemetry()
-    return _telemetry_singleton
+get_voice_realtime_telemetry = lazy_singleton(VoiceRealtimeTelemetry)
