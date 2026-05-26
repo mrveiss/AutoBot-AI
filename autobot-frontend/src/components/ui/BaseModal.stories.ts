@@ -15,8 +15,8 @@ const meta = {
     },
     size: {
       control: 'select',
-      options: ['small', 'medium', 'large'],
-      description: 'Modal size: small (500px), medium (900px), large (1200px)',
+      options: ['sm', 'md', 'lg'],
+      description: 'Modal size: sm (500px), md (900px), lg (1200px)',
     },
     showClose: {
       control: 'boolean',

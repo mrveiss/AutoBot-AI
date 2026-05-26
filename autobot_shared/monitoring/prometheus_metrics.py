@@ -30,6 +30,7 @@ from prometheus_client import (
 # Issue #476: Added FrontendMetricsRecorder for RUM metrics
 # Issue #4109: Added MCPWorkerMetricsRecorder for worker restart monitoring
 # Phase 4 (#7590): Added ChatMetricsRecorder for SSOT observability
+# Issue #7421: Added VoiceRealtimeMetricsRecorder for Realtime WebRTC session metrics
 from .metrics import (
     ChatMetricsRecorder,
     ClaudeAPIMetricsRecorder,
@@ -44,6 +45,7 @@ from .metrics import (
     ServiceHealthMetricsRecorder,
     SystemMetricsRecorder,
     TaskMetricsRecorder,
+    VoiceRealtimeMetricsRecorder,
     WebSocketMetricsRecorder,
     WorkflowMetricsRecorder,
 )
@@ -81,6 +83,7 @@ class PrometheusMetricsManager:
     - RedisMetricsRecorder: Redis operation metrics (Issue #470)
     - FrontendMetricsRecorder: Frontend RUM metrics (Issue #476)
     - MCPWorkerMetricsRecorder: MCP worker restart budget metrics (Issue #4109)
+    - VoiceRealtimeMetricsRecorder: Realtime WebRTC session metrics (Issue #7421)
     """
 
     def __init__(self, registry: CollectorRegistry | None = None) -> None:
@@ -117,6 +120,8 @@ class PrometheusMetricsManager:
         self._mcp_worker = MCPWorkerMetricsRecorder(self.registry)
         # Phase 4 (#7590): Initialize chat SSOT observability recorder
         self._chat = ChatMetricsRecorder(self.registry)
+        # Issue #7421: Initialize Voice Realtime WebRTC metrics recorder
+        self._voice_realtime = VoiceRealtimeMetricsRecorder(self.registry)
 
     # =========================================================================
     # Core Infrastructure Metrics Initialization

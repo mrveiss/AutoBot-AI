@@ -93,6 +93,11 @@ class WorkflowPlanner:
         """
         Plan workflow steps with intelligent agent assignment.
 
+        Consults the TrajectoryStore (GH#7357) before building from scratch:
+        if similar high-reward trajectories exist, logs them for the caller to
+        inspect via context["similar_trajectories"].  Step generation always
+        proceeds regardless of trajectory hits; reuse/adaptation is advisory.
+
         Args:
             user_request: The user's request to plan
             complexity: Classified task complexity
@@ -101,6 +106,9 @@ class WorkflowPlanner:
         Returns:
             List of enhanced workflow steps with agent assignments
         """
+        # GH#7357: consult trajectory store for similar solved tasks
+        await self._annotate_context_with_trajectories(user_request, context)
+
         # Get base workflow steps from original orchestrator
         base_steps = self.base_orchestrator.plan_workflow_steps(user_request, complexity)
 
@@ -265,3 +273,27 @@ class WorkflowPlanner:
                 set(step.get("assigned_agent") for step in enhanced_steps if step.get("assigned_agent"))
             ),
         }
+
+    async def _annotate_context_with_trajectories(
+        self,
+        user_request: str,
+        context: Dict[str, Any],
+    ) -> None:
+        """Populate context['similar_trajectories'] with past solutions (GH#7357).
+
+        Non-fatal: errors are caught and logged so planning always continues.
+        """
+        try:
+            from memory.trajectory_store import get_trajectory_store
+
+            store = await get_trajectory_store()
+            similar = await store.find_similar_trajectories(user_request, top_k=5, min_reward=0.7)
+            if similar:
+                context["similar_trajectories"] = similar
+                logger.debug(
+                    "WorkflowPlanner: found %d similar trajectories for request %r",
+                    len(similar),
+                    user_request[:80],
+                )
+        except Exception as exc:
+            logger.warning("WorkflowPlanner: trajectory lookup failed (non-fatal): %s", exc)

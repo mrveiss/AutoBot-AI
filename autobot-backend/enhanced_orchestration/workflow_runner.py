@@ -262,7 +262,7 @@ class WorkflowRunner:
                 "criteria_evaluation": criteria_eval,
             },
         )
-        return {
+        response = {
             "plan_id": plan.plan_id,
             "success": success,
             "results": results,
@@ -270,6 +270,46 @@ class WorkflowRunner:
             "strategy_used": plan.strategy.value,
             "criteria_evaluation": criteria_eval,
         }
+        # GH#7357: capture trajectory for future planner retrieval
+        await self._capture_trajectory(plan, response)
+        return response
+
+    async def _capture_trajectory(self, plan: WorkflowPlan, result: Dict[str, Any]) -> None:
+        """Write a trajectory record to the TrajectoryStore (GH#7357).
+
+        Fire-and-forget: errors are logged but never propagate to the caller so
+        trajectory capture cannot break workflow execution.
+        """
+        try:
+            from memory.trajectory_store import get_trajectory_store, reward_from_execution
+
+            store = await get_trajectory_store()
+            action_sequence = [
+                {
+                    "task_id": t.task_id,
+                    "agent_type": getattr(t, "agent_type", ""),
+                    "description": getattr(t, "description", ""),
+                    "status": getattr(t, "status", ""),
+                }
+                for t in plan.tasks
+            ]
+            outcome = "success" if result.get("success") else "failure"
+            criteria = result.get("criteria_evaluation", {})
+            if isinstance(criteria, dict) and criteria.get("overall") == "partial":
+                outcome = "partial"
+            reward = reward_from_execution(result)
+            await store.capture(
+                task_text=plan.goal,
+                action_sequence=action_sequence,
+                outcome=outcome,
+                reward=reward,
+                duration=float(result.get("execution_time", 0.0)),
+                agent_id=getattr(plan, "assigned_agent", ""),
+                plan_id=plan.plan_id,
+                strategy=plan.strategy.value,
+            )
+        except Exception as exc:
+            logger.warning("TrajectoryStore.capture failed (non-fatal): %s", exc)
 
     async def _handle_workflow_execution_failure(
         self, plan: WorkflowPlan, error: Exception, results: Dict[str, Any], _depth: int = 0

@@ -32,12 +32,10 @@ logger = get_logger(__name__)
 # Allow deployment-specific override so production installs that deploy only
 # autobot-backend/ to /opt/autobot/ can point at the real git repository root
 # (GH#6471 blocker 3 — _REPO_ROOT resolves to non-git dir on Ansible targets).
-_REPO_ROOT = Path(
-    os.environ.get("AUTOBOT_WORKSPACE_REPO_ROOT")
-    or Path(__file__).resolve().parent.parent.parent
-)
+_REPO_ROOT = Path(os.environ.get("AUTOBOT_WORKSPACE_REPO_ROOT") or Path(__file__).resolve().parent.parent.parent)
 _WORKSPACE_BASE_NAME = ".task-workspaces"
 _META_FILENAME = ".workspace-meta.json"
+_ACTIVE_LOCK_FILENAME = ".active-lock"
 _MAX_WORKTREES_PER_AGENT = 5
 
 # task_id must be a safe identifier: UUID hex chars + hyphens, max 128 chars.
@@ -58,9 +56,7 @@ class WorkspaceInfo:
 def _validate_task_id(task_id: str) -> None:
     """Reject task_ids that could be used for path traversal (GH#6471 blocker 2)."""
     if not _SAFE_TASK_ID_RE.match(task_id):
-        raise ValueError(
-            f"Invalid task_id {task_id!r}: must match [0-9a-zA-Z_-]{{1,128}}"
-        )
+        raise ValueError(f"Invalid task_id {task_id!r}: must match [0-9a-zA-Z_-]{{1,128}}")
 
 
 def allocate(
@@ -96,6 +92,7 @@ def allocate(
                 task_id,
                 workspace_dir,
             )
+            (workspace_dir / _ACTIVE_LOCK_FILENAME).touch()
             return WorkspaceInfo(
                 task_id=task_id,
                 agent_id=agent_id,
@@ -120,6 +117,7 @@ def allocate(
         "branch": branch,
     }
     (workspace_dir / _META_FILENAME).write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    (workspace_dir / _ACTIVE_LOCK_FILENAME).touch()
 
     logger.info(
         "Allocated new workspace for task=%s agent=%s at %s",
@@ -160,6 +158,9 @@ def release(
         return
 
     branch = f"task-{task_id}"
+    # Clear the active-lock before git removal so that if removal fails and
+    # keep_on_failure is True the directory can still be evicted later.
+    (workspace_dir / _ACTIVE_LOCK_FILENAME).unlink(missing_ok=True)
     try:
         subprocess.run(
             ["git", "worktree", "remove", "--force", str(workspace_dir)],
@@ -223,7 +224,11 @@ def cleanup_stale(
         if age_ts > cutoff:
             continue  # too young
 
-        task_id = entry.name[len("task-"):]
+        if (entry / _ACTIVE_LOCK_FILENAME).exists():
+            logger.debug("Skipping locked workspace task=%s during stale cleanup", entry.name[len("task-") :])
+            continue
+
+        task_id = entry.name[len("task-") :]
         try:
             release(task_id, root, keep_on_failure=True)
             cleaned.append(task_id)
@@ -315,21 +320,23 @@ def _git_add_worktree(root: Path, workspace_dir: Path, branch: str) -> None:
                         workspace_dir,
                     )
                 else:
-                    logger.error(
-                        "git worktree add failed for branch=%s: %s", branch, stderr2
-                    )
+                    logger.error("git worktree add failed for branch=%s: %s", branch, stderr2)
                     raise
         else:
-            logger.error(
-                "git worktree add failed for branch=%s: %s", branch, stderr
-            )
+            logger.error("git worktree add failed for branch=%s: %s", branch, stderr)
             raise
 
 
 def _enforce_limit(agent_id: str, max_per_agent: int, root: Path) -> None:
-    """Evict oldest worktree(s) for agent_id if the per-agent limit would be exceeded."""
+    """Evict oldest worktree(s) for agent_id if the per-agent limit would be exceeded.
+
+    All worktrees count toward the limit, but only unlocked ones are eviction
+    candidates.  Worktrees with an active-lock file are in use by a running
+    subprocess and must never be evicted (GH#6471 follow-up: MVA-1154).
+    """
     workspace_base = root / _WORKSPACE_BASE_NAME
-    agent_slots: list[tuple[float, str]] = []
+    total_count = 0
+    eviction_candidates: list[tuple[float, str]] = []
 
     for entry in workspace_base.iterdir():
         if not entry.is_dir() or not entry.name.startswith("task-"):
@@ -342,18 +349,21 @@ def _enforce_limit(agent_id: str, max_per_agent: int, root: Path) -> None:
                 meta = json.load(fh)
             if meta.get("agent_id") != agent_id:
                 continue
+            total_count += 1
+            if (entry / _ACTIVE_LOCK_FILENAME).exists():
+                continue  # count but do not add to eviction candidates
             ts = datetime.fromisoformat(meta["created_at"]).timestamp()
-            task_id = entry.name[len("task-"):]
-            agent_slots.append((ts, task_id))
+            task_id = entry.name[len("task-") :]
+            eviction_candidates.append((ts, task_id))
         except (json.JSONDecodeError, KeyError, ValueError):
             pass
 
-    overage = len(agent_slots) - max_per_agent + 1
+    overage = total_count - max_per_agent + 1
     if overage <= 0:
         return
 
-    agent_slots.sort()  # oldest first
-    for _, oldest_task_id in agent_slots[:overage]:
+    eviction_candidates.sort()  # oldest first
+    for _, oldest_task_id in eviction_candidates[:overage]:
         logger.info(
             "Evicting oldest workspace task=%s for agent=%s (limit=%d)",
             oldest_task_id,

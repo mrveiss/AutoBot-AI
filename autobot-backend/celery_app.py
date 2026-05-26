@@ -141,6 +141,9 @@ celery_app.conf.update(
 
 # Auto-discover tasks from tasks and workers modules
 celery_app.autodiscover_tasks(["tasks", "workers"])
+# GH#6480: pricing refresh task lives in services/, not tasks/ — import explicitly so
+# workers register it. autodiscover_tasks only scans the listed packages.
+import services.pricing_refresh  # noqa: F401
 
 
 # =========================================================================
@@ -213,5 +216,10 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.cleanup_stale_workspaces",
         "schedule": crontab(hour=2, minute=0),
         "kwargs": {"max_age_days": 7},
+    },
+    # GH#6480: daily pricing refresh from provider sources into Redis (02:15 UTC)
+    "pricing-refresh-daily": {
+        "task": "pricing.refresh_daily",
+        "schedule": crontab(hour=2, minute=15),
     },
 }

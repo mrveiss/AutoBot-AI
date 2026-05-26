@@ -6,9 +6,13 @@
 from .adapters import (
     BaseAdapter,
     DiscordAdapter,
+    IMessageAdapter,
+    MatrixAdapter,
     NormalizedResponse,
+    SignalAdapter,
     SlackAdapter,
     TeamsAdapter,
+    TelegramAdapter,
     UnifiedMessage,
     WebAdapter,
     WhatsAppAdapter,
@@ -28,4 +32,8 @@ __all__ = [
     "WhatsAppAdapter",
     "TeamsAdapter",
     "WebAdapter",
+    "TelegramAdapter",
+    "SignalAdapter",
+    "MatrixAdapter",
+    "IMessageAdapter",
 ]

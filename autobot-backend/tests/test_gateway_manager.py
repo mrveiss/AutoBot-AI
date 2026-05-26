@@ -5,11 +5,11 @@
 Comprehensive tests for Unified Multi-Platform Message Gateway
 
 Tests verify:
-- GatewayManager accepts messages from 5+ platforms
+- GatewayManager accepts messages from 9+ platforms
 - Platform adapters with request/response normalization
 - Rate limiting per platform
 - Message queue with async processing
-- Message routing correct for 5+ platforms
+- Message routing correct for 9+ platforms
 - Performance: <50ms per message
 """
 
@@ -259,7 +259,11 @@ class TestGatewayManager:
         assert "discord" in adapters
         assert "whatsapp" in adapters
         assert "teams" in adapters
-        assert len(adapters) == 5
+        assert "telegram" in adapters
+        assert "signal" in adapters
+        assert "matrix" in adapters
+        assert "imessage" in adapters
+        assert len(adapters) == 9
 
     @pytest.mark.asyncio
     async def test_normalize_web_message(self, gateway):
@@ -391,7 +395,7 @@ class TestGatewayManager:
     async def test_unsupported_platform(self, gateway):
         """Test error for unsupported platform."""
         raw = {
-            "platform": "telegram",
+            "platform": "unknown_platform_xyz",
             "user_id": "U123",
             "channel_id": "C456",
             "message": "Test",
@@ -453,8 +457,8 @@ class TestGatewayManager:
     def test_get_supported_platforms(self, gateway):
         """Test getting list of supported platforms."""
         platforms = gateway.get_supported_platforms()
-        assert len(platforms) == 5
-        assert set(platforms) == {"web", "slack", "discord", "whatsapp", "teams"}
+        assert len(platforms) == 9
+        assert set(platforms) == {"web", "slack", "discord", "whatsapp", "teams", "telegram", "signal", "matrix", "imessage"}
 
 
 class TestRateLimiter:

@@ -12,6 +12,8 @@ and are imported at module level to fail fast if missing.
 # Core router imports - these are required for basic functionality
 from api.adapters import router as adapters_router  # Issue #1403
 from api.admin_event_logs import router as admin_event_logs_router  # Issue #4461
+import api.pricing_health  # noqa: F401 — registers KnownProbes.PRICING probe (GH#6480)
+from api.admin_pricing import router as admin_pricing_router  # GH#6480
 from api.admin_schedulers import router as admin_schedulers_router  # GH#6594
 from api.agent import router as agent_router
 from api.agent_config import router as agent_config_router
@@ -83,6 +85,7 @@ from api.user_management.router import router as user_management_router  # Issue
 from api.vnc_manager import router as vnc_router
 from api.vnc_mcp import router as vnc_mcp_router
 from api.vnc_proxy import router as vnc_proxy_router
+from api.voice import realtime_router as voice_realtime_router
 from api.voice import router as voice_router
 from api.voice_stream import router as voice_stream_router
 from api.wake_word import router as wake_word_router
@@ -97,6 +100,7 @@ def _get_system_routers() -> list:
     """Get system and settings routers (Issue #560: extracted, #1281: audit, #4461: event-logs)."""
     return [
         (admin_event_logs_router, "", ["admin", "compliance"], "admin_event_logs"),  # Issue #4461
+        (admin_pricing_router, "", ["admin", "pricing"], "admin_pricing"),  # GH#6480
         (admin_schedulers_router, "", ["admin", "schedulers"], "admin_schedulers"),  # GH#6594
         (audit_router, "", ["audit"], "audit"),
         (auth_router, "/auth", ["auth"], "auth"),
@@ -307,6 +311,7 @@ def _get_service_routers() -> list:
         (models_router, "/models", ["models"], "models"),
         (adapters_router, "/adapters", ["adapters"], "adapters"),
         (redis_router, "/redis", ["redis"], "redis"),
+        (voice_realtime_router, "/voice", ["voice"], "voice_realtime"),
         (voice_router, "/voice", ["voice"], "voice"),
         (voice_stream_router, "/voice", ["voice", "websocket"], "voice_stream"),
         (wake_word_router, "/wake_word", ["wake_word", "voice"], "wake_word"),

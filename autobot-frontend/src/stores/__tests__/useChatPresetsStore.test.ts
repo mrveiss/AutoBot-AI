@@ -1,3 +1,6 @@
+// AutoBot - AI-Powered Automation Platform
+// Copyright (c) 2025 mrveiss
+// Author: mrveiss
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useChatPresetsStore } from '../useChatPresetsStore'
@@ -26,7 +29,7 @@ vi.mock('@/utils/debugUtils', () => ({
   createLogger: () => ({ error: vi.fn(), info: vi.fn(), warn: vi.fn() }),
 }))
 
-describe('useChatPresetsStore (GH#4449)', () => {
+describe('useChatPresetsStore (GH#8596)', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
@@ -44,6 +47,14 @@ describe('useChatPresetsStore (GH#4449)', () => {
     await store.fetchPresets()
     expect(store.presets).toHaveLength(1)
     expect(store.presets[0].name).toBe('greet')
+  })
+
+  it('fetchPresets sets isLoading during request', async () => {
+    const store = useChatPresetsStore()
+    const promise = store.fetchPresets()
+    expect(store.isLoading).toBe(true)
+    await promise
+    expect(store.isLoading).toBe(false)
   })
 
   it('sortedPresets returns alphabetically sorted list', () => {
@@ -79,6 +90,22 @@ describe('useChatPresetsStore (GH#4449)', () => {
       mockPreset({ id: '2', name: 'b' }),
     ]
     expect(store.filterByQuery('')).toHaveLength(2)
+  })
+
+  it('createPreset appends to presets list', async () => {
+    const store = useChatPresetsStore()
+    const result = await store.createPreset({ name: 'help', description: 'Help', content: 'How can I help?' })
+    expect(result).not.toBeNull()
+    expect(store.presets).toHaveLength(1)
+    expect(store.presets[0].id).toBe('preset-2')
+  })
+
+  it('updatePreset replaces the matching preset in list', async () => {
+    const store = useChatPresetsStore()
+    store.presets = [mockPreset()]
+    const result = await store.updatePreset('preset-1', { description: 'Updated' })
+    expect(result).not.toBeNull()
+    expect(store.presets[0].description).toBe('Updated')
   })
 
   it('deletePreset removes the preset from the list', async () => {

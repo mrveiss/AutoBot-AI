@@ -8,6 +8,11 @@ VoiceSettingsPanel.vue - Voice profile selection and management (#1054)
 
 <template>
   <div class="voice-settings">
+    <!-- Active voice toolset bundle (GH#7422) -->
+    <div class="voice-bundle-section">
+      <VoiceBundleInfo />
+    </div>
+
     <div class="voice-list" v-if="!loading">
       <!-- Default (no profile) -->
       <label
@@ -139,6 +144,7 @@ VoiceSettingsPanel.vue - Voice profile selection and management (#1054)
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
+import VoiceBundleInfo from '@/views/voice/VoiceBundleInfo.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useVoiceProfiles } from '@/composables/useVoiceProfiles'
@@ -251,6 +257,13 @@ async function handleDelete(voiceId: string, name: string) {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md, 12px);
+}
+
+.voice-bundle-section {
+  padding: var(--spacing-sm, 8px) var(--spacing-md, 12px);
+  background: var(--bg-secondary, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border-default, rgba(255, 255, 255, 0.1));
+  border-radius: var(--radius-md, 6px);
 }
 
 .voice-list {
