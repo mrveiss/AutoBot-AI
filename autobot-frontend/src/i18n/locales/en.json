@@ -7284,7 +7284,10 @@
     "loadingTimeout": "Loading Timed Out",
     "loadingTimeoutMessage": "Some content took too long to load. Try refreshing.",
     "more": "More",
-    "moreItems": "More navigation items"
+    "moreItems": "More navigation items",
+    "adminHosts": "Host Inventory",
+    "adminSandbox": "Sandbox",
+    "budgetPolicies": "Budget Policies"
   },
   "reasoningTrace": {
     "title": "Reasoning trace",

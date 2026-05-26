@@ -755,6 +755,18 @@ export const routes: RouteRecordRaw[] = [
       admin: true,
     },
   },
+  // GH#6470: Budget policy management (admin-only)
+  {
+    path: '/admin/budget-policies',
+    name: 'budget-policies',
+    component: () => import('@/views/BudgetPolicies.vue'),
+    meta: {
+      title: 'Budget Policies',
+      description: 'Manage agent spend thresholds and auto-pause rules',
+      requiresAuth: true,
+      admin: true,
+    },
+  },
   // /desktop removed from nav — noVNC is accessible via the Chat tab's noVNC tab.
   // Redirect any bookmarked /desktop URLs to /chat.
   { path: '/desktop', redirect: '/chat' },
