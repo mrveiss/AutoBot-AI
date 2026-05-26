@@ -198,7 +198,7 @@ async def test_messages_streaming_returns_anthropic_sse_events():
     event_types = []
     for line in text.splitlines():
         if line.startswith("event: "):
-            event_types.append(line[len("event: "):].strip())
+            event_types.append(line[len("event: ") :].strip())
 
     # Required Anthropic SSE event order
     assert "message_start" in event_types
@@ -240,7 +240,7 @@ async def test_messages_streaming_data_lines_are_valid_json():
                 raw = await response.aread()
 
     text = raw.decode("utf-8")
-    data_lines = [line[len("data: "):].strip() for line in text.splitlines() if line.startswith("data: ")]
+    data_lines = [line[len("data: ") :].strip() for line in text.splitlines() if line.startswith("data: ")]
     assert len(data_lines) >= 1
     for raw_json in data_lines:
         parsed = json.loads(raw_json)
@@ -279,7 +279,7 @@ async def test_messages_streaming_content_delta_carries_text():
         if line.startswith("event: content_block_delta") and i + 1 < len(lines):
             data_line = lines[i + 1]
             if data_line.startswith("data: "):
-                data_payloads.append(json.loads(data_line[len("data: "):]))
+                data_payloads.append(json.loads(data_line[len("data: ") :]))
 
     assert len(data_payloads) >= 1, "Expected at least one content_block_delta"
     combined = "".join(p["delta"]["text"] for p in data_payloads)

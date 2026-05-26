@@ -291,18 +291,14 @@ async def messages(
         raise HTTPException(status_code=503, detail="No LLM providers available")
 
     if not inspect.isasyncgenfunction(provider.stream_completion):
-        raise ValueError(
-            f"Provider {provider.provider_name!r} stream_completion must be an async generator function"
-        )
+        raise ValueError(f"Provider {provider.provider_name!r} stream_completion must be an async generator function")
 
     message_id = _make_message_id()
     if resolved_model is None:
         resolved_model = provider.provider_name
 
     if body.stream:
-        prompt_text = (body.system or "") + "\n" + "\n".join(
-            _extract_content_text(m.content) for m in body.messages
-        )
+        prompt_text = (body.system or "") + "\n" + "\n".join(_extract_content_text(m.content) for m in body.messages)
         stream_headers: Dict[str, str] = {
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
@@ -352,8 +348,6 @@ async def messages(
     if api_key_record is not None:
         svc = get_llm_api_key_service()
         await svc.record_spend(api_key_record, cost_usd)
-        await svc.publish_usage_event(
-            api_key_record, resolved_model, prompt_tokens, completion_tokens, cost_usd
-        )
+        await svc.publish_usage_event(api_key_record, resolved_model, prompt_tokens, completion_tokens, cost_usd)
 
     return JSONResponse(content=response.model_dump(exclude_none=True), headers=headers)
