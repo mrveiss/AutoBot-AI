@@ -25,7 +25,6 @@ import asyncio
 from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
-from services.mcp_bridge_manifest import MCPBridgeManifest
 
 from api.schemas_common import DataResponse
 from api.schemas_system import (
@@ -45,6 +44,7 @@ from api.schemas_workflows import (
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from services.mcp_bridge_manifest import MCPBridgeManifest
 from type_defs.common import Metadata
 
 MANIFEST = MCPBridgeManifest(

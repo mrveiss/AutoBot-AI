@@ -182,7 +182,7 @@ async def test_is_bridge_enabled_returns_true_on_redis_error():
 
 
 def test_mcp_bridges_populated():
-    from api.mcp_registry import MCP_BRIDGES, _BRIDGE_MODULE_REGISTRY
+    from api.mcp_registry import _BRIDGE_MODULE_REGISTRY, MCP_BRIDGES
 
     assert len(MCP_BRIDGES) == len(_BRIDGE_MODULE_REGISTRY)
 

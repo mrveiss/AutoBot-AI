@@ -7,9 +7,9 @@ File watching and callback management for config changes.
 """
 
 import asyncio
+import logging  # stdlib: avoids deadlock — config is on the logging-manager init path (GH#7765 pattern)
 from typing import Any, Callable, Dict
 
-import logging  # stdlib: avoids deadlock — config is on the logging-manager init path (GH#7765 pattern)
 from constants.threshold_constants import FileWatcherConfig
 
 logger = logging.getLogger(__name__)

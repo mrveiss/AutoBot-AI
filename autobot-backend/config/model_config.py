@@ -6,9 +6,9 @@
 LLM and model configuration management.
 """
 
+import logging  # stdlib: avoids deadlock — config is on the logging-manager init path (GH#7765 pattern)
 from typing import Any, Dict
 
-import logging  # stdlib: avoids deadlock — config is on the logging-manager init path (GH#7765 pattern)
 from autobot_shared.ssot_config import config
 
 logger = logging.getLogger(__name__)

@@ -13,6 +13,7 @@ from typing import List
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException
+
 from services.mcp_bridge_manifest import MCPBridgeManifest
 
 MANIFEST = MCPBridgeManifest(

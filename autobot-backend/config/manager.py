@@ -27,11 +27,11 @@ SSOT Migration (Issue #763, #3829):
 """
 
 import asyncio
+import logging  # stdlib: avoids deadlock — config is on the logging-manager init path (GH#7765 pattern)
 import time
 from datetime import datetime
 from typing import Any, Callable, Dict, List
 
-import logging  # stdlib: avoids deadlock — config is on the logging-manager init path (GH#7765 pattern)
 from autobot_shared.singleton_factory import lazy_singleton
 from config.async_ops import AsyncOperationsMixin
 from config.file_watcher import FileWatcherMixin
