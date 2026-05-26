@@ -32,9 +32,7 @@ async def test_security_scanner():
         open_ports = port_scan_result.get("open_ports", [])
         print(f"Open ports found: {len(open_ports)}")  # noqa: print
         for port in open_ports[:5]:  # Show first 5
-            print(
-                f"  - Port {port.get('port')}: {port.get('service', 'unknown')}"
-            )  # noqa: print  # noqa: print
+            print(f"  - Port {port.get('port')}: {port.get('service', 'unknown')}")  # noqa: print  # noqa: print
     else:
         print(f"Error: {port_scan_result.get('message')}")  # noqa: print
 
@@ -54,9 +52,7 @@ async def test_security_scanner():
         services = service_result.get("services", [])
         print(f"Services detected: {len(services)}")  # noqa: print
         for svc in services:
-            print(
-                f"  - Port {svc.get('port')}: {svc.get('service')} {svc.get('version', '')}"
-            )  # noqa: print
+            print(f"  - Port {svc.get('port')}: {svc.get('service')} {svc.get('version', '')}")  # noqa: print
 
     # Test 3: Target validation (should fail for external)
     print("\n📝 Test 3: Target Validation...")  # noqa: print
@@ -87,9 +83,7 @@ async def test_network_discovery():
         hosts = discovery_result.get("hosts", [])
         print(f"Hosts found: {discovery_result.get('hosts_found', 0)}")  # noqa: print
         for host in hosts[:3]:  # Show first 3
-            print(
-                f"  - {host.get('ip')} ({host.get('hostname', 'unknown')})"
-            )  # noqa: print  # noqa: print
+            print(f"  - {host.get('ip')} ({host.get('hostname', 'unknown')})")  # noqa: print  # noqa: print
 
     # Test 2: Network map
     print("\n📝 Test 2: Network Mapping...")  # noqa: print
@@ -143,21 +137,15 @@ async def test_workflow_integration():
                 "chat_id": "test_security_scan",
             }
 
-            async with session.post(
-                get_test_backend_url() + "/api/workflow/execute", json=workflow_data
-            ) as response:
+            async with session.post(get_test_backend_url() + "/api/workflow/execute", json=workflow_data) as response:
                 if response.status == 200:
                     result = await response.json()
                     print("✅ Workflow created successfully")  # noqa: print
                     print(f"Workflow ID: {result.get('workflow_id')}")  # noqa: print
                     print(f"Total steps: {result.get('total_steps', 0)}")  # noqa: print
-                    print(
-                        f"Complexity: {result.get('complexity', 'unknown')}"
-                    )  # noqa: print  # noqa: print
+                    print(f"Complexity: {result.get('complexity', 'unknown')}")  # noqa: print  # noqa: print
                 else:
-                    print(
-                        f"❌ Workflow creation failed: {response.status}"
-                    )  # noqa: print  # noqa: print
+                    print(f"❌ Workflow creation failed: {response.status}")  # noqa: print  # noqa: print
 
         except Exception as e:
             print(f"⚠️  Workflow test skipped (API not available): {e}")  # noqa: print

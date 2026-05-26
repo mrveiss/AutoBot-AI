@@ -82,9 +82,7 @@ class ServiceConfigMixin:
         """
         # 1. Try environment variable first (highest priority)
         env_key = f"AUTOBOT_{service.upper()}_HOST"
-        env_host = os.getenv(
-            env_key
-        )  # ssot-config-exempt: dynamic service-name env lookup
+        env_host = os.getenv(env_key)  # ssot-config-exempt: dynamic service-name env lookup
         if env_host:
             return env_host
 
@@ -116,9 +114,7 @@ class ServiceConfigMixin:
         """
         # 1. Try environment variable first (highest priority)
         env_key = f"AUTOBOT_{service.upper()}_PORT"
-        env_port = os.getenv(
-            env_key
-        )  # ssot-config-exempt: dynamic service-name env lookup
+        env_port = os.getenv(env_key)  # ssot-config-exempt: dynamic service-name env lookup
         if env_port:
             return int(env_port)
 
@@ -208,9 +204,7 @@ class ServiceConfigMixin:
         ollama_port = self.get_port("ollama")
         if ollama_host and ollama_port:
             return f"http://{ollama_host}:{ollama_port}"
-        return (
-            f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}"
-        )
+        return f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}"
 
     def get_ollama_url_for_model(self, model_name: str) -> str:
         """Get Ollama URL routed by model name (#1070).

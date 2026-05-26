@@ -379,9 +379,7 @@ class Orchestrator(_DeprecatedRequestMixin):
                 self.config.orchestrator_llm_model,
             )
             return
-        logger.warning(
-            "⚠️ Orchestrator model '%s' test failed", self.config.orchestrator_llm_model
-        )
+        logger.warning("⚠️ Orchestrator model '%s' test failed", self.config.orchestrator_llm_model)
         fallback_model = config_manager.get_default_llm_model()
         if await self._validate_llm_model(fallback_model):
             logger.info("✅ Using fallback model: %s", fallback_model)
@@ -401,13 +399,9 @@ class Orchestrator(_DeprecatedRequestMixin):
             # tuple is always truthy, so the prior `if not <tuple>:` guard
             # never fired and ollama-down failures fell through to the
             # less-specific model validation step.
-            ollama_connected, ollama_error = await self.llm_service.is_provider_healthy(
-                provider_name="ollama"
-            )
+            ollama_connected, ollama_error = await self.llm_service.is_provider_healthy(provider_name="ollama")
             if not ollama_connected:
-                raise Exception(
-                    f"Failed to connect to Ollama: {ollama_error or 'unknown error'}"
-                )
+                raise Exception(f"Failed to connect to Ollama: {ollama_error or 'unknown error'}")
             logger.info("✅ Ollama connection established")
             await self._ensure_working_llm_model()
             # #7431 ADR-006 §Q1: start the BlockedPlanResumer so plans
@@ -432,9 +426,7 @@ class Orchestrator(_DeprecatedRequestMixin):
         logger.info("Shutting down Consolidated Orchestrator...")
         self.is_running = False
         if self.active_tasks:
-            logger.info(
-                "Waiting for %d active tasks to complete...", len(self.active_tasks)
-            )
+            logger.info("Waiting for %d active tasks to complete...", len(self.active_tasks))
             await asyncio.sleep(TimingConstants.STANDARD_DELAY)
         # #7431 ADR-006 §Q1: cancel the BlockedPlanResumer subscriber.
         # Best-effort — never block shutdown on resumer plumbing.
@@ -451,12 +443,8 @@ class Orchestrator(_DeprecatedRequestMixin):
             )
         except Exception as e:
             logger.warning("Cleanup warning: %s", e)
-        uptime = (
-            datetime.now(tz=timezone.utc) - self.start_time if self.start_time else 0
-        )
-        logger.info(
-            "Orchestrator session %s completed (uptime %s)", self.session_id, uptime
-        )
+        uptime = datetime.now(tz=timezone.utc) - self.start_time if self.start_time else 0
+        logger.info("Orchestrator session %s completed (uptime %s)", self.session_id, uptime)
         logger.info(
             "  Tasks completed: %s  failed: %s",
             self.metrics["tasks_completed"],
@@ -513,9 +501,7 @@ class Orchestrator(_DeprecatedRequestMixin):
                 title=f"Workflow: {user_request[:50]}...",
                 description=user_request,
             )
-            doc.content.update(
-                {"request": user_request, "context": context, "start_time": start_time}
-            )
+            doc.content.update({"request": user_request, "context": context, "start_time": start_time})
             self.workflow_documentation[workflow_id] = doc
 
         try:
@@ -530,24 +516,18 @@ class Orchestrator(_DeprecatedRequestMixin):
             total = self.workflow_metrics["total_workflows"]
             elapsed = time.time() - start_time
             cur_avg = self.workflow_metrics["average_execution_time"]
-            self.workflow_metrics["average_execution_time"] = (
-                (cur_avg * (total - 1)) + elapsed
-            ) / total
+            self.workflow_metrics["average_execution_time"] = ((cur_avg * (total - 1)) + elapsed) / total
 
             if auto_document:
                 documenter = self._get_enhanced_documenter()
-                await documenter.generate_workflow_documentation(
-                    workflow_id, exec_result
-                )
+                await documenter.generate_workflow_documentation(workflow_id, exec_result)
                 doc = documenter.get_doc(workflow_id)
                 if doc:
                     self.workflow_documentation[workflow_id] = doc
 
             if self.knowledge_extraction_enabled:
                 documenter = self._get_enhanced_documenter()
-                await documenter.extract_workflow_knowledge(
-                    workflow_id, user_request, exec_result, self.agent_registry
-                )
+                await documenter.extract_workflow_knowledge(workflow_id, user_request, exec_result, self.agent_registry)
 
             return {
                 "workflow_id": workflow_id,
@@ -586,17 +566,13 @@ class Orchestrator(_DeprecatedRequestMixin):
             return TaskComplexity.COMPLEX
         try:
             if self.classification_agent:
-                result = await self.classification_agent.classify_user_request(
-                    user_request
-                )
+                result = await self.classification_agent.classify_user_request(user_request)
                 return result.complexity
         except Exception as e:
             logger.error("Classification failed: %s, defaulting to COMPLEX", e)
         return TaskComplexity.COMPLEX
 
-    async def plan_workflow_steps(
-        self, user_request: str, complexity: TaskComplexity
-    ) -> List[WorkflowStep]:
+    async def plan_workflow_steps(self, user_request: str, complexity: TaskComplexity) -> List[WorkflowStep]:
         """Plan WorkflowStep objects based on complexity.
 
         Retained for callers in orchestration/workflow_planner.py,
@@ -658,10 +634,7 @@ class Orchestrator(_DeprecatedRequestMixin):
 
     def _build_planning_prompt(self, goal: str) -> str:
         capabilities_json = json.dumps(
-            {
-                agent: [cap.value for cap in caps]
-                for agent, caps in self.agent_capabilities.items()
-            },
+            {agent: [cap.value for cap in caps] for agent, caps in self.agent_capabilities.items()},
             indent=2,
         )
         return build_planning_prompt(goal, capabilities_json)
@@ -676,9 +649,7 @@ class Orchestrator(_DeprecatedRequestMixin):
             return parse_result.data
         return self._strategy_planner.create_fallback_plan(goal)
 
-    async def create_workflow_plan(
-        self, goal: str, context: Dict[str, Any] | None = None
-    ) -> WorkflowPlan:
+    async def create_workflow_plan(self, goal: str, context: Dict[str, Any] | None = None) -> WorkflowPlan:
         """Create an intelligent workflow plan for a goal via LLM planning.
 
         Issue #5040: merged from EnhancedMultiAgentOrchestrator.
@@ -731,9 +702,7 @@ class Orchestrator(_DeprecatedRequestMixin):
             logger.debug("Event bus not available for settings update")
 
     async def get_status(self) -> Dict[str, Any]:
-        uptime = (
-            datetime.now(tz=timezone.utc) - self.start_time if self.start_time else 0
-        )
+        uptime = datetime.now(tz=timezone.utc) - self.start_time if self.start_time else 0
         return {
             "session_id": self.session_id,
             "is_running": self.is_running,
@@ -742,9 +711,7 @@ class Orchestrator(_DeprecatedRequestMixin):
             "queued_tasks": len(self.task_queue),
             "metrics": self.metrics,
             "workflow_metrics": self.workflow_metrics,
-            "capabilities_coverage": self._runner.get_performance_report()[
-                "capabilities_coverage"
-            ],
+            "capabilities_coverage": self._runner.get_performance_report()["capabilities_coverage"],
             "configuration": {
                 "orchestrator_model": self.config.orchestrator_llm_model,
                 "task_model": self.config.task_llm_model,
@@ -787,9 +754,7 @@ class Orchestrator(_DeprecatedRequestMixin):
 # ============================================================================
 
 
-async def create_and_execute_workflow(
-    goal: str, context: Dict[str, Any] | None = None
-) -> Dict[str, Any]:
+async def create_and_execute_workflow(goal: str, context: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """Create and execute a multi-agent workflow plan.
 
     Issue #5040: Replaces enhanced_orchestration.create_and_execute_workflow.

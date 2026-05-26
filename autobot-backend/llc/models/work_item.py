@@ -38,15 +38,9 @@ class LLCWorkItem(Base):
         primary_key=True,
         server_default=sa.text("gen_random_uuid()"),
     )
-    company_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False, index=True
-    )
-    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), nullable=True, index=True
-    )
-    sprint_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), nullable=True, index=True
-    )
+    company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    sprint_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
     goal_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("llc_goals.id", ondelete="SET NULL"),
@@ -67,15 +61,11 @@ class LLCWorkItem(Base):
     )
 
     # Identity
-    identifier: Mapped[str] = mapped_column(
-        String(64), nullable=False, unique=True, index=True
-    )
+    identifier: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
     title: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     acceptance_criteria: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
-    labels: Mapped[list] = mapped_column(
-        JSONB, nullable=False, server_default=sa.text("'[]'::jsonb")
-    )
+    labels: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=sa.text("'[]'::jsonb"))
 
     # Status / priority
     status: Mapped[str] = mapped_column(
@@ -91,70 +81,40 @@ class LLCWorkItem(Base):
         index=True,
     )
     story_points: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    backlog_position: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default="0"
-    )
-    needs_triage: Mapped[bool] = mapped_column(
-        sa.Boolean, nullable=False, server_default="false"
-    )
+    backlog_position: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    needs_triage: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, server_default="false")
 
     # Assignment — primary
     assignee_type: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
-    assignee_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), nullable=True, index=True
-    )
-    assignee_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), nullable=True, index=True
-    )
+    assignee_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    assignee_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
 
     # Co-working — secondary (GH#8230)
     co_worker_type: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
-    co_worker_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), nullable=True, index=True
-    )
-    co_worker_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), nullable=True, index=True
-    )
-    co_working_enabled: Mapped[bool] = mapped_column(
-        sa.Boolean, nullable=False, server_default="false"
-    )
+    co_worker_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    co_worker_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    co_working_enabled: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, server_default="false")
 
     # Atomic checkout lock fields
     checkout_run_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    checkout_locked_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    checkout_locked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Optimistic concurrency version counter
     version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
 
     # Audit: who created this item
-    created_by_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), nullable=True
-    )
-    created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), nullable=True
-    )
+    created_by_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
 
     # Review / handoff fields (GH#8231, GH#8232)
-    reviewer_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), nullable=True, index=True
-    )
-    reviewer_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), nullable=True, index=True
-    )
+    reviewer_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    reviewer_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
     review_brief: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
 
     # Lifecycle timestamps
-    started_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    cancelled_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Self-referencing relationship for child items
     children: Mapped[List["LLCWorkItem"]] = relationship(
@@ -209,26 +169,18 @@ class LLCWorkItemComment(Base):
         primary_key=True,
         server_default=sa.text("gen_random_uuid()"),
     )
-    company_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False, index=True
-    )
+    company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     work_item_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("llc_work_items.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    author_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), nullable=True
-    )
-    author_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), nullable=True
-    )
+    author_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    author_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
     body: Mapped[str] = mapped_column(Text, nullable=False)
 
-    work_item: Mapped["LLCWorkItem"] = relationship(
-        "LLCWorkItem", back_populates="comments"
-    )
+    work_item: Mapped["LLCWorkItem"] = relationship("LLCWorkItem", back_populates="comments")
 
 
 class LLCWorkItemRelation(Base):
@@ -245,9 +197,7 @@ class LLCWorkItemRelation(Base):
         primary_key=True,
         server_default=sa.text("gen_random_uuid()"),
     )
-    company_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False, index=True
-    )
+    company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     source_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("llc_work_items.id", ondelete="CASCADE"),
@@ -264,12 +214,8 @@ class LLCWorkItemRelation(Base):
         sa.Enum(WorkItemRelationType, name="workitemrelationtype", create_type=False),
         nullable=False,
     )
-    created_by_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), nullable=True
-    )
-    created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), nullable=True
-    )
+    created_by_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
 
     source: Mapped["LLCWorkItem"] = relationship(
         "LLCWorkItem",
@@ -283,10 +229,6 @@ class LLCWorkItemRelation(Base):
     )
 
     __table_args__ = (
-        sa.UniqueConstraint(
-            "source_id", "target_id", "relation_type", name="uq_work_item_relation"
-        ),
-        sa.CheckConstraint(
-            "source_id != target_id", name="ck_work_item_relation_no_self"
-        ),
+        sa.UniqueConstraint("source_id", "target_id", "relation_type", name="uq_work_item_relation"),
+        sa.CheckConstraint("source_id != target_id", name="ck_work_item_relation_no_self"),
     )

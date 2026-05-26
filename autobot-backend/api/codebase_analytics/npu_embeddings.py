@@ -98,9 +98,7 @@ def get_embedding_stats() -> Dict[str, Any]:
         "fallback_time_ms": _metrics.fallback_time_ms,
         "cache_hits": _metrics.cache_hits,
         "errors": _metrics.errors,
-        "avg_time_per_embedding_ms": (
-            _metrics.total_time_ms / total if total > 0 else 0
-        ),
+        "avg_time_per_embedding_ms": (_metrics.total_time_ms / total if total > 0 else 0),
     }
 
 
@@ -230,15 +228,11 @@ async def _generate_fallback_embeddings(
 
         try:
             # Use async batch embedding method
-            batch_embeddings = await chunker._compute_sentence_embeddings_async(
-                batch_docs
-            )
+            batch_embeddings = await chunker._compute_sentence_embeddings_async(batch_docs)
 
             # Convert numpy arrays to lists
             for emb in batch_embeddings:
-                all_embeddings.append(
-                    emb.tolist() if hasattr(emb, "tolist") else list(emb)
-                )
+                all_embeddings.append(emb.tolist() if hasattr(emb, "tolist") else list(emb))
 
             # Yield to event loop periodically
             if i % (batch_size * 2) == 0:
@@ -292,9 +286,7 @@ async def _generate_npu_embeddings(
         for i in range(0, total_docs, batch_size):
             batch_docs = documents[i : i + batch_size]
 
-            result = await client.generate_embeddings(
-                batch_docs, model_name=EMBEDDING_MODEL, use_cache=True
-            )
+            result = await client.generate_embeddings(batch_docs, model_name=EMBEDDING_MODEL, use_cache=True)
 
             if result is None or len(result.embeddings) != len(batch_docs):
                 logger.warning("NPU batch returned incomplete results at index %d", i)
@@ -419,9 +411,7 @@ async def warmup_npu_for_codebase() -> Dict[str, Any]:
             result["npu_available"] = True
             result["warmup_time_ms"] = warmup_time
             result["embedding_dimensions"] = len(embeddings[0])
-            result["message"] = (
-                f"NPU connection warmed up for codebase indexing in {warmup_time:.1f}ms"
-            )
+            result["message"] = f"NPU connection warmed up for codebase indexing in {warmup_time:.1f}ms"
 
             # Get device info
             if client:

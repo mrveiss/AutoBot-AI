@@ -107,9 +107,7 @@ async def voice_realtime_call_tool(
     allowed_tools = await bridge.list_realtime_tools()
     allowed_names = {t.name for t in allowed_tools}
     if body.name not in allowed_names:
-        raise HTTPException(
-            status_code=403, detail="Tool not permitted in active voice bundle"
-        )
+        raise HTTPException(status_code=403, detail="Tool not permitted in active voice bundle")
 
     result = await bridge.call_tool(
         body.name,
@@ -137,9 +135,7 @@ async def voice_listen_api(request: Request, user_role: str = Form("user")):
             content={"message": "Voice interface is not available on this server."},
         )
     if not security_layer.check_permission(user_role, "allow_voice_listen"):
-        security_layer.audit_log(
-            "voice_listen", user_role, "denied", {"reason": "permission_denied"}
-        )
+        security_layer.audit_log("voice_listen", user_role, "denied", {"reason": "permission_denied"})
         return JSONResponse(
             status_code=403,
             content={"message": "Permission denied to listen via voice."},
@@ -147,14 +143,10 @@ async def voice_listen_api(request: Request, user_role: str = Form("user")):
 
     result = await voice_interface.listen_and_convert_to_text()
     if result["status"] == "success":
-        security_layer.audit_log(
-            "voice_listen", user_role, "success", {"text": result["text"]}
-        )
+        security_layer.audit_log("voice_listen", user_role, "success", {"text": result["text"]})
         return {"message": "Speech recognized.", "text": result["text"]}
     else:
-        security_layer.audit_log(
-            "voice_listen", user_role, "failure", {"reason": result.get("message")}
-        )
+        security_layer.audit_log("voice_listen", user_role, "failure", {"reason": result.get("message")})
         return JSONResponse(
             status_code=500,
             content={"message": f"Speech recognition failed: {result['message']}"},
@@ -167,9 +159,7 @@ async def voice_listen_api(request: Request, user_role: str = Form("user")):
     operation="voice_speak_api",
     error_code_prefix="VOICE",
 )
-async def voice_speak_api(
-    request: Request, text: str = Form(...), user_role: str = Form("user")
-):
+async def voice_speak_api(request: Request, text: str = Form(...), user_role: str = Form("user")):
     """Converts text to speech and plays it."""
     security_layer = request.app.state.security_layer
     voice_interface = getattr(request.app.state, "voice_interface", None)
@@ -193,9 +183,7 @@ async def voice_speak_api(
 
     result = await voice_interface.speak_text(text)
     if result["status"] == "success":
-        security_layer.audit_log(
-            "voice_speak", user_role, "success", {"text_preview": text[:50]}
-        )
+        security_layer.audit_log("voice_speak", user_role, "success", {"text_preview": text[:50]})
         return {"message": "Text spoken successfully."}
     else:
         security_layer.audit_log(
@@ -210,9 +198,7 @@ async def voice_speak_api(
         )
 
 
-@router.post(
-    "/synthesize", response_model=None
-)  # Returns audio/wav Response — no Pydantic schema
+@router.post("/synthesize", response_model=None)  # Returns audio/wav Response — no Pydantic schema
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="voice_synthesize_api",
@@ -228,9 +214,7 @@ async def voice_synthesize_api(
     """Synthesize speech via Pocket TTS worker. Returns audio/wav stream."""
     security_layer = request.app.state.security_layer
     if not security_layer.check_permission(user_role, "allow_voice_speak"):
-        security_layer.audit_log(
-            "voice_synthesize", user_role, "denied", {"reason": "permission_denied"}
-        )
+        security_layer.audit_log("voice_synthesize", user_role, "denied", {"reason": "permission_denied"})
         return JSONResponse(
             status_code=403,
             content={"message": "Permission denied to synthesize voice."},
@@ -238,9 +222,7 @@ async def voice_synthesize_api(
 
     tts = get_tts_client()
     wav_bytes = await tts.synthesize(text, voice_id=voice_id, language=language)
-    security_layer.audit_log(
-        "voice_synthesize", user_role, "success", {"text_preview": text[:50]}
-    )
+    security_layer.audit_log("voice_synthesize", user_role, "success", {"text_preview": text[:50]})
     return Response(
         content=wav_bytes,
         media_type="audio/wav",
@@ -248,9 +230,7 @@ async def voice_synthesize_api(
     )
 
 
-@router.post(
-    "/clone-voice", response_model=None
-)  # Returns audio/wav Response — no Pydantic schema
+@router.post("/clone-voice", response_model=None)  # Returns audio/wav Response — no Pydantic schema
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="voice_clone_api",
@@ -265,9 +245,7 @@ async def voice_clone_api(
     """Zero-shot voice cloning via TTS worker. Returns audio/wav stream."""
     security_layer = request.app.state.security_layer
     if not security_layer.check_permission(user_role, "allow_voice_speak"):
-        security_layer.audit_log(
-            "voice_clone", user_role, "denied", {"reason": "permission_denied"}
-        )
+        security_layer.audit_log("voice_clone", user_role, "denied", {"reason": "permission_denied"})
         return JSONResponse(
             status_code=403,
             content={"message": "Permission denied to clone voice."},
@@ -276,9 +254,7 @@ async def voice_clone_api(
     ref_bytes = await reference_audio.read()
     tts = get_tts_client()
     wav_bytes = await tts.clone_voice(text, ref_bytes)
-    security_layer.audit_log(
-        "voice_clone", user_role, "success", {"text_preview": text[:50]}
-    )
+    security_layer.audit_log("voice_clone", user_role, "success", {"text_preview": text[:50]})
     return Response(
         content=wav_bytes,
         media_type="audio/wav",
@@ -370,9 +346,7 @@ def _whisper_sync(pipe, audio_bytes: bytes, suffix: str, language: str = "") -> 
             generate_kwargs=generate_kwargs or None,
         )
         text = output.get("text", "").strip() if isinstance(output, dict) else ""
-        detected_lang = (
-            output.get("language", "unknown") if isinstance(output, dict) else "unknown"
-        )
+        detected_lang = output.get("language", "unknown") if isinstance(output, dict) else "unknown"
         confidence = 0.9 if text else 0.0
         return {
             "text": text,
@@ -389,9 +363,7 @@ def _whisper_sync(pipe, audio_bytes: bytes, suffix: str, language: str = "") -> 
             pass
 
 
-async def _transcribe_with_whisper(
-    audio_bytes: bytes, content_type: str, language: str = ""
-) -> dict:
+async def _transcribe_with_whisper(audio_bytes: bytes, content_type: str, language: str = "") -> dict:
     """Run Whisper transcription in a background thread (#1030)."""
     from media.audio.pipeline import _get_whisper_pipeline
 
@@ -434,9 +406,7 @@ async def voice_transcribe_api(
             content={"text": "", "error": "Empty audio file."},
         )
 
-    result = await _transcribe_with_whisper(
-        audio_bytes, audio.content_type or "audio/webm", language
-    )
+    result = await _transcribe_with_whisper(audio_bytes, audio.content_type or "audio/webm", language)
     security_layer.audit_log(
         "voice_transcribe",
         "user",

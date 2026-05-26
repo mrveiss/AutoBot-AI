@@ -157,9 +157,7 @@ def _fingerprint_tool_call(tool_call: Dict[str, Any]) -> str:
         canonical = json.dumps(params, sort_keys=True, ensure_ascii=False)
     except (TypeError, ValueError):
         canonical = str(params)
-    digest = hashlib.sha1(canonical.encode("utf-8"), usedforsecurity=False).hexdigest()[
-        :12
-    ]
+    digest = hashlib.sha1(canonical.encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
     return f"{name}:{digest}"
 
 
@@ -219,9 +217,7 @@ async def initialize_session(state: ChatState, config: RunnableConfig) -> dict:
             session,
             terminal_session_id,
             user_wants_exit,
-        ) = await manager._initialize_chat_session(
-            state["session_id"], state["user_message"]
-        )
+        ) = await manager._initialize_chat_session(state["session_id"], state["user_message"])
         await manager._persist_user_message(state["session_id"], state["user_message"])
 
         # Issue #3278: fire ON_MESSAGE_RECEIVED hook so plugins can observe chat input.
@@ -234,9 +230,7 @@ async def initialize_session(state: ChatState, config: RunnableConfig) -> dict:
                 message=state["user_message"],
             )
         except Exception as _hook_exc:  # noqa: BLE001
-            logger.debug(
-                "Plugin hook ON_MESSAGE_RECEIVED failed (non-fatal): %s", _hook_exc
-            )
+            logger.debug("Plugin hook ON_MESSAGE_RECEIVED failed (non-fatal): %s", _hook_exc)
 
         return {
             "terminal_session_id": terminal_session_id,
@@ -310,9 +304,7 @@ async def prepare_llm(state: ChatState, config: RunnableConfig) -> dict:
     manager = config["configurable"]["manager"]
 
     session = await manager.get_or_create_session(state["session_id"])
-    llm_params = await manager._prepare_llm_workflow_params(
-        session, state["user_message"], state.get("context", {})
-    )
+    llm_params = await manager._prepare_llm_workflow_params(session, state["user_message"], state.get("context", {}))
     ctx = manager._create_llm_iteration_context(
         llm_params,
         state["session_id"],
@@ -498,9 +490,7 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
         logger.debug("Plugin hook ON_AGENT_EXECUTE failed (non-fatal): %s", _hook_exc)
 
     try:
-        messages, llm_response, should_continue = await _run_llm_iteration(
-            manager, ctx, iteration, messages, stream_cb
-        )
+        messages, llm_response, should_continue = await _run_llm_iteration(manager, ctx, iteration, messages, stream_cb)
     except aiohttp.ClientError as exc:
         logger.error("LLM call failed: %s", exc)
         error_msg = {"type": "error", "content": f"LLM error: {exc}"}
@@ -555,9 +545,7 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
         step_name,
         _cot_start,
         output_summary=(
-            f"{len(parsed_tool_calls)} tool call(s) queued"
-            if parsed_tool_calls
-            else "LLM response complete"
+            f"{len(parsed_tool_calls)} tool call(s) queued" if parsed_tool_calls else "LLM response complete"
         ),
         session_id=session_id,
     )
@@ -804,9 +792,7 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
     emit_step_complete(
         "execute_tools",
         _cot_exec_start,
-        output_summary=(
-            f"tools executed; loop_aborted={tool_loop_count >= _LOOP_ABORT_THRESHOLD}"
-        ),
+        output_summary=(f"tools executed; loop_aborted={tool_loop_count >= _LOOP_ABORT_THRESHOLD}"),
         session_id=session_id,
     )
 
@@ -906,9 +892,7 @@ async def perform_knowledge_search(state: ChatState, config: RunnableConfig) -> 
                 {},
             )
             # Reconstruct context_str from filtered results
-            context_str = "\n\n".join(
-                [r.get("content", "") for r in results if r.get("content")]
-            )
+            context_str = "\n\n".join([r.get("content", "") for r in results if r.get("content")])
         except Exception as hook_exc:  # noqa: BLE001
             logger.debug("AFTER_RAG_RESULTS hook failed (non-fatal): %s", hook_exc)
 
@@ -1137,9 +1121,7 @@ def build_chat_graph() -> StateGraph:
     builder.add_node("initialize_session", initialize_session)
     builder.add_node("detect_intent", detect_intent)
     builder.add_node("prepare_llm", prepare_llm)
-    builder.add_node(
-        "perform_knowledge_search", perform_knowledge_search
-    )  # Issue #1718
+    builder.add_node("perform_knowledge_search", perform_knowledge_search)  # Issue #1718
     builder.add_node("generate_response", generate_response)
     builder.add_node("reflect_on_response", reflect_on_response)
     builder.add_node("request_approval", request_approval)

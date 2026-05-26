@@ -54,9 +54,7 @@ def _bootstrap_provider_registry():
             sys.modules[heavy] = stub
 
     # ssot_config.config must be an object with attribute access
-    cfg_stub = sys.modules.setdefault(
-        "autobot_shared.ssot_config", types.ModuleType("autobot_shared.ssot_config")
-    )
+    cfg_stub = sys.modules.setdefault("autobot_shared.ssot_config", types.ModuleType("autobot_shared.ssot_config"))
     if not hasattr(cfg_stub, "config"):
         cfg_stub.config = MagicMock()
 
@@ -229,9 +227,7 @@ class TestNpuPipelineRouting(unittest.IsolatedAsyncioTestCase):
         registry, npu_provider = self._make_registry_with_npu_provider(dispatcher)
 
         request = _make_request(model_bytes=16 * (1024**3))
-        should_pipeline = await registry._should_use_npu_pipeline(
-            request, baseline_ttft_ms=200.0
-        )
+        should_pipeline = await registry._should_use_npu_pipeline(request, baseline_ttft_ms=200.0)
         self.assertFalse(should_pipeline)
 
     async def test_pipeline_disabled_skips_pipeline(self):

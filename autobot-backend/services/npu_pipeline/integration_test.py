@@ -52,9 +52,7 @@ _PROMPT = "Hello, pipeline"
 
 
 def _make_worker(worker_id: str, vram_bytes: int = _8_GB) -> WorkerNode:
-    return WorkerNode(
-        worker_id=worker_id, vram_bytes=vram_bytes, state=WorkerState.ONLINE
-    )
+    return WorkerNode(worker_id=worker_id, vram_bytes=vram_bytes, state=WorkerState.ONLINE)
 
 
 @pytest.fixture
@@ -88,9 +86,7 @@ async def test_pipeline_produces_tokens_across_two_workers(dispatcher):
     result = await dispatcher.run(_MODEL_ID, _TOTAL_PARAMS, _PROMPT, max_tokens=8)
 
     assert result.tokens, "Expected non-empty token list from pipeline run"
-    assert (
-        not result.fallback_used
-    ), "Fallback should not fire when both workers are healthy"
+    assert not result.fallback_used, "Fallback should not fire when both workers are healthy"
     assert result.metrics.total_tokens == len(result.tokens)
 
 
@@ -99,14 +95,11 @@ async def test_tokens_sourced_from_both_workers(dispatcher):
     result = await dispatcher.run(_MODEL_ID, _TOTAL_PARAMS, _PROMPT, max_tokens=8)
 
     worker_ids_seen = {
-        tok.split("_")[1] + "_" + tok.split("_")[2] if len(tok.split("_")) > 2 else ""
-        for tok in result.tokens
+        tok.split("_")[1] + "_" + tok.split("_")[2] if len(tok.split("_")) > 2 else "" for tok in result.tokens
     }
     # Tokens carry worker_id prefix: tok_{worker_id}_{i}
     prefixes = {tok.split("_")[1] for tok in result.tokens if tok.startswith("tok_")}
-    assert (
-        "npu-0" in prefixes or "npu-1" in prefixes
-    ), "Tokens should originate from pipeline workers"
+    assert "npu-0" in prefixes or "npu-1" in prefixes, "Tokens should originate from pipeline workers"
 
 
 # ---------------------------------------------------------------------------
@@ -151,9 +144,7 @@ async def test_tracing_span_emitted_after_run(mock_tracing):
 
     mock_tracing.start_span.assert_called_once()
     call_kwargs = mock_tracing.start_span.call_args
-    attrs = call_kwargs.kwargs.get("attributes") or (
-        call_kwargs.args[1] if len(call_kwargs.args) > 1 else {}
-    )
+    attrs = call_kwargs.kwargs.get("attributes") or (call_kwargs.args[1] if len(call_kwargs.args) > 1 else {})
     assert "npu.hop_count" in attrs
     assert "npu.layer_transfer_ms" in attrs
     assert "npu.fallback_fired" in attrs
@@ -234,18 +225,14 @@ def test_shard_plan_invalidated_on_worker_added(dispatcher):
     plan_before = dispatcher.plan_shards(_MODEL_ID, _TOTAL_PARAMS)
     dispatcher.register_worker(_make_worker("npu-2"))
     plan_after = dispatcher.plan_shards(_MODEL_ID, _TOTAL_PARAMS)
-    assert (
-        plan_before is not plan_after
-    ), "Cache must be invalidated when a new worker is registered"
+    assert plan_before is not plan_after, "Cache must be invalidated when a new worker is registered"
 
 
 def test_shard_plan_invalidated_on_worker_removed(dispatcher):
     plan_before = dispatcher.plan_shards(_MODEL_ID, _TOTAL_PARAMS)
     dispatcher.remove_worker("npu-0")
     plan_after = dispatcher.plan_shards(_MODEL_ID, _TOTAL_PARAMS)
-    assert (
-        plan_before is not plan_after
-    ), "Cache must be invalidated when a worker is removed"
+    assert plan_before is not plan_after, "Cache must be invalidated when a worker is removed"
 
 
 def test_shard_plan_new_plan_reflects_updated_worker_pool(dispatcher):

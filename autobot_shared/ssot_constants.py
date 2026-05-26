@@ -567,9 +567,7 @@ class TimingConstants:
     KB_INIT_DELAY = 3.0
 
 
-def exponential_backoff_delay(
-    attempt: int, base: float = 2.0, cap: float = 60.0
-) -> float:
+def exponential_backoff_delay(attempt: int, base: float = 2.0, cap: float = 60.0) -> float:
     """Return capped exponential backoff delay in seconds."""
     return min(base**attempt, cap)
 
@@ -813,12 +811,8 @@ TIMEOUT_TASK_ANALYSIS: float = 300.0
 
 PLACEHOLDER_PATTERNS = {"example", "placeholder", "your_", "xxx", "changeme", "todo"}
 
-HTTP_METHODS: FrozenSet[str] = frozenset(
-    {"get", "post", "put", "delete", "patch", "route"}
-)
-INSECURE_RANDOM_FUNCS: FrozenSet[str] = frozenset(
-    {"random", "randint", "choice", "shuffle"}
-)
+HTTP_METHODS: FrozenSet[str] = frozenset({"get", "post", "put", "delete", "patch", "route"})
+INSECURE_RANDOM_FUNCS: FrozenSet[str] = frozenset({"random", "randint", "choice", "shuffle"})
 
 
 # ============================================================================

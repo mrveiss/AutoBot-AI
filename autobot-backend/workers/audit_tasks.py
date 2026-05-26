@@ -148,9 +148,7 @@ def _file_issue(title: str, body: str, labels: str = _AUDIT_LABELS) -> bool:
     return True
 
 
-def _dedupe_and_file(
-    findings: list[dict], existing_titles: set[str], label: str
-) -> int:
+def _dedupe_and_file(findings: list[dict], existing_titles: set[str], label: str) -> int:
     """File GitHub issues for findings whose title is not in *existing_titles*.
 
     Returns the number of newly filed issues.
@@ -206,12 +204,7 @@ def _changed_python_modules(since_iso: str | None, repo_root: Path) -> list[Path
         line = line.strip()
         if not line or not line.endswith(".py"):
             continue
-        if (
-            "_test" in line
-            or "test_" in line
-            or "/tests/" in line
-            or "/conftest" in line
-        ):
+        if "_test" in line or "test_" in line or "/tests/" in line or "/conftest" in line:
             continue
         p = repo_root / line
         if p.is_file():
@@ -385,9 +378,7 @@ def _extract_capability_claims(repo_root: Path) -> list[dict]:
         re.IGNORECASE,
     )
     claims = []
-    search_paths = [repo_root / "README.md"] + list(
-        (repo_root / "docs").glob("**/*.md")
-    )
+    search_paths = [repo_root / "README.md"] + list((repo_root / "docs").glob("**/*.md"))
 
     for src in search_paths:
         if not src.is_file():
@@ -395,15 +386,9 @@ def _extract_capability_claims(repo_root: Path) -> list[dict]:
         rel = src.relative_to(repo_root)
         for lineno, line in enumerate(src.read_text(errors="ignore").splitlines(), 1):
             stripped = line.strip()
-            if (
-                stripped.startswith("#")
-                or stripped.startswith("-")
-                or stripped.startswith("*")
-            ):
+            if stripped.startswith("#") or stripped.startswith("-") or stripped.startswith("*"):
                 if claim_pattern.search(stripped):
-                    claims.append(
-                        {"source": str(rel), "lineno": lineno, "text": stripped[:200]}
-                    )
+                    claims.append({"source": str(rel), "lineno": lineno, "text": stripped[:200]})
     return claims
 
 
@@ -482,9 +467,7 @@ def audit_claims(self) -> dict:
     doc_path = _write_verification_doc(repo_root, verified, unverified)
 
     # Load previous unverified set for dedup
-    prev_unverified: list[str] = (
-        _redis_get(redis, _CLAIMS_LAST_RUN_KEY + ":unverified") or []
-    )
+    prev_unverified: list[str] = _redis_get(redis, _CLAIMS_LAST_RUN_KEY + ":unverified") or []
     prev_set = set(prev_unverified)
 
     findings = []

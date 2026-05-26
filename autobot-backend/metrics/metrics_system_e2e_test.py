@@ -87,13 +87,9 @@ async def test_workflow_metrics():
     if final_stats:
         print("✅ Workflow tracking completed")  # noqa: print
         print(f"  Total duration: {final_stats.total_duration_ms:.1f}ms")  # noqa: print
-        print(
-            f"  Average step duration: {final_stats.avg_step_duration_ms:.1f}ms"
-        )  # noqa: print  # noqa: print
+        print(f"  Average step duration: {final_stats.avg_step_duration_ms:.1f}ms")  # noqa: print  # noqa: print
         print(f"  Success rate: {final_stats.success_rate:.1f}%")  # noqa: print
-        print(
-            f"  Steps completed: {final_stats.completed_steps}/{final_stats.total_steps}"
-        )  # noqa: print
+        print(f"  Steps completed: {final_stats.completed_steps}/{final_stats.total_steps}")  # noqa: print
 
     return True
 
@@ -118,13 +114,9 @@ async def test_system_monitoring():
     detailed_metrics = await system_monitor.collect_system_metrics()
     print("✅ Detailed system metrics collected:")  # noqa: print
     print(f"  CPU cores: {detailed_metrics['cpu']['count']}")  # noqa: print
-    print(
-        f"  Memory total: {detailed_metrics['memory']['total_mb']:.0f} MB"
-    )  # noqa: print  # noqa: print
+    print(f"  Memory total: {detailed_metrics['memory']['total_mb']:.0f} MB")  # noqa: print  # noqa: print
     print(f"  Disk free: {detailed_metrics['disk']['free_gb']:.1f} GB")  # noqa: print
-    print(
-        f"  AutoBot processes: {len(detailed_metrics['autobot_processes'])}"
-    )  # noqa: print  # noqa: print
+    print(f"  AutoBot processes: {len(detailed_metrics['autobot_processes'])}")  # noqa: print  # noqa: print
 
     # Test 3: Resource thresholds check
     print("\n📝 Test 3: Resource Threshold Check...")  # noqa: print
@@ -164,12 +156,8 @@ async def test_system_monitoring():
     print("✅ Resource summary generated:")  # noqa: print
 
     if "system" in summary:
-        print(
-            f"  CPU avg: {summary['system']['cpu']['avg_percent']:.1f}%"
-        )  # noqa: print  # noqa: print
-        print(
-            f"  Memory avg: {summary['system']['memory']['avg_percent']:.1f}%"
-        )  # noqa: print  # noqa: print
+        print(f"  CPU avg: {summary['system']['cpu']['avg_percent']:.1f}%")  # noqa: print  # noqa: print
+        print(f"  Memory avg: {summary['system']['memory']['avg_percent']:.1f}%")  # noqa: print  # noqa: print
         print(f"  Data points: {summary['data_points']}")  # noqa: print
 
     return True
@@ -194,9 +182,7 @@ async def test_metrics_api_integration():
         async with aiohttp.ClientSession() as session:
             for endpoint in endpoints_to_test:
                 try:
-                    async with session.get(
-                        get_test_backend_url() + endpoint
-                    ) as response:
+                    async with session.get(get_test_backend_url() + endpoint) as response:
                         if response.status == 200:
                             print(f"✅ {endpoint}: OK")  # noqa: print
                         else:
@@ -207,9 +193,7 @@ async def test_metrics_api_integration():
         print("✅ API integration test completed")  # noqa: print
 
     except ImportError:
-        print(
-            "⚠️  aiohttp not available - skipping API integration test"
-        )  # noqa: print  # noqa: print
+        print("⚠️  aiohttp not available - skipping API integration test")  # noqa: print  # noqa: print
     except Exception as e:
         print(f"⚠️  API test failed: {e}")  # noqa: print
 

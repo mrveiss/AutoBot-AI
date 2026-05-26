@@ -118,18 +118,14 @@ def _map_finish_reason(finish_reason: str | None) -> str:
     return "end_turn"
 
 
-def _build_llm_request(
-    body: AnthropicRequest, resolved_model: str | None = None
-) -> LLMRequest:
+def _build_llm_request(body: AnthropicRequest, resolved_model: str | None = None) -> LLMRequest:
     """Convert Anthropic Messages-format request to AutoBot LLMRequest."""
     messages: List[Dict[str, str]] = []
     if body.system:
         messages.append({"role": "system", "content": body.system})
     for m in body.messages:
         messages.append({"role": m.role, "content": _extract_content_text(m.content)})
-    effective_model = resolved_model or (
-        body.model if body.model != "autobot-default" else None
-    )
+    effective_model = resolved_model or (body.model if body.model != "autobot-default" else None)
     return LLMRequest(
         messages=messages,
         model_name=effective_model,
@@ -204,9 +200,7 @@ async def _stream_generator_anthropic(
         )
 
     # content_block_stop
-    yield _sse(
-        "content_block_stop", {"type": "content_block_stop", "index": content_index}
-    )
+    yield _sse("content_block_stop", {"type": "content_block_stop", "index": content_index})
 
     completion_text = "".join(completion_text_parts)
     completion_tokens = _estimate_tokens(completion_text)
@@ -230,9 +224,7 @@ async def _stream_generator_anthropic(
     if api_key_record is not None:
         svc = get_llm_api_key_service()
         await svc.record_spend(api_key_record, cost_usd)
-        await svc.publish_usage_event(
-            api_key_record, model_name, prompt_tokens, completion_tokens, cost_usd
-        )
+        await svc.publish_usage_event(api_key_record, model_name, prompt_tokens, completion_tokens, cost_usd)
 
 
 # ---------------------------------------------------------------------------
@@ -268,15 +260,9 @@ async def messages(
                 raise HTTPException(
                     status_code=403,
                     detail="Model not permitted for this API key",
-                    headers={
-                        "x-llm-key-allowed-models": ",".join(
-                            api_key_record.allowed_models
-                        )
-                    },
+                    headers={"x-llm-key-allowed-models": ",".join(api_key_record.allowed_models)},
                 )
-        allowed, _remaining = await get_llm_api_key_service().check_budget(
-            api_key_record
-        )
+        allowed, _remaining = await get_llm_api_key_service().check_budget(api_key_record)
         if not allowed:
             raise HTTPException(
                 status_code=429,
@@ -289,10 +275,7 @@ async def messages(
         messages_raw: List[Dict[str, str]] = []
         if body.system:
             messages_raw.append({"role": "system", "content": body.system})
-        messages_raw += [
-            {"role": m.role, "content": _extract_content_text(m.content)}
-            for m in body.messages
-        ]
+        messages_raw += [{"role": m.role, "content": _extract_content_text(m.content)} for m in body.messages]
         resolved_model = await _resolve_auto_model(body.model, messages_raw)
     elif body.model == "autobot-default":
         resolved_model = None
@@ -307,20 +290,14 @@ async def messages(
         raise HTTPException(status_code=503, detail="No LLM providers available")
 
     if not inspect.isasyncgenfunction(provider.stream_completion):
-        raise ValueError(
-            f"Provider {provider.provider_name!r} stream_completion must be an async generator function"
-        )
+        raise ValueError(f"Provider {provider.provider_name!r} stream_completion must be an async generator function")
 
     message_id = _make_message_id()
     if resolved_model is None:
         resolved_model = provider.provider_name
 
     if body.stream:
-        prompt_text = (
-            (body.system or "")
-            + "\n"
-            + "\n".join(_extract_content_text(m.content) for m in body.messages)
-        )
+        prompt_text = (body.system or "") + "\n" + "\n".join(_extract_content_text(m.content) for m in body.messages)
         stream_headers: Dict[str, str] = {
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
@@ -358,9 +335,7 @@ async def messages(
         content=[AnthropicTextBlock(text=llm_response.content or "")],
         model=resolved_model,
         stop_reason=_map_finish_reason(llm_response.finish_reason),
-        usage=AnthropicUsage(
-            input_tokens=prompt_tokens, output_tokens=completion_tokens
-        ),
+        usage=AnthropicUsage(input_tokens=prompt_tokens, output_tokens=completion_tokens),
     )
 
     headers: Dict[str, str] = {}
@@ -372,8 +347,6 @@ async def messages(
     if api_key_record is not None:
         svc = get_llm_api_key_service()
         await svc.record_spend(api_key_record, cost_usd)
-        await svc.publish_usage_event(
-            api_key_record, resolved_model, prompt_tokens, completion_tokens, cost_usd
-        )
+        await svc.publish_usage_event(api_key_record, resolved_model, prompt_tokens, completion_tokens, cost_usd)
 
     return JSONResponse(content=response.model_dump(exclude_none=True), headers=headers)

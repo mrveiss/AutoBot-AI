@@ -59,9 +59,7 @@ class ShardPlan:
 
     def is_valid(self, registry: "PipelineDispatcher") -> bool:
         """Return False if any assigned worker is no longer online."""
-        current_ids = {
-            w.worker_id for w in registry.workers if w.state == WorkerState.ONLINE
-        }
+        current_ids = {w.worker_id for w in registry.workers if w.state == WorkerState.ONLINE}
         return all(wid in current_ids for wid in self.worker_ids)
 
 
@@ -80,9 +78,7 @@ class PipelineMetrics:
         self.layer_transfer_latency_ms += transfer_ms
 
     def record_worker_compute(self, worker_id: str, compute_ms: float) -> None:
-        self.per_worker_compute_ms[worker_id] = (
-            self.per_worker_compute_ms.get(worker_id, 0.0) + compute_ms
-        )
+        self.per_worker_compute_ms[worker_id] = self.per_worker_compute_ms.get(worker_id, 0.0) + compute_ms
 
 
 @dataclass
@@ -165,9 +161,7 @@ class PipelineDispatcher:
     def _distribute_layers(total_params: int, workers: List[WorkerNode]) -> List[int]:
         """Distribute model layers proportionally to worker VRAM."""
         total_vram = sum(w.vram_bytes for w in workers)
-        layers = [
-            max(1, round(total_params * (w.vram_bytes / total_vram))) for w in workers
-        ]
+        layers = [max(1, round(total_params * (w.vram_bytes / total_vram))) for w in workers]
         # Ensure total sums exactly to total_params
         diff = total_params - sum(layers)
         layers[-1] += diff
@@ -206,15 +200,11 @@ class PipelineDispatcher:
             metrics.fallback_fired = True
             self._fallback_count += 1
             fallback_used = True
-            tokens = await self._run_single_worker_fallback(
-                model_id, total_params, prompt, max_tokens, metrics
-            )
+            tokens = await self._run_single_worker_fallback(model_id, total_params, prompt, max_tokens, metrics)
 
         metrics.total_tokens = len(tokens)
         self._emit_metrics(metrics)
-        return PipelineResult(
-            tokens=tokens, metrics=metrics, fallback_used=fallback_used
-        )
+        return PipelineResult(tokens=tokens, metrics=metrics, fallback_used=fallback_used)
 
     async def _run_pipeline(
         self,
@@ -228,16 +218,12 @@ class PipelineDispatcher:
             if worker.state != WorkerState.ONLINE:
                 raise WorkerDroppedError(worker.worker_id)
             t0 = time.monotonic()
-            chunk = await self._call_worker(
-                worker, plan.layers_per_worker[i], prompt, max_tokens
-            )
+            chunk = await self._call_worker(worker, plan.layers_per_worker[i], prompt, max_tokens)
             compute_ms = (time.monotonic() - t0) * 1000
             metrics.record_worker_compute(worker.worker_id, compute_ms)
             tokens.extend(chunk)
             if i < len(plan.workers) - 1:
-                transfer_ms = await self._simulate_layer_transfer(
-                    worker, plan.workers[i + 1]
-                )
+                transfer_ms = await self._simulate_layer_transfer(worker, plan.workers[i + 1])
                 metrics.record_hop(transfer_ms)
         return tokens
 

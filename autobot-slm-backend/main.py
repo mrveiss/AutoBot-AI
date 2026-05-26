@@ -179,9 +179,7 @@ async def lifespan(app: FastAPI):
         await _init_user_management_tables()
         logger.info("User management tables initialized")
     except Exception as e:
-        logger.error(
-            "User management table initialization failed: %s", e, exc_info=True
-        )
+        logger.error("User management table initialization failed: %s", e, exc_info=True)
         raise
 
     try:
@@ -287,9 +285,7 @@ async def _ensure_local_node() -> None:
     hostname = socket.gethostname()
 
     async with db_service.session() as session:
-        existing = (
-            await session.execute(select(Node).where(Node.node_id == _SLM_NODE_ID))
-        ).scalar_one_or_none()
+        existing = (await session.execute(select(Node).where(Node.node_id == _SLM_NODE_ID))).scalar_one_or_none()
 
         if existing:
             # Heal stale IP — happens when slm-secrets.env has a wrong IP from
@@ -450,9 +446,7 @@ app.include_router(code_sync_router, prefix="/api")
 app.include_router(roles_router, prefix="/api")
 app.include_router(code_source_router, prefix="/api")
 app.include_router(personality_proxy_router, prefix="/api")  # Issue #1145
-app.include_router(
-    voice_proxy_router, prefix="/api"
-)  # Voice proxy for personality voice assignment
+app.include_router(voice_proxy_router, prefix="/api")  # Voice proxy for personality voice assignment
 app.include_router(orchestration_router, prefix="/api")
 app.include_router(discovery_router, prefix="/api")
 app.include_router(config_router, prefix="/api")

@@ -464,9 +464,7 @@ async def get_async_chromadb_client(
     import chromadb  # noqa: F811
     from chromadb.config import Settings as ChromaSettings
 
-    cache_key = (
-        f"http://{_CHROMADB_HOST}:{_CHROMADB_PORT}" if _CHROMADB_HOST else db_path
-    )
+    cache_key = f"http://{_CHROMADB_HOST}:{_CHROMADB_PORT}" if _CHROMADB_HOST else db_path
 
     if cache_key in _async_client_cache:
         return _async_client_cache[cache_key]

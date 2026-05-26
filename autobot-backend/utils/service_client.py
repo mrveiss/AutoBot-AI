@@ -56,9 +56,7 @@ class ServiceHTTPClient:
         # Use HTTPClient singleton
         self.http_client = get_http_client()
 
-        logger.info(
-            "Service HTTP client initialized", service_id=service_id, timeout=timeout
-        )
+        logger.info("Service HTTP client initialized", service_id=service_id, timeout=timeout)
 
     def _sign_request(self, method: str, url: str) -> Dict[str, str]:
         """
@@ -405,9 +403,7 @@ def create_service_client_from_env() -> ServiceHTTPClient:
 
 
 # Convenience function for creating authenticated clients
-async def create_service_client(
-    service_id: str, redis_manager=None
-) -> ServiceHTTPClient:
+async def create_service_client(service_id: str, redis_manager=None) -> ServiceHTTPClient:
     """
     Create authenticated service client by loading key from Redis.
 

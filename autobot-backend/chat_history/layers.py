@@ -81,10 +81,7 @@ class Layer0Identity:
             from autobot_shared.ssot_config import config as _cfg
 
             owner = getattr(getattr(_cfg, "owner", None), "name", None) or "mrveiss"
-            role = (
-                getattr(getattr(_cfg, "agent", None), "role", None)
-                or "AutoBot AI assistant"
-            )
+            role = getattr(getattr(_cfg, "agent", None), "role", None) or "AutoBot AI assistant"
         except Exception:
             owner = "mrveiss"
             role = "AutoBot AI assistant"
@@ -207,14 +204,12 @@ class Layer3DeepSearch:
             if not knowledge_service or not user_message:
                 return ""
 
-            knowledge_context, citations, _, _ = (
-                await knowledge_service.conversation_aware_retrieve(
-                    query=user_message,
-                    conversation_history=[],
-                    top_k=5,
-                    score_threshold=0.3,
-                    force_retrieval=True,
-                )
+            knowledge_context, citations, _, _ = await knowledge_service.conversation_aware_retrieve(
+                query=user_message,
+                conversation_history=[],
+                top_k=5,
+                score_threshold=0.3,
+                force_retrieval=True,
             )
             if not knowledge_context:
                 return ""

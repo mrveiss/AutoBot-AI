@@ -51,9 +51,7 @@ async def _emit_system_prompt_ready(system_prompt: str, session: Any) -> str:
         session_id=getattr(session, "session_id", ""),
         data={"system_prompt": system_prompt, "session": session},
     )
-    result = await get_extension_manager().invoke_with_transform(
-        HookPoint.SYSTEM_PROMPT_READY, ctx, "system_prompt"
-    )
+    result = await get_extension_manager().invoke_with_transform(HookPoint.SYSTEM_PROMPT_READY, ctx, "system_prompt")
     if isinstance(result, str) and result != system_prompt:
         logger.debug(
             "[#3405] SYSTEM_PROMPT_READY modified system prompt (%d -> %d chars)",
@@ -64,9 +62,7 @@ async def _emit_system_prompt_ready(system_prompt: str, session: Any) -> str:
     return system_prompt
 
 
-async def _emit_full_prompt_ready(
-    prompt: str, llm_params: Dict[str, Any], context: Dict[str, Any]
-) -> str:
+async def _emit_full_prompt_ready(prompt: str, llm_params: Dict[str, Any], context: Dict[str, Any]) -> str:
     """Emit ON_FULL_PROMPT_READY to registered extensions and return result.
 
     Issue #3405: Fires after _build_full_prompt() so extensions can append
@@ -86,9 +82,7 @@ async def _emit_full_prompt_ready(
         session_id=context.get("session_id", ""),
         data={"prompt": prompt, "llm_params": llm_params, "context": context},
     )
-    result = await get_extension_manager().invoke_with_transform(
-        HookPoint.FULL_PROMPT_READY, ctx, "prompt"
-    )
+    result = await get_extension_manager().invoke_with_transform(HookPoint.FULL_PROMPT_READY, ctx, "prompt")
     if isinstance(result, str) and result != prompt:
         logger.debug(
             "[#3405] FULL_PROMPT_READY modified full prompt (%d -> %d chars)",
@@ -99,9 +93,7 @@ async def _emit_full_prompt_ready(
     return prompt
 
 
-async def _emit_before_message_process(
-    message: str, session_id: str, context: Dict[str, Any]
-) -> Dict[str, Any]:
+async def _emit_before_message_process(message: str, session_id: str, context: Dict[str, Any]) -> Dict[str, Any]:
     """Emit BEFORE_MESSAGE_PROCESS hook to registered extensions.
 
     Issue #4181: Fires at the start of message handling so extensions can
@@ -144,9 +136,7 @@ async def _emit_before_prompt_build(session_id: str, context: Dict[str, Any]) ->
     await get_extension_manager().invoke_hook(HookPoint.BEFORE_PROMPT_BUILD, ctx)
 
 
-async def _emit_after_prompt_build(
-    prompt: str, session_id: str, context: Dict[str, Any]
-) -> str:
+async def _emit_after_prompt_build(prompt: str, session_id: str, context: Dict[str, Any]) -> str:
     """Emit AFTER_PROMPT_BUILD hook to registered extensions.
 
     Issue #4265: Fires after prompt is built so extensions can
@@ -164,15 +154,11 @@ async def _emit_after_prompt_build(
         session_id=session_id,
         data={"prompt": prompt, "context": context},
     )
-    result = await get_extension_manager().invoke_with_transform(
-        HookPoint.AFTER_PROMPT_BUILD, ctx, "prompt"
-    )
+    result = await get_extension_manager().invoke_with_transform(HookPoint.AFTER_PROMPT_BUILD, ctx, "prompt")
     return result if isinstance(result, str) else prompt
 
 
-async def _emit_before_llm_call(
-    prompt: str, llm_params: Dict[str, Any], session_id: str
-) -> bool:
+async def _emit_before_llm_call(prompt: str, llm_params: Dict[str, Any], session_id: str) -> bool:
     """Emit BEFORE_LLM_CALL hook to registered extensions.
 
     Issue #4181: Fires before calling the LLM so extensions can reject
@@ -195,9 +181,7 @@ async def _emit_before_llm_call(
     return not any(result is False for result in results)
 
 
-async def _emit_during_llm_streaming(
-    chunk: str, session_id: str, context: Dict[str, Any]
-) -> None:
+async def _emit_during_llm_streaming(chunk: str, session_id: str, context: Dict[str, Any]) -> None:
     """Emit DURING_LLM_STREAMING hook to registered extensions.
 
     Issue #4181: Fires during LLM response streaming so extensions can
@@ -215,9 +199,7 @@ async def _emit_during_llm_streaming(
     await get_extension_manager().invoke_hook(HookPoint.DURING_LLM_STREAMING, ctx)
 
 
-async def _emit_after_llm_response(
-    response: str, llm_params: Dict[str, Any], session_id: str
-) -> str:
+async def _emit_after_llm_response(response: str, llm_params: Dict[str, Any], session_id: str) -> str:
     """Emit AFTER_LLM_RESPONSE hook to registered extensions.
 
     Issue #4181: Fires after LLM returns full response so extensions can
@@ -235,15 +217,11 @@ async def _emit_after_llm_response(
         session_id=session_id,
         data={"response": response, "llm_params": llm_params},
     )
-    result = await get_extension_manager().invoke_with_transform(
-        HookPoint.AFTER_LLM_RESPONSE, ctx, "response"
-    )
+    result = await get_extension_manager().invoke_with_transform(HookPoint.AFTER_LLM_RESPONSE, ctx, "response")
     return result if isinstance(result, str) else response
 
 
-async def _emit_before_tool_parse(
-    llm_response: str, session_id: str, context: Dict[str, Any]
-) -> str:
+async def _emit_before_tool_parse(llm_response: str, session_id: str, context: Dict[str, Any]) -> str:
     """Emit BEFORE_TOOL_PARSE hook to registered extensions.
 
     Issue #4181: Fires before parsing tool calls from LLM response so
@@ -261,15 +239,11 @@ async def _emit_before_tool_parse(
         session_id=session_id,
         data={"llm_response": llm_response, "context": context},
     )
-    result = await get_extension_manager().invoke_with_transform(
-        HookPoint.BEFORE_TOOL_PARSE, ctx, "llm_response"
-    )
+    result = await get_extension_manager().invoke_with_transform(HookPoint.BEFORE_TOOL_PARSE, ctx, "llm_response")
     return result if isinstance(result, str) else llm_response
 
 
-async def _emit_before_tool_execute(
-    tool_name: str, tool_params: Dict[str, Any], session_id: str
-) -> bool:
+async def _emit_before_tool_execute(tool_name: str, tool_params: Dict[str, Any], session_id: str) -> bool:
     """Emit BEFORE_TOOL_EXECUTE hook to registered extensions.
 
     Issue #4181: Fires before executing a tool so extensions can reject
@@ -287,15 +261,11 @@ async def _emit_before_tool_execute(
         session_id=session_id,
         data={"tool_name": tool_name, "tool_params": tool_params},
     )
-    results = await get_extension_manager().invoke_hook(
-        HookPoint.BEFORE_TOOL_EXECUTE, ctx
-    )
+    results = await get_extension_manager().invoke_hook(HookPoint.BEFORE_TOOL_EXECUTE, ctx)
     return not any(result is False for result in results)
 
 
-async def _emit_after_tool_execute(
-    tool_name: str, tool_result: Any, session_id: str, context: Dict[str, Any]
-) -> Any:
+async def _emit_after_tool_execute(tool_name: str, tool_result: Any, session_id: str, context: Dict[str, Any]) -> Any:
     """Emit AFTER_TOOL_EXECUTE hook to registered extensions.
 
     Issue #4181: Fires after tool execution so extensions can inspect
@@ -318,15 +288,11 @@ async def _emit_after_tool_execute(
             "context": context,
         },
     )
-    result = await get_extension_manager().invoke_with_transform(
-        HookPoint.AFTER_TOOL_EXECUTE, ctx, "tool_result"
-    )
+    result = await get_extension_manager().invoke_with_transform(HookPoint.AFTER_TOOL_EXECUTE, ctx, "tool_result")
     return result if result is not None else tool_result
 
 
-async def _emit_tool_error(
-    tool_name: str, error: Exception, session_id: str, context: Dict[str, Any]
-) -> None:
+async def _emit_tool_error(tool_name: str, error: Exception, session_id: str, context: Dict[str, Any]) -> None:
     """Emit TOOL_ERROR hook to registered extensions.
 
     Issue #4181: Fires when tool execution fails so extensions can
@@ -350,9 +316,7 @@ async def _emit_tool_error(
     await get_extension_manager().invoke_hook(HookPoint.TOOL_ERROR, ctx)
 
 
-async def _emit_before_continuation(
-    iteration: int, session_id: str, context: Dict[str, Any]
-) -> bool:
+async def _emit_before_continuation(iteration: int, session_id: str, context: Dict[str, Any]) -> bool:
     """Emit BEFORE_CONTINUATION hook to registered extensions.
 
     Issue #4181: Fires before starting next iteration of continuation loop
@@ -370,15 +334,11 @@ async def _emit_before_continuation(
         session_id=session_id,
         data={"iteration": iteration, "context": context},
     )
-    results = await get_extension_manager().invoke_hook(
-        HookPoint.BEFORE_CONTINUATION, ctx
-    )
+    results = await get_extension_manager().invoke_hook(HookPoint.BEFORE_CONTINUATION, ctx)
     return not any(result is False for result in results)
 
 
-async def _emit_after_continuation(
-    iteration: int, response: str, session_id: str, context: Dict[str, Any]
-) -> str:
+async def _emit_after_continuation(iteration: int, response: str, session_id: str, context: Dict[str, Any]) -> str:
     """Emit AFTER_CONTINUATION hook to registered extensions.
 
     Issue #4181: Fires after continuation iteration completes so extensions
@@ -397,15 +357,11 @@ async def _emit_after_continuation(
         session_id=session_id,
         data={"iteration": iteration, "response": response, "context": context},
     )
-    result = await get_extension_manager().invoke_with_transform(
-        HookPoint.AFTER_CONTINUATION, ctx, "response"
-    )
+    result = await get_extension_manager().invoke_with_transform(HookPoint.AFTER_CONTINUATION, ctx, "response")
     return result if isinstance(result, str) else response
 
 
-async def _emit_loop_complete(
-    total_iterations: int, final_response: str, session_id: str
-) -> str:
+async def _emit_loop_complete(total_iterations: int, final_response: str, session_id: str) -> str:
     """Emit LOOP_COMPLETE hook to registered extensions.
 
     Issue #4181: Fires when continuation loop completes so extensions
@@ -423,15 +379,11 @@ async def _emit_loop_complete(
         session_id=session_id,
         data={"total_iterations": total_iterations, "final_response": final_response},
     )
-    result = await get_extension_manager().invoke_with_transform(
-        HookPoint.LOOP_COMPLETE, ctx, "final_response"
-    )
+    result = await get_extension_manager().invoke_with_transform(HookPoint.LOOP_COMPLETE, ctx, "final_response")
     return result if isinstance(result, str) else final_response
 
 
-async def _emit_repairable_error(
-    error: Exception, session_id: str, context: Dict[str, Any]
-) -> bool:
+async def _emit_repairable_error(error: Exception, session_id: str, context: Dict[str, Any]) -> bool:
     """Emit REPAIRABLE_ERROR hook to registered extensions.
 
     Issue #4181: Fires when a repairable error occurs so extensions
@@ -453,15 +405,11 @@ async def _emit_repairable_error(
             "context": context,
         },
     )
-    result = await get_extension_manager().invoke_until_handled(
-        HookPoint.REPAIRABLE_ERROR, ctx
-    )
+    result = await get_extension_manager().invoke_until_handled(HookPoint.REPAIRABLE_ERROR, ctx)
     return result is not None
 
 
-async def _emit_critical_error(
-    error: Exception, session_id: str, context: Dict[str, Any]
-) -> None:
+async def _emit_critical_error(error: Exception, session_id: str, context: Dict[str, Any]) -> None:
     """Emit CRITICAL_ERROR hook to registered extensions.
 
     Issue #4181: Fires when a critical unrecoverable error occurs so
@@ -483,9 +431,7 @@ async def _emit_critical_error(
     await get_extension_manager().invoke_hook(HookPoint.CRITICAL_ERROR, ctx)
 
 
-async def _emit_before_response_send(
-    response: str, session_id: str, context: Dict[str, Any]
-) -> str:
+async def _emit_before_response_send(response: str, session_id: str, context: Dict[str, Any]) -> str:
     """Emit BEFORE_RESPONSE_SEND hook to registered extensions.
 
     Issue #4181: Fires before sending response to user so extensions
@@ -503,15 +449,11 @@ async def _emit_before_response_send(
         session_id=session_id,
         data={"response": response, "context": context},
     )
-    result = await get_extension_manager().invoke_with_transform(
-        HookPoint.BEFORE_RESPONSE_SEND, ctx, "response"
-    )
+    result = await get_extension_manager().invoke_with_transform(HookPoint.BEFORE_RESPONSE_SEND, ctx, "response")
     return result if isinstance(result, str) else response
 
 
-async def _emit_after_response_send(
-    response: str, session_id: str, context: Dict[str, Any]
-) -> None:
+async def _emit_after_response_send(response: str, session_id: str, context: Dict[str, Any]) -> None:
     """Emit AFTER_RESPONSE_SEND hook to registered extensions.
 
     Issue #4181: Fires after response is sent to user so extensions
@@ -532,9 +474,7 @@ async def _emit_after_response_send(
 class LLMHandlerMixin:
     """Mixin for LLM interaction handling."""
 
-    def _convert_conversation_history_format(
-        self, history: List[Dict[str, str]]
-    ) -> List[Dict[str, str]]:
+    def _convert_conversation_history_format(self, history: List[Dict[str, str]]) -> List[Dict[str, str]]:
         """
         Convert conversation history from storage format to classification format.
 
@@ -557,9 +497,7 @@ class LLMHandlerMixin:
                 converted.append({"role": "user", "content": exchange["user"]})
             # Add assistant message
             if "assistant" in exchange:
-                converted.append(
-                    {"role": "assistant", "content": exchange["assistant"]}
-                )
+                converted.append({"role": "assistant", "content": exchange["assistant"]})
         return converted
 
     def _get_ollama_endpoint_fallback(self) -> str:
@@ -580,9 +518,7 @@ class LLMHandlerMixin:
                 if not endpoint.endswith(PATH_OLLAMA_GENERATE):
                     endpoint = endpoint.rstrip("/") + PATH_OLLAMA_GENERATE
                 return endpoint
-            logger.error(
-                "Invalid endpoint URL: %s, using config-based default", endpoint
-            )
+            logger.error("Invalid endpoint URL: %s, using config-based default", endpoint)
             return self._get_ollama_endpoint_fallback()
         except Exception as e:
             logger.error("Failed to load Ollama endpoint from config: %s", e)
@@ -692,15 +628,10 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             return ""
 
         context_parts = ["\n**Recent Context:**\n"]
-        context_parts.extend(
-            f"User: {msg['user']}\nYou: {msg['assistant']}\n\n"
-            for msg in complete_messages[-2:]
-        )
+        context_parts.extend(f"User: {msg['user']}\nYou: {msg['assistant']}\n\n" for msg in complete_messages[-2:])
         return "".join(context_parts)
 
-    async def _retrieve_knowledge_context(
-        self, message: str, session: WorkflowSession
-    ) -> tuple:
+    async def _retrieve_knowledge_context(self, message: str, session: WorkflowSession) -> tuple:
         """Retrieve knowledge context for RAG. Returns (context, citations)."""
         try:
             (
@@ -726,9 +657,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
                 session.metadata["query_intent"] = query_intent.intent.value
                 if enhanced_query and enhanced_query.enhancement_applied:
                     session.metadata["query_enhanced"] = True
-                    session.metadata["context_entities"] = (
-                        enhanced_query.context_entities
-                    )
+                    session.metadata["context_entities"] = enhanced_query.context_entities
             else:
                 session.metadata["used_knowledge"] = False
                 session.metadata["query_enhanced"] = False
@@ -754,23 +683,15 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         """
         if knowledge_context:
             return (
-                knowledge_context
-                + "\n"
-                + conversation_context
-                + f"\n**Current user message:** {message}\n\nAssistant:"
+                knowledge_context + "\n" + conversation_context + f"\n**Current user message:** {message}\n\nAssistant:"
             )
-        return (
-            conversation_context
-            + f"\n**Current user message:** {message}\n\nAssistant:"
-        )
+        return conversation_context + f"\n**Current user message:** {message}\n\nAssistant:"
 
     def _get_selected_model(self) -> str:
         """Get selected LLM model from config with fallback."""
         try:
             default_model = get_config().get_default_llm_model()
-            selected = get_config().get_nested(
-                "backend.llm.ollama.selected_model", default_model
-            )
+            selected = get_config().get_nested("backend.llm.ollama.selected_model", default_model)
             if selected and isinstance(selected, str):
                 logger.info("Using LLM model from config: %s", selected)
                 return selected
@@ -831,9 +752,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
                 # Issue #3787: legacy always-loaded compact memory summary.
                 from memory.essential_story import EssentialStoryGenerator
 
-                story = await EssentialStoryGenerator().generate(
-                    model_name=selected_model
-                )
+                story = await EssentialStoryGenerator().generate(model_name=selected_model)
                 if story:
                     system_prompt = story + "\n\n" + system_prompt
         except Exception as _ctx_exc:
@@ -844,9 +763,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         # Knowledge retrieval for RAG
         knowledge_context, citations = "", []
         if self.knowledge_service and use_knowledge:
-            knowledge_context, citations = await self._retrieve_knowledge_context(
-                message, session
-            )
+            knowledge_context, citations = await self._retrieve_knowledge_context(message, session)
             # Issue #3770: compress KB results when context exceeds model budget
             if knowledge_context and citations:
                 from context_window_manager import ContextWindowManager
@@ -856,9 +773,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
                 cwm.set_model(selected_model)
                 kc_tokens = cwm.estimate_tokens(knowledge_context)
                 max_kb_tokens = cwm.get_max_history_tokens()
-                if await cwm.async_should_compress(
-                    content_tokens=kc_tokens, model_name=selected_model
-                ):
+                if await cwm.async_should_compress(content_tokens=kc_tokens, model_name=selected_model):
                     svc = ContextCompressionService(
                         model_thresholds={
                             name: spec.get("compression_threshold", 8192)
@@ -866,9 +781,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
                             if isinstance(spec, dict)
                         }
                     )
-                    citations = await svc.compress_kb_results(
-                        citations, max_tokens=max_kb_tokens
-                    )
+                    citations = await svc.compress_kb_results(citations, max_tokens=max_kb_tokens)
                     # Rebuild knowledge context from trimmed citations
                     if citations:
                         lines = ["KNOWLEDGE CONTEXT:"]
@@ -887,9 +800,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         else:
             session.metadata["used_knowledge"] = False
 
-        full_prompt = self._build_full_prompt(
-            knowledge_context, conversation_context, message
-        )
+        full_prompt = self._build_full_prompt(knowledge_context, conversation_context, message)
 
         # Issue #4265: Emit AFTER_PROMPT_BUILD hook after full prompt is built
         full_prompt = await _emit_after_prompt_build(
@@ -904,9 +815,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             {"session_id": session.session_id, "message": message},
         )
 
-        logger.info(
-            "[ChatWorkflowManager] Making Ollama request to: %s", ollama_endpoint
-        )
+        logger.info("[ChatWorkflowManager] Making Ollama request to: %s", ollama_endpoint)
         logger.info("[ChatWorkflowManager] Using model: %s", selected_model)
 
         return {
@@ -918,9 +827,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             "used_knowledge": bool(knowledge_context),
         }
 
-    def _build_interpretation_prompt(
-        self, command: str, stdout: str, stderr: str, return_code: int
-    ) -> str:
+    def _build_interpretation_prompt(self, command: str, stdout: str, stderr: str, return_code: int) -> str:
         """Build the interpretation prompt for LLM (Issue #332 - extracted helper)."""
         # Issue #352: Modified to not imply task completion - just explain this step's results
         return f"""The command `{command}` was executed.
@@ -954,9 +861,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         """Handle non-streaming interpretation request (Issue #332)."""
         # Issue #4259: Wire BEFORE_LLM_CALL hook
         llm_params = {"model": selected_model, "endpoint": ollama_endpoint}
-        should_proceed = await _emit_before_llm_call(
-            interpretation_prompt, llm_params, session_id
-        )
+        should_proceed = await _emit_before_llm_call(interpretation_prompt, llm_params, session_id)
         if not should_proceed:
             logger.info("[Issue #4259] LLM call cancelled by BEFORE_LLM_CALL hook")
             return
@@ -975,9 +880,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
 
         # Issue #4259: Wire AFTER_LLM_RESPONSE hook
         if interpretation:
-            interpretation = await _emit_after_llm_response(
-                interpretation, llm_params, session_id
-            )
+            interpretation = await _emit_after_llm_response(interpretation, llm_params, session_id)
 
         if interpretation:
             yield WorkflowMessage(
@@ -999,9 +902,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
 
         # Issue #4259: Wire BEFORE_LLM_CALL hook
         llm_params = {"model": selected_model, "endpoint": ollama_endpoint}
-        should_proceed = await _emit_before_llm_call(
-            interpretation_prompt, llm_params, session_id
-        )
+        should_proceed = await _emit_before_llm_call(interpretation_prompt, llm_params, session_id)
         if not should_proceed:
             logger.info("[Issue #4259] LLM call cancelled by BEFORE_LLM_CALL hook")
             return
@@ -1032,9 +933,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
                     chunk = data.get("response", "")
                     if chunk:
                         # Issue #4259: Wire DURING_LLM_STREAMING hook
-                        await _emit_during_llm_streaming(
-                            chunk, session_id, {"endpoint": ollama_endpoint}
-                        )
+                        await _emit_during_llm_streaming(chunk, session_id, {"endpoint": ollama_endpoint})
                         full_response += chunk
                         yield WorkflowMessage(
                             type="stream",
@@ -1050,9 +949,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         finally:
             # Issue #4259: Wire AFTER_LLM_RESPONSE hook after streaming completes
             if full_response:
-                full_response = await _emit_after_llm_response(
-                    full_response, llm_params, session_id
-                )
+                full_response = await _emit_after_llm_response(full_response, llm_params, session_id)
 
     async def _interpret_command_results(
         self,
@@ -1081,9 +978,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         Yields:
             WorkflowMessage chunks
         """
-        interpretation_prompt = self._build_interpretation_prompt(
-            command, stdout, stderr, return_code
-        )
+        interpretation_prompt = self._build_interpretation_prompt(command, stdout, stderr, return_code)
         llm_options = self._get_interpretation_llm_options()
 
         if not streaming:
@@ -1127,14 +1022,9 @@ Do NOT conclude the task or provide a final summary - just explain this specific
                 message_type="terminal_interpretation",
                 session_id=session_id,
             )
-            logger.info(
-                f"[interpret_terminal_command] Saved interpretation "
-                f"to chat session {session_id}"
-            )
+            logger.info(f"[interpret_terminal_command] Saved interpretation " f"to chat session {session_id}")
         except Exception as e:
-            logger.error(
-                f"[interpret_terminal_command] Failed to save interpretation: {e}"
-            )
+            logger.error(f"[interpret_terminal_command] Failed to save interpretation: {e}")
 
     async def _get_last_user_message(self, session_id: str) -> str | None:
         """
@@ -1172,15 +1062,10 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             return None
 
         except asyncio.TimeoutError:
-            logger.warning(
-                f"[interpret_terminal_command] Redis timeout getting session "
-                f"data for {session_id}"
-            )
+            logger.warning(f"[interpret_terminal_command] Redis timeout getting session " f"data for {session_id}")
             return None
 
-    async def _persist_to_conversation_history(
-        self, session_id: str, interpretation: str
-    ) -> None:
+    async def _persist_to_conversation_history(self, session_id: str, interpretation: str) -> None:
         """
         Persist terminal interpretation to conversation history for LLM context.
 
@@ -1223,8 +1108,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
 
         except Exception as persist_error:
             logger.error(
-                f"[interpret_terminal_command] Failed to persist to conversation "
-                f"history: {persist_error}",
+                f"[interpret_terminal_command] Failed to persist to conversation " f"history: {persist_error}",
                 exc_info=True,
             )
 
@@ -1245,10 +1129,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         else:
             ollama_endpoint = get_config().get_ollama_url_for_model(selected_model)
 
-        logger.info(
-            f"[interpret_terminal_command] Starting interpretation "
-            f"for command: {command[:50]}..."
-        )
+        logger.info(f"[interpret_terminal_command] Starting interpretation " f"for command: {command[:50]}...")
 
         interpretation = ""
         async for msg in self._interpret_command_results(
@@ -1264,10 +1145,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             if hasattr(msg, "content"):
                 interpretation += msg.content
 
-        logger.info(
-            f"[interpret_terminal_command] Interpretation complete, "
-            f"length: {len(interpretation)}"
-        )
+        logger.info(f"[interpret_terminal_command] Interpretation complete, " f"length: {len(interpretation)}")
         return interpretation
 
     async def interpret_terminal_command(
@@ -1282,9 +1160,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             Full interpretation text from LLM
         """
         try:
-            interpretation = await self._get_interpretation_from_llm(
-                command, stdout, stderr, return_code, session_id
-            )
+            interpretation = await self._get_interpretation_from_llm(command, stdout, stderr, return_code, session_id)
 
             if not session_id or not interpretation:
                 return interpretation

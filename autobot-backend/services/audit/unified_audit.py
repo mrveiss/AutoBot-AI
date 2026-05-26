@@ -354,9 +354,7 @@ class KnowledgeAuditLog(_KnowledgeAuditLog):
         )
         # Also write to unified stream
         await emit_knowledge(
-            action=(
-                event_type.value if hasattr(event_type, "value") else str(event_type)
-            ),
+            action=(event_type.value if hasattr(event_type, "value") else str(event_type)),
             actor_id=user_id,
             resource_type="fact" if fact_id else "knowledge",
             resource_id=fact_id or organization_id,

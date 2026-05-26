@@ -40,9 +40,7 @@ class MCPError(Exception):
 # ---------------------------------------------------------------------------
 
 
-def _make_tool(
-    name: str, description: str = "A tool", schema: dict | None = None
-) -> MCPToolDefinition:
+def _make_tool(name: str, description: str = "A tool", schema: dict | None = None) -> MCPToolDefinition:
     """Build a minimal MCPToolDefinition for tests."""
     if schema is None:
         schema = {
@@ -54,9 +52,7 @@ def _make_tool(
     return MCPToolDefinition.model_validate(raw)
 
 
-def _make_bridge(
-    server_uris: list[str] | None = None, is_admin: bool = False
-) -> RealtimeMCPBridge:
+def _make_bridge(server_uris: list[str] | None = None, is_admin: bool = False) -> RealtimeMCPBridge:
     """Return a bridge with optional server URIs and mocked bundle filtering."""
     bridge = RealtimeMCPBridge(is_admin=is_admin, server_uris=server_uris or [])
     return bridge
@@ -158,9 +154,7 @@ class TestTranslateInputSchema:
 
     def test_pydantic_mcp_input_schema(self):
         schema = MCPInputSchema(
-            properties={
-                "path": MCPPropertyDefinition(type="string", description="file path")
-            },
+            properties={"path": MCPPropertyDefinition(type="string", description="file path")},
             required=["path"],
         )
         result = _translate_input_schema(schema)
@@ -324,9 +318,7 @@ class TestCallToolSuccess:
         }
 
         mock_client = AsyncMock()
-        mock_client.call_tool = AsyncMock(
-            return_value={"content": [{"text": "hello result"}]}
-        )
+        mock_client.call_tool = AsyncMock(return_value={"content": [{"text": "hello result"}]})
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
@@ -334,9 +326,7 @@ class TestCallToolSuccess:
             "services.realtime_mcp_bridge._get_mcp_client_class",
             return_value=lambda uri: mock_client,
         ):
-            with patch(
-                "services.realtime_mcp_bridge._audit_log", new_callable=AsyncMock
-            ):
+            with patch("services.realtime_mcp_bridge._audit_log", new_callable=AsyncMock):
                 result = await bridge.call_tool("search", {"q": "test"})
 
         assert result.is_error is False
@@ -349,19 +339,13 @@ class TestCallToolSuccess:
 
         from services.realtime_mcp_bridge import _ToolEntry
 
-        bridge._registry = {
-            "kb.search": _ToolEntry(
-                server_id="autobot", server_uri=None, original_name="kb.search"
-            )
-        }
+        bridge._registry = {"kb.search": _ToolEntry(server_id="autobot", server_uri=None, original_name="kb.search")}
 
         with patch(
             "services.realtime_mcp_bridge.RealtimeMCPBridge._call_inprocess",
             new=AsyncMock(return_value="inprocess result"),
         ):
-            with patch(
-                "services.realtime_mcp_bridge._audit_log", new_callable=AsyncMock
-            ):
+            with patch("services.realtime_mcp_bridge._audit_log", new_callable=AsyncMock):
                 result = await bridge.call_tool("kb.search", {"query": "test"})
 
         assert result.is_error is False
@@ -390,9 +374,7 @@ class TestCallToolError:
         }
 
         mock_client = AsyncMock()
-        mock_client.call_tool = AsyncMock(
-            side_effect=MCPError(code=-32000, message="backend exploded")
-        )
+        mock_client.call_tool = AsyncMock(side_effect=MCPError(code=-32000, message="backend exploded"))
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
@@ -400,9 +382,7 @@ class TestCallToolError:
             "services.realtime_mcp_bridge._get_mcp_client_class",
             return_value=lambda uri: mock_client,
         ):
-            with patch(
-                "services.realtime_mcp_bridge._audit_log", new_callable=AsyncMock
-            ):
+            with patch("services.realtime_mcp_bridge._audit_log", new_callable=AsyncMock):
                 result = await bridge.call_tool("broken", {})
 
         assert result.is_error is True
@@ -435,9 +415,7 @@ class TestTransportDown:
         bridge = _make_bridge(server_uris=uris)
 
         dead_client = AsyncMock()
-        dead_client.__aenter__ = AsyncMock(
-            side_effect=ConnectionRefusedError("no connection")
-        )
+        dead_client.__aenter__ = AsyncMock(side_effect=ConnectionRefusedError("no connection"))
         dead_client.__aexit__ = AsyncMock(return_value=False)
 
         alive_client = AsyncMock()
@@ -468,9 +446,7 @@ class TestTransportDown:
         bridge = _make_bridge(server_uris=uris)
 
         dead_client = AsyncMock()
-        dead_client.__aenter__ = AsyncMock(
-            side_effect=ConnectionRefusedError("no connection")
-        )
+        dead_client.__aenter__ = AsyncMock(side_effect=ConnectionRefusedError("no connection"))
         dead_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch(
@@ -509,9 +485,7 @@ class TestTransportDown:
             "services.realtime_mcp_bridge._get_mcp_client_class",
             return_value=lambda uri: mock_client,
         ):
-            with patch(
-                "services.realtime_mcp_bridge._audit_log", new_callable=AsyncMock
-            ):
+            with patch("services.realtime_mcp_bridge._audit_log", new_callable=AsyncMock):
                 result = await bridge.call_tool("flaky", {})
 
         assert result.is_error is True

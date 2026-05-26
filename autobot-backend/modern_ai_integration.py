@@ -144,12 +144,8 @@ class BaseAIProvider(ABC):
         async with self._rate_lock:
             current_time = time.time()
             wait_time = 0.0
-            if (current_time - self.last_request_time) < (
-                60 / self.config.rate_limit_per_minute
-            ):
-                wait_time = (60 / self.config.rate_limit_per_minute) - (
-                    current_time - self.last_request_time
-                )
+            if (current_time - self.last_request_time) < (60 / self.config.rate_limit_per_minute):
+                wait_time = (60 / self.config.rate_limit_per_minute) - (current_time - self.last_request_time)
 
             self.last_request_time = time.time()
             self.request_count += 1
@@ -239,9 +235,7 @@ class OpenAIGPT4VProvider(BaseAIProvider):
             logger.error("OpenAI GPT-4 text generation failed: %s", e)
             return self._create_error_response(request, "AI provider request failed")
 
-    def _build_openai_image_content(
-        self, prompt: str, images: List[str]
-    ) -> List[Dict[str, Any]]:
+    def _build_openai_image_content(self, prompt: str, images: List[str]) -> List[Dict[str, Any]]:
         """Build content list with text and images for OpenAI API. Issue #620."""
         content = [{"type": "text", "text": prompt}]
         for image_b64 in images:
@@ -256,9 +250,7 @@ class OpenAIGPT4VProvider(BaseAIProvider):
             )
         return content
 
-    def _build_openai_vision_response(
-        self, request: AIRequest, response: Any, processing_time: float
-    ) -> AIResponse:
+    def _build_openai_vision_response(self, request: AIRequest, response: Any, processing_time: float) -> AIResponse:
         """Build AIResponse from OpenAI vision API response. Issue #620."""
         return AIResponse(
             request_id=request.request_id,
@@ -286,9 +278,7 @@ class OpenAIGPT4VProvider(BaseAIProvider):
         if not self.client:
             return self._create_error_response(request, "OpenAI client not available")
         if not request.images:
-            return self._create_error_response(
-                request, "No images provided for analysis"
-            )
+            return self._create_error_response(request, "No images provided for analysis")
 
         try:
             start_time = time.time()
@@ -306,9 +296,7 @@ class OpenAIGPT4VProvider(BaseAIProvider):
                 temperature=request.temperature or self.config.temperature,
             )
 
-            return self._build_openai_vision_response(
-                request, response, time.time() - start_time
-            )
+            return self._build_openai_vision_response(request, response, time.time() - start_time)
 
         except Exception as e:
             logger.error("OpenAI GPT-4V image analysis failed: %s", e)
@@ -346,9 +334,7 @@ class AnthropicClaudeProvider(BaseAIProvider):
         await self._check_rate_limit()
 
         if not self.client:
-            return self._create_error_response(
-                request, "Anthropic client not available"
-            )
+            return self._create_error_response(request, "Anthropic client not available")
 
         try:
             start_time = time.time()
@@ -386,9 +372,7 @@ class AnthropicClaudeProvider(BaseAIProvider):
             logger.error("Anthropic Claude text generation failed: %s", e)
             return self._create_error_response(request, "AI provider request failed")
 
-    def _build_anthropic_image_content(
-        self, prompt: str, images: List[str]
-    ) -> List[Dict[str, Any]]:
+    def _build_anthropic_image_content(self, prompt: str, images: List[str]) -> List[Dict[str, Any]]:
         """Build content list with text and images for Anthropic API. Issue #620."""
         content = [{"type": "text", "text": prompt}]
         for image_b64 in images:
@@ -404,9 +388,7 @@ class AnthropicClaudeProvider(BaseAIProvider):
             )
         return content
 
-    def _build_anthropic_vision_response(
-        self, request: AIRequest, response: Any, processing_time: float
-    ) -> AIResponse:
+    def _build_anthropic_vision_response(self, request: AIRequest, response: Any, processing_time: float) -> AIResponse:
         """Build AIResponse from Anthropic vision API response. Issue #620."""
         return AIResponse(
             request_id=request.request_id,
@@ -432,19 +414,13 @@ class AnthropicClaudeProvider(BaseAIProvider):
         await self._check_rate_limit()
 
         if not self.client:
-            return self._create_error_response(
-                request, "Anthropic client not available"
-            )
+            return self._create_error_response(request, "Anthropic client not available")
         if not request.images:
-            return self._create_error_response(
-                request, "No images provided for analysis"
-            )
+            return self._create_error_response(request, "No images provided for analysis")
 
         try:
             start_time = time.time()
-            content = self._build_anthropic_image_content(
-                request.prompt, request.images
-            )
+            content = self._build_anthropic_image_content(request.prompt, request.images)
             messages = [{"role": "user", "content": content}]
 
             response = await self.client.messages.create(
@@ -455,9 +431,7 @@ class AnthropicClaudeProvider(BaseAIProvider):
                 messages=messages,
             )
 
-            return self._build_anthropic_vision_response(
-                request, response, time.time() - start_time
-            )
+            return self._build_anthropic_vision_response(request, response, time.time() - start_time)
 
         except Exception as e:
             logger.error("Anthropic Claude image analysis failed: %s", e)
@@ -496,9 +470,7 @@ class GoogleGeminiProvider(BaseAIProvider):
         await self._check_rate_limit()
 
         if not self.client:
-            return self._create_error_response(
-                request, "Google AI client not available"
-            )
+            return self._create_error_response(request, "Google AI client not available")
 
         try:
             start_time = time.time()
@@ -509,9 +481,7 @@ class GoogleGeminiProvider(BaseAIProvider):
             # Prepare prompt
             full_prompt = request.prompt
             if request.system_message:
-                full_prompt = (
-                    f"System: {request.system_message}\n\nUser: {request.prompt}"
-                )
+                full_prompt = f"System: {request.system_message}\n\nUser: {request.prompt}"
 
             # Generate content
             response = model.generate_content(
@@ -561,9 +531,7 @@ class GoogleGeminiProvider(BaseAIProvider):
             content.append(image)
         return content
 
-    def _build_image_analysis_response(
-        self, request: AIRequest, response: Any, processing_time: float
-    ) -> AIResponse:
+    def _build_image_analysis_response(self, request: AIRequest, response: Any, processing_time: float) -> AIResponse:
         """
         Build AIResponse from Gemini Vision analysis result.
 
@@ -587,14 +555,10 @@ class GoogleGeminiProvider(BaseAIProvider):
         await self._check_rate_limit()
 
         if not self.client:
-            return self._create_error_response(
-                request, "Google AI client not available"
-            )
+            return self._create_error_response(request, "Google AI client not available")
 
         if not request.images:
-            return self._create_error_response(
-                request, "No images provided for analysis"
-            )
+            return self._create_error_response(request, "No images provided for analysis")
 
         try:
             start_time = time.time()
@@ -610,9 +574,7 @@ class GoogleGeminiProvider(BaseAIProvider):
             )
 
             processing_time = time.time() - start_time
-            return self._build_image_analysis_response(
-                request, response, processing_time
-            )
+            return self._build_image_analysis_response(request, response, processing_time)
 
         except Exception as e:
             logger.error("Google Gemini image analysis failed: %s", e)
@@ -686,9 +648,7 @@ class LocalModelProvider(BaseAIProvider):
             )
         except Exception as e:
             logger.error("LocalModelProvider.generate_text failed: %s", e)
-            return self._create_error_response(
-                request, f"Local model request failed: {e}"
-            )
+            return self._create_error_response(request, f"Local model request failed: {e}")
 
     async def analyze_image(self, request: AIRequest) -> AIResponse:
         """Analyze image — delegates text prompt to Ollama (vision models only)."""
@@ -696,8 +656,7 @@ class LocalModelProvider(BaseAIProvider):
         if "llava" not in model_name.lower() and "vision" not in model_name.lower():
             return self._create_error_response(
                 request,
-                f"Model '{model_name}' does not support image analysis. "
-                "Use a vision-capable model like 'llava'.",
+                f"Model '{model_name}' does not support image analysis. " "Use a vision-capable model like 'llava'.",
             )
         return await self.generate_text(request)
 
@@ -854,9 +813,7 @@ class ModernAIIntegration:
                 logger.info("Initialized provider: %s", provider_enum.value)
 
             except Exception as e:
-                logger.error(
-                    f"Failed to initialize provider {provider_enum.value}: {e}"
-                )
+                logger.error(f"Failed to initialize provider {provider_enum.value}: {e}")
 
     def _create_ai_request(
         self,
@@ -926,9 +883,7 @@ class ModernAIIntegration:
                     raise ValueError(f"Provider {provider.value} not available")
 
                 provider_instance = self.providers[provider]
-                request = self._create_ai_request(
-                    provider, prompt, images, system_message, task_type, **kwargs
-                )
+                request = self._create_ai_request(provider, prompt, images, system_message, task_type, **kwargs)
 
                 if images:
                     response = await provider_instance.analyze_image(request)
@@ -956,9 +911,7 @@ class ModernAIIntegration:
                 logger.error("AI processing failed: %s", e)
                 raise
 
-    def _select_vision_provider(
-        self, preferred_provider: AIProvider | None
-    ) -> AIProvider:
+    def _select_vision_provider(self, preferred_provider: AIProvider | None) -> AIProvider:
         """Select an available vision-capable AI provider (Issue #665: extracted helper)."""
         vision_providers = [
             AIProvider.OPENAI_GPT4V,
@@ -988,9 +941,7 @@ class ModernAIIntegration:
             "text_content": [],
             "suggested_actions": [],
             "automation_opportunities": [],
-            "context_analysis": (
-                content[:500] + "..." if len(content) > 500 else content
-            ),
+            "context_analysis": (content[:500] + "..." if len(content) > 500 else content),
         }
 
     def _build_screen_analysis_prompts(self) -> tuple[str, str]:
@@ -1192,12 +1143,8 @@ class ModernAIIntegration:
             return {"total_requests": 0}
 
         # Calculate statistics
-        avg_confidence = (
-            sum(r.confidence for r in self.request_history) / total_requests
-        )
-        avg_processing_time = (
-            sum(r.processing_time for r in self.request_history) / total_requests
-        )
+        avg_confidence = sum(r.confidence for r in self.request_history) / total_requests
+        avg_processing_time = sum(r.processing_time for r in self.request_history) / total_requests
 
         provider_usage = {}
         for response in self.request_history:
@@ -1208,12 +1155,7 @@ class ModernAIIntegration:
 
         # Issue #380: Use module-level frozenset for error filtering
         success_rate = (
-            sum(
-                1
-                for r in self.request_history
-                if r.finish_reason not in _ERROR_FINISH_REASONS
-            )
-            / total_requests
+            sum(1 for r in self.request_history if r.finish_reason not in _ERROR_FINISH_REASONS) / total_requests
         )
 
         return {

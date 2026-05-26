@@ -144,9 +144,7 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
 
         self._prom._voice_realtime.sessions_total.labels(model=model).inc()
         self._prom._voice_realtime.sessions_active.labels(model=model).inc()
-        logger.info(
-            "voice_realtime session_start session_id=%s model=%s", session_id, model
-        )
+        logger.info("voice_realtime session_start session_id=%s model=%s", session_id, model)
         return record
 
     async def session_end(
@@ -157,9 +155,7 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         """Finalise the session record and flush Prometheus counters."""
         record = await self._load_record(session_id)
         if record is None:
-            logger.warning(
-                "voice_realtime session_end: unknown session_id=%s", session_id
-            )
+            logger.warning("voice_realtime session_end: unknown session_id=%s", session_id)
             return None
 
         end_time = now_utc()
@@ -168,9 +164,7 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
 
         record.ended_at = end_time.isoformat()
         record.duration_s = duration_s
-        record.disconnect_reason = (
-            reason.value if isinstance(reason, DisconnectReason) else reason
-        )
+        record.disconnect_reason = reason.value if isinstance(reason, DisconnectReason) else reason
 
         # Accumulate audio cost if not already computed incrementally
         record.estimated_cost_usd = _estimate_cost(record)
@@ -180,9 +174,7 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         m = self._prom._voice_realtime
         m.sessions_active.labels(model=record.model).dec()
         m.session_seconds_total.labels(model=record.model).inc(duration_s)
-        m.session_duration.labels(
-            model=record.model, disconnect_reason=record.disconnect_reason
-        ).observe(duration_s)
+        m.session_duration.labels(model=record.model, disconnect_reason=record.disconnect_reason).observe(duration_s)
         m.estimated_cost_usd.labels(model=record.model).inc(record.estimated_cost_usd)
 
         if reason in (DisconnectReason.DURATION_CAP, DisconnectReason.COST_CAP):
@@ -214,9 +206,7 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
             record.audio_out_s += seconds
 
         await self._save_record(record)
-        self._prom._voice_realtime.audio_seconds_total.labels(direction=direction).inc(
-            seconds
-        )
+        self._prom._voice_realtime.audio_seconds_total.labels(direction=direction).inc(seconds)
 
     async def record_response_done(
         self,
@@ -363,10 +353,7 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
 
 def _estimate_cost(record: RealtimeSessionRecord) -> float:
     """Compute estimated USD cost from the session record."""
-    audio_cost = (
-        record.audio_in_s * _AUDIO_COST_PER_SEC["input"]
-        + record.audio_out_s * _AUDIO_COST_PER_SEC["output"]
-    )
+    audio_cost = record.audio_in_s * _AUDIO_COST_PER_SEC["input"] + record.audio_out_s * _AUDIO_COST_PER_SEC["output"]
     token_cost = (
         record.input_tokens * _TOKEN_COST_PER_1M["input"] / 1_000_000
         + record.output_tokens * _TOKEN_COST_PER_1M["output"] / 1_000_000
