@@ -13,8 +13,9 @@ import os
 import tempfile
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
+from pydantic import BaseModel
 
 from api.schemas_agent import VoiceCreateResponse
 from api.schemas_code import (
@@ -23,15 +24,81 @@ from api.schemas_code import (
     VoiceSpeakResponse,
     VoiceTranscribeResponse,
 )
-from auth_middleware import check_admin_permission
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from services.realtime_mcp_bridge import get_realtime_bridge
 from services.tts_client import get_tts_client
 
 router = APIRouter(
     dependencies=[Depends(check_admin_permission)],
 )
 logger = get_logger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Realtime MCP tool endpoints (Issue #7343)
+# ---------------------------------------------------------------------------
+
+
+class _RealtimeToolCallRequest(BaseModel):
+    name: str
+    arguments: Dict[str, Any] = {}
+
+
+@router.get("/realtime/tools")
+async def voice_realtime_list_tools(
+    current_user: dict = Depends(get_current_user),
+):
+    """Return MCP tools as OpenAI Realtime function-tool schemas.
+
+    The frontend calls this before ``session.update`` to populate the tools
+    array for the Realtime session. Tools are filtered by voice bundle and
+    the caller's RBAC role.
+    """
+    is_admin = current_user.get("role") == "admin"
+    bridge = await get_realtime_bridge(is_admin=is_admin)
+    tools = await bridge.list_realtime_tools()
+    return {
+        "tools": [
+            {
+                "type": t.type,
+                "name": t.name,
+                "description": t.description,
+                "parameters": t.parameters,
+            }
+            for t in tools
+        ]
+    }
+
+
+@router.post("/realtime/tools/call")
+async def voice_realtime_call_tool(
+    body: _RealtimeToolCallRequest,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """Invoke an MCP tool by name and return the result envelope.
+
+    Accepts ``{name, arguments}`` and proxies the call through MCPClient.
+    Errors surface as ``{is_error: true, content: "<message>"}`` so the
+    Realtime model can self-correct verbally without the session crashing.
+    """
+    is_admin = current_user.get("role") == "admin"
+    user_id = current_user.get("id") or current_user.get("sub")
+    session_id = request.headers.get("X-Session-Id")
+
+    bridge = await get_realtime_bridge(is_admin=is_admin)
+    # Ensure the routing registry is populated before calling
+    await bridge.list_realtime_tools()
+
+    result = await bridge.call_tool(
+        body.name,
+        body.arguments,
+        user_id=user_id,
+        session_id=session_id,
+    )
+    return {"is_error": result.is_error, "content": result.content}
 
 
 @router.post("/listen", response_model=VoiceListenResponse)
