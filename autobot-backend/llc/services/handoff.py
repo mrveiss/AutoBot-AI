@@ -194,6 +194,14 @@ class HandoffService(LLCServiceBase):
         item.checkout_locked_at = None
         item.version += 1
         await session.flush()
+
+        # Release per-task workspace on handoff approval (MVA-1152)
+        try:
+            from services.task_workspace import release_for_task
+            await release_for_task(work_item_id, session)
+        except Exception:
+            logger.warning("workspace release skipped for task=%s", work_item_id, exc_info=True)
+
         if self.activity_log:
             try:
                 from ..models.activity import ActorType
