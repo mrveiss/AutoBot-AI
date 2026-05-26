@@ -175,6 +175,10 @@ class LoadBalancingConfig(BaseModel):
         le=600,
         description="Cooldown period before retrying failed workers (10-600 seconds)",
     )
+    npu_pipeline_enabled: bool = Field(
+        default=False,
+        description="Enable multi-worker NPU pipeline dispatch for oversized models (MVA-1099)",
+    )
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -184,6 +188,7 @@ class LoadBalancingConfig(BaseModel):
                 "timeout_seconds": 10,
                 "retry_failed_workers": True,
                 "retry_cooldown_seconds": 60,
+                "npu_pipeline_enabled": False,
             }
         }
     )
