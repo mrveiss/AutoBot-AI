@@ -9,7 +9,7 @@ Data validation models for NPU worker management and load balancing.
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -317,6 +317,27 @@ class WorkerTestResult(BaseModel):
     status_code: int | None = Field(default=None, description="HTTP status code")
     error_message: str | None = Field(default=None, description="Error message if test failed")
     health_data: Dict | None = Field(default=None, description="Health check response data")
+    # GH#6738: auto-suggestion fields (additive — no breaking change)
+    recommended_profile: str | None = Field(
+        default=None,
+        description="Suggested worker profile: inference | embedding | mixed | relay",
+    )
+    recommended_models: List[Dict[str, str]] | None = Field(
+        default=None,
+        description="Ordered list of models that fit the worker's VRAM",
+    )
+    vram_gb: float | None = Field(
+        default=None,
+        description="Largest single-GPU VRAM detected on the worker (GB)",
+    )
+    compute_class: str | None = Field(
+        default=None,
+        description="Hardware class: consumer-gpu | datacenter-gpu | apple-silicon | cpu-only",
+    )
+    capabilities_summary: str | None = Field(
+        default=None,
+        description="Human-readable summary of worker hardware for the UI tooltip",
+    )
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -331,6 +352,13 @@ class WorkerTestResult(BaseModel):
                     "models_loaded": 2,
                     "available_memory_gb": 8.5,
                 },
+                "recommended_profile": "inference",
+                "recommended_models": [
+                    {"id": "gemma-3-4b", "reason": "fits in 8GB VRAM, good quality/size tradeoff"}
+                ],
+                "vram_gb": 8.0,
+                "compute_class": "consumer-gpu",
+                "capabilities_summary": "CUDA, 1× RTX 3060 8GB, 32GB RAM",
             }
         }
     )

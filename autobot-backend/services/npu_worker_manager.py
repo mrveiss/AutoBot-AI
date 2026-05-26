@@ -916,6 +916,8 @@ class NPUWorkerManager(AsyncInitializable):
 
     async def test_worker_connection(self, worker_config: NPUWorkerConfig) -> WorkerTestResult:
         """Test connection to a worker"""
+        from services.npu_profile_suggester import suggest_profile  # GH#6738: lazy import
+
         client = NPUWorkerClient(worker_config.url)
 
         try:
@@ -930,12 +932,20 @@ class NPUWorkerManager(AsyncInitializable):
             end_time = now_utc()
             response_time_ms = (end_time - start_time).total_seconds() * 1000
 
+            # GH#6738: derive profile + model suggestions from capabilities in health_data
+            suggestion = suggest_profile(health_data)
+
             return WorkerTestResult(
                 worker_id=worker_config.id,
                 success=health_data.get("status") == "healthy",
                 response_time_ms=response_time_ms,
                 status_code=200,
                 health_data=health_data,
+                recommended_profile=suggestion.recommended_profile,
+                recommended_models=suggestion.recommended_models,
+                vram_gb=suggestion.vram_gb,
+                compute_class=suggestion.compute_class,
+                capabilities_summary=suggestion.capabilities_summary,
             )
 
         except asyncio.TimeoutError:

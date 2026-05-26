@@ -214,6 +214,21 @@ for _npu_mod in [
 # so the npu_client / Redis chain it imports won't re-execute. (#MVA-1119)
 if "services" in sys.modules:
     sys.modules["services"].__path__ = [str(backend_root / "services")]  # type: ignore[attr-defined]
+# services.npu_profile_suggester (GH#6738) — pure-logic module with no heavy deps.
+# Load from the real file so test_npu_profile_suggester.py can import it directly
+# without being blocked by the services package stub above.
+if "services.npu_profile_suggester" not in sys.modules:
+    import importlib.util as _ilu_ps
+
+    _ps_spec = _ilu_ps.spec_from_file_location(
+        "services.npu_profile_suggester",
+        str(backend_root / "services" / "npu_profile_suggester.py"),
+    )
+    if _ps_spec and _ps_spec.loader:
+        _ps_mod = _ilu_ps.module_from_spec(_ps_spec)
+        _ps_mod.__package__ = "services"
+        sys.modules["services.npu_profile_suggester"] = _ps_mod
+        _ps_spec.loader.exec_module(_ps_mod)  # type: ignore[union-attr]
 # Provide the SUPPORTED_LANGUAGES symbol consumed by api.schemas_agent
 if not hasattr(sys.modules.get("services.personality_service", object()), "SUPPORTED_LANGUAGES"):
     sys.modules["services.personality_service"].SUPPORTED_LANGUAGES = {}  # type: ignore[attr-defined]
