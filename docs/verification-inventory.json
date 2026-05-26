@@ -1,0 +1,463 @@
+{
+  "meta": {
+    "generated_at": "2026-05-26",
+    "generated_by": "claims-audit skill",
+    "source_issue": "https://github.com/mrveiss/AutoBot-AI/issues/7359",
+    "skill_path": ".claude/skills/claims-audit/SKILL.md",
+    "schema_version": "1"
+  },
+  "summary": {
+    "total": 17,
+    "wired": 13,
+    "partial": 3,
+    "broken": 1
+  },
+  "claims": [
+    {
+      "id": "fastapi-rest-api",
+      "capability": "FastAPI REST API",
+      "claim": "Backend (FastAPI API server)",
+      "source": {
+        "file": "README.md",
+        "line": 188
+      },
+      "evidence": [
+        {
+          "kind": "implementation",
+          "file": "autobot-backend/main.py",
+          "line": 1
+        },
+        {
+          "kind": "implementation",
+          "file": "autobot-backend/app_factory.py",
+          "line": 1
+        },
+        {
+          "kind": "test",
+          "file": "autobot-backend/tests/",
+          "line": null
+        }
+      ],
+      "status": "wired",
+      "notes": "100+ routers registered via core_routers.py and feature_routers.py; smoke-tested by CI"
+    },
+    {
+      "id": "multi-turn-chat-streaming",
+      "capability": "Multi-turn chat / WebSocket streaming",
+      "claim": "Multi-turn conversations with function calling, streaming responses",
+      "source": {
+        "file": "README.md",
+        "line": 85
+      },
+      "evidence": [
+        {
+          "kind": "endpoint",
+          "file": "autobot-backend/api/websockets.py",
+          "line": 1,
+          "url": "ws://<host>/ws"
+        }
+      ],
+      "status": "wired",
+      "notes": "30+ event types; authenticated; real-time broadcast via event bus"
+    },
+    {
+      "id": "rag-knowledge-retrieval",
+      "capability": "RAG-powered knowledge retrieval",
+      "claim": "RAG-powered retrieval from documents, code, infrastructure docs",
+      "source": {
+        "file": "README.md",
+        "line": 87
+      },
+      "evidence": [
+        {
+          "kind": "endpoint",
+          "file": "autobot-backend/api/knowledge_rag.py",
+          "line": 122,
+          "url": "POST /api/knowledge_base/rag/advanced_search"
+        },
+        {
+          "kind": "implementation",
+          "file": "autobot-backend/advanced_rag_optimizer.py",
+          "line": 1
+        },
+        {
+          "kind": "test",
+          "file": "autobot-backend/advanced_rag_optimizer_test.py",
+          "line": null
+        },
+        {
+          "kind": "test",
+          "file": "autobot-backend/services/rag_integration_test.py",
+          "line": null
+        }
+      ],
+      "status": "wired",
+      "notes": "Advanced search, reranking, graph-RAG, benchmarks all implemented"
+    },
+    {
+      "id": "chromadb-vector-store",
+      "capability": "ChromaDB knowledge base / vector store",
+      "claim": "ChromaDB (Vectors)",
+      "source": {
+        "file": "README.md",
+        "line": 144
+      },
+      "evidence": [
+        {
+          "kind": "service",
+          "file": "docker-compose.yml",
+          "line": 109,
+          "url": "http://localhost:8100"
+        },
+        {
+          "kind": "implementation",
+          "file": "autobot-backend/knowledge/backends/chromadb_adapter.py",
+          "line": null
+        },
+        {
+          "kind": "test",
+          "file": "autobot-backend/api/codebase_analytics/chromadb_storage_test.py",
+          "line": null
+        }
+      ],
+      "status": "wired",
+      "notes": "chromadb/chroma:0.5.23 service; persistent volume; sync and async adapters"
+    },
+    {
+      "id": "a2a-federation",
+      "capability": "A2A (Agent-to-Agent) federation",
+      "claim": "Multi-agent chat workflows with A2A task routing",
+      "source": {
+        "file": "docs/superpowers/plans/2026-04-16-gui-audit-quick-fixes.md",
+        "line": 226
+      },
+      "evidence": [
+        {
+          "kind": "endpoint",
+          "file": "autobot-backend/api/a2a.py",
+          "line": 110,
+          "url": "GET /api/a2a/agent-card"
+        },
+        {
+          "kind": "endpoint",
+          "file": "autobot-backend/api/a2a.py",
+          "line": 173,
+          "url": "POST /api/a2a/tasks"
+        },
+        {
+          "kind": "router",
+          "file": "autobot-backend/initialization/router_registry/feature_routers.py",
+          "line": 517
+        },
+        {
+          "kind": "test",
+          "file": "autobot-backend/a2a/a2a_test.py",
+          "line": null
+        },
+        {
+          "kind": "test",
+          "file": "autobot-backend/api/test_a2a_stream.py",
+          "line": null
+        }
+      ],
+      "status": "wired",
+      "notes": "10+ endpoints: agent-card, tasks CRUD, SSE stream, trace, capability verify, stats; HMAC-signed identity"
+    },
+    {
+      "id": "npu-acceleration",
+      "capability": "NPU acceleration",
+      "claim": "NPU acceleration worker",
+      "source": {
+        "file": "docs/developer/AUTOBOT_REFERENCE.md",
+        "line": 58
+      },
+      "evidence": [
+        {
+          "kind": "endpoint",
+          "file": "autobot-backend/api/npu_workers.py",
+          "line": 78,
+          "url": "GET /api/npu/workers"
+        },
+        {
+          "kind": "implementation",
+          "file": "autobot-backend/npu_semantic_search.py",
+          "line": 1
+        },
+        {
+          "kind": "implementation",
+          "file": "autobot-backend/ai_hardware_accelerator.py",
+          "line": 1
+        },
+        {
+          "kind": "test",
+          "file": "autobot-backend/npu_integration_e2e_test.py",
+          "line": null
+        }
+      ],
+      "status": "wired",
+      "notes": "Full worker lifecycle API: pair, test, metrics, repair, unrepair; pool stats; load-balancing config"
+    },
+    {
+      "id": "plugin-marketplace",
+      "capability": "Plugin marketplace",
+      "claim": "Plugin marketplace — SDK for building and publishing AutoBot plugins",
+      "source": {
+        "file": "docs/developer/_index.md",
+        "line": 121
+      },
+      "evidence": [
+        {
+          "kind": "endpoint",
+          "file": "autobot-backend/api/marketplace.py",
+          "line": 311,
+          "url": "GET /plugins/catalog"
+        },
+        {
+          "kind": "endpoint",
+          "file": "autobot-backend/plugin_manager.py",
+          "line": 143,
+          "url": "GET /plugins"
+        },
+        {
+          "kind": "test",
+          "file": "autobot-backend/tests/api/test_plugin_manager.py",
+          "line": null
+        }
+      ],
+      "status": "wired",
+      "notes": "Catalog browse, git/zip install, enable/disable, config patch; SDK in plugin_sdk/"
+    },
+    {
+      "id": "vision-screenshot-analysis",
+      "capability": "Vision / screenshot analysis",
+      "claim": "Vision (Image/screenshot analysis for infrastructure troubleshooting)",
+      "source": {
+        "file": "README.md",
+        "line": 89
+      },
+      "evidence": [
+        {
+          "kind": "endpoint",
+          "file": "autobot-backend/api/vision.py",
+          "line": 61,
+          "url": "POST /vision/analyze"
+        },
+        {
+          "kind": "router",
+          "file": "autobot-backend/initialization/router_registry/feature_routers.py",
+          "line": 204
+        },
+        {
+          "kind": "test",
+          "file": "autobot-backend/computer_vision/computer_vision_refactoring_test.py",
+          "line": null
+        }
+      ],
+      "status": "wired",
+      "notes": "Analyze, OCR, element detection, automation opportunities, layout analysis"
+    },
+    {
+      "id": "codebase-analytics",
+      "capability": "Codebase analytics",
+      "claim": "Codebase Analytics — code structure analysis, risk detection, dependency insights",
+      "source": {
+        "file": "README.md",
+        "line": 88
+      },
+      "evidence": [
+        {
+          "kind": "implementation",
+          "file": "autobot-backend/api/codebase_analytics/",
+          "line": null
+        },
+        {
+          "kind": "test",
+          "file": "autobot-backend/api/codebase_analytics/codebase_stats_endpoint_test.py",
+          "line": null
+        }
+      ],
+      "status": "wired",
+      "notes": "Analyzers, cross-file analysis, ChromaDB storage, NPU embeddings, call-graph resolution"
+    },
+    {
+      "id": "workflow-builder",
+      "capability": "Workflow builder",
+      "claim": "Workflow Builder — visual and code-based workflow creation for infrastructure tasks",
+      "source": {
+        "file": "README.md",
+        "line": 87
+      },
+      "evidence": [
+        {
+          "kind": "endpoint",
+          "file": "autobot-backend/api/workflow.py",
+          "line": 386,
+          "url": "GET /workflows"
+        },
+        {
+          "kind": "endpoint",
+          "file": "autobot-backend/api/workflow.py",
+          "line": 569,
+          "url": "POST /execute"
+        },
+        {
+          "kind": "test",
+          "file": "autobot-backend/api/live_workflow_e2e_test.py",
+          "line": null
+        }
+      ],
+      "status": "wired",
+      "notes": "List, status, approve, reject, execute, export, delete; live e2e test; automation support"
+    },
+    {
+      "id": "redis-cache-queue",
+      "capability": "Redis cache / message queue",
+      "claim": "Redis (Cache/Queue)",
+      "source": {
+        "file": "README.md",
+        "line": 134
+      },
+      "evidence": [
+        {
+          "kind": "service",
+          "file": "docker-compose.yml",
+          "line": 87,
+          "url": "redis://localhost:6379"
+        },
+        {
+          "kind": "implementation",
+          "file": "autobot-backend/celery_app.py",
+          "line": 1
+        }
+      ],
+      "status": "wired",
+      "notes": "Dedicated autobot-redis container; used by Celery broker, cross-worker rate limiter, session cache"
+    },
+    {
+      "id": "postgresql-database",
+      "capability": "PostgreSQL relational database",
+      "claim": "PostgreSQL (Data)",
+      "source": {
+        "file": "README.md",
+        "line": 136
+      },
+      "evidence": [
+        {
+          "kind": "service",
+          "file": "docker-compose.yml",
+          "line": 52,
+          "url": "postgresql://localhost:5432"
+        }
+      ],
+      "status": "wired",
+      "notes": "Dedicated autobot-db container; persistent volume; healthcheck"
+    },
+    {
+      "id": "docker-compose-deployment",
+      "capability": "Docker Compose deployment",
+      "claim": "docker compose up -d",
+      "source": {
+        "file": "README.md",
+        "line": 45
+      },
+      "evidence": [
+        {
+          "kind": "implementation",
+          "file": "docker-compose.yml",
+          "line": 1
+        },
+        {
+          "kind": "test",
+          "file": ".github/workflows/docker-smoke-test.yml",
+          "line": 1
+        }
+      ],
+      "status": "wired",
+      "notes": "CI smoke-tested on every PR to Dev_new_gui and weekly Sunday run"
+    },
+    {
+      "id": "celery-beat-scheduler",
+      "capability": "Celery Beat scheduler",
+      "claim": "Celery Beat ([#6555]) — static cron schedules for knowledge cleanup, sprint auto-close",
+      "source": {
+        "file": "docs/architecture/async-work.md",
+        "line": 163
+      },
+      "evidence": [
+        {
+          "kind": "implementation",
+          "file": "autobot-backend/celery_app.py",
+          "line": 176
+        },
+        {
+          "kind": "service",
+          "file": "autobot-slm-backend/ansible/roles/backend/templates/autobot-celery-beat.service.j2",
+          "line": 1
+        }
+      ],
+      "status": "broken",
+      "notes": "beat_schedule defined in celery_app.py:176 with 4 entries but docker-compose.yml has NO celery beat service — only celery worker runs. Scheduled tasks (knowledge-cleanup-orphan-documents, knowledge-cleanup-generated-files, llc-sprint-autoclose-daily) never fire for Docker Compose deployments. Bare-metal Ansible systemd service exists but is not part of default Docker path.",
+      "discovery_issue": "https://github.com/mrveiss/AutoBot-AI/issues/8666"
+    },
+    {
+      "id": "ansible-fleet-management",
+      "capability": "Ansible fleet management",
+      "claim": "Self-Hosted Fleet Management — Orchestrate multi-server deployments, updates, and monitoring with Ansible",
+      "source": {
+        "file": "README.md",
+        "line": 63
+      },
+      "evidence": [
+        {
+          "kind": "implementation",
+          "file": "autobot-slm-backend/services/playbook_executor.py",
+          "line": null
+        },
+        {
+          "kind": "implementation",
+          "file": "autobot-slm-backend/ansible/",
+          "line": null
+        }
+      ],
+      "status": "partial",
+      "notes": "Fully implemented in autobot-slm-backend, not in autobot-backend REST API directly. No /api/fleet/* endpoint in core backend; backend delegates to SLM service."
+    },
+    {
+      "id": "4-uvicorn-workers",
+      "capability": "4 uvicorn workers (production)",
+      "claim": "workers: 4",
+      "source": {
+        "file": "docs/deployment/comprehensive_deployment_guide.md",
+        "line": 316
+      },
+      "evidence": [
+        {
+          "kind": "implementation",
+          "file": "autobot-backend/main.py",
+          "line": 100
+        }
+      ],
+      "status": "partial",
+      "notes": "main.py:100 sets workers=1 if reload else None (uvicorn defaults to 1 when None). docker-compose.yml does not set --workers flag. 4-worker prescription is bare-metal only; Docker users get 1 worker silently."
+    },
+    {
+      "id": "prometheus-metrics",
+      "capability": "Prometheus metrics collection",
+      "claim": "Prometheus (Metrics collection)",
+      "source": {
+        "file": "README.md",
+        "line": 190
+      },
+      "evidence": [
+        {
+          "kind": "service",
+          "file": "docker-compose.yml",
+          "line": 275,
+          "url": "http://localhost:9090"
+        }
+      ],
+      "status": "partial",
+      "notes": "Service defined in docker-compose.yml but under optional profile (not enabled by default). README.md presents it as a core service in the services table."
+    }
+  ]
+}
