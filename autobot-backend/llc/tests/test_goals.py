@@ -331,6 +331,57 @@ async def test_get_subtree_with_children(svc: GoalService) -> None:
     assert len(subtree) == 3
 
 
+# ----------------------------------------------- get_goal_ancestry_for_work_item (GH#6469)
+
+
+@pytest.mark.asyncio
+async def test_get_goal_ancestry_for_work_item_not_found(svc: GoalService) -> None:
+    session = AsyncMock()
+    with patch.object(svc, "get", new=AsyncMock(return_value=None)):
+        result = await svc.get_goal_ancestry_for_work_item(session, uuid.uuid4())
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_get_goal_ancestry_for_work_item_root_goal(svc: GoalService) -> None:
+    vision = _make_goal(title="Company Vision", level=GoalLevel.VISION.value)
+    session = AsyncMock()
+
+    async def _get(s: object, gid: uuid.UUID) -> LLCGoal | None:
+        return vision if gid == vision.id else None
+
+    with patch.object(svc, "get", new=_get):
+        result = await svc.get_goal_ancestry_for_work_item(session, vision.id)
+
+    assert len(result) == 1
+    assert result[0]["title"] == "Company Vision"
+    assert result[0]["level"] == GoalLevel.VISION.value
+    assert result[0]["id"] == str(vision.id)
+
+
+@pytest.mark.asyncio
+async def test_get_goal_ancestry_for_work_item_chain(svc: GoalService) -> None:
+    vision = _make_goal(title="Vision", level=GoalLevel.VISION.value)
+    mission = _make_goal(title="Mission", level=GoalLevel.MISSION.value)
+    objective = _make_goal(title="Objective", level=GoalLevel.OBJECTIVE.value)
+    mission.parent_goal_id = vision.id
+    objective.parent_goal_id = mission.id
+
+    lookup = {vision.id: vision, mission.id: mission, objective.id: objective}
+
+    async def _get(s: object, gid: uuid.UUID) -> LLCGoal | None:
+        return lookup.get(gid)
+
+    session = AsyncMock()
+    with patch.object(svc, "get", new=_get):
+        result = await svc.get_goal_ancestry_for_work_item(session, objective.id)
+
+    assert len(result) == 3
+    assert result[0]["title"] == "Vision"
+    assert result[1]["title"] == "Mission"
+    assert result[2]["title"] == "Objective"
+
+
 # ------------------------------------------------------- KB indexing
 
 

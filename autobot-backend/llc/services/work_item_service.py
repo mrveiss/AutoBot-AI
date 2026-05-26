@@ -165,6 +165,13 @@ class WorkItemService(LLCServiceBase):
         created_by_user_id: Optional[str] = None,
         labels: Optional[List[str]] = None,
     ) -> LLCWorkItem:
+        # GH#6469: inherit goal_id from parent when not explicitly provided
+        resolved_goal_id: Optional[uuid.UUID] = uuid.UUID(goal_id) if goal_id else None
+        if resolved_goal_id is None and parent_id is not None:
+            parent = await self.get(session, parent_id)
+            if parent is not None and parent.goal_id is not None:
+                resolved_goal_id = parent.goal_id
+
         identifier = await self._next_identifier(session, company_id)
         item = LLCWorkItem(
             id=uuid.uuid4(),
@@ -179,7 +186,7 @@ class WorkItemService(LLCServiceBase):
             parent_id=uuid.UUID(parent_id) if parent_id else None,
             project_id=uuid.UUID(project_id) if project_id else None,
             sprint_id=uuid.UUID(sprint_id) if sprint_id else None,
-            goal_id=uuid.UUID(goal_id) if goal_id else None,
+            goal_id=resolved_goal_id,
             assignee_agent_id=uuid.UUID(assignee_agent_id) if assignee_agent_id else None,
             assignee_user_id=uuid.UUID(assignee_user_id) if assignee_user_id else None,
             created_by_agent_id=uuid.UUID(created_by_agent_id) if created_by_agent_id else None,

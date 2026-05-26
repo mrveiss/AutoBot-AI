@@ -218,6 +218,32 @@ class GoalService(LLCServiceBase):
             current_id = goal.parent_goal_id
         return list(reversed(ancestors))
 
+    async def get_goal_ancestry_for_work_item(
+        self,
+        session: AsyncSession,
+        goal_id: uuid.UUID,
+    ) -> List[dict]:
+        """Return root-first goal ancestry chain for a goal_id (GH#6469).
+
+        Includes the goal itself as the last element.  Returns plain dicts
+        (``id``, ``title``, ``level``, ``status``) so callers avoid importing
+        LLCGoal.  Returns ``[]`` when the goal is not found.
+        """
+        goal = await self.get(session, goal_id)
+        if goal is None:
+            return []
+        ancestors = await self.get_ancestors(session, goal_id)
+        chain = ancestors + [goal]
+        return [
+            {
+                "id": str(g.id),
+                "title": g.title,
+                "level": g.level,
+                "status": g.status,
+            }
+            for g in chain
+        ]
+
     async def get_subtree(self, session: AsyncSession, goal_id: uuid.UUID) -> List[LLCGoal]:
         """Return all descendants of goal_id (BFS, inclusive of goal_id)."""
         root = await self.get(session, goal_id)
