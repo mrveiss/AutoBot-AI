@@ -34,8 +34,17 @@ import aiofiles
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+from services.mcp_bridge_manifest import MCPBridgeManifest
 from type_defs.common import Metadata
 from utils.io_executor import run_in_file_executor
+
+MANIFEST = MCPBridgeManifest(
+    name="filesystem_mcp",
+    version="1.0.0",
+    description="Filesystem Operations - Secure File & Directory Access",
+    features=["read_files", "write_files", "directory_management", "search", "metadata"],
+    endpoint="/api/filesystem/mcp/tools",
+)
 
 # Issue #514: Per-file locking to prevent concurrent write corruption
 _file_locks: Dict[str, asyncio.Lock] = {}

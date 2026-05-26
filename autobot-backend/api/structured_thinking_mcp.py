@@ -25,6 +25,7 @@ import asyncio
 from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
+from services.mcp_bridge_manifest import MCPBridgeManifest
 
 from api.schemas_common import DataResponse
 from api.schemas_system import (
@@ -45,6 +46,14 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from type_defs.common import Metadata
+
+MANIFEST = MCPBridgeManifest(
+    name="structured_thinking_mcp",
+    version="1.0.0",
+    description="Structured Thinking - 5-Stage Cognitive Framework",
+    features=["process_thought", "generate_summary", "clear_history", "stage_tracking"],
+    endpoint="/api/structured_thinking/mcp/tools",
+)
 
 logger = get_logger(__name__)
 router = APIRouter(

@@ -47,10 +47,19 @@ from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from constants.network_constants import NetworkConstants
+from services.mcp_bridge_manifest import MCPBridgeManifest
 from type_defs.common import JSONObject, Metadata
 from utils.template_loader import load_mcp_tools, mcp_tools_exist
 
 from .schemas_code import HTTPClientMCPStatusResponse, HTTPRequestResultResponse
+
+MANIFEST = MCPBridgeManifest(
+    name="http_client_mcp",
+    version="1.0.0",
+    description="HTTP Client - Secure REST API Interactions",
+    features=["get", "post", "put", "patch", "delete", "head", "rate_limiting"],
+    endpoint="/api/http_client/mcp/tools",
+)
 
 logger = get_logger(__name__)
 router = APIRouter(

@@ -22,7 +22,23 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import get_config
+from services.mcp_bridge_manifest import MCPBridgeManifest
 from type_defs.common import Metadata
+
+MANIFEST = MCPBridgeManifest(
+    name="prometheus_mcp",
+    version="1.0.0",
+    description="Prometheus Metrics - System Monitoring and Alerting",
+    features=[
+        "query_metric",
+        "query_range",
+        "get_system_metrics",
+        "get_service_health",
+        "get_vm_metrics",
+        "list_available_metrics",
+    ],
+    endpoint="/api/prometheus/mcp/tools",
+)
 
 logger = get_logger(__name__)
 router = APIRouter(

@@ -36,6 +36,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
+from services.mcp_bridge_manifest import MCPBridgeManifest
 from type_defs.common import Metadata
 
 from .schemas_code import (
@@ -51,6 +52,14 @@ from .schemas_code import (
     SQLExecuteRequest,
     SQLQueryRequest,
     TableListRequest,
+)
+
+MANIFEST = MCPBridgeManifest(
+    name="database_mcp",
+    version="1.0.0",
+    description="Database Operations - SQLite Query and Management",
+    features=["query", "execute", "schema", "tables", "statistics", "sql_injection_prevention"],
+    endpoint="/api/database/mcp/tools",
 )
 
 logger = get_logger(__name__)

@@ -38,6 +38,15 @@ from knowledge.schemas.mcp import (
     McpToolsResponse,
     McpVectorSimilarityResponse,
 )
+from services.mcp_bridge_manifest import MCPBridgeManifest
+
+MANIFEST = MCPBridgeManifest(
+    name="knowledge_mcp",
+    version="1.0.0",
+    description="Knowledge Base Operations (LlamaIndex + Redis Vectors)",
+    features=["search", "add_documents", "vector_similarity", "statistics"],
+    endpoint="/api/knowledge/mcp/tools",
+)
 from knowledge_base import KnowledgeBase
 from type_defs.common import Metadata
 from utils.service_registry import get_service_url

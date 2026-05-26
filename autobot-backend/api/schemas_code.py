@@ -504,6 +504,32 @@ class MCPRegistryInfoResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# mcp_registry.py bridge plugin discovery schemas  (Issue #4462)
+# ---------------------------------------------------------------------------
+
+
+class MCPBridgeManifestSchema(BaseModel):
+    """Pydantic schema for MCPBridgeManifest."""
+
+    name: str
+    version: str
+    description: str
+    features: List[str] = []
+    endpoint: str | None = None
+    resource_limits: Dict[str, Any] | None = None
+
+
+class MCPBridgeToggleResponse(BaseModel):
+    """Response for enable/disable/reload bridge endpoints."""
+
+    status: str
+    bridge: str
+    enabled: bool
+    message: str
+    timestamp: str
+
+
+# ---------------------------------------------------------------------------
 # feature_flags.py schemas  (Issue #5317)
 # ---------------------------------------------------------------------------
 
