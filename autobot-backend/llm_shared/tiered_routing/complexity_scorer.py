@@ -230,6 +230,19 @@ class TaskComplexityScorer:
         self._compiled_simple_question_patterns = [re.compile(p, re.IGNORECASE) for p in self.SIMPLE_QUESTION_PATTERNS]
         self._compiled_output_length_patterns = [re.compile(p, re.IGNORECASE) for p in self.OUTPUT_LENGTH_PATTERNS]
 
+    def estimate_input_tokens(self, messages: List[Dict]) -> int:
+        """Estimate the total input token count across all messages.
+
+        Uses self._tokenizer if provided; falls back to char/4 estimate.
+        Counts content from every role (system, user, assistant).
+        """
+        all_content = " ".join(
+            msg.get("content", "") for msg in messages if msg.get("content")
+        )
+        if self._tokenizer is not None:
+            return self._tokenizer(all_content)
+        return len(all_content) // 4
+
     def score(self, messages: List[Dict], expected_output_tokens: Optional[int] = None) -> ComplexityResult:
         """
         Score the complexity of a request.
@@ -241,8 +254,11 @@ class TaskComplexityScorer:
                 from this value instead of content heuristics.
 
         Returns:
-            ComplexityResult with score, factors, tier, and reasoning
+            ComplexityResult with score, factors, tier, reasoning, and input_tokens
         """
+        # Estimate total input tokens across all messages for long_context routing
+        input_tokens = self.estimate_input_tokens(messages)
+
         # Extract user messages for analysis
         user_content = self._extract_user_content(messages)
 
@@ -252,6 +268,7 @@ class TaskComplexityScorer:
                 factors={},
                 tier="simple",
                 reasoning="No user content to analyze",
+                input_tokens=input_tokens,
             )
 
         # Extract max_tokens hint from any message that carries it
@@ -274,7 +291,7 @@ class TaskComplexityScorer:
 
         # Calculate weighted score and build result
         normalized_score = self._calculate_weighted_score(factors)
-        return self._build_complexity_result(normalized_score, factors)
+        return self._build_complexity_result(normalized_score, factors, input_tokens)
 
     def _extract_user_content(self, messages: List[Dict]) -> str:
         """Extract and combine user message content."""
@@ -429,6 +446,7 @@ class TaskComplexityScorer:
         self,
         normalized_score: float,
         factors: Dict[str, float],
+        input_tokens: int = 0,
     ) -> ComplexityResult:
         """
         Build the final ComplexityResult with tier and reasoning.
@@ -438,6 +456,7 @@ class TaskComplexityScorer:
         Args:
             normalized_score: The normalized 0-10 complexity score
             factors: Dictionary of factor scores
+            input_tokens: Estimated total input token count
 
         Returns:
             ComplexityResult with all fields populated
@@ -458,6 +477,7 @@ class TaskComplexityScorer:
             factors={k: round(v, 2) for k, v in factors.items()},
             tier=tier,
             reasoning=reasoning,
+            input_tokens=input_tokens,
         )
 
     def _generate_reasoning(self, factors: Dict[str, float], score: float, tier: str) -> str:

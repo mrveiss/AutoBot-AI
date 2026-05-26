@@ -20,6 +20,7 @@ class TierModels:
 
     simple: str = CLASSIFICATION_MODEL
     complex: str = DEFAULT_LLM_MODEL
+    long_context: str = DEFAULT_LLM_MODEL
 
 
 @dataclass
@@ -47,6 +48,7 @@ class TierConfig:
 
     enabled: bool = True
     complexity_threshold: float = 3.0
+    long_context_threshold: int = 16000
     models: TierModels = field(default_factory=TierModels)
     fallback_to_complex: bool = True
     logging: TierLogging = field(default_factory=TierLogging)
@@ -70,9 +72,11 @@ class TierConfig:
         return cls(
             enabled=tier_config.get("enabled", True),
             complexity_threshold=float(tier_config.get("complexity_threshold", 3.0)),
+            long_context_threshold=int(tier_config.get("long_context_threshold", 16000)),
             models=TierModels(
                 simple=models_config.get("simple", CLASSIFICATION_MODEL),
                 complex=models_config.get("complex", DEFAULT_LLM_MODEL),
+                long_context=models_config.get("long_context", DEFAULT_LLM_MODEL),
             ),
             fallback_to_complex=tier_config.get("fallback_to_complex", True),
             logging=TierLogging(
@@ -90,14 +94,16 @@ class ComplexityResult:
     Attributes:
         score: Normalized complexity score (0-10)
         factors: Individual factor scores for debugging
-        tier: Selected tier ("simple" or "complex")
+        tier: Selected tier ("simple", "complex", or "long_context")
         reasoning: Human-readable explanation of the score
+        input_tokens: Estimated input token count (used for long_context routing)
     """
 
     score: float
     factors: Dict[str, float]
     tier: str
     reasoning: str
+    input_tokens: int = 0
 
     @property
     def is_simple(self) -> bool:
@@ -108,6 +114,11 @@ class ComplexityResult:
     def is_complex(self) -> bool:
         """Check if this result indicates complex tier."""
         return self.tier == "complex"
+
+    @property
+    def is_long_context(self) -> bool:
+        """Check if this result indicates long_context tier."""
+        return self.tier == "long_context"
 
 
 @dataclass
@@ -120,6 +131,7 @@ class TierMetrics:
 
     simple_tier_requests: int = 0
     complex_tier_requests: int = 0
+    long_context_tier_requests: int = 0
     total_requests: int = 0
     avg_simple_score: float = 0.0
     avg_complex_score: float = 0.0
@@ -136,6 +148,8 @@ class TierMetrics:
             self.score_sum_simple += result.score
             if self.simple_tier_requests > 0:
                 self.avg_simple_score = self.score_sum_simple / self.simple_tier_requests
+        elif result.is_long_context:
+            self.long_context_tier_requests += 1
         else:
             self.complex_tier_requests += 1
             self.score_sum_complex += result.score
@@ -151,6 +165,7 @@ class TierMetrics:
         return {
             "simple_tier_requests": self.simple_tier_requests,
             "complex_tier_requests": self.complex_tier_requests,
+            "long_context_tier_requests": self.long_context_tier_requests,
             "total_requests": self.total_requests,
             "avg_simple_score": round(self.avg_simple_score, 2),
             "avg_complex_score": round(self.avg_complex_score, 2),
