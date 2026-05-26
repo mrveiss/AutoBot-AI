@@ -41,6 +41,7 @@ from typing import Any, Dict, List
 
 import aiohttp
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_7_DAYS

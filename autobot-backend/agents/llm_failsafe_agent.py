@@ -9,6 +9,8 @@ of LLM, even when primary systems fail. Implements multiple fallback strategies
 and degraded operation modes.
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import time

@@ -12,7 +12,7 @@ Part of KB-ASYNC-014: Timeout Configuration Centralization
 
 from typing import Dict
 
-from autobot_shared.ssot_config import config
+from autobot_shared.ssot_config import config as _ssot_config
 from config.manager import get_config_manager
 
 config = get_config_manager()
@@ -23,7 +23,7 @@ class KnowledgeBaseTimeouts:
 
     def __init__(self):
         """Initialize timeout accessor with current environment"""
-        self.environment = config.environment
+        self.environment = _ssot_config.environment
         self._config = config
 
     # Redis Connection Timeouts

@@ -25,6 +25,7 @@ Endpoints:
 
 from typing import List
 
+from autobot_shared.logging_manager import get_logger
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 

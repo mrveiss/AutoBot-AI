@@ -8,6 +8,8 @@ Advanced code analysis using NPU worker and Redis for development acceleration.
 Focuses on finding duplicates, patterns, optimization opportunities, and code quality improvements.
 """
 
+from __future__ import annotations
+
 import ast
 import asyncio
 import hashlib
