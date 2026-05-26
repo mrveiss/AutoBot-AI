@@ -22,13 +22,14 @@ class UnifiedRegistry:
 
     _instance: "UnifiedRegistry" | None = None
     _lock: threading.Lock = threading.Lock()
+    _manifests: dict[str, ManifestContract]
 
     def __new__(cls) -> "UnifiedRegistry":
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
                     instance = super().__new__(cls)
-                    instance._manifests: dict[str, ManifestContract] = {}
+                    instance._manifests = {}
                     cls._instance = instance
         return cls._instance
 

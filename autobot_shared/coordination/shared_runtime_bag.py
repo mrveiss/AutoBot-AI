@@ -260,7 +260,7 @@ class SharedRuntimeBag(Generic[T]):
                     )
         finally:
             await pubsub.unsubscribe(channel)
-            await pubsub.aclose()
+            await pubsub.aclose()  # type: ignore[attr-defined]  # GH#7105
 
     # ------------------------------------------------------------------
     # Internal helpers

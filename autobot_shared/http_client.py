@@ -44,7 +44,7 @@ class HTTPClientManager:
         if not hasattr(self, "_initialized"):
             self._initialized = True
             self._session = None
-            self._connector = None
+            self._connector: TCPConnector | None = None
             self._closed = False
             self._request_count = 0
             self._error_count = 0
@@ -55,7 +55,7 @@ class HTTPClientManager:
             self._pool_max = 200  # Maximum pool size
             self._current_pool_size = 100  # Start at default
             self._pool_adjustment_interval = TimingConstants.STANDARD_TIMEOUT  # Adjust every 60s
-            self._last_adjustment_time = 0
+            self._last_adjustment_time: float = 0.0
             self._active_requests = 0  # Track concurrent requests
             self._pending_pool_recreation = False  # Issue #352: Track deferred recreation
 

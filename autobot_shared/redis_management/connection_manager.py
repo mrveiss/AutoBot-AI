@@ -733,7 +733,7 @@ class RedisConnectionManager:
                 socket_connect_timeout=self._pool_config.socket_connect_timeout,
                 retry_on_timeout=self._pool_config.retry_on_timeout,
                 max_retries=self._pool_config.max_retries,
-                health_check_interval=self._pool_config.health_check_interval,
+                health_check_interval=int(self._pool_config.health_check_interval),
             )
 
         return await self._create_async_pool_with_retry(database_name, config)
@@ -1152,9 +1152,9 @@ class RedisConnectionManager:
             except Exception as e:
                 logger.warning("Error closing async pool: %s", e)
 
-        for pool in self._sync_pools.values():
+        for sync_pool in self._sync_pools.values():
             try:
-                pool.disconnect()
+                sync_pool.disconnect()
             except Exception as e:
                 logger.warning("Error closing sync pool: %s", e)
 
