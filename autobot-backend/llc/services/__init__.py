@@ -6,10 +6,10 @@ receive a typed ``activity_log`` reference at construction time.
 """
 
 from .activity_log import LLCActivityLogService
+from .agent_budget_tracker import AgentBudgetState, AgentBudgetTracker
 from .approval import ApprovalService
 from .base import LLCServiceBase
 from .board import BoardService
-from .agent_budget_tracker import AgentBudgetState, AgentBudgetTracker
 from .budget import BudgetService
 from .ceo_chat import CeoChatService
 from .goal import GoalService

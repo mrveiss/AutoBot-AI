@@ -19,7 +19,7 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from api.anthropic_compat import router, _map_finish_reason
+from api.anthropic_compat import _map_finish_reason, router
 from auth_middleware import get_current_user
 
 # ---------------------------------------------------------------------------

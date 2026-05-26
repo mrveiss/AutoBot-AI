@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_db_session
-from auth_middleware import get_current_user
+from auth_middleware import check_admin_permission
 from autobot_shared.logging_manager import get_logger
 from models.heartbeat import AgentRuntimeState
 from services.task_workspace import _SAFE_TASK_ID_RE
@@ -44,13 +44,13 @@ class TaskWorkspaceResponse(BaseModel):
 async def get_task_workspace(
     task_id: str,
     session: AsyncSession = Depends(get_db_session),
-    _user: dict = Depends(get_current_user),
+    _admin: bool = Depends(check_admin_permission),
 ) -> TaskWorkspaceResponse:
     """
     Return the git worktree workspace directory, branch, and preview URL
     for the agent currently running the given task (GH#6471).
 
-    Requires authentication.  Returns 404 when no agent has an active workspace
+    Requires admin role.  Returns 404 when no agent has an active workspace
     for this task.
     """
     if not _SAFE_TASK_ID_RE.match(task_id):

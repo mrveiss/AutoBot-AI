@@ -4,7 +4,6 @@
 """Unit tests for shard_planner (MVA-1096)."""
 
 import pytest
-
 from shard_planner import (
     InsufficientPoolError,
     LayerRange,

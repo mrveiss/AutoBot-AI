@@ -11,12 +11,11 @@ cross-host, and falls back to single-worker mode when workers drop mid-run.
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, AsyncIterator, Dict, List, Optional
-
-import logging
 
 logger = logging.getLogger(__name__)
 

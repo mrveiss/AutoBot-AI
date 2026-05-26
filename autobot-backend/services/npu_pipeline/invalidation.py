@@ -22,8 +22,7 @@ from typing import Any, Dict
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from events.bus import get_event_bus
-
-from services.npu_pipeline.plan_cache import RedisShardPlanCache, _KEY_PREFIX
+from services.npu_pipeline.plan_cache import _KEY_PREFIX, RedisShardPlanCache
 
 logger = get_logger(__name__)
 

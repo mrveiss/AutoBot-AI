@@ -77,14 +77,14 @@ class TestCostCalculation:
     """Unit tests for _estimate_cost — pure function, no I/O."""
 
     def test_audio_only_cost(self):
-        from services.voice_realtime_telemetry import _estimate_cost, _AUDIO_COST_PER_SEC
+        from services.voice_realtime_telemetry import _AUDIO_COST_PER_SEC, _estimate_cost
 
         rec = _make_record(audio_in_s=60.0, audio_out_s=30.0)
         expected = 60.0 * _AUDIO_COST_PER_SEC["input"] + 30.0 * _AUDIO_COST_PER_SEC["output"]
         assert abs(_estimate_cost(rec) - expected) < 1e-9
 
     def test_token_only_cost(self):
-        from services.voice_realtime_telemetry import _estimate_cost, _TOKEN_COST_PER_1M
+        from services.voice_realtime_telemetry import _TOKEN_COST_PER_1M, _estimate_cost
 
         rec = _make_record(input_tokens=1_000_000, output_tokens=500_000, cached_input_tokens=200_000)
         expected = (
