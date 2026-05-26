@@ -15,10 +15,10 @@ from typing import Any, Dict
 import aiofiles
 import yaml
 
-from autobot_shared.logging_manager import get_logger
+import logging  # stdlib: avoids deadlock — config is on the logging-manager init path (GH#7765 pattern)
 from retry_mechanism import RetryConfig, RetryStrategy, with_retry
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 # Module-level constants for O(1) lookups (Issue #326)
 YAML_FILE_EXTENSIONS = {".yaml", ".yml"}

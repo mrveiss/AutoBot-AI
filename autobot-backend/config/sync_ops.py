@@ -12,9 +12,9 @@ from typing import Any, Dict
 
 import yaml
 
-from autobot_shared.logging_manager import get_logger
+import logging  # stdlib: avoids deadlock — config is on the logging-manager init path (GH#7765 pattern)
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class SyncOperationsMixin:

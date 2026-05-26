@@ -9,10 +9,10 @@ File watching and callback management for config changes.
 import asyncio
 from typing import Any, Callable, Dict
 
-from autobot_shared.logging_manager import get_logger
+import logging  # stdlib: avoids deadlock — config is on the logging-manager init path (GH#7765 pattern)
 from constants.threshold_constants import FileWatcherConfig
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class FileWatcherMixin:

@@ -31,7 +31,7 @@ import time
 from datetime import datetime
 from typing import Any, Callable, Dict, List
 
-from autobot_shared.logging_manager import get_logger
+import logging  # stdlib: avoids deadlock — config is on the logging-manager init path (GH#7765 pattern)
 from autobot_shared.singleton_factory import lazy_singleton
 from config.async_ops import AsyncOperationsMixin
 from config.file_watcher import FileWatcherMixin
@@ -44,7 +44,7 @@ from config.timeout_config import TimeoutConfigMixin
 from config.validation import ValidationMixin
 from constants.path_constants import PATH
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class ConfigManager(

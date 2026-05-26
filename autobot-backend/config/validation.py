@@ -13,10 +13,10 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
-from autobot_shared.logging_manager import get_logger
+import logging  # stdlib: avoids deadlock — config is on the logging-manager init path (GH#7765 pattern)
 from config.loader import ENV_VAR_MAPPINGS
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 # Minimum/maximum valid port range.
 _PORT_MIN = 1

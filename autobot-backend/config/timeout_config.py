@@ -8,10 +8,10 @@ Timeout configuration management for unified config manager.
 
 from typing import Any, Dict
 
-from autobot_shared.logging_manager import get_logger
+import logging  # stdlib: avoids deadlock — config is on the logging-manager init path (GH#7765 pattern)
 from autobot_shared.ssot_config import config
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level tuple for required timeout categories
 _REQUIRED_TIMEOUT_CATEGORIES = ("redis", "llamaindex", "documents", "http", "llm")
