@@ -612,6 +612,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ),
     # GH#8251: LLC (Lean Lifecycle Controller) module skeleton
     ("llc.api", "", ["llc"], "llc"),
+    # GH#7342: Backend SDP proxy for OpenAI Realtime WebRTC
+    (
+        "api.realtime_session",
+        "/voice/realtime",
+        ["voice", "realtime", "webrtc"],
+        "realtime_session",
+    ),
 ]
 
 
