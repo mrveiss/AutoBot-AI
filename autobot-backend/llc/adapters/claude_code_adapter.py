@@ -132,11 +132,7 @@ class ClaudeCodeAdapter:
                     cwd=workspace_dir or None,
                 )
             except FileNotFoundError as e:
-                if not (
-                    workspace_dir
-                    and e.filename
-                    and os.path.abspath(e.filename) == os.path.abspath(workspace_dir)
-                ):
+                if not (workspace_dir and e.filename and os.path.abspath(e.filename) == os.path.abspath(workspace_dir)):
                     raise  # missing binary or unrelated path
                 logger.warning(
                     "ClaudeCodeAdapter: workspace_dir %r missing, retrying without cwd",
