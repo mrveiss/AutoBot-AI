@@ -36,6 +36,7 @@ from models.heartbeat import (
 from services import task_workspace
 from services.run_jwt import get_run_jwt_scopes, mint_run_jwt, revoke_run_jwt_async
 from services.task_claim import renew_claim
+from services import task_workspace
 
 logger = get_logger(__name__)
 
