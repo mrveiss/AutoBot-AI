@@ -21,6 +21,7 @@ import time
 from typing import Any, AsyncIterator, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from circuit_breaker import circuit_breaker_async
 from constants.model_constants import OPENAI_O1_MINI  # used in _OPENAI_MODELS list
 from constants.model_constants import (

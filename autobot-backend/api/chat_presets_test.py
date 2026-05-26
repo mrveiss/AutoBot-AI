@@ -4,7 +4,7 @@
 """Unit tests for slash command presets API (GH#8595)."""
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -32,7 +32,11 @@ def _make_app() -> FastAPI:
 @pytest.fixture
 def mock_redis():
     redis = AsyncMock()
-    with patch("api.chat_presets.get_async_redis_client", new_callable=AsyncMock, return_value=redis) as p:
+    with patch(
+        "api.chat_presets.get_async_redis_client",
+        new_callable=AsyncMock,
+        return_value=redis,
+    ) as p:
         p.return_value = redis
         yield redis
 
@@ -76,7 +80,10 @@ class TestListPresets:
 class TestCreatePreset:
     def test_creates_with_id(self, client, mock_redis):
         mock_redis.hset.return_value = 1
-        resp = client.post("/chat/presets", json={"name": "greet", "description": "Greeting", "content": "Hello!"})
+        resp = client.post(
+            "/chat/presets",
+            json={"name": "greet", "description": "Greeting", "content": "Hello!"},
+        )
         assert resp.status_code == 201
         data = resp.json()
         assert data["name"] == "greet"

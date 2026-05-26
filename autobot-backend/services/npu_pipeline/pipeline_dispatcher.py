@@ -15,7 +15,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +192,10 @@ class PipelineDispatcher:
         try:
             tokens = await self._run_pipeline(plan, prompt, max_tokens, metrics)
         except WorkerDroppedError as exc:
-            logger.warning("Worker dropped mid-run (%s), engaging single-worker fallback", exc.worker_id)
+            logger.warning(
+                "Worker dropped mid-run (%s), engaging single-worker fallback",
+                exc.worker_id,
+            )
             self.remove_worker(exc.worker_id)
             metrics.fallback_fired = True
             self._fallback_count += 1

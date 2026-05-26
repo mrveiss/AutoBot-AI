@@ -324,7 +324,6 @@ async def _item_to_dict(item: Any, session: AsyncSession) -> Dict[str, Any]:
         "created_by_user_id": (str(item.created_by_user_id) if item.created_by_user_id else None),
         "reviewer_user_id": (str(item.reviewer_user_id) if item.reviewer_user_id else None),
         "reviewer_agent_id": (str(item.reviewer_agent_id) if item.reviewer_agent_id else None),
-        "review_brief": item.review_brief,
         "started_at": item.started_at.isoformat() if item.started_at else None,
         "completed_at": item.completed_at.isoformat() if item.completed_at else None,
         "cancelled_at": item.cancelled_at.isoformat() if item.cancelled_at else None,

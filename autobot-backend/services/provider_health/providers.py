@@ -105,9 +105,9 @@ class OpenAIHealth(BaseProviderHealth):
     def __init__(self) -> None:
         """Initialize OpenAI health checker with API key configuration."""
         super().__init__("openai")
-        self.api_key = config.openai_api_key
+        self.api_key = ssot_config.openai_api_key
         # Use env var for base URL, fallback to standard OpenAI API
-        self.base_url = config.openai_api_base_url
+        self.base_url = ssot_config.openai_api_base_url
 
     def _build_response_result(self, response_status: int, data: dict, response_time: float) -> ProviderHealthResult:
         """Build result based on HTTP response status. (Issue #315 - extracted)"""
@@ -204,9 +204,9 @@ class AnthropicHealth(BaseProviderHealth):
     def __init__(self) -> None:
         """Initialize Anthropic health checker with API key configuration."""
         super().__init__("anthropic")
-        self.api_key = config.anthropic_api_key
+        self.api_key = ssot_config.anthropic_api_key
         # Use env var for base URL, fallback to standard Anthropic API
-        self.base_url = config.anthropic_api_base_url
+        self.base_url = ssot_config.anthropic_api_base_url
 
     def _build_anthropic_result(self, response_status: int, response_time: float) -> ProviderHealthResult:
         """Build result based on HTTP response status. (Issue #315 - extracted)"""
@@ -306,7 +306,7 @@ class GoogleHealth(BaseProviderHealth):
     def __init__(self) -> None:
         """Initialize Google health checker with API key from environment."""
         super().__init__("google")
-        self.api_key = config.google_api_key
+        self.api_key = ssot_config.google_api_key
         self.base_url = "https://generativelanguage.googleapis.com/v1"
 
     def _build_google_result(self, response_status: int, data: dict, response_time: float) -> ProviderHealthResult:
@@ -479,7 +479,7 @@ class VLLMHealth(BaseProviderHealth):
         """Initialize vLLM health checker with host configuration."""
         super().__init__("vllm")
         # vLLM default port is 8000
-        self.vllm_host = config.vllm_host
+        self.vllm_host = ssot_config.vllm_host
 
     async def check_health(self, timeout: float = 5.0) -> ProviderHealthResult:
         """Check vLLM service health"""

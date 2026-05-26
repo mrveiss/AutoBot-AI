@@ -181,7 +181,8 @@ class SharedRuntimeBag(Generic[T]):
                         raise
                     if attempt == retries:
                         raise RuntimeError(
-                            f"SharedRuntimeBag.update: CAS failed after {retries} retries for key '{key}' in namespace '{self._namespace}'"
+                            f"SharedRuntimeBag.update: CAS failed after {retries} retries"
+                            f" for key '{key}' in namespace '{self._namespace}'"
                         ) from exc
                     logger.debug(
                         "SharedRuntimeBag CAS conflict on '%s/%s', retry %d/%d",

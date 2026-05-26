@@ -204,7 +204,6 @@ class HandoffBriefGenerator:
         lines = []
         for chunk in chunks:
             content = chunk.get("content", "")
-            metadata = chunk.get("metadata", {})
             source = chunk.get("source", "unknown")
             similarity = chunk.get("similarity_score", 0.0)
 

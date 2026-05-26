@@ -27,6 +27,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
 from autobot_shared.ssot_config import config as _ssot_config
 from rlm.evaluator import ResponseQualityEvaluator

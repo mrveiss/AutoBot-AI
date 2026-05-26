@@ -700,7 +700,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         except Exception as e:
             logger.error("Failed to load model from config: %s", e)
 
-            return config.default_llm_model
+            return _ssot_config.default_llm_model
 
     async def _prepare_llm_request_params(
         self,
@@ -844,7 +844,11 @@ Do NOT conclude the task or provide a final summary - just explain this specific
 
     def _get_interpretation_llm_options(self) -> Dict[str, Any]:
         """Get LLM options for command interpretation."""
-        return {"temperature": 0.7, "top_p": 0.9, "num_ctx": ModelConstants.DEFAULT_NUM_CTX}
+        return {
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "num_ctx": ModelConstants.DEFAULT_NUM_CTX,
+        }
 
     async def _interpret_non_streaming(
         self,
@@ -979,13 +983,21 @@ Do NOT conclude the task or provide a final summary - just explain this specific
 
         if not streaming:
             async for msg in self._interpret_non_streaming(
-                ollama_endpoint, selected_model, interpretation_prompt, llm_options, session_id
+                ollama_endpoint,
+                selected_model,
+                interpretation_prompt,
+                llm_options,
+                session_id,
             ):
                 yield msg
             return
 
         async for msg in self._interpret_streaming(
-            ollama_endpoint, selected_model, interpretation_prompt, llm_options, session_id
+            ollama_endpoint,
+            selected_model,
+            interpretation_prompt,
+            llm_options,
+            session_id,
         ):
             yield msg
 
@@ -1033,7 +1045,8 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         session_key = f"chat:session:{session_id}"
         try:
             session_data_json = await asyncio.wait_for(
-                self.redis_client.get(session_key), timeout=_ssot_config.timeout.redis_op
+                self.redis_client.get(session_key),
+                timeout=_ssot_config.timeout.redis_op,
             )
             if not session_data_json:
                 return None
@@ -1100,7 +1113,12 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             )
 
     async def _get_interpretation_from_llm(
-        self, command: str, stdout: str, stderr: str, return_code: int, session_id: str = ""
+        self,
+        command: str,
+        stdout: str,
+        stderr: str,
+        return_code: int,
+        session_id: str = "",
     ) -> str:
         """Get LLM interpretation for command results (non-streaming)."""
         selected_model = get_config().get_selected_model()

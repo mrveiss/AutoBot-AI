@@ -6,6 +6,8 @@ Test the new security scanning agent implementations
 import asyncio
 import sys
 
+from autobot_shared.ssot_config import config
+
 sys.path.append(config.project_root)
 
 from agents.network_discovery_agent import network_discovery_agent

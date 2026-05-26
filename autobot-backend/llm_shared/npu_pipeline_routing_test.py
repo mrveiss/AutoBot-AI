@@ -20,7 +20,7 @@ import importlib.util
 import sys
 import types
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 # ---------------------------------------------------------------------------
 # Bootstrap: load real provider_registry module without triggering the
@@ -115,7 +115,13 @@ _NPU_POOL_PROVIDER_NAME = _pr_mod._NPU_POOL_PROVIDER_NAME
 def _bootstrap_pipeline_dispatcher():
     import os
 
-    path = os.path.join(os.path.dirname(__file__), "..", "services", "npu_pipeline", "pipeline_dispatcher.py")
+    path = os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "services",
+        "npu_pipeline",
+        "pipeline_dispatcher.py",
+    )
     return _load_module_from_file("services.npu_pipeline.pipeline_dispatcher", path)
 
 

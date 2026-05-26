@@ -6,6 +6,8 @@ Test security agents with research-based tool discovery
 import asyncio
 import sys
 
+from autobot_shared.ssot_config import config
+
 sys.path.append(config.project_root)
 
 from agents.security_scanner_agent import security_scanner_agent

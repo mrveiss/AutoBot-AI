@@ -73,7 +73,9 @@ async def update_app_state_multi(**kwargs) -> None:
 
 def configure_logging():
     """Configure logging level from environment variable"""
-    LOG_LEVEL = config.log_level.upper()
+    from autobot_shared.ssot_config import config as _ssot_cfg
+
+    LOG_LEVEL = _ssot_cfg.log_level.upper()
     LOG_LEVEL_VALUE = getattr(logging, LOG_LEVEL, logging.INFO)
     logging.root.setLevel(LOG_LEVEL_VALUE)
 
@@ -1005,8 +1007,8 @@ async def _init_slm_client():
         # Issue #768: Get SLM URL from SSOT config, fallback to env var
         from autobot_shared.ssot_config import get_config
 
-        slm_url = config.slm_url or get_config().slm_url
-        slm_token = config.slm_auth_token
+        slm_url = get_config().slm_url
+        slm_token = get_config().slm_auth_token
         if not slm_token:
             logger.warning(
                 "SLM_AUTH_TOKEN is unset — SLM WebSocket will connect without auth header. "

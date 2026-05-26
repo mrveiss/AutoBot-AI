@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Tuple
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 from constants.path_constants import PATH

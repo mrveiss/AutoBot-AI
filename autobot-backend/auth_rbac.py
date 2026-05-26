@@ -42,6 +42,7 @@ from autobot_shared.auth.permissions import (  # noqa: F401 — re-exported for 
     Permission,
     Role,
 )
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error

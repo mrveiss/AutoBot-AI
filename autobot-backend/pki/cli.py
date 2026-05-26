@@ -25,6 +25,8 @@ import logging
 import sys
 from pathlib import Path
 
+from autobot_shared.logging_manager import get_logger
+
 logger = get_logger(__name__)
 
 # Add project root to path

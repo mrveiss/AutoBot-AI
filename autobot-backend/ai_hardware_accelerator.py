@@ -190,8 +190,8 @@ class AIHardwareAccelerator:
         self.device_metrics = {}
         self.task_history = []
 
-        npu_worker_host = config.npu_worker_host
-        npu_worker_port = config.npu_worker_port
+        npu_worker_host = _ssot_config.npu_worker_host
+        npu_worker_port = _ssot_config.npu_worker_port
         if not npu_worker_host or not npu_worker_port:
             raise ValueError(
                 "NPU Worker configuration missing: AUTOBOT_NPU_WORKER_HOST and "
@@ -212,7 +212,10 @@ class AIHardwareAccelerator:
         self.device_status = {
             HardwareDevice.NPU: {"available": False, "last_check": None},
             HardwareDevice.GPU: {"available": False, "last_check": None},
-            HardwareDevice.CPU: {"available": True, "last_check": datetime.now(tz=timezone.utc)},
+            HardwareDevice.CPU: {
+                "available": True,
+                "last_check": datetime.now(tz=timezone.utc),
+            },
         }
 
         # Multi-modal models

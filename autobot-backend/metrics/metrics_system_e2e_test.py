@@ -6,6 +6,8 @@ Test the new metrics and monitoring system
 import asyncio
 import sys
 
+from autobot_shared.ssot_config import config
+
 sys.path.append(config.project_root)
 
 from metrics.system_monitor import system_monitor

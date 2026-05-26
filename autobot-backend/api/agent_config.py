@@ -136,7 +136,12 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 1,
         "tasks": ["workflow_planning", "task_classification", "agent_coordination"],
-        "mcp_tools": ["memory_mcp", "sequential_thinking_mcp", "structured_thinking_mcp", "shrimp_task_manager_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "sequential_thinking_mcp",
+            "structured_thinking_mcp",
+            "shrimp_task_manager_mcp",
+        ],
         "invoked_by": "AsyncChatWorkflow (automatic on every request)",
         "source_file": "orchestrator.py, agents/agent_orchestration/coordinator.py",
     },
@@ -173,7 +178,12 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 2,
         "tasks": ["knowledge_search", "document_analysis", "information_retrieval"],
-        "mcp_tools": ["memory_mcp", "knowledge_mcp", "filesystem_mcp", "shrimp_task_manager_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "knowledge_mcp",
+            "filesystem_mcp",
+            "shrimp_task_manager_mcp",
+        ],
         "invoked_by": "AsyncChatWorkflow via KNOWLEDGE_PATTERNS, knowledge_mcp tools",
         "source_file": "src/agents/kb_librarian_agent.py, src/agents/kb_librarian/",
     },
@@ -185,7 +195,12 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 2,
         "tasks": ["rag_queries", "context_retrieval", "knowledge_synthesis"],
-        "mcp_tools": ["memory_mcp", "knowledge_mcp", "database_mcp", "sequential_thinking_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "knowledge_mcp",
+            "database_mcp",
+            "sequential_thinking_mcp",
+        ],
         "invoked_by": "AgentRouter as secondary_agent with KNOWLEDGE_RETRIEVAL",
         "source_file": "src/agents/rag_agent.py",
     },
@@ -197,7 +212,13 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 2,
         "tasks": ["web_research", "fact_checking", "data_gathering"],
-        "mcp_tools": ["memory_mcp", "browser_mcp", "http_client_mcp", "knowledge_mcp", "sequential_thinking_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "browser_mcp",
+            "http_client_mcp",
+            "knowledge_mcp",
+            "sequential_thinking_mcp",
+        ],
         "invoked_by": "AgentRouter via RESEARCH_PATTERNS matching",
         "source_file": "src/agents/web_research_integration_agent.py",
     },
@@ -209,7 +230,12 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 2,
         "tasks": ["entity_extraction", "relation_extraction", "knowledge_structuring"],
-        "mcp_tools": ["memory_mcp", "knowledge_mcp", "filesystem_mcp", "structured_thinking_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "knowledge_mcp",
+            "filesystem_mcp",
+            "structured_thinking_mcp",
+        ],
         "invoked_by": "kb_librarian during document processing",
         "source_file": "src/agents/knowledge_extraction_agent.py",
     },
@@ -221,7 +247,12 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 2,
         "tasks": ["semantic_search", "similarity_matching", "context_retrieval"],
-        "mcp_tools": ["memory_mcp", "knowledge_mcp", "database_mcp", "sequential_thinking_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "knowledge_mcp",
+            "database_mcp",
+            "sequential_thinking_mcp",
+        ],
         "invoked_by": "AgentRouter via KNOWLEDGE_PATTERNS as primary_agent",
         "source_file": "src/agents/knowledge_retrieval_agent.py",
     },
@@ -233,7 +264,13 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 2,
         "tasks": ["code_review", "static_analysis", "bug_detection"],
-        "mcp_tools": ["memory_mcp", "filesystem_mcp", "git_mcp", "sequential_thinking_mcp", "shrimp_task_manager_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "filesystem_mcp",
+            "git_mcp",
+            "sequential_thinking_mcp",
+            "shrimp_task_manager_mcp",
+        ],
         "invoked_by": "Codebase Analytics API, CODE_SEARCH_TERMS patterns",
         "source_file": "src/code_intelligence/",
     },
@@ -258,7 +295,12 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 3,
         "tasks": ["safe_command_execution", "privilege_management", "audit_logging"],
-        "mcp_tools": ["memory_mcp", "filesystem_mcp", "prometheus_mcp", "sequential_thinking_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "filesystem_mcp",
+            "prometheus_mcp",
+            "sequential_thinking_mcp",
+        ],
         "invoked_by": "Orchestrator for security-sensitive system operations",
         "source_file": "src/agents/enhanced_system_commands_agent.py",
     },
@@ -270,7 +312,13 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 3,
         "tasks": ["security_analysis", "vulnerability_scanning", "threat_assessment"],
-        "mcp_tools": ["memory_mcp", "filesystem_mcp", "http_client_mcp", "database_mcp", "sequential_thinking_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "filesystem_mcp",
+            "http_client_mcp",
+            "database_mcp",
+            "sequential_thinking_mcp",
+        ],
         "invoked_by": "Security API endpoints, Orchestrator for security queries",
         "source_file": "src/agents/security_scanner_agent.py",
     },
@@ -282,7 +330,12 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 3,
         "tasks": ["network_scanning", "service_discovery", "topology_mapping"],
-        "mcp_tools": ["memory_mcp", "http_client_mcp", "prometheus_mcp", "sequential_thinking_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "http_client_mcp",
+            "prometheus_mcp",
+            "sequential_thinking_mcp",
+        ],
         "invoked_by": "Network API endpoints, Orchestrator for network queries",
         "source_file": "src/agents/network_discovery_agent.py",
     },
@@ -332,7 +385,13 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 3,
         "tasks": ["code_generation", "boilerplate_creation", "workflow_automation"],
-        "mcp_tools": ["memory_mcp", "filesystem_mcp", "git_mcp", "sequential_thinking_mcp", "shrimp_task_manager_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "filesystem_mcp",
+            "git_mcp",
+            "sequential_thinking_mcp",
+            "shrimp_task_manager_mcp",
+        ],
         "invoked_by": "Codebase Analytics API, Developer Tools UI",
         "source_file": "src/agents/development_speedup_agent.py",
     },
@@ -356,7 +415,12 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 3,
         "tasks": ["entity_extraction", "relationship_mapping", "graph_construction"],
-        "mcp_tools": ["memory_mcp", "knowledge_mcp", "database_mcp", "sequential_thinking_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "knowledge_mcp",
+            "database_mcp",
+            "sequential_thinking_mcp",
+        ],
         "invoked_by": "KnowledgeExtractionAgent, conversation processing pipeline",
         "source_file": "src/agents/graph_entity_extractor.py",
     },
@@ -373,7 +437,13 @@ DEFAULT_AGENT_CONFIGS = {
             "npu_acceleration",
             "large_codebase_analysis",
         ],
-        "mcp_tools": ["memory_mcp", "filesystem_mcp", "git_mcp", "knowledge_mcp", "sequential_thinking_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "filesystem_mcp",
+            "git_mcp",
+            "knowledge_mcp",
+            "sequential_thinking_mcp",
+        ],
         "invoked_by": "DevelopmentSpeedupAgent, Codebase Analytics for semantic search",
         "source_file": "src/agents/npu_code_search_agent.py",
     },
@@ -390,7 +460,13 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 4,
         "tasks": ["web_research", "content_extraction", "knowledge_storage"],
-        "mcp_tools": ["memory_mcp", "knowledge_mcp", "filesystem_mcp", "browser_mcp", "sequential_thinking_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "knowledge_mcp",
+            "filesystem_mcp",
+            "browser_mcp",
+            "sequential_thinking_mcp",
+        ],
         "invoked_by": "Orchestrator when external research is needed",
         "source_file": "src/agents/librarian_assistant.py",
     },
@@ -430,7 +506,12 @@ DEFAULT_AGENT_CONFIGS = {
             "resource_aware_processing",
             "adaptive_caching",
         ],
-        "mcp_tools": ["memory_mcp", "knowledge_mcp", "prometheus_mcp", "sequential_thinking_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "knowledge_mcp",
+            "prometheus_mcp",
+            "sequential_thinking_mcp",
+        ],
         "invoked_by": "SystemKnowledgeManager for machine-specific operations",
         "source_file": "src/agents/machine_aware_system_knowledge_manager.py",
     },
@@ -442,7 +523,12 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 4,
         "tasks": ["man_page_parsing", "command_documentation", "unix_knowledge"],
-        "mcp_tools": ["memory_mcp", "knowledge_mcp", "filesystem_mcp", "sequential_thinking_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "knowledge_mcp",
+            "filesystem_mcp",
+            "sequential_thinking_mcp",
+        ],
         "invoked_by": "MachineAwareKnowledgeManager, system initialization",
         "source_file": "src/agents/man_page_knowledge_integrator.py",
     },
@@ -515,7 +601,12 @@ DEFAULT_AGENT_CONFIGS = {
             "step_orchestration",
             "dependency_management",
         ],
-        "mcp_tools": ["memory_mcp", "sequential_thinking_mcp", "structured_thinking_mcp", "shrimp_task_manager_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "sequential_thinking_mcp",
+            "structured_thinking_mcp",
+            "shrimp_task_manager_mcp",
+        ],
         "invoked_by": "AsyncChatWorkflow for complex multi-step queries requiring task planning",
         "source_file": "src/agents/overseer/overseer_agent.py",
     },
@@ -533,7 +624,12 @@ DEFAULT_AGENT_CONFIGS = {
             "output_streaming",
             "explanation_generation",
         ],
-        "mcp_tools": ["memory_mcp", "filesystem_mcp", "sequential_thinking_mcp", "shrimp_task_manager_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "filesystem_mcp",
+            "sequential_thinking_mcp",
+            "shrimp_task_manager_mcp",
+        ],
         "invoked_by": "OverseerAgent during task plan execution",
         "source_file": "src/agents/overseer/step_executor_agent.py",
     },
@@ -583,27 +679,27 @@ async def list_agents(admin_check: bool = Depends(check_admin_permission)):
     provider_type = llm_config.get("provider_type", "local")
 
     agents = []
-    for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
+    for agent_id, agent_cfg in DEFAULT_AGENT_CONFIGS.items():
         (
             current_model,
             current_provider,
             enabled,
             config_source,
-        ) = await _resolve_agent_effective_config(agent_id, config, unified_config_manager)
+        ) = await _resolve_agent_effective_config(agent_id, agent_cfg, unified_config_manager)
 
         status = "connected" if enabled and current_model else "disconnected"
 
         agent_info = {
             "id": agent_id,
-            "name": config["name"],
-            "description": config["description"],
+            "name": agent_cfg["name"],
+            "description": agent_cfg["description"],
             "current_model": current_model,
             "provider": current_provider,
             "enabled": enabled,
             "status": status,
-            "priority": config["priority"],
-            "tasks": config["tasks"],
-            "mcp_tools": config.get("mcp_tools", []),
+            "priority": agent_cfg["priority"],
+            "tasks": agent_cfg["tasks"],
+            "mcp_tools": agent_cfg.get("mcp_tools", []),
             "config_source": config_source,
             "last_used": None,
             "performance": {
@@ -692,8 +788,8 @@ async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
     from config import unified_config_manager
 
     backend_agents = []
-    for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
-        backend_agents.append(await _resolve_agent_entry(agent_id, config, unified_config_manager))
+    for agent_id, agent_cfg in DEFAULT_AGENT_CONFIGS.items():
+        backend_agents.append(await _resolve_agent_entry(agent_id, agent_cfg, unified_config_manager))
 
     healthy_count = sum(1 for a in backend_agents if a["status"] == "connected")
 
@@ -719,7 +815,10 @@ async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
     )
 
 
-@router.get("/agents/specialized", response_model=DataResponse[AgentConfigSpecializedListResponse])
+@router.get(
+    "/agents/specialized",
+    response_model=DataResponse[AgentConfigSpecializedListResponse],
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_specialized_agents",
@@ -752,7 +851,10 @@ async def list_specialized_agents(
     )
 
 
-@router.get("/agents/specialized/{agent_id}", response_model=DataResponse[AgentConfigSpecializedDetailResponse])
+@router.get(
+    "/agents/specialized/{agent_id}",
+    response_model=DataResponse[AgentConfigSpecializedDetailResponse],
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_specialized_agent",
@@ -1233,9 +1335,9 @@ async def get_agents_overview(admin_check: bool = Depends(check_admin_permission
 
     agent_summary = []
 
-    for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
-        enabled = unified_config_manager.get_nested(f"agents.{agent_id}.enabled", config["enabled"])
-        model = unified_config_manager.get_nested(f"agents.{agent_id}.model", config["default_model"])
+    for agent_id, agent_cfg in DEFAULT_AGENT_CONFIGS.items():
+        enabled = unified_config_manager.get_nested(f"agents.{agent_id}.enabled", agent_cfg["enabled"])
+        model = unified_config_manager.get_nested(f"agents.{agent_id}.model", agent_cfg["default_model"])
 
         if enabled:
             enabled_agents += 1
@@ -1245,10 +1347,10 @@ async def get_agents_overview(admin_check: bool = Depends(check_admin_permission
         agent_summary.append(
             {
                 "id": agent_id,
-                "name": config["name"],
+                "name": agent_cfg["name"],
                 "enabled": enabled,
                 "status": "healthy" if enabled and model else "unhealthy",
-                "priority": config["priority"],
+                "priority": agent_cfg["priority"],
             }
         )
 

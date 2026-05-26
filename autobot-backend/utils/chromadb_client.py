@@ -43,7 +43,7 @@ logger = get_logger(__name__)
 
 # Issue #3094: Use SSOT config port so the default (8100) matches Ansible deployment.
 # Host remains os.getenv-based: empty string = use local PersistentClient (dev mode).
-_CHROMADB_HOST = config.chromadb_host
+_CHROMADB_HOST = _ssot_config.vm.chromadb
 _CHROMADB_PORT = _ssot_config.port.chromadb
 
 # Module exports

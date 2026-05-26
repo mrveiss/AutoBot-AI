@@ -17,13 +17,12 @@ from __future__ import annotations
 
 import inspect
 import json
-import time
 from typing import Any, AsyncIterator, Dict, List, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from api.openai_compat import (
     _AUTO_MODEL_NAMES,

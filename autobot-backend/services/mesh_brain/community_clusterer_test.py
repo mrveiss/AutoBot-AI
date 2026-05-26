@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from autobot_shared.logging_manager import get_logger as _get_logger
 from services.mesh_brain.community_clusterer import CommunityClusterer, cluster_graph
 
 

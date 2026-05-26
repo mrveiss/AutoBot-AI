@@ -59,7 +59,10 @@ class ComplexityRouter:
                 score=result.score,
                 factors=result.factors,
                 tier="long_context",
-                reasoning=f"Input tokens ({result.input_tokens}) exceed long_context_threshold ({self.config.long_context_threshold})",
+                reasoning=(
+                    f"Input tokens ({result.input_tokens}) exceed"
+                    f" long_context_threshold ({self.config.long_context_threshold})"
+                ),
                 input_tokens=result.input_tokens,
             )
             selected_model = self.config.models.long_context

@@ -7,17 +7,12 @@ Focus: the dedupe-against-existing-issues logic must not spam GitHub with
 duplicate issues when an audit task runs multiple times without new findings.
 """
 
-import json
-from pathlib import Path
-from unittest.mock import MagicMock, call, patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from workers.audit_tasks import (
     _dead_code_fingerprint,
     _dedupe_and_file,
     _find_test_file,
-    _testgap_findings,
     audit_claims,
     audit_dead_code,
     audit_testgaps,
@@ -201,7 +196,10 @@ class TestAuditDeadCode:
 
         with (
             patch("workers.audit_tasks._get_redis", return_value=MagicMock()),
-            patch("workers.audit_tasks._redis_get", side_effect=lambda _, k: inventory.get(k)),
+            patch(
+                "workers.audit_tasks._redis_get",
+                side_effect=lambda _, k: inventory.get(k),
+            ),
             patch("workers.audit_tasks._redis_set"),
             patch("workers.audit_tasks._run_vulture", return_value=[finding]),
             patch("workers.audit_tasks._list_open_issues", return_value=list(open_issues)),
@@ -245,9 +243,15 @@ class TestAuditDeadCode:
         with (
             patch("workers.audit_tasks._get_redis", return_value=MagicMock()),
             patch("workers.audit_tasks._redis_get", side_effect=lambda _, k: stored.get(k)),
-            patch("workers.audit_tasks._redis_set", side_effect=lambda _, k, v, **kw: stored.update({k: v})),
+            patch(
+                "workers.audit_tasks._redis_set",
+                side_effect=lambda _, k, v, **kw: stored.update({k: v}),
+            ),
             patch("workers.audit_tasks._run_vulture", return_value=[finding]),
-            patch("workers.audit_tasks._list_open_issues", side_effect=lambda **kw: list(open_issues)),
+            patch(
+                "workers.audit_tasks._list_open_issues",
+                side_effect=lambda **kw: list(open_issues),
+            ),
             patch("workers.audit_tasks._file_issue", side_effect=fake_file_issue),
         ):
             r1 = audit_dead_code.run()

@@ -20,6 +20,7 @@ from autobot_shared.logging_manager import get_logger
 import asyncio
 from typing import Any, AsyncIterator, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from skills.sync.mcp_transport import MCPTransport, create_transport
 from type_defs.mcp import (
     MCPPromptDefinition,

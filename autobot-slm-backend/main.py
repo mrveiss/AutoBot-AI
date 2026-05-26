@@ -184,7 +184,7 @@ async def lifespan(app: FastAPI):
 
     try:
         await _run_migrations()
-    except Exception as e:
+    except Exception:
         logger.error("Database migrations failed during startup", exc_info=True)
         raise
 

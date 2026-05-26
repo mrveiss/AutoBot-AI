@@ -58,7 +58,7 @@ def _dev_auth_bypass_enabled() -> bool:
     is opt-in. Without the flag, /login behaves like production modes and
     refuses to mint tokens without a real user store backing the request.
     """
-    return config.dev_auth_bypass.strip().lower() in _DEV_AUTH_BYPASS_TRUTHY
+    return ssot_config.dev_auth_bypass.strip().lower() in _DEV_AUTH_BYPASS_TRUTHY
 
 
 async def _enrich_user_with_org_context(user_data: Dict) -> Dict:
@@ -188,7 +188,11 @@ async def login(request: Request, login_data: LoginRequest):
                 "last_login": None,
             }
             jwt_token = get_auth_middleware().create_jwt_token(
-                {"username": "admin", "role": "admin", "email": f"admin@{ssot_config.auth.domain}"}
+                {
+                    "username": "admin",
+                    "role": "admin",
+                    "email": f"admin@{ssot_config.auth.domain}",
+                }
             )
             session_id = get_auth_middleware().create_session({"username": "admin", "role": "admin"}, request)
             _emit_event(EventType.USER_LOGIN, user_id="admin", ip_address=ip_address)

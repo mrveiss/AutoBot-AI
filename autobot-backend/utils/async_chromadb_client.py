@@ -35,6 +35,7 @@ import asyncio
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
 
 if TYPE_CHECKING:

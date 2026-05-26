@@ -186,7 +186,7 @@ class ServiceConfigMixin:
     def get_ollama_url(self) -> str:
         """Get the Ollama service URL from configuration (backward compatibility)"""
         # First check environment variable
-        env_url = config.ollama_url
+        env_url = ssot_config.ollama_url
         if env_url:
             return env_url
 
@@ -218,7 +218,7 @@ class ServiceConfigMixin:
 
     def get_redis_url(self) -> str:
         """Get the Redis service URL from configuration (backward compatibility)"""
-        env_url = config.redis_url
+        env_url = ssot_config.redis_url
         if env_url:
             return env_url
 
@@ -328,7 +328,7 @@ class ServiceConfigMixin:
 
         Priority: env AUTOBOT_LLM_PROVIDER > config > 'ollama'.
         """
-        env_provider = config.llm_provider
+        env_provider = ssot_config.llm_provider
         if env_provider:
             return env_provider
         return self.get_nested("backend.llm.active_provider", "ollama")

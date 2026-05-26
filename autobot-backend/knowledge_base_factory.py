@@ -29,6 +29,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, Dict
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
 if TYPE_CHECKING:

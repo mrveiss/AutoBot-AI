@@ -88,7 +88,7 @@ class KbCollectionManager:
         try:
             kb = await _get_kb()
             # get_or_create_collection is idempotent
-            collection = await kb._async_chroma_client.get_or_create_collection(
+            await kb._async_chroma_client.get_or_create_collection(
                 name=collection_name,
                 metadata={"entity_type": entity_type, "entity_id": str(entity_id)},
             )

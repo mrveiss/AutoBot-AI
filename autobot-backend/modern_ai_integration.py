@@ -802,14 +802,14 @@ class ModernAIIntegration:
 
         Issue #315: Refactored to use dispatch pattern for reduced nesting.
         """
-        for provider_enum, config in self.model_configs.items():
+        for provider_enum, model_cfg in self.model_configs.items():
             try:
                 provider_class = self._get_provider_class(provider_enum)
                 if provider_class is None:
                     logger.warning("Unknown provider type: %s", provider_enum.value)
                     continue
 
-                self.providers[provider_enum] = provider_class(config)
+                self.providers[provider_enum] = provider_class(model_cfg)
                 logger.info("Initialized provider: %s", provider_enum.value)
 
             except Exception as e:

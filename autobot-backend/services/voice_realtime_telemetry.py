@@ -18,7 +18,6 @@ Issue #7421 — Implements:
 """
 
 import json
-import time
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any
@@ -119,7 +118,9 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         self._max_cost_usd = config.misc.voice_realtime_max_cost_usd
 
         # Lazy import to avoid circular dependency with prometheus_metrics module
-        from autobot_shared.monitoring.prometheus_metrics import PrometheusMetricsManager
+        from autobot_shared.monitoring.prometheus_metrics import (
+            PrometheusMetricsManager,
+        )
 
         self._prom = PrometheusMetricsManager()
 
@@ -339,7 +340,11 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         try:
             return RealtimeSessionRecord.from_dict(json.loads(raw))
         except Exception as exc:
-            logger.warning("voice_realtime: failed to parse record session_id=%s: %s", session_id, exc)
+            logger.warning(
+                "voice_realtime: failed to parse record session_id=%s: %s",
+                session_id,
+                exc,
+            )
             return None
 
 

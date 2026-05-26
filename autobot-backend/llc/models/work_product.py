@@ -57,7 +57,7 @@ class LLCWorkProduct(Base):
         server_default=sa.func.now(),
     )
 
-    work_item: Mapped["LLCWorkItem"] = relationship(  # type: ignore[name-defined]
+    work_item: Mapped["LLCWorkItem"] = relationship(  # type: ignore[name-defined]  # noqa: F821
         "LLCWorkItem",
         back_populates="work_products",
         lazy="selectin",

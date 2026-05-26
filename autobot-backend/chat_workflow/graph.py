@@ -29,6 +29,7 @@ from typing import Any, Dict, List, Tuple
 from langchain_core.runnables import RunnableConfig
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 try:
     from langgraph.checkpoint.redis.aio import AsyncRedisSaver

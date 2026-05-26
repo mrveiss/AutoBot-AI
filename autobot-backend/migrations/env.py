@@ -16,8 +16,6 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from autobot_shared.ssot_config import config
-
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -26,7 +24,9 @@ import canvas.models  # noqa: F401
 from autobot_shared.async_compat import run_or_schedule
 
 # Import models to register with SQLAlchemy
-from llc.models.activity import LLCBase  # noqa: F401 — registers LLC tables with metadata
+from llc.models.activity import (  # noqa: F401 — registers LLC tables with metadata
+    LLCBase,
+)
 from user_management.config import get_deployment_config
 from user_management.models import Base
 

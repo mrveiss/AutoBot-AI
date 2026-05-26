@@ -31,13 +31,16 @@ import asyncio
 import re
 from typing import Any
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config as _ssot_config
+
 logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Feature flag
 # ---------------------------------------------------------------------------
 
-TIERED_CONTEXT_ENABLED: bool = config.tiered_context_enabled.lower() == "true"
+TIERED_CONTEXT_ENABLED: bool = _ssot_config.tiered_context_enabled.lower() == "true"
 
 # ---------------------------------------------------------------------------
 # Retrieval-trigger keywords for L3

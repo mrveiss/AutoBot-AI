@@ -17,10 +17,9 @@ Test coverage:
 
 from __future__ import annotations
 
-import asyncio
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -32,7 +31,6 @@ if str(_here) not in sys.path:
 
 from pipeline_dispatcher import (  # noqa: E402
     PipelineDispatcher,
-    PipelineMetrics,
     WorkerDroppedError,
     WorkerNode,
     WorkerState,

@@ -136,7 +136,7 @@ class LLCWorkItem(Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
-    work_products: Mapped[List["LLCWorkProduct"]] = relationship(  # type: ignore[name-defined]
+    work_products: Mapped[List["LLCWorkProduct"]] = relationship(  # type: ignore[name-defined]  # noqa: F821
         "LLCWorkProduct",
         back_populates="work_item",
         cascade="all, delete-orphan",
