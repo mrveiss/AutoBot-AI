@@ -36,6 +36,7 @@ from a2a.security import SecurityCardSigner
 from a2a.task_executor import execute_a2a_task
 from a2a.task_manager import get_task_manager
 from a2a.tracing import extract_caller_id, new_trace_id
+from a2a.trust_score import Capability, TrustAccessDenied, get_trust_manager
 from a2a.types import Task
 from api.schemas_agent import (
     A2AAgentCardResponse,
@@ -206,6 +207,18 @@ async def submit_task(
     jwt_sub = _extract_jwt_sub(authorization)
     caller_id = extract_caller_id(x_a2a_agent_id, jwt_sub, addr)
     trace_id = new_trace_id()
+
+    # Issue #7358: gate task submission by behavioural trust level.
+    # Peers that have not yet earned LIMITED trust (≥ 0.30 score) are
+    # restricted to discovery endpoints only.
+    if x_a2a_agent_id:
+        try:
+            get_trust_manager().require_capability(x_a2a_agent_id, Capability.SUBMIT_TASKS)
+        except TrustAccessDenied as exc:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Peer trust level insufficient for task submission: {exc.level.value}",
+            ) from exc
 
     manager = get_task_manager()
     task = manager.create_task(
