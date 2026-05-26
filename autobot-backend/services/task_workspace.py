@@ -262,11 +262,7 @@ async def release_for_task(
         from sqlalchemy import select  # local import — avoids heavy dep at module load
         from models.heartbeat import AgentRuntimeState
 
-        result = await session.execute(
-            select(AgentRuntimeState).where(
-                AgentRuntimeState.current_task_id == task_id
-            )
-        )
+        result = await session.execute(select(AgentRuntimeState).where(AgentRuntimeState.current_task_id == task_id))
         state = result.scalar_one_or_none()
         if state is None or state.workspace_dir is None:
             return
