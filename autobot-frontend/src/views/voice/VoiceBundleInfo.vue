@@ -39,9 +39,14 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { inject, onMounted } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
-import { useVoiceBundle, VOICE_BUNDLE_LABELS } from '@/composables/useVoiceBundle'
+import {
+  useVoiceBundle,
+  VOICE_BUNDLE_LABELS,
+  VOICE_BUNDLE_STATE_KEY,
+} from '@/composables/useVoiceBundle'
+import type { VoiceBundleInjectedState } from '@/composables/useVoiceBundle'
 
 const RESOLUTION_LABELS = {
   user_override: 'Admin override',
@@ -49,9 +54,15 @@ const RESOLUTION_LABELS = {
   global_env: 'System default',
 } as const
 
-const { bundleInfo, loading, error, fetchMyBundle } = useVoiceBundle()
+const injected = inject<VoiceBundleInjectedState | null>(VOICE_BUNDLE_STATE_KEY, null)
+const composable = injected === null ? useVoiceBundle() : null
+const bundleInfo = injected?.bundleInfo ?? composable!.bundleInfo
+const loading = injected?.loading ?? composable!.loading
+const error = injected?.error ?? composable!.error
 
-onMounted(fetchMyBundle)
+onMounted(() => {
+  if (composable) composable.fetchMyBundle()
+})
 </script>
 
 <style scoped>
