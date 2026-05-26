@@ -10,7 +10,7 @@
 prometheus-client>=0.25.0
 
 # Web framework
-fastapi>=0.136.1                # SECURITY UPDATE - requires starlette >=0.52.1
+fastapi>=0.136.3                # SECURITY UPDATE - requires starlette >=0.52.1
 starlette>=0.52.1              # explicit pin — avoids python_multipart __all__ ImportError on older starlette (#8275)
 uvicorn[standard]>=0.48.0
 
