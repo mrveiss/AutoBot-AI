@@ -21,7 +21,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, watchEffect, useSlots, Comment } from 'vue'
+import { computed, ref, watchEffect, useSlots, Comment } from 'vue'
 import type { ButtonVariant, ComponentSize } from '@/types/component-props'
 import { size as SIZE_VALUES } from '@/design-tokens/tokens'
 import { createLogger } from '@/utils/debugUtils'
@@ -67,7 +67,7 @@ const props = withDefaults(defineProps<Props>(), {
 const slots = useSlots()
 
 if (import.meta.env.DEV) {
-  onMounted(() => {
+  watchEffect(() => {
     const hasVisibleText = !!props.label || !!slots.default?.()?.some(
       (vnode: any) => vnode.type !== Comment && vnode.children
     )
@@ -77,9 +77,6 @@ if (import.meta.env.DEV) {
         'This is a WCAG 4.1.2 failure. Add :ariaLabel="$t(\'common.actionName\')" to the button.'
       )
     }
-  })
-
-  watchEffect(() => {
     if (props.size !== undefined && !(SIZE_VALUES as readonly string[]).includes(props.size)) {
       logger.warn(`Invalid "size" prop: "${props.size}". Expected: ${SIZE_VALUES.join(' | ')}`)
     }
