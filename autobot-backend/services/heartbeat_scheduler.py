@@ -243,16 +243,20 @@ class HeartbeatScheduler:
             agent_type = agent_row.agent_type if agent_row else "worker"
 
             # Allocate per-task worktree workspace (GH#6471)
-            workspace_dir: str | None = state.workspace_dir  # carry forward existing value
+            workspace_dir: str | None = None
             if state.current_task_id:
                 try:
-                    ws_info = await asyncio.get_event_loop().run_in_executor(
+                    task_id_for_ws = state.current_task_id
+                    ws_info = await asyncio.get_running_loop().run_in_executor(
                         None,
-                        lambda: task_workspace.allocate(state.current_task_id, agent_id),
+                        lambda: task_workspace.allocate(task_id_for_ws, agent_id),
                     )
                     workspace_dir = ws_info.worktree_path
                     state.workspace_dir = workspace_dir
                 except Exception as exc:
+                    # Clear stale workspace_dir so the adapter does not run
+                    # in a deleted or invalid worktree (GH#6471 review finding).
+                    state.workspace_dir = None
                     logger.warning(
                         "Workspace allocation failed for task=%s agent=%s: %s",
                         state.current_task_id,

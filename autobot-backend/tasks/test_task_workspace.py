@@ -139,3 +139,35 @@ class TestHeartbeatResume:
 
         assert ws2.created_at == ws1.created_at
         assert ws2.branch == ws1.branch
+
+    @pytest.mark.parametrize(
+        "bad_id",
+        [
+            "../../etc/passwd",
+            "../secret",
+            "task/../../foo",
+            "a" * 129,
+            "",
+            "foo bar",
+            "foo\x00bar",
+        ],
+    )
+    def test_allocate_rejects_traversal_task_ids(
+        self, git_repo: Path, bad_id: str
+    ) -> None:
+        """Path traversal and malformed task_ids must raise ValueError (GH#6471 blocker 2)."""
+        with pytest.raises(ValueError, match="Invalid task_id"):
+            allocate(bad_id, "agent-sec", repo_root=git_repo)
+
+    @pytest.mark.parametrize(
+        "bad_id",
+        [
+            "../../etc/passwd",
+            "../worktrees",
+        ],
+    )
+    def test_release_rejects_traversal_task_ids(
+        self, git_repo: Path, bad_id: str
+    ) -> None:
+        with pytest.raises(ValueError, match="Invalid task_id"):
+            release(bad_id, repo_root=git_repo)
