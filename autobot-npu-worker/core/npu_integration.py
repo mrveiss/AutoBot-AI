@@ -271,11 +271,26 @@ class NPUWorkerClient:
             logger.error("Failed to get NPU models: %s", e)
             return {"loaded_models": {}, "error": "Failed to retrieve NPU models"}
 
-    async def load_model(self, model_id: str, device: str = "CPU") -> Dict[str, Any]:
-        """Load a model on the NPU worker"""
+    async def load_model(
+        self,
+        model_id: str,
+        device: str = "CPU",
+        architecture_family: str | None = None,
+    ) -> Dict[str, Any]:
+        """Load a model on the NPU worker.
+
+        Args:
+            model_id: Opaque model identifier.
+            device: Target OpenVINO device (e.g. "CPU", "NPU").
+            architecture_family: Architecture family for dispatch (GH#7352).
+                One of "transformer", "state_space", "linear_attention", "hybrid".
+                Defaults to "transformer" on the worker side when omitted.
+        """
         try:
             http_client = await self._get_http_client()
-            payload = {"model_id": model_id, "device": device}
+            payload: Dict[str, Any] = {"model_id": model_id, "device": device}
+            if architecture_family is not None:
+                payload["architecture_family"] = architecture_family
             async with await http_client.post(f"{self.npu_endpoint}/models/load", json=payload) as response:
                 return await response.json()
         except Exception as e:
