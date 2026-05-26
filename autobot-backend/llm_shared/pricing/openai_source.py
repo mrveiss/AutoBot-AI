@@ -11,7 +11,6 @@ accept a future live-fetch implementation without changes to callers.
 from __future__ import annotations
 
 from autobot_shared.logging_manager import get_logger
-
 from llm_shared.pricing.sources import ModelPricing, PricingSource
 
 logger = get_logger(__name__)

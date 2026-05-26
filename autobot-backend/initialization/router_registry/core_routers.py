@@ -9,10 +9,11 @@ basic AutoBot functionality. These routers should always be available
 and are imported at module level to fail fast if missing.
 """
 
+import api.pricing_health  # noqa: F401 — registers KnownProbes.PRICING probe (GH#6480)
+
 # Core router imports - these are required for basic functionality
 from api.adapters import router as adapters_router  # Issue #1403
 from api.admin_event_logs import router as admin_event_logs_router  # Issue #4461
-import api.pricing_health  # noqa: F401 — registers KnownProbes.PRICING probe (GH#6480)
 from api.admin_pricing import router as admin_pricing_router  # GH#6480
 from api.admin_schedulers import router as admin_schedulers_router  # GH#6594
 from api.agent import router as agent_router

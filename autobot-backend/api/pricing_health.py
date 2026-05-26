@@ -21,8 +21,9 @@ _MAX_STALE_SECONDS = 26 * 60 * 60  # 26 h — 24 h refresh cadence + 2 h grace
 @register_health_probe(KnownProbes.PRICING)
 async def _pricing_health_probe(request: Request | None) -> ComponentHealth:
     try:
-        from llm_shared.pricing.redis_store import PricingRedisStore
         from datetime import datetime, timezone
+
+        from llm_shared.pricing.redis_store import PricingRedisStore
 
         store = PricingRedisStore()
         status = await store.get_refresh_status()

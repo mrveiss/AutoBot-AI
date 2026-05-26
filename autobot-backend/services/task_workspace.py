@@ -260,6 +260,7 @@ async def release_for_task(
     """
     try:
         from sqlalchemy import select  # local import — avoids heavy dep at module load
+
         from models.heartbeat import AgentRuntimeState
 
         result = await session.execute(select(AgentRuntimeState).where(AgentRuntimeState.current_task_id == task_id))

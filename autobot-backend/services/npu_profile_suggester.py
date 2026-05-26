@@ -11,11 +11,10 @@ capabilities_summary so the pair-confirm dialog can pre-fill the profile selecto
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from typing import Any, Dict, List
-
-import logging
 
 import yaml
 

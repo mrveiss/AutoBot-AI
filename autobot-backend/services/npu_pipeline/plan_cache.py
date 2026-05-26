@@ -16,7 +16,6 @@ from typing import List, Optional
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-
 from services.npu_pipeline.shard_planner import LayerRange, ShardAssignment
 
 logger = get_logger(__name__)
