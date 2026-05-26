@@ -1,5 +1,5 @@
 # LangChain ecosystem — tightly coupled versions
-langchain==1.2.18                # Issue #2808: bumped to match canonical minimum (was 1.2.12)
+langchain==1.2.24                # GH#8675: bumped from 1.2.18 — PVE-2026-88512 SQL injection fix
 langchain-classic==1.0.7
 langchain-community==0.4.1
 langchain-core>=1.2.31,<2.0.0    # #7049: floor bumped from ==1.2.28 — langchain-text-splitters 1.1.2 requires >=1.2.31
