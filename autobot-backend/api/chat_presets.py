@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
@@ -57,12 +57,14 @@ class PresetUpdate(BaseModel):
 
 @router.get("/chat/presets")
 async def list_presets(
-    request: Request,
     current_user: dict = Depends(get_current_user),
 ) -> JSONResponse:
     """Return all presets for the authenticated user."""
     user_id = current_user.get("username", "")
     redis = await get_async_redis_client(database=REDIS_DB)
+    if redis is None:
+        logger.warning("chat_presets: Redis unavailable for user %s", user_id)
+        raise HTTPException(status_code=503, detail="Service temporarily unavailable")
     raw = await redis.hgetall(_hash_key(user_id))
     presets = []
     for value in raw.values():
@@ -77,7 +79,6 @@ async def list_presets(
 @router.post("/chat/presets", status_code=201)
 async def create_preset(
     payload: PresetCreate,
-    request: Request,
     current_user: dict = Depends(get_current_user),
 ) -> JSONResponse:
     """Create a new preset for the authenticated user."""
@@ -92,6 +93,9 @@ async def create_preset(
         "updatedAt": now,
     }
     redis = await get_async_redis_client(database=REDIS_DB)
+    if redis is None:
+        logger.warning("chat_presets: Redis unavailable for user %s", user_id)
+        raise HTTPException(status_code=503, detail="Service temporarily unavailable")
     await redis.hset(_hash_key(user_id), preset["id"], json.dumps(preset))
     logger.info("Created preset %s for user %s", preset["id"], user_id)
     return JSONResponse(content=preset, status_code=201)
@@ -101,12 +105,14 @@ async def create_preset(
 async def update_preset(
     preset_id: str,
     payload: PresetUpdate,
-    request: Request,
     current_user: dict = Depends(get_current_user),
 ) -> JSONResponse:
     """Update an existing preset owned by the authenticated user."""
     user_id = current_user.get("username", "")
     redis = await get_async_redis_client(database=REDIS_DB)
+    if redis is None:
+        logger.warning("chat_presets: Redis unavailable for user %s", user_id)
+        raise HTTPException(status_code=503, detail="Service temporarily unavailable")
     raw = await redis.hget(_hash_key(user_id), preset_id)
     if raw is None:
         raise HTTPException(status_code=404, detail="Preset not found")
@@ -131,12 +137,14 @@ async def update_preset(
 @router.delete("/chat/presets/{preset_id}", status_code=204)
 async def delete_preset(
     preset_id: str,
-    request: Request,
     current_user: dict = Depends(get_current_user),
 ) -> Response:
     """Delete a preset owned by the authenticated user."""
     user_id = current_user.get("username", "")
     redis = await get_async_redis_client(database=REDIS_DB)
+    if redis is None:
+        logger.warning("chat_presets: Redis unavailable for user %s", user_id)
+        raise HTTPException(status_code=503, detail="Service temporarily unavailable")
     deleted = await redis.hdel(_hash_key(user_id), preset_id)
     if deleted == 0:
         raise HTTPException(status_code=404, detail="Preset not found")
