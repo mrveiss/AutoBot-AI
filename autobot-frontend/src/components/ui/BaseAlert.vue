@@ -40,11 +40,6 @@
 import { ref, computed, onMounted, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
-
-const ALERT_VARIANTS = ['success', 'info', 'warning', 'error', 'critical'] as const
-const ALERT_SIZES = ['default', 'compact'] as const
-
-const logger = createLogger('BaseAlert')
 import {
   CheckCircleIcon,
   InformationCircleIcon,
@@ -52,6 +47,11 @@ import {
   XCircleIcon,
   XMarkIcon
 } from '@heroicons/vue/24/outline'
+
+const ALERT_VARIANTS = ['success', 'info', 'warning', 'error', 'critical'] as const
+const ALERT_SIZES = ['default', 'compact'] as const
+
+const logger = createLogger('BaseAlert')
 
 export interface BaseAlertProps {
   variant?: 'success' | 'info' | 'warning' | 'error' | 'critical'
