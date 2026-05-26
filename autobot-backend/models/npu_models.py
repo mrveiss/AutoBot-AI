@@ -353,9 +353,7 @@ class WorkerTestResult(BaseModel):
                     "available_memory_gb": 8.5,
                 },
                 "recommended_profile": "inference",
-                "recommended_models": [
-                    {"id": "gemma-3-4b", "reason": "fits in 8GB VRAM, good quality/size tradeoff"}
-                ],
+                "recommended_models": [{"id": "gemma-3-4b", "reason": "fits in 8GB VRAM, good quality/size tradeoff"}],
                 "vram_gb": 8.0,
                 "compute_class": "consumer-gpu",
                 "capabilities_summary": "CUDA, 1× RTX 3060 8GB, 32GB RAM",

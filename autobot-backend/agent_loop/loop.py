@@ -1050,9 +1050,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
 
         if isinstance(error, CRITICAL_ERROR_TYPES):
             self._fatal_error = error
-            self._fatal_reason = (
-                f"Critical error {type(error).__name__} — halting without retry"
-            )
+            self._fatal_reason = f"Critical error {type(error).__name__} — halting without retry"
             logger.error(
                 "AgentLoop: FATAL %s (severity=%s) — %s",
                 type(error).__name__,

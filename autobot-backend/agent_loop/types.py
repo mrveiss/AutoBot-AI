@@ -193,10 +193,10 @@ class AgentLoopConfig:
     max_tool_retries: int = RetryConfig.MIN_RETRIES  # 2 - Max retries per tool
 
     # Per-severity retry budgets (GH#6628)
-    max_retries_critical: int = 0   # CRITICAL: immediate halt, no retry
-    max_retries_high: int = 1       # HIGH severity: 1 retry
-    max_retries_medium: int = 3     # MEDIUM severity: 3 retries (legacy default)
-    max_retries_low: int = 5        # LOW/RETRY-class: 5 retries (transient errors)
+    max_retries_critical: int = 0  # CRITICAL: immediate halt, no retry
+    max_retries_high: int = 1  # HIGH severity: 1 retry
+    max_retries_medium: int = 3  # MEDIUM severity: 3 retries (legacy default)
+    max_retries_low: int = 5  # LOW/RETRY-class: 5 retries (transient errors)
 
     # Repetitive tool-call detection (#3255)
     max_identical_tool_calls: int = 3  # Halt when same tool+args seen N times
