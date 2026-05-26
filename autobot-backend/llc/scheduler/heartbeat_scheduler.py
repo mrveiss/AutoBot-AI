@@ -32,7 +32,10 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
-from croniter import croniter
+try:
+    from croniter import croniter as _croniter_cls
+except ImportError:
+    _croniter_cls = None  # type: ignore[assignment]  # croniter not installed
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -617,8 +620,10 @@ def get_heartbeat_scheduler() -> HeartbeatScheduler:
 
 def _next_fire(cron_expr: str, base_ts: float) -> float:
     """Return the next scheduled epoch (float) after *base_ts*."""
+    if _croniter_cls is None:
+        raise RuntimeError("croniter is required for heartbeat scheduling — pip install croniter")
     base_dt = datetime.fromtimestamp(base_ts, tz=timezone.utc)
-    itr = croniter(cron_expr, base_dt)
+    itr = _croniter_cls(cron_expr, base_dt)
     return itr.get_next(float)
 
 
