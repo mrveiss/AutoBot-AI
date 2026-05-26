@@ -141,6 +141,9 @@ celery_app.conf.update(
 
 # Auto-discover tasks from tasks and workers modules
 celery_app.autodiscover_tasks(["tasks", "workers"])
+# GH#6480: pricing refresh task lives in services/, not tasks/ — import explicitly so
+# workers register it. autodiscover_tasks only scans the listed packages.
+import services.pricing_refresh  # noqa: F401
 
 
 # =========================================================================

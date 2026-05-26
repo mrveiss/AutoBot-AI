@@ -98,8 +98,16 @@ class PricingRedisStore:
                 for pricing in pricings.values():
                     key = _model_key(pricing.provider, pricing.model_id)
                     pipe.setex(key, _TTL_SECONDS, json.dumps(pricing.to_dict()))
-                results = await pipe.execute()
-            count = sum(1 for r in results if r)
+                # raise_on_error=False collects per-command exceptions in the results list
+                # rather than short-circuiting on the first failure. We then count only
+                # genuine successes (True / b'OK') — Exception objects in the list are
+                # not counted and are logged individually.
+                results = await pipe.execute(raise_on_error=False)
+            for r in results:
+                if isinstance(r, Exception):
+                    logger.warning("PricingRedisStore.set_many: pipeline command failed: %s", r)
+                elif r is True or r == b"OK":
+                    count += 1
         except Exception as exc:
             logger.warning("PricingRedisStore.set_many failed: %s", exc)
         return count

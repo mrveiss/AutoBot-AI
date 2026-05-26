@@ -15,7 +15,7 @@ from fastapi import Request
 
 from api.system_health import ComponentHealth, KnownProbes, register_health_probe
 
-_MAX_STALE_SECONDS = 90 * 60  # 25 h nominal + 90 min grace
+_MAX_STALE_SECONDS = 26 * 60 * 60  # 26 h — 24 h refresh cadence + 2 h grace
 
 
 @register_health_probe(KnownProbes.PRICING)
