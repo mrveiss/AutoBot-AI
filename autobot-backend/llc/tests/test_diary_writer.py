@@ -4,7 +4,7 @@
 """Unit tests for AgentDiaryKbWriter (GH#8237)."""
 
 import sys
-from typing import Any, Dict, Optional
+from typing import Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

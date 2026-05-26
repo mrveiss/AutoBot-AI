@@ -8,14 +8,13 @@ Run with: python -m pytest autobot-backend/llc/ -k sprint_close
 """
 
 import uuid
-from datetime import date, datetime, timezone
-from decimal import Decimal
+from datetime import date
 from typing import Optional
-from unittest.mock import ANY, AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock
 
 import pytest
 
-from llc.models.enums import ApprovalStatus, ApprovalType, SprintStatus, WorkItemStatus
+from llc.models.enums import ApprovalStatus, ApprovalType, SprintStatus
 from llc.models.sprint import LLCSprint
 from llc.services.sprint_autoclose import SprintAutoCloseService
 

@@ -13,7 +13,6 @@ import importlib.util
 import sys
 from pathlib import Path
 
-import pytest
 
 # Import scheduler_registry directly to avoid services/__init__.py pulling in
 # ai_stack_client (which transitively imports autobot_shared modules that require

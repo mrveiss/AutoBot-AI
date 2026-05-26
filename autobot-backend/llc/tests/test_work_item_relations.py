@@ -1,10 +1,9 @@
 """Tests for LLC WorkItemRelationService (GH#8252)."""
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-import sqlalchemy as sa
 
 from llc.models.enums import WorkItemRelationType, WorkItemStatus
 from llc.models.work_item import LLCWorkItem, LLCWorkItemRelation

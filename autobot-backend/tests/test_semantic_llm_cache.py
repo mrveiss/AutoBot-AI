@@ -8,7 +8,6 @@ Uses pure-Python / numpy assertions; does not import from llm_shared.cache
 or any service module so the test runs without external infrastructure.
 """
 
-import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 

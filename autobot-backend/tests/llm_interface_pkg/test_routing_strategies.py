@@ -8,7 +8,7 @@ Tests ComplexityRouter, CostRouter, LatencyRouter, and the strategy registry
 without hitting Redis or real LLM providers.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -17,7 +17,7 @@ from llm_shared.tiered_routing.complexity_router import ComplexityRouter
 from llm_shared.tiered_routing.cost_router import CostRouter
 from llm_shared.tiered_routing.latency_router import LatencyRouter
 from llm_shared.tiered_routing.registry import get_active_router
-from llm_shared.tiered_routing.tier_config import ComplexityResult, TierConfig, TierModels
+from llm_shared.tiered_routing.tier_config import TierConfig, TierModels
 from llm_shared.tiered_routing.tier_router import TieredModelRouter, get_tiered_router
 
 SIMPLE_MSG = [{"role": "user", "content": "hi"}]

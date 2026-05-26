@@ -7,7 +7,7 @@ Acceptance tests for WebCrawlerConnector (Issue #8151).
 Uses a mocked WebFetcher so no live HTTP requests are made.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 

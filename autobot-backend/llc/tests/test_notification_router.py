@@ -7,11 +7,11 @@ from __future__ import annotations
 
 import asyncio
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from llc.notifications.publisher import LLCEvent, LLCWebSocketPublisher
+from llc.notifications.publisher import LLCWebSocketPublisher
 from llc.notifications.router import LLCNotificationRouter
 
 

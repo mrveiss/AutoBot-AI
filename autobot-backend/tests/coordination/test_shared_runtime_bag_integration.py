@@ -122,7 +122,6 @@ class _FakePubSub:
 
 def _make_worker(shared_redis: _FakeRedis, namespace: str = "integration_ns") -> SharedRuntimeBag[int]:
     """Return a SharedRuntimeBag whose Redis calls hit *shared_redis*."""
-    from unittest.mock import patch
 
     bag: SharedRuntimeBag[int] = SharedRuntimeBag(namespace, int, default_ttl_s=60)
 
@@ -131,7 +130,6 @@ def _make_worker(shared_redis: _FakeRedis, namespace: str = "integration_ns") ->
     async def _fake_client(database: str = "main") -> _FakeRedis:  # type: ignore[override]
         return shared_redis
 
-    import autobot_shared.coordination.shared_runtime_bag as _mod
 
     bag.get = lambda key: _patched_get(bag, shared_redis, key)  # type: ignore[method-assign]
     bag.set = lambda key, value, ttl_s=None: _patched_set(bag, shared_redis, key, value, ttl_s)  # type: ignore[method-assign]

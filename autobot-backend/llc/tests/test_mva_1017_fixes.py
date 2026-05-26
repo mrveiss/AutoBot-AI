@@ -3,14 +3,12 @@
 # Author: mrveiss
 """Targeted tests for MVA-1017 gap fixes (GH#8479 #8478 #8476 #8474 #8462 #8461 #8493)."""
 
-import uuid
 from decimal import Decimal
-from typing import Any, Dict, Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import Any, Dict
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from llc.models.enums import SprintStatus
 
 # ---------------------------------------------------------------------------
 # GH#8493 — falsy-zero token metadata lookup
@@ -67,7 +65,6 @@ def test_falsy_zero_completion_tokens_not_shadowed():
 @pytest.mark.asyncio
 async def test_update_limit_uses_decimal_not_str() -> None:
     """GH#8462: budget_limit must be sent as Decimal, not str, to the DB update."""
-    from sqlalchemy import update
 
     from llc.models.budget import LLCAgentBudget
 

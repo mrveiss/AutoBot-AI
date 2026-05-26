@@ -9,14 +9,13 @@ Covers:
   6. Removed/disabled agent is dropped from the sorted set on next tick.
 """
 
-import asyncio
 import uuid
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from llc.models.enums import HeartbeatInvocationSource, HeartbeatRunStatus
+from llc.models.enums import HeartbeatRunStatus
 from llc.models.heartbeat_run import LLCHeartbeatRun
 from llc.scheduler.heartbeat_scheduler import (
     _SCHEDULE_KEY,

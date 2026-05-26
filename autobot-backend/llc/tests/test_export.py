@@ -3,9 +3,7 @@
 # Author: mrveiss
 """Tests for PortabilityService — company template and snapshot export (GH#8245)."""
 
-import json
 import uuid
-from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

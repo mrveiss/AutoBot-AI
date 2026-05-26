@@ -4,7 +4,7 @@
 """Unit tests for MCP bridge plugin discovery and toggle logic (Issue #4462)."""
 
 from dataclasses import fields
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 

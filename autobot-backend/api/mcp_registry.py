@@ -34,7 +34,7 @@ Key Features:
 import importlib
 import importlib.metadata
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Request

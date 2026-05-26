@@ -12,7 +12,6 @@ broken transitional deps in the dev venv).
 import asyncio
 import hashlib
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -29,7 +28,6 @@ _CLASSIFICATION_CACHE_TTL = int(_os.environ.get("AUTOBOT_CLASSIFICATION_CACHE_TT
 
 import asyncio as _asyncio
 import hashlib as _hashlib
-import json as _json
 
 
 class _StubAgent:

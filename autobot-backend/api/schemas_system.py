@@ -2342,7 +2342,6 @@ class AgentPauseRequest(BaseModel):
 class AgentResumeRequest(BaseModel):
     """Request body for POST /heartbeat/{agent_id}/resume (GH#6476)."""
 
-    pass
 
 
 class AgentTerminateRequest(BaseModel):

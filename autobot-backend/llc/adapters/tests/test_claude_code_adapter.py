@@ -3,20 +3,17 @@
 # Author: mrveiss
 """Tests for ClaudeCodeAdapter (GH#8258)."""
 
-import asyncio
 import json
 import os
-import signal
 import tempfile
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from llc.adapters.base import AdapterRunStatus, LLCAdapter
+from llc.adapters.base import LLCAdapter
 from llc.adapters.claude_code_adapter import (
     ClaudeCodeAdapter,
-    _output_path,
     _state_path,
 )
 from llc.models.enums import LLCRunStatus

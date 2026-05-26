@@ -13,11 +13,10 @@ Covers:
 """
 
 import uuid
-from typing import Any, Dict, Optional
+from typing import Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import pytest_asyncio
 
 from llc.models.enums import LLCAgentStatus
 from llc.services.activity_log import ActivityEventType, LLCActivityLogService

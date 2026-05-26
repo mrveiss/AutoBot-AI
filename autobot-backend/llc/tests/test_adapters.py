@@ -3,10 +3,7 @@
 # Author: mrveiss
 """Tests for LLC adapter protocol, ProcessAdapter, HttpAdapter, and registry (GH#8226)."""
 
-import asyncio
 import signal
-import sys
-import types
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

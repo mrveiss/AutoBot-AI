@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -320,7 +320,7 @@ class TestCapBreachDisconnect:
 
     @pytest.mark.asyncio
     async def test_no_breach_within_limits(self):
-        from services.voice_realtime_telemetry import CapBreachError
+        pass
 
         record = _make_record(
             session_id="cap3",

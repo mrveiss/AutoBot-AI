@@ -10,16 +10,14 @@ pub/sub fanout, using a fake in-memory Redis to avoid real network deps.
 
 from __future__ import annotations
 
-import asyncio
 import json
 from collections.abc import AsyncIterator
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from autobot_shared.coordination.shared_runtime_bag import (
-    ChangeEvent,
     SharedRuntimeBag,
     _changes_channel,
     _value_key,

@@ -142,7 +142,7 @@ async def test_concurrent_pickup_only_one_wins(fake_redis):
 async def test_add_active_task_blocked_on_second_agent(fake_redis, monkeypatch):
     """add_active_task returns False for the second agent on the same task."""
     from agents.agent_orchestration.distributed_management import DistributedAgentManager
-    from agents.agent_orchestration.types import CircuitState, DistributedAgentInfo
+    from agents.agent_orchestration.types import DistributedAgentInfo
 
     mgr = DistributedAgentManager(builtin_agents={})
 
