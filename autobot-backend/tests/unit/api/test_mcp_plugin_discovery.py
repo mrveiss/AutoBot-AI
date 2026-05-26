@@ -10,7 +10,6 @@ import pytest
 
 from services.mcp_bridge_manifest import MCPBridgeManifest
 
-
 # ---------------------------------------------------------------------------
 # MCPBridgeManifest dataclass tests
 # ---------------------------------------------------------------------------
