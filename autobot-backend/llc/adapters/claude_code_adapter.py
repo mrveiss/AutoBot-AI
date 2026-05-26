@@ -10,10 +10,13 @@ adapter_config schema::
         "max_turns": 10,
         "allowed_tools": ["Bash", "Read"],
         "output_dir": "/tmp",
-        "timeout_seconds": 3600
+        "timeout_seconds": 3600,
+        "workspace_dir": "/path/to/worktree"
     }
 
 ``run_id`` is ``"<pid>/<session_id>"``.
+``workspace_dir`` sets the subprocess cwd; if the directory has been deleted the
+adapter retries without it and clears the config value for subsequent calls.
 """
 
 from __future__ import annotations
@@ -118,14 +121,33 @@ class ClaudeCodeAdapter:
         if workspace_dir:
             env["AUTOBOT_WORKSPACE_DIR"] = workspace_dir
 
-        out_fh = open(output_file, "w", encoding="utf-8")  # noqa: WPS515
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=out_fh,
-            stderr=asyncio.subprocess.PIPE,
-            env=env,
-            cwd=workspace_dir or None,
-        )
+        out_fh = open(output_file, "w", encoding="utf-8")
+        try:
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=out_fh,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=env,
+                    cwd=workspace_dir or None,
+                )
+            except FileNotFoundError:
+                if not workspace_dir:
+                    raise
+                logger.warning(
+                    "ClaudeCodeAdapter: workspace_dir %r missing, retrying without cwd",
+                    workspace_dir,
+                )
+                context.pop("workspace_dir", None)
+                workspace_dir = None
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=out_fh,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=env,
+                )
+        finally:
+            out_fh.close()
 
         run_id = f"{proc.pid}/{session_id}"
         logger.info(
