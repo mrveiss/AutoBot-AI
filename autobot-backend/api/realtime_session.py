@@ -23,7 +23,7 @@ from autobot_shared.ssot_config import get_config
 logger = get_logger(__name__)
 router = APIRouter()
 
-_OPENAI_REALTIME_URL = "https://api.openai.com/v1/realtime/calls"
+_OPENAI_REALTIME_URL = "https://api.openai.com/v1/realtime/sessions"
 _OPENAI_BETA_HEADER = "realtime=v1"
 
 
@@ -74,7 +74,8 @@ async def create_realtime_session(
     form.add_field("session", session, content_type="application/json")
 
     try:
-        async with aiohttp.ClientSession() as http:
+        timeout = aiohttp.ClientTimeout(connect=30, total=60)
+        async with aiohttp.ClientSession(timeout=timeout) as http:
             async with http.post(_OPENAI_REALTIME_URL, data=form, headers=headers) as upstream:
                 body = await upstream.read()
 
