@@ -2314,10 +2314,14 @@ class HeartbeatConfigRequest(BaseModel):
 
 
 class HeartbeatConfigResponse(BaseModel):
-    """Response for agent heartbeat config / runtime state."""
+    """Response for agent heartbeat config / runtime state (GH#6476)."""
 
     agent_id: str
     heartbeat_enabled: bool
+    status: str
+    paused_reason: str | None = None
+    paused_at: str | None = None
+    paused_by: str | None = None
     heartbeat_interval_seconds: int
     max_run_duration_seconds: int
     current_task_id: str | None
@@ -2326,6 +2330,25 @@ class HeartbeatConfigResponse(BaseModel):
     extra: Dict[str, Any] | None
     created_at: str | None
     updated_at: str | None
+
+
+class AgentPauseRequest(BaseModel):
+    """Request body for POST /heartbeat/{agent_id}/pause (GH#6476)."""
+
+    reason: str | None = None
+    paused_by: str | None = None
+
+
+class AgentResumeRequest(BaseModel):
+    """Request body for POST /heartbeat/{agent_id}/resume (GH#6476)."""
+
+    pass
+
+
+class AgentTerminateRequest(BaseModel):
+    """Request body for POST /heartbeat/{agent_id}/terminate (GH#6476)."""
+
+    reason: str | None = None
 
 
 class WakeupRequestCreate(BaseModel):
