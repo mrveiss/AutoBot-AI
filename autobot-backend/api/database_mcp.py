@@ -39,14 +39,6 @@ from autobot_shared.time_utils import now_utc
 from services.mcp_bridge_manifest import MCPBridgeManifest
 from type_defs.common import Metadata
 
-MANIFEST = MCPBridgeManifest(
-    name="database_mcp",
-    version="1.0.0",
-    description="Database Operations - SQLite Query and Management",
-    features=["query", "execute", "schema", "tables", "statistics", "sql_injection_prevention"],
-    endpoint="/api/database/mcp/tools",
-)
-
 from .schemas_code import (
     DatabaseDescribeSchemaResponse,
     DatabaseExecuteResponse,
@@ -60,6 +52,14 @@ from .schemas_code import (
     SQLExecuteRequest,
     SQLQueryRequest,
     TableListRequest,
+)
+
+MANIFEST = MCPBridgeManifest(
+    name="database_mcp",
+    version="1.0.0",
+    description="Database Operations - SQLite Query and Management",
+    features=["query", "execute", "schema", "tables", "statistics", "sql_injection_prevention"],
+    endpoint="/api/database/mcp/tools",
 )
 
 logger = get_logger(__name__)

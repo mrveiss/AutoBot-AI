@@ -35,7 +35,7 @@ import importlib
 import importlib.metadata
 import importlib.util
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -46,12 +46,14 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 from constants.network_constants import NetworkConstants
 from services.mcp_bridge_manifest import MCPBridgeManifest
 from type_defs.common import Metadata
 
 from .schemas_code import (
+    MCPBridgeManifestSchema,
     MCPBridgeToggleResponse,
     MCPRegistryBridgesResponse,
     MCPRegistryCacheInvalidateResponse,
@@ -206,10 +208,10 @@ mcp_cache = MCPToolCache(ttl_seconds=CACHE_TTL_SECONDS)
 # ============================================================================
 
 
-class MCP_BridgeToggleService(AsyncRedisClientMixin):
+class MCPBridgeToggleService(AsyncRedisClientMixin):
     """Manage per-bridge enable/disable state via Redis."""
 
-    _redis_database = "cache"
+    _redis_database = "main"
 
     async def is_bridge_enabled(self, name: str) -> bool:
         """Return True when bridge is enabled (default when key absent)."""
@@ -225,8 +227,29 @@ class MCP_BridgeToggleService(AsyncRedisClientMixin):
             logger.error("Failed to read bridge enabled state for %s: %s", name, e)
             return True
 
+    async def get_enabled_batch(self, names: List[str]) -> Dict[str, bool]:
+        """Return enabled state for all named bridges in a single mget call."""
+        if not names:
+            return {}
+        try:
+            redis = await self._get_redis()
+            keys = [f"mcp_bridge:enabled:{n}" for n in names]
+            values = await redis.mget(*keys)
+            result: Dict[str, bool] = {}
+            for name, value in zip(names, values):
+                if value is None:
+                    result[name] = True
+                else:
+                    if isinstance(value, bytes):
+                        value = value.decode()
+                    result[name] = value.lower() != "false"
+            return result
+        except Exception as e:
+            logger.error("Failed to batch-read bridge enabled states: %s", e)
+            return {n: True for n in names}
+
     async def set_bridge_enabled(self, name: str, enabled: bool) -> None:
-        """Set the enabled state for a bridge."""
+        """Set the enabled state for a bridge (no TTL — state is intentionally persistent)."""
         try:
             redis = await self._get_redis()
             await redis.set(f"mcp_bridge:enabled:{name}", "true" if enabled else "false")
@@ -235,14 +258,7 @@ class MCP_BridgeToggleService(AsyncRedisClientMixin):
             raise
 
 
-_toggle_service: Optional[MCP_BridgeToggleService] = None
-
-
-def _get_toggle_service() -> MCP_BridgeToggleService:
-    global _toggle_service
-    if _toggle_service is None:
-        _toggle_service = MCP_BridgeToggleService()
-    return _toggle_service
+get_toggle_service = lazy_singleton(MCPBridgeToggleService)
 
 
 # ============================================================================
@@ -332,6 +348,7 @@ _MANIFEST_REGISTRY: dict[str, Tuple[MCPBridgeManifest, str]] = {}
 
 def discover_bridges() -> List[Tuple[str, str, str, List[str]]]:
     """Discover bridges via entry-points, then fall back to module-scan."""
+    _MANIFEST_REGISTRY.clear()
     manifests: List[MCPBridgeManifest] = []
 
     # 1. Try entry-point based discovery
@@ -489,23 +506,26 @@ async def _fetch_bridges_info() -> Metadata:
     bridges = []
     # Issue #380: Get http_client once before loop instead of per-iteration
     http_client = get_http_client()
-    toggle_svc = _get_toggle_service()
+    toggle_svc = get_toggle_service()
+
+    bridge_names = [b[0] for b in MCP_BRIDGES]
+    enabled_map = await toggle_svc.get_enabled_batch(bridge_names)
 
     for bridge_name, bridge_desc, endpoint, features in MCP_BRIDGES:
         manifest_entry = _MANIFEST_REGISTRY.get(bridge_name)
         manifest_dict: Optional[dict] = None
         if manifest_entry:
             m = manifest_entry[0]
-            manifest_dict = {
-                "name": m.name,
-                "version": m.version,
-                "description": m.description,
-                "features": m.features,
-                "endpoint": m.endpoint,
-                "resource_limits": m.resource_limits,
-            }
+            manifest_dict = MCPBridgeManifestSchema(
+                name=m.name,
+                version=m.version,
+                description=m.description,
+                features=m.features,
+                endpoint=m.endpoint,
+                resource_limits=m.resource_limits,
+            ).model_dump()
 
-        enabled = await toggle_svc.is_bridge_enabled(bridge_name)
+        enabled = enabled_map.get(bridge_name, True)
 
         bridge_info = {
             "name": bridge_name,
@@ -845,7 +865,7 @@ async def get_mcp_tool_details(bridge_name: str, tool_name: str) -> Metadata:
 async def enable_mcp_bridge(name: str) -> Metadata:
     """Enable a registered MCP bridge (Issue #4462)."""
     _find_bridge_by_name(name)
-    toggle_svc = _get_toggle_service()
+    toggle_svc = get_toggle_service()
     await toggle_svc.set_bridge_enabled(name, True)
     mcp_cache.invalidate_all()
     return {
@@ -866,7 +886,7 @@ async def enable_mcp_bridge(name: str) -> Metadata:
 async def disable_mcp_bridge(name: str) -> Metadata:
     """Disable a registered MCP bridge (Issue #4462)."""
     _find_bridge_by_name(name)
-    toggle_svc = _get_toggle_service()
+    toggle_svc = get_toggle_service()
     await toggle_svc.set_bridge_enabled(name, False)
     mcp_cache.invalidate_all()
     return {
@@ -891,6 +911,11 @@ async def reload_mcp_bridge(name: str) -> Metadata:
     if not manifest_entry or not manifest_entry[1]:
         raise HTTPException(status_code=400, detail=f"No reloadable module path for bridge '{name}'")
     _, module_path = manifest_entry
+    logger.warning(
+        "reload_mcp_bridge('%s'): importlib.reload affects only the current uvicorn worker. "
+        "Other workers retain the previous module state until restarted.",
+        name,
+    )
     try:
         mod = importlib.import_module(module_path)
         importlib.reload(mod)
@@ -904,7 +929,7 @@ async def reload_mcp_bridge(name: str) -> Metadata:
         logger.error("Failed to reload bridge '%s': %s", name, e)
         raise HTTPException(status_code=500, detail=f"Failed to reload bridge '{name}': {e}")
     mcp_cache.invalidate_all()
-    toggle_svc = _get_toggle_service()
+    toggle_svc = get_toggle_service()
     enabled = await toggle_svc.is_bridge_enabled(name)
     return {
         "status": "success",

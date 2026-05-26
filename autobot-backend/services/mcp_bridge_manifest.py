@@ -4,7 +4,7 @@
 """Shared MCPBridgeManifest dataclass — imported by mcp_registry and each bridge."""
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -16,4 +16,4 @@ class MCPBridgeManifest:
     description: str
     features: List[str] = field(default_factory=list)
     endpoint: Optional[str] = None
-    resource_limits: Optional[Dict[str, int]] = None
+    resource_limits: Optional[Dict[str, Any]] = None

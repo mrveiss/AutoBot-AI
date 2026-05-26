@@ -49,12 +49,11 @@ def test_manifest_field_names():
 # ---------------------------------------------------------------------------
 
 
-def test_discover_bridges_returns_all_11():
-    # Import after clearing so that discover_bridges runs fresh
-    from api.mcp_registry import discover_bridges
+def test_discover_bridges_returns_all():
+    from api.mcp_registry import _BRIDGE_MODULE_REGISTRY, discover_bridges
 
     result = discover_bridges()
-    assert len(result) == 11
+    assert len(result) == len(_BRIDGE_MODULE_REGISTRY)
 
 
 def test_discover_bridges_structure():
@@ -101,16 +100,16 @@ def test_discover_bridges_manifest_registry_populated():
 
 
 # ---------------------------------------------------------------------------
-# MCP_BridgeToggleService tests
+# MCPBridgeToggleService tests
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_is_bridge_enabled_default_true():
     """Bridge is enabled by default when key absent in Redis."""
-    from api.mcp_registry import MCP_BridgeToggleService
+    from api.mcp_registry import MCPBridgeToggleService
 
-    svc = MCP_BridgeToggleService()
+    svc = MCPBridgeToggleService()
     mock_redis = AsyncMock()
     mock_redis.get = AsyncMock(return_value=None)
 
@@ -123,9 +122,9 @@ async def test_is_bridge_enabled_default_true():
 @pytest.mark.asyncio
 async def test_is_bridge_enabled_false_when_set():
     """Bridge returns False after being explicitly disabled."""
-    from api.mcp_registry import MCP_BridgeToggleService
+    from api.mcp_registry import MCPBridgeToggleService
 
-    svc = MCP_BridgeToggleService()
+    svc = MCPBridgeToggleService()
     mock_redis = AsyncMock()
     mock_redis.get = AsyncMock(return_value=b"false")
 
@@ -138,9 +137,9 @@ async def test_is_bridge_enabled_false_when_set():
 @pytest.mark.asyncio
 async def test_is_bridge_enabled_true_when_set():
     """Bridge returns True when explicitly enabled."""
-    from api.mcp_registry import MCP_BridgeToggleService
+    from api.mcp_registry import MCPBridgeToggleService
 
-    svc = MCP_BridgeToggleService()
+    svc = MCPBridgeToggleService()
     mock_redis = AsyncMock()
     mock_redis.get = AsyncMock(return_value=b"true")
 
@@ -152,9 +151,9 @@ async def test_is_bridge_enabled_true_when_set():
 
 @pytest.mark.asyncio
 async def test_set_bridge_enabled_calls_redis_set():
-    from api.mcp_registry import MCP_BridgeToggleService
+    from api.mcp_registry import MCPBridgeToggleService
 
-    svc = MCP_BridgeToggleService()
+    svc = MCPBridgeToggleService()
     mock_redis = AsyncMock()
     mock_redis.set = AsyncMock()
 
@@ -167,9 +166,9 @@ async def test_set_bridge_enabled_calls_redis_set():
 @pytest.mark.asyncio
 async def test_is_bridge_enabled_returns_true_on_redis_error():
     """Fail-safe: enabled=True when Redis is unavailable."""
-    from api.mcp_registry import MCP_BridgeToggleService
+    from api.mcp_registry import MCPBridgeToggleService
 
-    svc = MCP_BridgeToggleService()
+    svc = MCPBridgeToggleService()
 
     with patch.object(svc, "_get_redis", side_effect=Exception("Redis down")):
         result = await svc.is_bridge_enabled("git_mcp")
@@ -183,9 +182,9 @@ async def test_is_bridge_enabled_returns_true_on_redis_error():
 
 
 def test_mcp_bridges_populated():
-    from api.mcp_registry import MCP_BRIDGES
+    from api.mcp_registry import MCP_BRIDGES, _BRIDGE_MODULE_REGISTRY
 
-    assert len(MCP_BRIDGES) == 11
+    assert len(MCP_BRIDGES) == len(_BRIDGE_MODULE_REGISTRY)
 
 
 def test_mcp_bridges_backward_compat_tuple_format():

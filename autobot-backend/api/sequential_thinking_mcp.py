@@ -18,17 +18,8 @@ import asyncio
 from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
-from services.mcp_bridge_manifest import MCPBridgeManifest
 
 from api.schemas_common import DataResponse
-
-MANIFEST = MCPBridgeManifest(
-    name="sequential_thinking_mcp",
-    version="1.0.0",
-    description="Sequential Thinking - Dynamic Problem-Solving Framework",
-    features=["sequential_thinking", "thought_tracking", "branching", "revision"],
-    endpoint="/api/sequential_thinking/mcp/tools",
-)
 from api.schemas_workflows import (
     SequentialThinkingClearData,
     SequentialThinkingMCPTool,
@@ -41,7 +32,16 @@ from api.schemas_workflows import (
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from services.mcp_bridge_manifest import MCPBridgeManifest
 from type_defs.common import Metadata
+
+MANIFEST = MCPBridgeManifest(
+    name="sequential_thinking_mcp",
+    version="1.0.0",
+    description="Sequential Thinking - Dynamic Problem-Solving Framework",
+    features=["sequential_thinking", "thought_tracking", "branching", "revision"],
+    endpoint="/api/sequential_thinking/mcp/tools",
+)
 
 logger = get_logger(__name__)
 router = APIRouter(
