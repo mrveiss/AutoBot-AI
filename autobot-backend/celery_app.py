@@ -139,8 +139,8 @@ celery_app.conf.update(
     task_send_sent_event=True,
 )
 
-# Auto-discover tasks from tasks module
-celery_app.autodiscover_tasks(["tasks"])
+# Auto-discover tasks from tasks and workers modules
+celery_app.autodiscover_tasks(["tasks", "workers"])
 
 
 # =========================================================================
@@ -193,5 +193,19 @@ celery_app.conf.beat_schedule = {
     "llc-sprint-autoclose-daily": {
         "task": "llc.scheduler.sprint_autoclose.run_daily_check",
         "schedule": crontab(hour=0, minute=5),
+    },
+    # GH#7356: background audit daemon — testgaps, dead-code, claims
+    # Beat pidfile must NOT reside on tmpfs (/run/autobot/ is wiped on reboot).
+    "audit-testgaps-6h": {
+        "task": "workers.audit_testgaps",
+        "schedule": crontab(minute=15, hour="*/6"),  # 00:15, 06:15, 12:15, 18:15 UTC
+    },
+    "audit-dead-code-daily": {
+        "task": "workers.audit_dead_code",
+        "schedule": crontab(hour=2, minute=30),
+    },
+    "audit-claims-weekly": {
+        "task": "workers.audit_claims",
+        "schedule": crontab(hour=3, minute=0, day_of_week=1),  # Monday 03:00 UTC
     },
 }
