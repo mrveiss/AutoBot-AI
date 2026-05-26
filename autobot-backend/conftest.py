@@ -61,6 +61,27 @@ def _make_pkg_stub(name: str) -> types.ModuleType:
     return mod
 
 
+# Stub chromadb before it is imported. chromadb hangs at import time on
+# machines without a local Chroma server (it fires gRPC keep-alive probes via
+# opentelemetry), AND the version of opentelemetry-exporter-otlp-proto-grpc in
+# this venv removed ReadableLogRecord causing an ImportError on older installs.
+# Tests never hit a real Chroma cluster — every test that touches the knowledge
+# stack either mocks at the fixture level or is in the agents/ integration suite
+# that runs against a stub InMemoryClient.  A package-level stub is safe. (#MVA-1119)
+for _chromadb_mod in [
+    "chromadb",
+    "chromadb.api",
+    "chromadb.api.models",
+    "chromadb.api.models.Collection",
+    "chromadb.auth",
+    "chromadb.auth.token_authn",
+    "chromadb.config",
+    "chromadb.telemetry",
+    "chromadb.telemetry.opentelemetry",
+]:
+    if _chromadb_mod not in sys.modules:
+        sys.modules[_chromadb_mod] = _make_pkg_stub(_chromadb_mod)
+
 # Stub optional heavy dependencies that may not be installed in the dev venv.
 # These are only needed at runtime on the target VM; tests use mocks.
 # Simple (leaf) modules that don't need submodule resolution:
@@ -187,6 +208,12 @@ for _npu_mod in [
         if _npu_mod == "services.npu_pipeline":
             _npu_stub.__path__ = [str(_NPU_PKG_DIR)]
         sys.modules[_npu_mod] = _npu_stub
+# Give the services stub the real __path__ so submodule imports (e.g.
+# from services.audit_logger import ...) can find real files on disk.
+# services/__init__.py is already bypassed (in sys.modules as a stub),
+# so the npu_client / Redis chain it imports won't re-execute. (#MVA-1119)
+if "services" in sys.modules:
+    sys.modules["services"].__path__ = [str(backend_root / "services")]  # type: ignore[attr-defined]
 # Provide the SUPPORTED_LANGUAGES symbol consumed by api.schemas_agent
 if not hasattr(sys.modules.get("services.personality_service", object()), "SUPPORTED_LANGUAGES"):
     sys.modules["services.personality_service"].SUPPORTED_LANGUAGES = {}  # type: ignore[attr-defined]

@@ -20,6 +20,8 @@ Key Features:
 - Supervised mode for guided dangerous actions
 """
 
+from __future__ import annotations
+
 import time
 from dataclasses import dataclass
 from enum import Enum

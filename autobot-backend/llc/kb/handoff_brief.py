@@ -74,7 +74,7 @@ class HandoffBriefGenerator:
                     },
                     {
                         "role": "user",
-                        "content": f"Generate a handoff brief from the following work context:\n\n{formatted_context}\n\n"
+                        "content": f"Generate a handoff brief from the following work context:\n\n{formatted_context}\n\n"  # noqa: E501
                         "Return a JSON object with: completed (list of completed tasks), "
                         "remaining (list of incomplete tasks), "
                         "open_questions (list of unresolved issues), "

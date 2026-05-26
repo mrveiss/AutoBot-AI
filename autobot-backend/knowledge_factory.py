@@ -3,6 +3,8 @@
 # Author: mrveiss
 """Knowledge Base Factory - Breaks circular import between api/knowledge.py and app_factory.py"""
 
+from __future__ import annotations
+
 import asyncio
 import time
 

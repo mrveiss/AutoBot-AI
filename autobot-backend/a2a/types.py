@@ -11,7 +11,7 @@ Ref: https://a2a-protocol.org/latest/
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from autobot_shared.time_utils import now_utc
 
@@ -158,7 +158,7 @@ class Task:
     created_at: str = field(default_factory=_utcnow)
     updated_at: str = field(default_factory=_utcnow)
     # Issue #968: distributed tracing — set on task creation
-    trace_context: "TraceContext" | None = field(default=None, repr=False)
+    trace_context: Optional["TraceContext"] = field(default=None, repr=False)
 
     def to_dict(self) -> Dict[str, Any]:
         d: Dict[str, Any] = {

@@ -14,7 +14,6 @@ Provides centralized chat workflow orchestration with modular architecture:
 
 Usage:
     from chat_workflow import (
-from autobot_shared.logging_manager import get_logger
         ChatWorkflowManager,
         WorkflowSession,
         get_chat_workflow_manager,
@@ -22,6 +21,7 @@ from autobot_shared.logging_manager import get_logger
     )
 """
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 
 from .manager import ChatWorkflowManager

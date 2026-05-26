@@ -8,6 +8,8 @@ Provides endpoints for real-time code quality metrics, health scores,
 pattern distribution, and quality trends.
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 from datetime import datetime, timedelta, timezone

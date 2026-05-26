@@ -15,6 +15,8 @@ Features:
 - Result diversification to avoid redundant information
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import time

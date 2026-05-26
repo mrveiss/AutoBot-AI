@@ -466,4 +466,4 @@ class WebCrawlerConnector(AbstractConnector):
         except Exception:
             from constants.network_constants import NetworkConstants
 
-            return f"http://{os.environ.get('AUTOBOT_BROWSER_SERVICE_HOST', '')}:{NetworkConstants.BROWSER_SERVICE_PORT}"  # ssot-config-exempt: fallback path, empty-string default differs from config
+            return f"http://{os.environ.get('AUTOBOT_BROWSER_SERVICE_HOST', '')}:{NetworkConstants.BROWSER_SERVICE_PORT}"  # ssot-config-exempt: fallback path, empty-string default differs from config  # noqa: E501

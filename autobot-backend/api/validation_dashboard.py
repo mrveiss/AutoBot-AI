@@ -6,6 +6,8 @@ Validation Dashboard API for AutoBot
 Provides endpoints for real-time validation dashboard and reports
 """
 
+from __future__ import annotations
+
 import os
 
 # Import the dashboard generator

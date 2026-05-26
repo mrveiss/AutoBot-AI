@@ -8,6 +8,8 @@ Issue #657: Implements Agent Zero's subordinate agent pattern where complex
 tasks can be delegated to child agents for better task decomposition.
 """
 
+from __future__ import annotations
+
 import asyncio
 import uuid
 from dataclasses import dataclass, field

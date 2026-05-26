@@ -8,6 +8,8 @@ Contains the core KnowledgeBaseCore class with initialization, configuration,
 and connection management functionality.
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 from pathlib import Path

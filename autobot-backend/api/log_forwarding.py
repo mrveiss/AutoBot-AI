@@ -15,6 +15,8 @@ Features:
 - Real-time status and statistics
 """
 
+from __future__ import annotations
+
 import asyncio
 import socket
 import sys
