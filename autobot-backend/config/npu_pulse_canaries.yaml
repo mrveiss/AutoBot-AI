@@ -1,0 +1,70 @@
+# NPU Pulse-Probe Canary Configuration (GH#6739)
+#
+# Each model family defines a fixed canary prompt and the expected token
+# that must appear verbatim in the response.  A response is considered
+# valid only when:
+#   1. It arrives within pulse_timeout_seconds
+#   2. It is well-formed (parseable JSON / non-empty text)
+#   3. expected_token appears in the response text (case-sensitive)
+#
+# pulse_interval_seconds: base cadence per worker (jitter ±20 % applied)
+# pulse_timeout_seconds:  per-request deadline
+# degrade_after_failures: consecutive failures before DEGRADED state
+# unhealthy_after_failures: consecutive failures before OFFLINE/unhealthy state
+
+defaults:
+  pulse_interval_seconds: 300   # 5 minutes
+  pulse_timeout_seconds: 30
+  degrade_after_failures: 3
+  unhealthy_after_failures: 5
+  # p95 latency window — number of recent pulses to keep per worker
+  latency_window: 20
+  # p95 latency must stay within this multiplier of the pool median
+  latency_throttle_multiplier: 3.0
+
+model_families:
+  # Small/medium generative models (Gemma, Phi, Mistral, Llama ≤13 B)
+  gemma:
+    match_prefixes:
+      - "gemma-"
+    canary_prompt: "Reply with exactly: PULSE_OK"
+    expected_token: "PULSE_OK"
+
+  phi:
+    match_prefixes:
+      - "phi-"
+      - "phi3-"
+      - "phi4-"
+    canary_prompt: "Reply with exactly: PULSE_OK"
+    expected_token: "PULSE_OK"
+
+  mistral:
+    match_prefixes:
+      - "mistral-"
+      - "mixtral-"
+    canary_prompt: "Reply with exactly: PULSE_OK"
+    expected_token: "PULSE_OK"
+
+  llama:
+    match_prefixes:
+      - "llama-"
+      - "llama2-"
+      - "llama3-"
+      - "meta-llama"
+    canary_prompt: "Reply with exactly: PULSE_OK"
+    expected_token: "PULSE_OK"
+
+  # Embedding models — inference returns a vector, not text; probe via
+  # a single-token input and check that the response is a non-empty list.
+  nomic:
+    match_prefixes:
+      - "nomic-embed"
+    canary_prompt: "ok"
+    expected_token: "__embedding_vector__"   # sentinel: validate shape not text
+    probe_mode: "embedding"
+
+  # Fallback for any model not matched above
+  default:
+    match_prefixes: []
+    canary_prompt: "Reply with exactly: PULSE_OK"
+    expected_token: "PULSE_OK"
