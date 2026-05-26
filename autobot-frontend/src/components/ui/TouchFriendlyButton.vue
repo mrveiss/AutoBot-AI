@@ -30,7 +30,7 @@ import LoadingSpinner from './LoadingSpinner.vue'
 import type { ComponentSize } from '@/types/component-props'
 
 interface Props {
-  variant?: 'primary' | 'secondary' | 'outline-solid' | 'ghost' | 'danger'
+  variant?: 'primary' | 'secondary' | 'outline-solid' | 'ghost' | 'error'
   size?: ComponentSize
   loading?: boolean
   disabled?: boolean
@@ -240,18 +240,18 @@ const createRipple = (event: TouchEvent) => {
   @apply ring-autobot-border;
 }
 
-.button-danger {
+.button-error {
   @apply border border-transparent;
   background: var(--color-error);
   color: var(--text-inverse);
 }
 
-.button-danger:hover:not(.button-disabled):not(.button-loading) {
+.button-error:hover:not(.button-disabled):not(.button-loading) {
   background: var(--color-error);
   filter: brightness(0.9);
 }
 
-.button-danger:focus {
+.button-error:focus {
   @apply ring-red-500;
 }
 

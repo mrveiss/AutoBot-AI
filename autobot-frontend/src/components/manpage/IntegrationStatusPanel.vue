@@ -1,5 +1,5 @@
 <template>
-  <BasePanel variant="bordered" size="medium">
+  <BasePanel variant="bordered" size="md">
     <template #header>
       <h3><Icon name="chart-bar" /> {{ $t('manpage.integrationStatus.title') }}</h3>
       <BaseButton

@@ -160,7 +160,7 @@
     <!-- Approval buttons -->
     <div class="approval-actions">
       <BaseButton
-        variant="danger"
+        variant="error"
         size="sm"
         @click="startDeny"
         :disabled="processing"

@@ -268,7 +268,7 @@ onMounted(() => {
     <BaseModal
       v-model="showHistoryModal"
       :title="t('knowledge.connectors.syncHistoryTitle', { name: historyConnectorName })"
-      size="medium"
+      size="md"
     >
       <ConnectorHistoryPanel
         v-if="historyConnectorId"

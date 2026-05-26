@@ -176,7 +176,7 @@
             {{ $t('knowledge.persistence.keepSelectedTemporarily') }}
           </BaseButton>
           <BaseButton
-            variant="danger"
+            variant="error"
             @click="applyBulkDecision('delete')"
             :disabled="!hasSelectedItems"
             class="bulk-button delete"

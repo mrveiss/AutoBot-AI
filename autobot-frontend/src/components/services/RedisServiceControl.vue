@@ -77,7 +77,7 @@
           </BaseButton>
 
           <BaseButton
-            variant="danger"
+            variant="error"
             @click="handleStopService"
             :disabled="serviceStatus.status !== 'running' || loading"
             class="flex items-center gap-2 px-4 py-2"
@@ -106,7 +106,7 @@
       <h4 class="text-md font-semibold text-autobot-text-primary mb-3">{{ $t('redis.healthStatus') }}</h4>
 
       <!-- Overall Health Indicator -->
-      <StatusBadge :variant="healthVariant" size="medium" class="font-semibold mb-4" data-testid="redis-service-health-badge">
+      <StatusBadge :variant="healthVariant" size="md" class="font-semibold mb-4" data-testid="redis-service-health-badge">
         {{ (healthStatus?.overall_status || 'unknown').toUpperCase() }}
       </StatusBadge>
 
@@ -121,7 +121,7 @@
         >
           <div class="flex items-center justify-between mb-2">
             <span class="text-sm font-medium text-autobot-text-secondary capitalize">{{ name }}</span>
-            <StatusBadge :variant="getHealthCheckVariant(check.status)" size="small" class="font-bold">
+            <StatusBadge :variant="getHealthCheckVariant(check.status)" size="sm" class="font-bold">
               {{ check.status }}
             </StatusBadge>
           </div>
@@ -191,7 +191,7 @@
     <BaseModal
       v-model="showConfirmDialog"
       :title="confirmDialog.title"
-      size="medium"
+      size="md"
       data-testid="redis-service-confirm-dialog"
     >
       <p class="text-sm text-autobot-text-secondary mb-4">{{ confirmDialog.message }}</p>
@@ -214,7 +214,7 @@
           {{ $t('common.cancel') }}
         </BaseButton>
         <BaseButton
-          :variant="confirmDialog.type === 'danger' ? 'danger' : 'primary'"
+          :variant="confirmDialog.type === 'error' ? 'error' : 'primary'"
           @click="confirmDialog.onConfirm"
           data-testid="redis-service-confirm-ok-btn"
         >
@@ -267,7 +267,7 @@ const statusVariant = computed(() => {
   const statusMap = {
     'running': 'success',
     'stopped': 'secondary',
-    'failed': 'danger'
+    'failed': 'error'
   }
   return statusMap[serviceStatus.value.status] || 'warning'
 })
@@ -277,7 +277,7 @@ const healthVariant = computed(() => {
   const healthMap = {
     'healthy': 'success',
     'degraded': 'warning',
-    'critical': 'danger'
+    'critical': 'error'
   }
   return healthMap[healthStatus.value?.overall_status] || 'secondary'
 })
@@ -287,7 +287,7 @@ const getHealthCheckVariant = (status) => {
   const variantMap = {
     'pass': 'success',
     'warning': 'warning',
-    'fail': 'danger'
+    'fail': 'error'
   }
   return variantMap[status] || 'secondary'
 }
@@ -341,7 +341,7 @@ const handleStopService = () => {
     title: t('redis.stopTitle'),
     message: t('redis.stopMsg'),
     warning: t('redis.stopWarning'),
-    type: 'danger',
+    type: 'error',
     onConfirm: async () => {
       showConfirmDialog.value = false
       try {

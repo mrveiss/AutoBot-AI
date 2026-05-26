@@ -121,7 +121,7 @@
             Cancel
           </BaseButton>
           <BaseButton
-            variant="danger"
+            variant="error"
             size="sm"
             :disabled="composable.isLoading.value"
             @click="executeDelete"

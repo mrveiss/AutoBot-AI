@@ -25,7 +25,7 @@
             </div>
             <div class="info-item" v-if="riskLevel">
               <span class="label">{{ t('ui.commandPermission.riskLevelLabel') }}:</span>
-              <StatusBadge :variant="getRiskVariant(riskLevel)" size="small">{{ riskLevel }}</StatusBadge>
+              <StatusBadge :variant="getRiskVariant(riskLevel)" size="sm">{{ riskLevel }}</StatusBadge>
             </div>
           </div>
         </div>
@@ -268,8 +268,8 @@ watch(() => props.show, (newValue) => {
   showDialog.value = newValue ?? false
 }, { immediate: true })
 
-const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'primary' | 'secondary' | 'danger' | undefined => {
-  const variantMap: Record<string, 'success' | 'warning' | 'danger' | 'secondary'> = { LOW: 'success', MEDIUM: 'warning', HIGH: 'danger', CRITICAL: 'danger' }
+const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'primary' | 'secondary' | 'error' | undefined => {
+  const variantMap: Record<string, 'success' | 'warning' | 'error' | 'secondary'> = { LOW: 'success', MEDIUM: 'warning', HIGH: 'error', CRITICAL: 'error' }
   return variantMap[riskLevel] ?? 'secondary'
 }
 </script>

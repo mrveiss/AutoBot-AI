@@ -139,15 +139,15 @@ export const AllSizes: Story = {
       <div style="display:flex;flex-direction:column;gap:16px;padding:16px;max-width:400px">
         <div>
           <p style="margin:0 0 4px;font-size:12px;color:#6b7280">Small</p>
-          <OperationProgress :progress="60" status="running" size="small" :show-info="false" :show-step="false" />
+          <OperationProgress :progress="60" status="running" size="sm" :show-info="false" :show-step="false" />
         </div>
         <div>
           <p style="margin:0 0 4px;font-size:12px;color:#6b7280">Medium</p>
-          <OperationProgress :progress="60" status="running" size="medium" :show-info="true" :show-step="false" />
+          <OperationProgress :progress="60" status="running" size="md" :show-info="true" :show-step="false" />
         </div>
         <div>
           <p style="margin:0 0 4px;font-size:12px;color:#6b7280">Large</p>
-          <OperationProgress :progress="60" status="running" size="large" :show-info="true" current-step="Processing…" />
+          <OperationProgress :progress="60" status="running" size="lg" :show-info="true" current-step="Processing…" />
         </div>
       </div>
     `,

@@ -42,7 +42,7 @@
         :processed-items="operation.processed_items"
         :estimated-items="operation.estimated_items"
         :current-step="operation.current_step"
-        size="large"
+        size="lg"
       />
     </div>
 

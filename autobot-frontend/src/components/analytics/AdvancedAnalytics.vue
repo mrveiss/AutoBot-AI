@@ -30,7 +30,7 @@
     <div v-if="activeTab === 'cost'" class="tab-content">
       <div class="metrics-grid">
         <!-- Total Cost Card -->
-        <BasePanel variant="bordered" size="small">
+        <BasePanel variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="dollar-sign" /> {{ $t('analytics.advanced.totalCost30d') }}</h4>
           </template>
@@ -44,7 +44,7 @@
         </BasePanel>
 
         <!-- Daily Average Card -->
-        <BasePanel variant="bordered" size="small">
+        <BasePanel variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="calendar" /> {{ $t('analytics.advanced.dailyAverage') }}</h4>
           </template>
@@ -54,7 +54,7 @@
         </BasePanel>
 
         <!-- Trend Card -->
-        <BasePanel variant="bordered" size="small">
+        <BasePanel variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="arrow-trend-up" /> {{ $t('analytics.advanced.costTrend') }}</h4>
           </template>
@@ -97,7 +97,7 @@
     <div v-if="activeTab === 'agents'" class="tab-content">
       <div class="metrics-grid">
         <!-- Total Agents -->
-        <BasePanel variant="bordered" size="small">
+        <BasePanel variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="users-cog" /> {{ $t('analytics.advanced.totalAgents') }}</h4>
           </template>
@@ -105,7 +105,7 @@
         </BasePanel>
 
         <!-- Total Tasks -->
-        <BasePanel variant="bordered" size="small">
+        <BasePanel variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="tasks" /> {{ $t('analytics.advanced.totalTasks') }}</h4>
           </template>
@@ -115,7 +115,7 @@
         </BasePanel>
 
         <!-- Avg Success Rate -->
-        <BasePanel variant="bordered" size="small">
+        <BasePanel variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="check-circle" /> {{ $t('analytics.advanced.avgSuccessRate') }}</h4>
           </template>
@@ -190,7 +190,7 @@
     <div v-if="activeTab === 'behavior'" class="tab-content">
       <div class="metrics-grid">
         <!-- Total Sessions -->
-        <BasePanel variant="bordered" size="small">
+        <BasePanel variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="users" /> {{ $t('analytics.advanced.totalSessions') }}</h4>
           </template>
@@ -200,7 +200,7 @@
         </BasePanel>
 
         <!-- Page Views -->
-        <BasePanel variant="bordered" size="small">
+        <BasePanel variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="eye" /> {{ $t('analytics.advanced.pageViews') }}</h4>
           </template>
@@ -210,7 +210,7 @@
         </BasePanel>
 
         <!-- Avg Session Duration -->
-        <BasePanel variant="bordered" size="small">
+        <BasePanel variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="clock" /> {{ $t('analytics.advanced.avgSessionDuration') }}</h4>
           </template>
@@ -220,7 +220,7 @@
         </BasePanel>
 
         <!-- Pages Per Session -->
-        <BasePanel variant="bordered" size="small">
+        <BasePanel variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="file-alt" /> {{ $t('analytics.advanced.pagesPerSession') }}</h4>
           </template>

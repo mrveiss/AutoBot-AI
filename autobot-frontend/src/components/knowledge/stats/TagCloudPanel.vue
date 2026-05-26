@@ -1,5 +1,5 @@
 <template>
-  <BasePanel variant="bordered" size="medium">
+  <BasePanel variant="bordered" size="md">
     <h4>{{ $t('knowledge.stats.tagCloud.title') }}</h4>
     <div class="tag-cloud" role="list" :aria-label="$t('knowledge.stats.tagCloud.ariaLabel')">
       <span

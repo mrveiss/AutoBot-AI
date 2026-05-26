@@ -1,5 +1,5 @@
 <template>
-  <BasePanel v-if="show" variant="bordered" size="medium">
+  <BasePanel v-if="show" variant="bordered" size="md">
     <template #header>
       <h3><Icon name="tasks" /> {{ $t('manpage.progressTracking.title') }}</h3>
       <BaseButton

@@ -7,12 +7,12 @@ const meta = {
   argTypes: {
     variant: {
       control: 'select',
-      options: ['success', 'danger', 'warning', 'info', 'secondary', 'primary'],
+      options: ['success', 'error', 'warning', 'info', 'secondary', 'primary'],
       description: 'Color variant',
     },
     size: {
       control: 'select',
-      options: ['small', 'medium', 'large'],
+      options: ['sm', 'md', 'lg'],
       description: 'Badge size',
     },
     icon: {
@@ -37,7 +37,7 @@ export const Success: Story = {
 export const Danger: Story = {
   render: () => ({
     components: { StatusBadge },
-    template: '<StatusBadge variant="danger" icon="exclamation-circle">Failed</StatusBadge>',
+    template: '<StatusBadge variant="error" icon="exclamation-circle">Failed</StatusBadge>',
   }),
 };
 
@@ -72,14 +72,14 @@ export const Secondary: Story = {
 export const Small: Story = {
   render: () => ({
     components: { StatusBadge },
-    template: '<StatusBadge variant="success" size="small" icon="check-circle">OK</StatusBadge>',
+    template: '<StatusBadge variant="success" size="sm" icon="check-circle">OK</StatusBadge>',
   }),
 };
 
 export const Large: Story = {
   render: () => ({
     components: { StatusBadge },
-    template: '<StatusBadge variant="danger" size="large" icon="exclamation-circle">Critical</StatusBadge>',
+    template: '<StatusBadge variant="error" size="lg" icon="exclamation-circle">Critical</StatusBadge>',
   }),
 };
 
@@ -89,7 +89,7 @@ export const AllVariants: Story = {
     template: `
       <div class="flex flex-wrap gap-2">
         <StatusBadge variant="success" icon="check-circle">Success</StatusBadge>
-        <StatusBadge variant="danger" icon="exclamation-circle">Danger</StatusBadge>
+        <StatusBadge variant="error" icon="exclamation-circle">Danger</StatusBadge>
         <StatusBadge variant="warning" icon="exclamation-triangle">Warning</StatusBadge>
         <StatusBadge variant="info" icon="info-circle">Info</StatusBadge>
         <StatusBadge variant="primary">Primary</StatusBadge>
@@ -104,9 +104,9 @@ export const AllSizes: Story = {
     components: { StatusBadge },
     template: `
       <div class="flex items-center gap-2">
-        <StatusBadge variant="success" size="small" icon="check-circle">Small</StatusBadge>
-        <StatusBadge variant="success" size="medium" icon="check-circle">Medium</StatusBadge>
-        <StatusBadge variant="success" size="large" icon="check-circle">Large</StatusBadge>
+        <StatusBadge variant="success" size="sm" icon="check-circle">Small</StatusBadge>
+        <StatusBadge variant="success" size="md" icon="check-circle">Medium</StatusBadge>
+        <StatusBadge variant="success" size="lg" icon="check-circle">Large</StatusBadge>
       </div>
     `,
   }),

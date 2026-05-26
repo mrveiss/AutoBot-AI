@@ -292,7 +292,7 @@
     <BaseModal
       v-model="showDialog"
       :title="dialogMode === 'view' ? $t('knowledge.entries.viewEntry') : $t('knowledge.entries.editEntry')"
-      size="large"
+      size="lg"
       scrollable
     >
       <div v-if="currentEntry && dialogMode === 'view'" class="view-mode">

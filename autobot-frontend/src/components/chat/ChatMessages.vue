@@ -406,7 +406,7 @@
                 <span>{{ $t('chat.approval.comment') }}</span>
               </BaseButton>
               <BaseButton
-                variant="danger"
+                variant="error"
                 size="sm"
                 @click="approveCommand((message.metadata as any).terminal_session_id as string, false, undefined, (message.metadata as any).command_id, { command: (message.metadata as any).command as string, risk_level: (message.metadata as any).risk_level as string })"
                 :disabled="processingApproval || showCommentInput"
@@ -478,7 +478,7 @@
   <BaseModal
     v-model="showEditModal"
     :title="$t('chat.messages.editMessage')"
-    size="medium"
+    size="md"
   >
     <textarea
       v-model="editingContent"

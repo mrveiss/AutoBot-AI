@@ -91,7 +91,7 @@
         {{ $t('knowledge.verification.approveSelected') }}
       </BaseButton>
       <BaseButton
-        variant="danger"
+        variant="error"
         size="sm"
         @click="bulkReject"
         :loading="bulkProcessing"
@@ -197,7 +197,7 @@
             {{ $t('knowledge.verification.approve') }}
           </BaseButton>
           <BaseButton
-            variant="danger"
+            variant="error"
             size="sm"
             @click="rejectSource(source.fact_id)"
             :loading="actionLoadingId === source.fact_id"

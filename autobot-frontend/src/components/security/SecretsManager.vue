@@ -273,7 +273,7 @@
       :modelValue="showCreateModal || showEditModal"
       @update:modelValue="val => !val && closeModals()"
       :title="modalTitle"
-      size="large"
+      size="lg"
       :closeOnOverlay="!saving"
     >
       <form @submit.prevent="saveSecret" class="credential-form">
@@ -652,7 +652,7 @@
     <BaseModal
       v-model="showViewModal"
       :title="viewingSecret?.name || $t('security.secretsManager.viewDetails')"
-      size="medium"
+      size="md"
     >
       <div class="view-credential">
         <div class="view-header">
@@ -730,7 +730,7 @@
     <BaseModal
       v-model="showTransferModal"
       :title="$t('security.secretsManager.transferTitle')"
-      size="small"
+      size="sm"
     >
       <div class="transfer-content">
         <div class="transfer-icon">
@@ -757,7 +757,7 @@
     <BaseModal
       v-model="showDeleteModal"
       :title="$t('security.secretsManager.deleteConfirmTitle')"
-      size="small"
+      size="sm"
     >
       <div class="delete-content">
         <div class="delete-icon">

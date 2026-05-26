@@ -248,7 +248,7 @@
           <div class="mb-4">
             <div class="flex items-center justify-between mb-2">
               <h4 class="text-sm font-medium text-autobot-text-primary">{{ $t('desktop.popoutBrowser.browserSession') }}</h4>
-              <StatusBadge variant="success" size="small">{{ $t('desktop.popoutBrowser.connected') }}</StatusBadge>
+              <StatusBadge variant="success" size="sm">{{ $t('desktop.popoutBrowser.connected') }}</StatusBadge>
             </div>
             <div class="text-xs text-autobot-text-secondary">
               <div class="flex items-center gap-2">

@@ -7,7 +7,7 @@ const meta = {
   argTypes: {
     variant: {
       control: 'select',
-      options: ['primary', 'secondary', 'outline-solid', 'ghost', 'danger'],
+      options: ['primary', 'secondary', 'outline-solid', 'ghost', 'error'],
       description: 'Button style variant',
     },
     size: {
@@ -72,7 +72,7 @@ export const Ghost: Story = {
 export const Danger: Story = {
   render: () => ({
     components: { TouchFriendlyButton },
-    template: '<TouchFriendlyButton variant="danger">Delete</TouchFriendlyButton>',
+    template: '<TouchFriendlyButton variant="error">Delete</TouchFriendlyButton>',
   }),
 };
 
@@ -114,7 +114,7 @@ export const AllVariants: Story = {
         <TouchFriendlyButton variant="secondary">Secondary</TouchFriendlyButton>
         <TouchFriendlyButton variant="outline-solid">Outline</TouchFriendlyButton>
         <TouchFriendlyButton variant="ghost">Ghost</TouchFriendlyButton>
-        <TouchFriendlyButton variant="danger">Danger</TouchFriendlyButton>
+        <TouchFriendlyButton variant="error">Danger</TouchFriendlyButton>
       </div>
     `,
   }),

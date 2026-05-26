@@ -22,7 +22,7 @@
         />
         <BaseButton
           v-if="upload.error"
-          variant="danger"
+          variant="error"
           size="xs"
           @click="retryUpload(upload.id)"
           class="retry-upload-btn"

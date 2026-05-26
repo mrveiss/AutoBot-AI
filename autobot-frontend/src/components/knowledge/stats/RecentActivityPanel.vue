@@ -1,5 +1,5 @@
 <template>
-  <BasePanel variant="bordered" size="medium">
+  <BasePanel variant="bordered" size="md">
     <h4>{{ $t('knowledge.stats.recentActivity.title') }}</h4>
     <div class="activity-timeline">
       <div v-for="activity in activities" :key="activity.id" class="activity-item">

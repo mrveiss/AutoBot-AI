@@ -1,7 +1,7 @@
 <template>
   <div class="enhanced-analytics-grid">
     <!-- System Overview -->
-    <BasePanel variant="dark" size="medium">
+    <BasePanel variant="dark" size="md">
       <template #header>
         <div class="card-header-content">
           <h3><Icon name="tachometer-alt" /> {{ $t('analytics.grid.systemOverview') }}</h3>
@@ -43,7 +43,7 @@
     </BasePanel>
 
     <!-- Communication Patterns -->
-    <BasePanel variant="dark" size="medium">
+    <BasePanel variant="dark" size="md">
       <template #header>
         <div class="card-header-content">
           <h3><Icon name="network-wired" /> {{ $t('analytics.grid.communicationPatterns') }}</h3>
@@ -74,7 +74,7 @@
     </BasePanel>
 
     <!-- Code Quality -->
-    <BasePanel variant="dark" size="medium">
+    <BasePanel variant="dark" size="md">
       <template #header>
         <div class="card-header-content">
           <h3><Icon name="code-branch" /> {{ $t('analytics.grid.codeQuality') }}</h3>
@@ -111,7 +111,7 @@
     </BasePanel>
 
     <!-- Performance Metrics -->
-    <BasePanel variant="dark" size="medium">
+    <BasePanel variant="dark" size="md">
       <template #header>
         <div class="card-header-content">
           <h3><Icon name="bolt" /> {{ $t('analytics.grid.performanceMetrics') }}</h3>

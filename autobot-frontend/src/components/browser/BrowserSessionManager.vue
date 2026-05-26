@@ -102,7 +102,7 @@
             </div>
 
             <div class="flex items-center gap-2">
-              <StatusBadge :variant="getStatusVariant(session.status)" size="small">
+              <StatusBadge :variant="getStatusVariant(session.status)" size="sm">
                 {{ session.status.toUpperCase() }}
               </StatusBadge>
 
@@ -358,11 +358,11 @@ export default {
       }
     }
 
-    const getStatusVariant = (status: SessionStatus): 'success' | 'warning' | 'danger' | 'info' => {
+    const getStatusVariant = (status: SessionStatus): 'success' | 'warning' | 'error' | 'info' => {
       switch (status) {
         case 'active': return 'success'
         case 'idle': return 'warning'
-        case 'error': return 'danger'
+        case 'error': return 'error'
         default: return 'info'
       }
     }

@@ -289,7 +289,7 @@ defineExpose({ resetSyncing })
       </template>
       <template v-else>
         <BaseButton
-          variant="danger"
+          variant="error"
           size="sm"
           @click="handleDelete"
         >

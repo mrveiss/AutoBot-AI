@@ -1,5 +1,5 @@
 <template>
-  <BasePanel v-if="show" variant="bordered" size="medium">
+  <BasePanel v-if="show" variant="bordered" size="md">
     <template #header>
       <h3><Icon name="search" /> {{ $t('manpage.searchPanel.title') }}</h3>
     </template>
