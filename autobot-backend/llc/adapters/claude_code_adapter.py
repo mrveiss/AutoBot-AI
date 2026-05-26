@@ -131,17 +131,18 @@ class ClaudeCodeAdapter:
                     env=env,
                     cwd=workspace_dir or None,
                 )
-            except FileNotFoundError:
-                if not workspace_dir:
+            except FileNotFoundError as e:
+                if workspace_dir and e.filename and os.path.abspath(str(e.filename)) == os.path.abspath(workspace_dir):
+                    logger.warning(
+                        "ClaudeCodeAdapter: workspace_dir %r missing, retrying without cwd",
+                        workspace_dir,
+                    )
+                    context.pop("workspace_dir", None)
+                    env.pop("AUTOBOT_WORKSPACE_DIR", None)
+                    env["LLC_INVOKE_CONTEXT"] = json.dumps(context, default=str)
+                    workspace_dir = None
+                else:
                     raise
-                logger.warning(
-                    "ClaudeCodeAdapter: workspace_dir %r missing, retrying without cwd",
-                    workspace_dir,
-                )
-                context.pop("workspace_dir", None)
-                env.pop("AUTOBOT_WORKSPACE_DIR", None)
-                env["LLC_INVOKE_CONTEXT"] = json.dumps(context, default=str)
-                workspace_dir = None
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdout=out_fh,
