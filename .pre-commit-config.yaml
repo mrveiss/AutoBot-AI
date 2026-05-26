@@ -421,6 +421,18 @@ repos:
         stages: [pre-commit]
         description: "Blocks commits with direct redis.Redis() — use get_redis_client() instead"
 
+  # No new module-level singletons in agent/runtime paths (GH#6630)
+  - repo: local
+    hooks:
+      - id: no-module-singletons
+        name: No New Module-Level Singletons in Agent/Runtime Paths (GH#6630)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-module-singletons
+        language: python
+        types: [python]
+        pass_filenames: true
+        stages: [pre-commit]
+        description: "Warns on new module-level singletons in agent/runtime paths — use SharedRuntimeBag instead"
+
   # No new /health routes outside api/system_health.py (Issue #3333)
   - repo: local
     hooks:

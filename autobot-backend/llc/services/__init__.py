@@ -9,6 +9,7 @@ from .activity_log import LLCActivityLogService
 from .approval import ApprovalService
 from .base import LLCServiceBase
 from .board import BoardService
+from .agent_budget_tracker import AgentBudgetState, AgentBudgetTracker
 from .budget import BudgetService
 from .ceo_chat import CeoChatService
 from .goal import GoalService
@@ -25,6 +26,8 @@ from .sprint_planning import SprintNotFound, SprintPlanningService
 from .work_product_service import WorkProductService
 
 __all__ = [
+    "AgentBudgetState",
+    "AgentBudgetTracker",
     "ApprovalService",
     "CeoChatService",
     "BoardService",
