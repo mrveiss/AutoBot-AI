@@ -87,14 +87,63 @@ class TestCreate:
     async def test_create_sets_parent_id(self, service, mock_session):
         parent_id = str(uuid.uuid4())
         with patch.object(service, "_next_identifier", new=AsyncMock(return_value="PRJ-2")):
-            item = await service.create(
-                mock_session,
-                company_id=str(uuid.uuid4()),
-                type=WorkItemType.SUBTASK,
-                title="Child",
-                parent_id=parent_id,
-            )
+            with patch.object(service, "get", new=AsyncMock(return_value=None)):
+                item = await service.create(
+                    mock_session,
+                    company_id=str(uuid.uuid4()),
+                    type=WorkItemType.SUBTASK,
+                    title="Child",
+                    parent_id=parent_id,
+                )
         assert str(item.parent_id) == parent_id
+
+    async def test_create_inherits_goal_id_from_parent(self, service, mock_session):
+        """Sub-task inherits parent's goal_id when none is explicitly provided (GH#6469)."""
+        parent_id = str(uuid.uuid4())
+        inherited_goal_id = uuid.uuid4()
+        parent_item = _make_item(goal_id=inherited_goal_id)
+        with patch.object(service, "_next_identifier", new=AsyncMock(return_value="PRJ-3")):
+            with patch.object(service, "get", new=AsyncMock(return_value=parent_item)):
+                item = await service.create(
+                    mock_session,
+                    company_id=str(uuid.uuid4()),
+                    type=WorkItemType.SUBTASK,
+                    title="Child with inherited goal",
+                    parent_id=parent_id,
+                )
+        assert item.goal_id == inherited_goal_id
+
+    async def test_create_explicit_goal_id_overrides_parent(self, service, mock_session):
+        """Explicit goal_id takes precedence over parent's goal_id (GH#6469)."""
+        parent_id = str(uuid.uuid4())
+        explicit_goal_id = str(uuid.uuid4())
+        parent_item = _make_item(goal_id=uuid.uuid4())
+        with patch.object(service, "_next_identifier", new=AsyncMock(return_value="PRJ-4")):
+            with patch.object(service, "get", new=AsyncMock(return_value=parent_item)):
+                item = await service.create(
+                    mock_session,
+                    company_id=str(uuid.uuid4()),
+                    type=WorkItemType.SUBTASK,
+                    title="Child with explicit goal",
+                    parent_id=parent_id,
+                    goal_id=explicit_goal_id,
+                )
+        assert str(item.goal_id) == explicit_goal_id
+
+    async def test_create_no_goal_when_parent_has_none(self, service, mock_session):
+        """No goal_id is set when parent work item also has no goal (GH#6469)."""
+        parent_id = str(uuid.uuid4())
+        parent_item = _make_item(goal_id=None)
+        with patch.object(service, "_next_identifier", new=AsyncMock(return_value="PRJ-5")):
+            with patch.object(service, "get", new=AsyncMock(return_value=parent_item)):
+                item = await service.create(
+                    mock_session,
+                    company_id=str(uuid.uuid4()),
+                    type=WorkItemType.SUBTASK,
+                    title="Child without goal",
+                    parent_id=parent_id,
+                )
+        assert item.goal_id is None
 
 
 class TestStatusTransitions:

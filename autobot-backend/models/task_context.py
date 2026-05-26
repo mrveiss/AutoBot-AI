@@ -26,6 +26,7 @@ class TaskExecutionContext:
     user_role, and task_id were passed separately to multiple methods.
 
     Issue #322: Replaces 4-parameter signatures across 21+ task handler methods.
+    GH#6469: Added goal_chain field for structured goal ancestry in prompts.
 
     Attributes:
         worker: The WorkerNode instance providing access to modules and security
@@ -33,6 +34,10 @@ class TaskExecutionContext:
         user_role: The user role for permission checks and audit logging
         task_id: The unique task identifier for tracking and audit
         metadata: Optional additional metadata for the task execution
+        goal_chain: Ordered list of ancestor goals (root-first) for this task.
+                    Each entry is a dict with at minimum ``id``, ``title``,
+                    ``level`` keys (mirrors LLCGoal fields).  Populated by the
+                    orchestration layer; empty list means no goal linkage.
     """
 
     worker: "WorkerNode"
@@ -40,6 +45,7 @@ class TaskExecutionContext:
     user_role: str
     task_id: str
     metadata: Dict[str, Any] = field(default_factory=dict)
+    goal_chain: List[Dict[str, Any]] = field(default_factory=list)
 
     @property
     def security_layer(self):
@@ -92,6 +98,23 @@ class TaskExecutionContext:
         if key not in self.task_payload:
             raise KeyError(f"Required key '{key}' not found in task_payload")
         return self.task_payload[key]
+
+    def has_goal_context(self) -> bool:
+        """Return True when a non-empty goal ancestry chain is present (GH#6469)."""
+        return bool(self.goal_chain)
+
+    def goal_ancestry_for_prompt(self) -> List[Dict[str, Any]]:
+        """Return the goal_chain list ready for Layer4GoalAncestry (GH#6469).
+
+        Falls back to a single-entry chain synthesised from task_payload["goal"]
+        when goal_chain was not pre-populated by the orchestration layer.
+        """
+        if self.goal_chain:
+            return self.goal_chain
+        raw_goal = self.task_payload.get("goal")
+        if raw_goal:
+            return [{"title": str(raw_goal), "level": "goal"}]
+        return []
 
 
 @dataclass
