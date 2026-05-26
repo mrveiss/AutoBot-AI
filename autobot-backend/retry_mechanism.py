@@ -16,13 +16,14 @@ from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Dict
 
+import logging  # stdlib: avoids circular import — retry_mechanism is on the config-manager init path (GH#7765 pattern)
+
 from autobot_shared.async_compat import run_or_schedule
-from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.threshold_constants import RetryConfig as ThresholdRetryConfig
 from constants.threshold_constants import TimingConstants
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class RetryStrategy(Enum):
