@@ -481,6 +481,7 @@ class AgentLoop:
             avg_novelty = sum(f.novel_token_ratio for f in recent) / window
             self._halted_on_stagnation = True
             from agent_loop.types import LoopOutcome
+
             self._halt_outcome = LoopOutcome.STAGNATED
             self._halt_reason = (
                 f"Halted: observation stagnation — avg novelty {avg_novelty:.3f} "

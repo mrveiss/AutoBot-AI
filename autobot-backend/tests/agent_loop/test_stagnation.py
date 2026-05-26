@@ -34,7 +34,6 @@ from agent_loop.types import (
     TaskContext,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -284,9 +283,7 @@ class TestStagnationHaltUnit:
         words = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"]
         for i in range(6):
             unique_doc = " ".join(words[i:] + words[:i])
-            loop._current_context.record_observation(
-                {"doc": unique_doc, "index": i}, iteration=i
-            )
+            loop._current_context.record_observation({"doc": unique_doc, "index": i}, iteration=i)
         assert loop._check_observation_stagnation() is False
 
 
