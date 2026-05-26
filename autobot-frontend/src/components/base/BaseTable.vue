@@ -133,9 +133,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, useSlots, watch } from 'vue'
+import { ref, computed, watchEffect, useSlots, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useBatchSelection } from '@/composables/useBatchSelection'
+import { createLogger } from '@/utils/debugUtils'
+
+const TABLE_SIZES = ['compact', 'comfortable', 'spacious'] as const
+const TABLE_VARIANTS = ['default', 'bordered', 'striped'] as const
+
+const logger = createLogger('BaseTable')
 
 interface TableColumn {
   key: string
@@ -243,6 +249,17 @@ const formatCellValue = (value: any, column: TableColumn) => {
     return column.formatter(value)
   }
   return value ?? '—'
+}
+
+if (import.meta.env.DEV) {
+  watchEffect(() => {
+    if (props.size !== undefined && !(TABLE_SIZES as readonly string[]).includes(props.size)) {
+      logger.warn(`Invalid "size" prop: "${props.size}". Expected: ${TABLE_SIZES.join(' | ')}`)
+    }
+    if (props.variant !== undefined && !(TABLE_VARIANTS as readonly string[]).includes(props.variant)) {
+      logger.warn(`Invalid "variant" prop: "${props.variant}". Expected: ${TABLE_VARIANTS.join(' | ')}`)
+    }
+  })
 }
 </script>
 

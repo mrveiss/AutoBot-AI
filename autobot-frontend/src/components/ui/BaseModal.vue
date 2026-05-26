@@ -52,13 +52,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, useId, toRef } from 'vue'
+import { ref, computed, watchEffect, useId, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useInitialFocus } from '@/composables/useInitialFocus'
 import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
+import { createLogger } from '@/utils/debugUtils'
 import Icon from './Icon.vue'
+
+const MODAL_SIZES = ['sm', 'md', 'lg'] as const
+
+const logger = createLogger('BaseModal')
 
 /**
  * Reusable Modal/Dialog Component
@@ -162,6 +167,14 @@ const handleOverlayClick = () => {
 
 // Focus, restore, and scroll-lock all driven by composables above.
 const onAfterEnter = () => focusFirst()
+
+if (import.meta.env.DEV) {
+  watchEffect(() => {
+    if (props.size !== undefined && !(MODAL_SIZES as readonly string[]).includes(props.size)) {
+      logger.warn(`Invalid "size" prop: "${props.size}". Expected: ${MODAL_SIZES.join(' | ')}`)
+    }
+  })
+}
 </script>
 
 <style scoped>

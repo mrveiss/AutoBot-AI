@@ -20,7 +20,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watchEffect } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
+
+const PANEL_SIZES = ['sm', 'md', 'lg'] as const
+const PANEL_VARIANTS = ['default', 'bordered', 'elevated', 'flat', 'dark'] as const
+
+const logger = createLogger('BasePanel')
 
 interface Props {
   title?: string
@@ -67,6 +73,17 @@ const toggleCollapse = () => {
   if (props.collapsible) {
     emit('toggle', !props.collapsed)
   }
+}
+
+if (import.meta.env.DEV) {
+  watchEffect(() => {
+    if (props.size !== undefined && !(PANEL_SIZES as readonly string[]).includes(props.size)) {
+      logger.warn(`Invalid "size" prop: "${props.size}". Expected: ${PANEL_SIZES.join(' | ')}`)
+    }
+    if (props.variant !== undefined && !(PANEL_VARIANTS as readonly string[]).includes(props.variant)) {
+      logger.warn(`Invalid "variant" prop: "${props.variant}". Expected: ${PANEL_VARIANTS.join(' | ')}`)
+    }
+  })
 }
 </script>
 

@@ -26,7 +26,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watchEffect } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
+
+const CARD_SIZES = ['sm', 'md', 'lg'] as const
+const CARD_VARIANTS = ['default', 'bordered', 'elevated', 'flat'] as const
+
+const logger = createLogger('BaseCard')
 
 interface Props {
   title?: string
@@ -66,6 +72,17 @@ const bodyClasses = computed(() => ({
 const footerClasses = computed(() => ({
   'footer-no-padding': props.noPadding
 }))
+
+if (import.meta.env.DEV) {
+  watchEffect(() => {
+    if (props.size !== undefined && !(CARD_SIZES as readonly string[]).includes(props.size)) {
+      logger.warn(`Invalid "size" prop: "${props.size}". Expected: ${CARD_SIZES.join(' | ')}`)
+    }
+    if (props.variant !== undefined && !(CARD_VARIANTS as readonly string[]).includes(props.variant)) {
+      logger.warn(`Invalid "variant" prop: "${props.variant}". Expected: ${CARD_VARIANTS.join(' | ')}`)
+    }
+  })
+}
 </script>
 
 <style scoped>
