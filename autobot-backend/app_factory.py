@@ -96,6 +96,16 @@ def _register_routers(app: FastAPI) -> None:
     except Exception as e:
         logger.warning("⚠️ Failed to register OpenAI-compat router: %s", e)
 
+    # Issue #6591: Anthropic-compatible /v1/messages endpoint so Anthropic-SDK
+    # consumers can point base_url at AutoBot without changing integration code.
+    try:
+        from api.anthropic_compat import router as anthropic_compat_router
+
+        app.include_router(anthropic_compat_router, prefix="/v1")
+        logger.info("✅ Registered Anthropic-compat router at /v1")
+    except Exception as e:
+        logger.warning("⚠️ Failed to register Anthropic-compat router: %s", e)
+
     logger.info("✅ API routes configured with optional AI Stack integration")
 
 
