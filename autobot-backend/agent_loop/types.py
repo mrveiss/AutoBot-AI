@@ -49,6 +49,21 @@ class LoopState(Enum):
     CANCELLED = auto()  # Task was cancelled
 
 
+class LoopOutcome(Enum):
+    """Terminal outcome of a loop run.
+
+    ABSTAINED is distinct from FAILED: the agent recognised it could not
+    produce a reliable answer and chose governed silence over hallucination.
+    It is re-runnable with different inputs; FAILED typically is not.
+    """
+
+    COMPLETED = "completed"
+    ABSTAINED = "abstained"
+    CANCELLED = "cancelled"
+    HALTED = "halted"
+    FAILED = "failed"
+
+
 class ThinkCategory(Enum):
     """
     Categories for Think Tool reasoning (Devin pattern).
@@ -189,6 +204,11 @@ class AgentLoopConfig:
 
     # First-turn priming (Issue #4481)
     first_turn_priming_enabled: bool = True  # Inject context note on first iteration
+
+    # Confidence-based abstention (GH#6626)
+    abstain_on_low_confidence: bool = True  # Halt with ABSTAINED outcome when confidence stays low
+    min_confidence_floor: float = 0.3  # Confidence threshold below which a think step is "low"
+    confidence_window: int = 3  # Consecutive low-confidence steps before abstention fires
 
     # Logging
     log_iterations: bool = True  # Log each iteration

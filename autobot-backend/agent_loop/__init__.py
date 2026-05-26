@@ -33,6 +33,7 @@ from agent_loop.think_tool import ThinkCategory, ThinkTool
 from agent_loop.types import (
     AgentLoopConfig,
     IterationResult,
+    LoopOutcome,
     LoopPhase,
     LoopState,
     ThinkResult,
@@ -41,6 +42,7 @@ from agent_loop.types import (
 __all__ = [
     # Types
     "LoopState",
+    "LoopOutcome",
     "LoopPhase",
     "IterationResult",
     "AgentLoopConfig",

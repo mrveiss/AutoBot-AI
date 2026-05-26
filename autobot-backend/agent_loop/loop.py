@@ -29,6 +29,7 @@ from agent_loop.types import (
     AgentLoopConfig,
     AgentMessage,
     IterationResult,
+    LoopOutcome,
     LoopPhase,
     LoopState,
     MessageType,
@@ -39,6 +40,7 @@ from autobot_shared.logging_manager import get_logger
 from events import EventStreamManager, EventType
 from events.bus import PersistStrategy
 from events.bus import publish_event as _bus_publish_event
+from events.event_types import AGENT_ABSTAINED as EVT_AGENT_ABSTAINED
 from events.event_types import APPROVAL_REQUIRED as EVT_APPROVAL_REQUIRED
 from events.types import create_approval_required_event, create_message_event
 from planner import PlannerModule
@@ -150,6 +152,9 @@ class AgentLoop:
         # _should_continue() so the main while-loop exits on the very next guard
         # check rather than relying solely on _should_iterate()'s error detection.
         self._halted_on_repetition: bool = False
+        # GH#6626: confidence-based abstention state
+        self._abstained: bool = False
+        self._abstention_reason: str | None = None
 
     # =========================================================================
     # Properties
@@ -204,6 +209,8 @@ class AgentLoop:
         self._iteration_count = 0
         self._consecutive_errors = 0
         self._halted_on_repetition = False
+        self._abstained = False
+        self._abstention_reason = None
 
     async def _execute_main_loop(self) -> list[IterationResult]:
         """Execute the main iteration loop.
@@ -246,6 +253,7 @@ class AgentLoop:
         """Finalize task execution and build result.
 
         Issue #620: Extracted from run_task to reduce function length.
+        GH#6626: Emits agent_abstained event and skips completion-think when abstaining.
 
         Args:
             results: List of iteration results
@@ -254,11 +262,32 @@ class AgentLoop:
             Dict with task results
         """
         self._state = LoopState.COMPLETING
-        if self.config.think_on_completion:
+        if not self._abstained and self.config.think_on_completion:
             await self._think_before_completion()
 
         self._state = LoopState.COMPLETED
-        return self._build_result(results)
+        result = self._build_result(results)
+
+        if self._abstained and self._current_context is not None:
+            await _bus_publish_event(
+                "global",
+                EVT_AGENT_ABSTAINED,
+                {
+                    "task_id": self._current_context.task_id,
+                    "abstained": True,
+                    "abstention_reason": self._abstention_reason,
+                    "iterations": len(results),
+                    "think_count": len(self._current_context.think_history),
+                },
+                persist=PersistStrategy.MEMORY,
+            )
+            logger.info(
+                "AgentLoop: task %s abstained — %s",
+                self._current_context.task_id,
+                self._abstention_reason,
+            )
+
+        return result
 
     async def run_task(
         self,
@@ -952,6 +981,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
 
         Issue #3877: Also returns False when a repetition halt has fired so the
         main while-loop exits even if _should_iterate() did not catch the error.
+        GH#6626: Also returns False when confidence-based abstention fires.
         """
         if self._halted_on_repetition:
             return False
@@ -961,6 +991,25 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
             return False
         if self._consecutive_errors >= self.config.max_consecutive_errors:
             return False
+        if (
+            self.config.abstain_on_low_confidence
+            and self._current_context is not None
+        ):
+            window = self.config.confidence_window
+            recent = self._current_context.think_history[-window:]
+            if len(recent) >= window and all(
+                t.confidence < self.config.min_confidence_floor for t in recent
+            ):
+                self._abstained = True
+                self._abstention_reason = (
+                    f"confidence below {self.config.min_confidence_floor} "
+                    f"for {window} consecutive iterations"
+                )
+                logger.warning(
+                    "AgentLoop: abstaining — %s",
+                    self._abstention_reason,
+                )
+                return False
         return True
 
     async def _handle_iteration_error(self, error: Exception) -> bool:
@@ -1022,6 +1071,18 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
 
         return plan.get_progress()
 
+    def _resolve_outcome(self) -> LoopOutcome:
+        """Map current loop state + abstention flag to a LoopOutcome."""
+        if self._abstained:
+            return LoopOutcome.ABSTAINED
+        if self._halted_on_repetition:
+            return LoopOutcome.HALTED
+        if self._state == LoopState.CANCELLED:
+            return LoopOutcome.CANCELLED
+        if self._state == LoopState.FAILED:
+            return LoopOutcome.FAILED
+        return LoopOutcome.COMPLETED
+
     def _build_result(
         self,
         iterations: list[IterationResult],
@@ -1030,10 +1091,12 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
         if not self._current_context:
             return {"error": "No context"}
 
-        return {
+        outcome = self._resolve_outcome()
+        result: dict[str, Any] = {
             "task_id": self._current_context.task_id,
             "description": self._current_context.description,
             "state": self._state.name,
+            "outcome": outcome.value,
             "iterations": len(iterations),
             "tools_executed": len(self._current_context.tools_executed),
             "errors": self._current_context.errors,
@@ -1041,3 +1104,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
             "plan_id": self._current_context.plan_id,
             "think_count": len(self._current_context.think_history),
         }
+        if self._abstained:
+            result["abstained"] = True
+            result["abstention_reason"] = self._abstention_reason
+        return result
