@@ -87,6 +87,7 @@ def _run(cmd: list[str], cwd: str | None = None) -> tuple[int, str, str]:
             capture_output=True,
             text=True,
             cwd=cwd,
+            timeout=60,
         )
         return result.returncode, result.stdout, result.stderr
     except Exception as exc:
@@ -100,7 +101,7 @@ def _repo_root() -> Path:
 
 def _list_open_issues(label: str | None = None) -> list[str]:
     """Return titles of open GitHub issues (optionally filtered by label)."""
-    cmd = ["gh", "issue", "list", "--repo", _GH_REPO, "--state", "open", "--json", "title"]
+    cmd = ["gh", "issue", "list", "--repo", _GH_REPO, "--state", "open", "--json", "title", "--limit", "500"]
     if label:
         cmd += ["--label", label]
     code, out, _ = _run(cmd)
@@ -148,9 +149,9 @@ def _changed_python_modules(since_iso: str | None, repo_root: Path) -> list[Path
     Falls back to the last 6 hours when *since_iso* is None.
     """
     if since_iso:
-        cmd = ["git", "log", "Dev_new_gui", f"--since={since_iso}", "--name-only", "--pretty=format:", "--diff-filter=ACMR"]
+        cmd = ["git", "log", "origin/Dev_new_gui", f"--since={since_iso}", "--name-only", "--pretty=format:", "--diff-filter=ACMR"]
     else:
-        cmd = ["git", "log", "Dev_new_gui", "--since=6 hours ago", "--name-only", "--pretty=format:", "--diff-filter=ACMR"]
+        cmd = ["git", "log", "origin/Dev_new_gui", "--since=6 hours ago", "--name-only", "--pretty=format:", "--diff-filter=ACMR"]
 
     code, out, _ = _run(cmd, cwd=str(repo_root))
     if code != 0:
@@ -258,7 +259,7 @@ def _run_vulture(repo_root: Path) -> list[str]:
         "*/migrations/*,*/__pycache__/*,*/tests/*",
     ]
     code, out, err = _run(cmd, cwd=str(repo_root))
-    if code not in (0, 3):  # vulture exits 3 when dead code found
+    if code not in (0, 1):  # vulture exits 1 when dead code found
         logger.warning("vulture exited %d: %s", code, err[:_MAX_LOG_CHARS])
         return []
     return [line.strip() for line in out.splitlines() if line.strip()]
