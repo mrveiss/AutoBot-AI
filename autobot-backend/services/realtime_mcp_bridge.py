@@ -80,17 +80,48 @@ class RealtimeMCPBridge:
         )
         return filtered
 
-    async def call_tool(self, name: str, arguments: dict[str, Any]) -> RealtimeToolResult:
+    async def call_tool(
+        self,
+        name: str,
+        arguments: dict[str, Any],
+        session_id: str | None = None,
+    ) -> RealtimeToolResult:
         """Route a Realtime tool call back through MCPClient.
 
+        Emits per-tool Prometheus metrics (Issue #7421).
         Full transport wiring deferred to #7343.
         """
+        import time
+
+        start = time.monotonic()
         # Stub: full wiring in #7343
         logger.warning("realtime_mcp_bridge.call_tool not yet wired: tool=%s", name)
-        return RealtimeToolResult(
+        result = RealtimeToolResult(
             content=f"Tool '{name}' transport not yet wired (#7343)",
             is_error=True,
         )
+        latency_s = time.monotonic() - start
+
+        # Issue #7421: emit per-tool metrics
+        try:
+            from autobot_shared.monitoring.prometheus_metrics import PrometheusMetricsManager
+            m = PrometheusMetricsManager()
+            outcome = "error" if result.is_error else "success"
+            m._voice_realtime.tool_calls_total.labels(tool=name, outcome=outcome).inc()
+            m._voice_realtime.tool_call_duration.labels(tool=name).observe(latency_s)
+
+            if session_id:
+                from services.voice_realtime_telemetry import get_voice_realtime_telemetry
+                await get_voice_realtime_telemetry().record_tool_call(
+                    session_id=session_id,
+                    tool=name,
+                    latency_s=latency_s,
+                    outcome=outcome,
+                )
+        except Exception as exc:  # metrics must never break the tool call path
+            logger.debug("voice_realtime metrics emit failed: %s", exc)
+
+        return result
 
     async def _discover_tools(self) -> list[RealtimeTool]:
         """Enumerate available MCP tools.

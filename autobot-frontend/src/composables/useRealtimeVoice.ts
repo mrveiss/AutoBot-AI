@@ -39,18 +39,33 @@ interface OaiToolCall {
 
 const connectionState = ref<RealtimeConnectionState>('disconnected')
 const errorMessage = ref('')
+// Issue #7421: surface disconnect reason from cap-breach events
+const disconnectReason = ref<string | null>(null)
 
 let _peerConnection: RTCPeerConnection | null = null
 let _dataChannel: RTCDataChannel | null = null
 let _localStream: MediaStream | null = null
+// Issue #7421: session_id from backend header — used to finalise telemetry on disconnect
+let _sessionId: string | null = null
 // In-flight tool calls keyed by call_id — aborted on disconnect
 const _pendingToolCalls = new Map<string, AbortController>()
 
 // ─── Helpers ─────────────────────────────────────────────
 
-function _cleanup(): void {
+function _cleanup(reason = 'normal'): void {
   _pendingToolCalls.forEach((ctrl) => ctrl.abort())
   _pendingToolCalls.clear()
+
+  // Issue #7421: notify backend to finalise telemetry
+  if (_sessionId) {
+    const sid = _sessionId
+    _sessionId = null
+    void fetchWithAuth(`${getApiBase()}/voice/realtime/session/${sid}/end`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    }).catch((e) => logger.debug('telemetry end call failed:', e))
+  }
 
   if (_dataChannel) {
     _dataChannel.close()
@@ -183,6 +198,34 @@ function _handleDataChannelMessage(raw: string): void {
       })
       break
     }
+    // Issue #7421: forward response.done usage to backend telemetry
+    case 'response.done': {
+      if (_sessionId) {
+        const usage = (event as { response?: { usage?: Record<string, number> } }).response?.usage
+        if (usage) {
+          void fetchWithAuth(`${getApiBase()}/voice/realtime/session/${_sessionId}/response_done`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              input_tokens: usage.input_tokens ?? 0,
+              output_tokens: usage.output_tokens ?? 0,
+              cached_input_tokens: usage.input_token_details?.cached_tokens ?? 0,
+            }),
+          }).then(async (res) => {
+            if (res.ok) {
+              const data = await res.json() as { status?: string; reason?: string; message?: string }
+              if (data.status === 'cap_breach') {
+                // Backend has ended the session — surface reason to user
+                disconnectReason.value = data.message ?? 'Session limit reached'
+                _cleanup(data.reason ?? 'cap_breach')
+                connectionState.value = 'disconnected'
+              }
+            }
+          }).catch((e) => logger.debug('response_done telemetry failed:', e))
+        }
+      }
+      break
+    }
     case 'error':
       logger.error('oai-events error:', event)
       errorMessage.value = String((event as { message?: string }).message ?? 'Realtime error')
@@ -260,12 +303,15 @@ export function useRealtimeVoice() {
         throw new Error(`SDP proxy returned ${sessionRes.status}`)
       }
 
+      // Issue #7421: capture session_id for telemetry
+      _sessionId = sessionRes.headers.get('X-Realtime-Session-Id')
+
       const sessionData = await sessionRes.json() as { sdp: string }
       await _peerConnection.setRemoteDescription(
         new RTCSessionDescription({ type: 'answer', sdp: sessionData.sdp }),
       )
 
-      logger.debug('WebRTC Realtime connection established')
+      logger.debug('WebRTC Realtime connection established session_id=%s', _sessionId)
     } catch (e) {
       const err = e instanceof Error ? e : new Error(String(e))
       logger.error('Realtime connect failed:', err)
@@ -275,16 +321,18 @@ export function useRealtimeVoice() {
     }
   }
 
-  function disconnect(): void {
-    _cleanup()
+  function disconnect(reason = 'normal'): void {
+    _cleanup(reason)
     connectionState.value = 'disconnected'
     errorMessage.value = ''
-    logger.debug('Realtime voice disconnected')
+    logger.debug('Realtime voice disconnected reason=%s', reason)
   }
 
   return {
     connectionState,
     errorMessage,
+    // Issue #7421: expose disconnect reason (cap breach message) to UI
+    disconnectReason,
     connect,
     disconnect,
   }
