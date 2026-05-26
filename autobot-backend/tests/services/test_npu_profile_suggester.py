@@ -169,8 +169,7 @@ def test_recommend_models(vram_gb, expected_ids):
 def test_suggest_profile_selection(health, expected_profile):
     suggestion = suggest_profile(health)
     assert suggestion.recommended_profile == expected_profile, (
-        f"Expected {expected_profile!r} but got {suggestion.recommended_profile!r} "
-        f"for health={health}"
+        f"Expected {expected_profile!r} but got {suggestion.recommended_profile!r} " f"for health={health}"
     )
 
 

@@ -24,7 +24,6 @@ from utils.error_boundaries.types import (
     classify_error,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -191,17 +190,13 @@ class TestFallbackHook:
     @pytest.mark.asyncio
     async def test_fallback_strategy_called_for_fallback_error(self):
         loop = _make_loop()
-        with patch.object(
-            loop, "_try_fallback_strategy", new_callable=AsyncMock
-        ) as mock_fallback:
+        with patch.object(loop, "_try_fallback_strategy", new_callable=AsyncMock) as mock_fallback:
             await loop._handle_iteration_error(ValueError("val"))
             mock_fallback.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_fallback_strategy_not_called_for_high_error(self):
         loop = _make_loop()
-        with patch.object(
-            loop, "_try_fallback_strategy", new_callable=AsyncMock
-        ) as mock_fallback:
+        with patch.object(loop, "_try_fallback_strategy", new_callable=AsyncMock) as mock_fallback:
             await loop._handle_iteration_error(OSError("disk"))
             mock_fallback.assert_not_awaited()

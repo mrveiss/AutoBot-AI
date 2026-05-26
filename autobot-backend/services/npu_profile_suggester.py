@@ -73,9 +73,7 @@ def _has_strong_cpu(health_data: Dict[str, Any]) -> bool:
 
 
 def _has_openvino_or_onnx(health_data: Dict[str, Any]) -> bool:
-    return bool(health_data.get("openvino_available")) or bool(
-        health_data.get("onnxruntime_available")
-    )
+    return bool(health_data.get("openvino_available")) or bool(health_data.get("onnxruntime_available"))
 
 
 def _compute_class(health_data: Dict[str, Any], vram_gb: float) -> str:
@@ -108,9 +106,7 @@ def _capabilities_summary(health_data: Dict[str, Any], vram_gb: float) -> str:
 
     # CUDA / GPU info
     if cuda_available and devices:
-        device_str = ", ".join(
-            f"{d.get('name', 'GPU')} {d.get('memory_gb', 0):.0f}GB" for d in devices
-        )
+        device_str = ", ".join(f"{d.get('name', 'GPU')} {d.get('memory_gb', 0):.0f}GB" for d in devices)
         parts.append(f"CUDA, {len(devices)}× {device_str}")
     else:
         parts.append("no GPU")
