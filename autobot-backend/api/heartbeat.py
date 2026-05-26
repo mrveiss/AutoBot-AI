@@ -362,7 +362,9 @@ async def terminate_agent(
     state.paused_reason = body.reason
     state.paused_at = now_utc()
     # _user is always a Dict; "id" key does not exist — use "username" (P1)
-    state.paused_by = _user.get("username", "unknown") if isinstance(_user, dict) else getattr(_user, "username", "unknown")
+    state.paused_by = (
+        _user.get("username", "unknown") if isinstance(_user, dict) else getattr(_user, "username", "unknown")
+    )
     await session.commit()
     await session.refresh(state)
     await scheduler.disable_agent(agent_id)
