@@ -148,7 +148,7 @@ def test_lifecycle_guard_blocks_active_and_closed_in_source() -> None:
 
     src_path = os.path.join(os.path.dirname(__file__), "..", "api", "sprints.py")
     with open(src_path) as f:
-        tree = ast.parse(f.read())
+        ast.parse(f.read())
 
     source = open(src_path).read()
     assert "_LIFECYCLE_STATUSES" in source, "lifecycle guard constant missing"

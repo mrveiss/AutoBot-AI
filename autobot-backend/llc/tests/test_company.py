@@ -66,7 +66,7 @@ class TestCompanyCreate:
     @pytest.mark.asyncio
     async def test_create_root_company(self):
         svc = _make_service()
-        org = _make_org()
+        _make_org()
 
         # Stub _assert_prefix_unique: no conflict
         svc._assert_prefix_unique = AsyncMock()
