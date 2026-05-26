@@ -21,7 +21,6 @@ import pytest
 
 from autobot_shared.coordination.shared_runtime_bag import SharedRuntimeBag
 
-
 # ---------------------------------------------------------------------------
 # Shared in-memory Redis (same instance = same data store)
 # ---------------------------------------------------------------------------

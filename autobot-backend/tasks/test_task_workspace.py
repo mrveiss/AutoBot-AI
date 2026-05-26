@@ -44,17 +44,20 @@ def git_repo(tmp_path: Path) -> Path:
     subprocess.run(["git", "init", str(tmp_path)], check=True, capture_output=True)
     subprocess.run(
         ["git", "-C", str(tmp_path), "config", "user.email", "test@test.com"],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     subprocess.run(
         ["git", "-C", str(tmp_path), "config", "user.name", "Test"],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     (tmp_path / "README.md").write_text("test repo")
     subprocess.run(["git", "-C", str(tmp_path), "add", "."], check=True, capture_output=True)
     subprocess.run(
         ["git", "-C", str(tmp_path), "commit", "-m", "init"],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     return tmp_path
 
@@ -124,7 +127,8 @@ class TestHeartbeatResume:
         subprocess.run(["git", "-C", str(wt), "add", "."], check=True, capture_output=True)
         subprocess.run(
             ["git", "-C", str(wt), "commit", "-m", "hb1"],
-            check=True, capture_output=True,
+            check=True,
+            capture_output=True,
         )
 
         ws2 = allocate(task_id, "agent-resume", repo_root=git_repo)
@@ -153,9 +157,7 @@ class TestHeartbeatResume:
             "foo\x00bar",
         ],
     )
-    def test_allocate_rejects_traversal_task_ids(
-        self, git_repo: Path, bad_id: str
-    ) -> None:
+    def test_allocate_rejects_traversal_task_ids(self, git_repo: Path, bad_id: str) -> None:
         """Path traversal and malformed task_ids must raise ValueError (GH#6471 blocker 2)."""
         with pytest.raises(ValueError, match="Invalid task_id"):
             allocate(bad_id, "agent-sec", repo_root=git_repo)
@@ -167,9 +169,7 @@ class TestHeartbeatResume:
             "../worktrees",
         ],
     )
-    def test_release_rejects_traversal_task_ids(
-        self, git_repo: Path, bad_id: str
-    ) -> None:
+    def test_release_rejects_traversal_task_ids(self, git_repo: Path, bad_id: str) -> None:
         with pytest.raises(ValueError, match="Invalid task_id"):
             release(bad_id, repo_root=git_repo)
 

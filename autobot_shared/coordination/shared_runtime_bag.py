@@ -202,10 +202,7 @@ class SharedRuntimeBag(Generic[T]):
         prefix = f"runtime_bag:{self._namespace}:"
         full_pattern = f"{prefix}{pattern}"
         raw_keys = await redis.keys(full_pattern)
-        return [
-            (k.decode() if isinstance(k, bytes) else k).removeprefix(prefix)
-            for k in raw_keys
-        ]
+        return [(k.decode() if isinstance(k, bytes) else k).removeprefix(prefix) for k in raw_keys]
 
     async def subscribe_changes(self) -> AsyncIterator[ChangeEvent]:
         """Yield ChangeEvent for every set/delete in this namespace.
@@ -280,6 +277,4 @@ class SharedRuntimeBag(Generic[T]):
             await redis.publish(channel, payload)
         except Exception as exc:
             # pub/sub is best-effort — never let it break callers
-            logger.warning(
-                "SharedRuntimeBag: publish failed in '%s': %s", self._namespace, exc
-            )
+            logger.warning("SharedRuntimeBag: publish failed in '%s': %s", self._namespace, exc)

@@ -59,9 +59,7 @@ async def get_task_workspace(
             detail="Invalid task_id format",
         )
 
-    result = await session.execute(
-        select(AgentRuntimeState).where(AgentRuntimeState.current_task_id == task_id)
-    )
+    result = await session.execute(select(AgentRuntimeState).where(AgentRuntimeState.current_task_id == task_id))
     state = result.scalar_one_or_none()
 
     if state is None or state.workspace_dir is None:

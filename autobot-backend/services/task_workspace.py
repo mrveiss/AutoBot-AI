@@ -30,10 +30,7 @@ logger = get_logger(__name__)
 # Allow deployment-specific override so production installs that deploy only
 # autobot-backend/ to /opt/autobot/ can point at the real git repository root
 # (GH#6471 blocker 3 — _REPO_ROOT resolves to non-git dir on Ansible targets).
-_REPO_ROOT = Path(
-    os.environ.get("AUTOBOT_WORKSPACE_REPO_ROOT")
-    or Path(__file__).resolve().parent.parent.parent
-)
+_REPO_ROOT = Path(os.environ.get("AUTOBOT_WORKSPACE_REPO_ROOT") or Path(__file__).resolve().parent.parent.parent)
 _WORKSPACE_BASE_NAME = ".task-workspaces"
 _META_FILENAME = ".workspace-meta.json"
 _ACTIVE_LOCK_FILENAME = ".active-lock"
@@ -57,9 +54,7 @@ class WorkspaceInfo:
 def _validate_task_id(task_id: str) -> None:
     """Reject task_ids that could be used for path traversal (GH#6471 blocker 2)."""
     if not _SAFE_TASK_ID_RE.match(task_id):
-        raise ValueError(
-            f"Invalid task_id {task_id!r}: must match [0-9a-zA-Z_-]{{1,128}}"
-        )
+        raise ValueError(f"Invalid task_id {task_id!r}: must match [0-9a-zA-Z_-]{{1,128}}")
 
 
 def allocate(
@@ -228,10 +223,10 @@ def cleanup_stale(
             continue  # too young
 
         if (entry / _ACTIVE_LOCK_FILENAME).exists():
-            logger.debug("Skipping locked workspace task=%s during stale cleanup", entry.name[len("task-"):])
+            logger.debug("Skipping locked workspace task=%s during stale cleanup", entry.name[len("task-") :])
             continue
 
-        task_id = entry.name[len("task-"):]
+        task_id = entry.name[len("task-") :]
         try:
             release(task_id, root, keep_on_failure=True)
             cleaned.append(task_id)
@@ -279,14 +274,10 @@ def _git_add_worktree(root: Path, workspace_dir: Path, branch: str) -> None:
                         workspace_dir,
                     )
                 else:
-                    logger.error(
-                        "git worktree add failed for branch=%s: %s", branch, stderr2
-                    )
+                    logger.error("git worktree add failed for branch=%s: %s", branch, stderr2)
                     raise
         else:
-            logger.error(
-                "git worktree add failed for branch=%s: %s", branch, stderr
-            )
+            logger.error("git worktree add failed for branch=%s: %s", branch, stderr)
             raise
 
 
@@ -316,7 +307,7 @@ def _enforce_limit(agent_id: str, max_per_agent: int, root: Path) -> None:
             if (entry / _ACTIVE_LOCK_FILENAME).exists():
                 continue  # count but do not add to eviction candidates
             ts = datetime.fromisoformat(meta["created_at"]).timestamp()
-            task_id = entry.name[len("task-"):]
+            task_id = entry.name[len("task-") :]
             eviction_candidates.append((ts, task_id))
         except (json.JSONDecodeError, KeyError, ValueError):
             pass

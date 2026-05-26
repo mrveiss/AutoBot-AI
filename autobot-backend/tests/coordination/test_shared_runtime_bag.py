@@ -25,7 +25,6 @@ from autobot_shared.coordination.shared_runtime_bag import (
     _value_key,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers / fakes
 # ---------------------------------------------------------------------------
@@ -372,9 +371,7 @@ async def test_subscribe_changes_yields_set_events(fake_redis: _FakeRedis) -> No
     bag: SharedRuntimeBag[int] = SharedRuntimeBag("ns", int)
     channel = _changes_channel("ns")
     # Pre-seed a published message
-    payload = json.dumps(
-        {"key": "k", "operation": "set", "value": 7, "timestamp": "2026-01-01T00:00:00"}
-    )
+    payload = json.dumps({"key": "k", "operation": "set", "value": 7, "timestamp": "2026-01-01T00:00:00"})
     fake_redis._published.append((channel, payload))
 
     events = []
@@ -396,9 +393,7 @@ async def test_subscribe_changes_yields_set_events(fake_redis: _FakeRedis) -> No
 async def test_subscribe_changes_yields_delete_events(fake_redis: _FakeRedis) -> None:
     bag: SharedRuntimeBag[int] = SharedRuntimeBag("ns", int)
     channel = _changes_channel("ns")
-    payload = json.dumps(
-        {"key": "k", "operation": "delete", "value": None, "timestamp": "2026-01-01T00:00:00"}
-    )
+    payload = json.dumps({"key": "k", "operation": "delete", "value": None, "timestamp": "2026-01-01T00:00:00"})
     fake_redis._published.append((channel, payload))
 
     events = []
