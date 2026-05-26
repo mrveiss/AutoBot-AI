@@ -145,7 +145,6 @@ celery_app.autodiscover_tasks(["tasks", "workers"])
 # workers register it. autodiscover_tasks only scans the listed packages.
 import services.pricing_refresh  # noqa: F401
 
-
 # =========================================================================
 # Issue #4455: Periodic knowledge-base cleanup schedule
 # =========================================================================

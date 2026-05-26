@@ -35,7 +35,7 @@ logger = get_logger(__name__)
 # Source: OpenAI pricing page – audio input $0.10/min, output $0.20/min
 # Update alongside PRICING_VERSION in llm_cost_tracker.py when prices change.
 _AUDIO_COST_PER_SEC: dict[str, float] = {
-    "input": 0.10 / 60,   # ~$0.001667/s
+    "input": 0.10 / 60,  # ~$0.001667/s
     "output": 0.20 / 60,  # ~$0.003333/s
 }
 
@@ -120,6 +120,7 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
 
         # Lazy import to avoid circular dependency with prometheus_metrics module
         from autobot_shared.monitoring.prometheus_metrics import PrometheusMetricsManager
+
         self._prom = PrometheusMetricsManager()
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -172,9 +173,7 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         m = self._prom._voice_realtime
         m.sessions_active.labels(model=record.model).dec()
         m.session_seconds_total.labels(model=record.model).inc(duration_s)
-        m.session_duration.labels(
-            model=record.model, disconnect_reason=record.disconnect_reason
-        ).observe(duration_s)
+        m.session_duration.labels(model=record.model, disconnect_reason=record.disconnect_reason).observe(duration_s)
         m.estimated_cost_usd.labels(model=record.model).inc(record.estimated_cost_usd)
 
         if reason in (DisconnectReason.DURATION_CAP, DisconnectReason.COST_CAP):
@@ -182,7 +181,10 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
 
         logger.info(
             "voice_realtime session_end session_id=%s duration_s=%.1f cost_usd=%.4f reason=%s",
-            session_id, duration_s, record.estimated_cost_usd, reason.value,
+            session_id,
+            duration_s,
+            record.estimated_cost_usd,
+            reason.value,
         )
         return record
 
@@ -343,12 +345,10 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
 
 # ── Module-level helpers ──────────────────────────────────────────────────────
 
+
 def _estimate_cost(record: RealtimeSessionRecord) -> float:
     """Compute estimated USD cost from the session record."""
-    audio_cost = (
-        record.audio_in_s * _AUDIO_COST_PER_SEC["input"]
-        + record.audio_out_s * _AUDIO_COST_PER_SEC["output"]
-    )
+    audio_cost = record.audio_in_s * _AUDIO_COST_PER_SEC["input"] + record.audio_out_s * _AUDIO_COST_PER_SEC["output"]
     token_cost = (
         record.input_tokens * _TOKEN_COST_PER_1M["input"] / 1_000_000
         + record.output_tokens * _TOKEN_COST_PER_1M["output"] / 1_000_000
@@ -366,6 +366,7 @@ def _elapsed_seconds(record: RealtimeSessionRecord) -> float:
 
 def _parse_iso(iso_str: str):
     from datetime import datetime, timezone
+
     dt = datetime.fromisoformat(iso_str)
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)

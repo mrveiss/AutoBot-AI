@@ -33,6 +33,7 @@ _OPENAI_BETA_HEADER = "realtime=v1"
 
 # ── Telemetry endpoint models (Issue #7421) ───────────────────────────────────
 
+
 class SessionEndRequest(BaseModel):
     reason: str = "normal"
 
@@ -154,9 +155,8 @@ async def create_realtime_session(  # noqa: PLR0912
                 # Issue #7421: start telemetry for this session
                 try:
                     from services.voice_realtime_telemetry import get_voice_realtime_telemetry
-                    await get_voice_realtime_telemetry().session_start(
-                        session_id=session_id, model=_get_model()
-                    )
+
+                    await get_voice_realtime_telemetry().session_start(session_id=session_id, model=_get_model())
                 except Exception as exc:  # telemetry must never break the session
                     logger.warning("voice_realtime telemetry start failed: %s", exc)
 
@@ -185,10 +185,12 @@ async def create_realtime_session(  # noqa: PLR0912
 
 # ── Telemetry endpoints (Issue #7421) ─────────────────────────────────────────
 
+
 @router.post("/session/{session_id}/end")
 async def end_realtime_session(session_id: str, body: SessionEndRequest) -> dict:
     """Finalise telemetry for a Realtime session."""
     from services.voice_realtime_telemetry import DisconnectReason, get_voice_realtime_telemetry
+
     try:
         reason = DisconnectReason(body.reason)
     except ValueError:
@@ -201,6 +203,7 @@ async def end_realtime_session(session_id: str, body: SessionEndRequest) -> dict
 async def ingest_response_done(session_id: str, body: ResponseDoneRequest) -> dict:
     """Ingest a response.done payload and enforce soft-caps."""
     from services.voice_realtime_telemetry import CapBreachError, get_voice_realtime_telemetry
+
     telemetry = get_voice_realtime_telemetry()
     await telemetry.record_response_done(
         session_id=session_id,
@@ -222,6 +225,7 @@ async def ingest_response_done(session_id: str, body: ResponseDoneRequest) -> di
 async def call_realtime_tool(body: ToolCallRequest) -> dict:
     """Route a Realtime tool call through the MCP bridge (#7343 stub)."""
     from services.realtime_mcp_bridge import get_realtime_bridge
+
     bridge = await get_realtime_bridge()
     result = await bridge.call_tool(name=body.name, arguments=body.arguments, session_id=body.session_id)
     return {"call_id": body.call_id, "content": result.content, "is_error": result.is_error}
@@ -231,6 +235,7 @@ async def call_realtime_tool(body: ToolCallRequest) -> dict:
 async def list_realtime_sessions(user_id: str | None = None, limit: int = 20) -> list[SessionSummary]:
     """Return recent Realtime sessions for the UsageView (#7421)."""
     from services.voice_realtime_telemetry import get_voice_realtime_telemetry
+
     telemetry = get_voice_realtime_telemetry()
     records = await telemetry.list_recent_sessions(user_id=user_id, limit=limit)
     return [

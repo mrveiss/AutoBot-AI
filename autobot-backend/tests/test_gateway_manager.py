@@ -458,7 +458,17 @@ class TestGatewayManager:
         """Test getting list of supported platforms."""
         platforms = gateway.get_supported_platforms()
         assert len(platforms) == 9
-        assert set(platforms) == {"web", "slack", "discord", "whatsapp", "teams", "telegram", "signal", "matrix", "imessage"}
+        assert set(platforms) == {
+            "web",
+            "slack",
+            "discord",
+            "whatsapp",
+            "teams",
+            "telegram",
+            "signal",
+            "matrix",
+            "imessage",
+        }
 
 
 class TestRateLimiter:

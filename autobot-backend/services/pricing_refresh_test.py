@@ -13,7 +13,6 @@ import pytest
 
 from llm_shared.pricing.sources import ModelPricing
 
-
 # ---------------------------------------------------------------------------
 # ModelPricing round-trip
 # ---------------------------------------------------------------------------
@@ -212,8 +211,18 @@ async def test_cost_tracker_uses_redis_pricing_when_available():
             nonlocal cost
             # intercept at the record-creation step
             record = await tracker._build_and_persist_record(
-                "anthropic", "claude-opus-4-0", 1_000_000, 1_000_000,
-                None, None, None, None, None, True, None, None,
+                "anthropic",
+                "claude-opus-4-0",
+                1_000_000,
+                1_000_000,
+                None,
+                None,
+                None,
+                None,
+                None,
+                True,
+                None,
+                None,
             )
             cost = record.cost_usd
             return True

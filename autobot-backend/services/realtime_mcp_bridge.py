@@ -39,19 +39,23 @@ logger = get_logger(__name__)
 def _get_mcp_client_class():
     """Lazy import MCPClient to avoid pulling in the skills package init at module load."""
     from skills.sync.mcp_client import MCPClient  # noqa: PLC0415
+
     return MCPClient
 
 
 def _get_filter_tools_for_bundle():
     """Lazy import to avoid circular import at module init time."""
     from api.redis_mcp.rbac import filter_tools_for_bundle  # noqa: PLC0415
+
     return filter_tools_for_bundle
 
 
 async def _audit_log(*args, **kwargs):
     """Lazy-import audit_log to avoid pulling in Redis at module init time."""
     from services.audit_logger import audit_log  # noqa: PLC0415
+
     return await audit_log(*args, **kwargs)
+
 
 # ---------------------------------------------------------------------------
 # Realtime schema types
@@ -79,6 +83,7 @@ class RealtimeToolResult:
 # ---------------------------------------------------------------------------
 # Internal routing registry entry
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class _ToolEntry:
@@ -321,8 +326,12 @@ class RealtimeMCPBridge:
             if session_id:
                 try:
                     from services.voice_realtime_telemetry import get_voice_realtime_telemetry
+
                     await get_voice_realtime_telemetry().record_tool_call(
-                        session_id=session_id, tool=name, latency_s=latency_s, outcome="success",
+                        session_id=session_id,
+                        tool=name,
+                        latency_s=latency_s,
+                        outcome="success",
                     )
                 except Exception as _te:
                     logger.debug("voice_realtime telemetry emit failed: %s", _te)
@@ -332,7 +341,9 @@ class RealtimeMCPBridge:
             latency_s = time.monotonic() - start
             logger.warning(
                 "realtime_mcp_bridge.call_tool error tool=%s (%s): %s",
-                name, type(exc).__name__, exc,
+                name,
+                type(exc).__name__,
+                exc,
             )
             await _audit_log(
                 "voice.realtime.tool_call",
@@ -345,8 +356,12 @@ class RealtimeMCPBridge:
             if session_id:
                 try:
                     from services.voice_realtime_telemetry import get_voice_realtime_telemetry
+
                     await get_voice_realtime_telemetry().record_tool_call(
-                        session_id=session_id, tool=name, latency_s=latency_s, outcome="error",
+                        session_id=session_id,
+                        tool=name,
+                        latency_s=latency_s,
+                        outcome="error",
                     )
                 except Exception as _te:
                     logger.debug("voice_realtime telemetry emit failed: %s", _te)
@@ -376,13 +391,9 @@ class RealtimeMCPBridge:
                 async with MCPClient(uri) as client:
                     tools = await client.discover_tools()
                 server_tool_lists.append((sid, uri, tools))
-                logger.info(
-                    "realtime_mcp_bridge discovered server=%s tools=%d", sid, len(tools)
-                )
+                logger.info("realtime_mcp_bridge discovered server=%s tools=%d", sid, len(tools))
             except Exception as exc:  # noqa: BLE001
-                logger.warning(
-                    "realtime_mcp_bridge skipping unreachable server %s: %s", uri, exc
-                )
+                logger.warning("realtime_mcp_bridge skipping unreachable server %s: %s", uri, exc)
 
         return self._build_registry(server_tool_lists)
 
@@ -406,9 +417,7 @@ class RealtimeMCPBridge:
         logger.info("realtime_mcp_bridge in-process tools=%d", len(result))
         return result
 
-    def _build_registry(
-        self, server_tool_lists: list[tuple[str, str, list[Any]]]
-    ) -> list[RealtimeTool]:
+    def _build_registry(self, server_tool_lists: list[tuple[str, str, list[Any]]]) -> list[RealtimeTool]:
         """Resolve name collisions and build the routing registry.
 
         A tool name that appears on exactly one server keeps its bare name.
@@ -433,9 +442,7 @@ class RealtimeMCPBridge:
                 rt = RealtimeTool(
                     name=public_name,
                     description=tool.description,
-                    parameters=_translate_input_schema(
-                        getattr(tool, "input_schema", None)
-                    ),
+                    parameters=_translate_input_schema(getattr(tool, "input_schema", None)),
                 )
                 result.append(rt)
                 self._registry[public_name] = _ToolEntry(
@@ -450,9 +457,7 @@ class RealtimeMCPBridge:
     # Transport routing
     # ------------------------------------------------------------------
 
-    async def _call_via_transport(
-        self, entry: _ToolEntry, arguments: dict[str, Any]
-    ) -> Any:
+    async def _call_via_transport(self, entry: _ToolEntry, arguments: dict[str, Any]) -> Any:
         """Invoke the tool via MCPClient transport or in-process handler."""
         if entry.server_uri is None:
             return await self._call_inprocess(entry.original_name, arguments)
