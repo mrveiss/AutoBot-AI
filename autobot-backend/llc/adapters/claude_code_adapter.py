@@ -140,6 +140,7 @@ class ClaudeCodeAdapter:
                 )
                 context.pop("workspace_dir", None)
                 env.pop("AUTOBOT_WORKSPACE_DIR", None)
+                env["LLC_INVOKE_CONTEXT"] = json.dumps(context, default=str)
                 workspace_dir = None
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,

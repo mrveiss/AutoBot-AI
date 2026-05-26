@@ -267,6 +267,8 @@ class TestInvoke:
         fake_fh.close.assert_called_once()
         assert "AUTOBOT_WORKSPACE_DIR" in captured_envs[0]
         assert "AUTOBOT_WORKSPACE_DIR" not in captured_envs[1]
+        retry_ctx = json.loads(captured_envs[1]["LLC_INVOKE_CONTEXT"])
+        assert "workspace_dir" not in retry_ctx
 
     async def test_workspace_dir_missing_no_retry_when_unset(self) -> None:
         """FileNotFoundError propagates unchanged when workspace_dir is not in context."""
