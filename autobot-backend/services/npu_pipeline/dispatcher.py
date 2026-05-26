@@ -69,9 +69,7 @@ class PipelineDispatcher:
     # ------------------------------------------------------------------
 
     async def __aenter__(self) -> "PipelineDispatcher":
-        self._session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=self._timeout)
-        )
+        self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self._timeout))
         logger.debug("PipelineDispatcher: session opened")
         return self
 
@@ -104,9 +102,7 @@ class PipelineDispatcher:
             RuntimeError: When called outside an async context manager.
         """
         if self._session is None:
-            raise RuntimeError(
-                "PipelineDispatcher must be used as an async context manager"
-            )
+            raise RuntimeError("PipelineDispatcher must be used as an async context manager")
 
         assignments = plan.assignments
         if not assignments:
@@ -119,15 +115,11 @@ class PipelineDispatcher:
 
             if is_last:
                 # Last worker streams tokens
-                async for token in self._stream_tokens(
-                    plan, assignment, hidden_state
-                ):
+                async for token in self._stream_tokens(plan, assignment, hidden_state):
                     yield token
                 return
             else:
-                hidden_state = await self._forward_pass(
-                    plan, assignment, hidden_state
-                )
+                hidden_state = await self._forward_pass(plan, assignment, hidden_state)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -143,9 +135,7 @@ class PipelineDispatcher:
 
         Retries on peer workers from plan.peer_map on connection/timeout error.
         """
-        candidates = [assignment.worker_id] + plan.peer_map.get(
-            assignment.worker_id, []
-        )
+        candidates = [assignment.worker_id] + plan.peer_map.get(assignment.worker_id, [])
 
         last_exc: Optional[Exception] = None
         for worker_id in candidates:
@@ -187,9 +177,7 @@ class PipelineDispatcher:
         hidden_state: object,
     ) -> AsyncIterator[str]:
         """POST to the last worker's /generate endpoint and stream tokens."""
-        candidates = [assignment.worker_id] + plan.peer_map.get(
-            assignment.worker_id, []
-        )
+        candidates = [assignment.worker_id] + plan.peer_map.get(assignment.worker_id, [])
 
         last_exc: Optional[Exception] = None
         for worker_id in candidates:
@@ -224,7 +212,5 @@ class PipelineDispatcher:
     def _worker_url(self, worker_id: str, path: str) -> str:
         base = self._worker_urls.get(worker_id)
         if not base:
-            raise WorkerDropError(
-                f"No URL registered for worker '{worker_id}'"
-            )
+            raise WorkerDropError(f"No URL registered for worker '{worker_id}'")
         return base.rstrip("/") + path

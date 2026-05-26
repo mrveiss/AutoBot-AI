@@ -1005,19 +1005,13 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
             return False
         if self._consecutive_errors >= self.config.max_consecutive_errors:
             return False
-        if (
-            self.config.abstain_on_low_confidence
-            and self._current_context is not None
-        ):
+        if self.config.abstain_on_low_confidence and self._current_context is not None:
             window = self.config.confidence_window
             recent = self._current_context.think_history[-window:]
-            if len(recent) >= window and all(
-                t.confidence < self.config.min_confidence_floor for t in recent
-            ):
+            if len(recent) >= window and all(t.confidence < self.config.min_confidence_floor for t in recent):
                 self._abstained = True
                 self._abstention_reason = (
-                    f"confidence below {self.config.min_confidence_floor} "
-                    f"for {window} consecutive iterations"
+                    f"confidence below {self.config.min_confidence_floor} " f"for {window} consecutive iterations"
                 )
                 logger.warning(
                     "AgentLoop: abstaining — %s",
