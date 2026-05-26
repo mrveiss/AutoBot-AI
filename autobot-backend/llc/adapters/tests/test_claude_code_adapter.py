@@ -192,6 +192,101 @@ class TestInvoke:
         tools_idx = captured_cmd.index("--allowedTools")
         assert captured_cmd[tools_idx + 1] == "Bash,Read"
 
+    async def test_fd_closed_when_exec_raises(self) -> None:
+        """out_fh must be closed even if create_subprocess_exec raises (GH#6471 follow-up)."""
+        adapter = ClaudeCodeAdapter()
+        fake_fh = MagicMock()
+
+        with tempfile.TemporaryDirectory() as td:
+            cfg = _agent_cfg(output_dir=td)
+            with (
+                patch("llc.adapters.claude_code_adapter.shutil.which", return_value="/usr/bin/claude"),
+                patch(
+                    "llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None
+                ),
+                patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, side_effect=OSError("boom")),
+                patch("builtins.open", MagicMock(return_value=fake_fh)),
+            ):
+                with pytest.raises(OSError):
+                    await adapter.invoke(cfg, {})
+
+        fake_fh.close.assert_called_once()
+
+    async def test_fd_closed_on_success(self) -> None:
+        """out_fh must be closed even on the happy path."""
+        adapter = ClaudeCodeAdapter()
+        fake_proc = _make_fake_proc(88)
+        fake_fh = MagicMock()
+
+        with tempfile.TemporaryDirectory() as td:
+            cfg = _agent_cfg(output_dir=td)
+            with (
+                patch("llc.adapters.claude_code_adapter.shutil.which", return_value="/usr/bin/claude"),
+                patch(
+                    "llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None
+                ),
+                patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=fake_proc),
+                patch("builtins.open", MagicMock(return_value=fake_fh)),
+            ):
+                await adapter.invoke(cfg, {})
+
+        fake_fh.close.assert_called_once()
+
+    async def test_workspace_dir_missing_retries_without_cwd(self) -> None:
+        """If workspace_dir is deleted, adapter retries without cwd and clears it from context."""
+        adapter = ClaudeCodeAdapter()
+        fake_proc = _make_fake_proc(77)
+        call_count = 0
+        context = {"workspace_dir": "/deleted/worktree", "task_id": "t1"}
+        fake_fh = MagicMock()
+        captured_envs: list[dict] = []
+
+        async def exec_raising_first(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            captured_envs.append(dict(kwargs.get("env", {})))
+            if call_count == 1:
+                raise FileNotFoundError("No such directory")
+            return fake_proc
+
+        with tempfile.TemporaryDirectory() as td:
+            cfg = _agent_cfg(output_dir=td)
+            with (
+                patch("llc.adapters.claude_code_adapter.shutil.which", return_value="/usr/bin/claude"),
+                patch(
+                    "llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None
+                ),
+                patch("asyncio.create_subprocess_exec", side_effect=exec_raising_first),
+                patch("builtins.open", MagicMock(return_value=fake_fh)),
+            ):
+                run_id = await adapter.invoke(cfg, context)
+
+        assert call_count == 2
+        assert "workspace_dir" not in context
+        assert run_id.startswith("77/")
+        fake_fh.close.assert_called_once()
+        assert "AUTOBOT_WORKSPACE_DIR" in captured_envs[0]
+        assert "AUTOBOT_WORKSPACE_DIR" not in captured_envs[1]
+        retry_ctx = json.loads(captured_envs[1]["LLC_INVOKE_CONTEXT"])
+        assert "workspace_dir" not in retry_ctx
+
+    async def test_workspace_dir_missing_no_retry_when_unset(self) -> None:
+        """FileNotFoundError propagates unchanged when workspace_dir is not in context."""
+        adapter = ClaudeCodeAdapter()
+
+        with tempfile.TemporaryDirectory() as td:
+            cfg = _agent_cfg(output_dir=td)
+            with (
+                patch("llc.adapters.claude_code_adapter.shutil.which", return_value="/usr/bin/claude"),
+                patch(
+                    "llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None
+                ),
+                patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, side_effect=FileNotFoundError("gone")),
+                patch("builtins.open", MagicMock(return_value=MagicMock())),
+            ):
+                with pytest.raises(FileNotFoundError):
+                    await adapter.invoke(cfg, {"task_id": "t2"})
+
 
 # ---------------------------------------------------------------------------
 # status
