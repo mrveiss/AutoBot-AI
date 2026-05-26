@@ -111,6 +111,9 @@ SENSITIVE_TOOLS: frozenset[str] = frozenset(
 # a halt without inspecting the error string.  Issue #3877.
 _HALT_SENTINEL = "__repetition_halt__"
 
+# Sentinel key for stagnation halts (Issue #6627).
+_STAGNATION_SENTINEL = "__stagnation_halt__"
+
 # =============================================================================
 # Agent Loop
 # =============================================================================
@@ -164,6 +167,10 @@ class AgentLoop:
         # GH#6628: set when a CRITICAL error causes an immediate halt
         self._fatal_error: Exception | None = None
         self._fatal_reason: str | None = None
+        # Issue #6627: semantic stagnation halt state
+        self._halted_on_stagnation: bool = False
+        self._halt_outcome: "LoopOutcome | None" = None
+        self._halt_reason: str = ""
 
     # =========================================================================
     # Properties
@@ -222,6 +229,9 @@ class AgentLoop:
         self._abstention_reason = None
         self._fatal_error = None
         self._fatal_reason = None
+        self._halted_on_stagnation = False
+        self._halt_outcome = None
+        self._halt_reason = ""
 
     async def _execute_main_loop(self) -> list[IterationResult]:
         """Execute the main iteration loop.
@@ -461,6 +471,24 @@ class AgentLoop:
 
         for tool_name in result.tools_executed:
             self._current_context.add_tool(tool_name)
+
+        # Issue #6627: fingerprint observations and check for stagnation.
+        self._record_observation_fingerprints(tool_results)
+        if self._check_observation_stagnation():
+            window = self.config.stagnation_window
+            fingerprints = self._current_context.observation_fingerprints
+            recent = fingerprints[-window:]
+            avg_novelty = sum(f.novel_token_ratio for f in recent) / window
+            self._halted_on_stagnation = True
+            from agent_loop.types import LoopOutcome
+            self._halt_outcome = LoopOutcome.STAGNATED
+            self._halt_reason = (
+                f"Halted: observation stagnation — avg novelty {avg_novelty:.3f} "
+                f"< {self.config.min_observation_novelty} over {window} observations"
+            )
+            result.should_continue = False
+            result.phase_completed = LoopPhase.ITERATE
+            return result
 
         # Phase 4: Iterate
         self._current_phase = LoopPhase.ITERATE
@@ -841,6 +869,41 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
         return None
 
     # =========================================================================
+    # Semantic Stagnation Detection (Issue #6627)
+    # =========================================================================
+
+    def _record_observation_fingerprints(self, tool_results: dict[str, Any]) -> None:
+        """Fingerprint successful tool results and append to the task context.
+
+        Error results (dicts with an "error" key) are skipped — only successful
+        observations contribute to the novelty window.  Issue #6627.
+        """
+        if not self._current_context:
+            return
+        for result in tool_results.values():
+            if isinstance(result, dict) and "error" in result:
+                continue
+            self._current_context.record_observation(result, iteration=self._iteration_count)
+
+    def _check_observation_stagnation(self) -> bool:
+        """Return True when the recent observation window shows no novelty.
+
+        Disabled when halt_on_stagnation=False or when the context is absent.
+        Issue #6627.
+        """
+        if not self.config.halt_on_stagnation:
+            return False
+        if not self._current_context:
+            return False
+        fingerprints = self._current_context.observation_fingerprints
+        window = self.config.stagnation_window
+        if len(fingerprints) < window:
+            return False
+        recent = fingerprints[-window:]
+        avg_novelty = sum(f.novel_token_ratio for f in recent) / window
+        return avg_novelty < self.config.min_observation_novelty
+
+    # =========================================================================
     # Approval Workflow (Issue #4092)
     # =========================================================================
 
@@ -999,6 +1062,8 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
             return False
         if self._fatal_error is not None:
             return False
+        if self._halted_on_stagnation:
+            return False
         if self._state not in (LoopState.RUNNING, LoopState.PAUSED):
             return False
         if self._iteration_count >= self.config.max_iterations:
@@ -1130,9 +1195,11 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
         return plan.get_progress()
 
     def _resolve_outcome(self) -> LoopOutcome:
-        """Map current loop state + abstention flag to a LoopOutcome."""
+        """Map current loop state + halt flags to a LoopOutcome."""
         if self._abstained:
             return LoopOutcome.ABSTAINED
+        if self._halted_on_stagnation:
+            return LoopOutcome.STAGNATED
         if self._halted_on_repetition:
             return LoopOutcome.HALTED
         if self._state == LoopState.CANCELLED:
@@ -1167,4 +1234,8 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
             result["abstention_reason"] = self._abstention_reason
         if self._fatal_reason:
             result["fatal_reason"] = self._fatal_reason
+        # Issue #6627: surface stagnation halt details when set.
+        if self._halted_on_stagnation:
+            result["halt_outcome"] = outcome.name
+            result["halt_reason"] = self._halt_reason
         return result

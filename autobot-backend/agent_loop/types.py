@@ -201,6 +201,11 @@ class AgentLoopConfig:
     # Repetitive tool-call detection (#3255)
     max_identical_tool_calls: int = 3  # Halt when same tool+args seen N times
 
+    # Semantic stagnation detection (#6627)
+    stagnation_window: int = 5  # Rolling window of observations to evaluate
+    min_observation_novelty: float = 0.05  # Min avg novel-token ratio to avoid halt
+    halt_on_stagnation: bool = True  # Enable stagnation-based halt
+
     # Schema self-correction (Issue #4482)
     max_schema_retries: int = 3  # Max retries when tool argument schema validation fails
 
@@ -269,6 +274,38 @@ class AgentMessage:
 
 
 # =============================================================================
+# Loop Outcomes (Issue #6627)
+# =============================================================================
+
+
+class LoopOutcome(Enum):
+    """High-level reason a loop run terminated."""
+
+    COMPLETED = auto()  # Task finished normally
+    REPETITION_HALT = auto()  # Halted: identical tool calls (#3877)
+    STAGNATED = auto()  # Halted: observation novelty plateaued (#6627)
+    MAX_ITERATIONS = auto()  # Exceeded iteration budget
+    MAX_ERRORS = auto()  # Exceeded consecutive-error budget
+    CANCELLED = auto()  # Externally cancelled
+
+
+# =============================================================================
+# Observation Fingerprint (Issue #6627)
+# =============================================================================
+
+
+@dataclass
+class ObservationFingerprint:
+    """SHA-256 content digest + novelty metrics for a single tool result."""
+
+    iteration: int
+    content_hash: str
+    content_size: int
+    novel_token_ratio: float
+    timestamp: datetime = field(default_factory=now_utc)
+
+
+# =============================================================================
 # Task Context
 # =============================================================================
 
@@ -290,6 +327,33 @@ class TaskContext:
     metadata: dict = field(default_factory=dict)
     # Repetitive tool-call detection: maps content-hash -> call count (#3255)
     tool_call_hashes: dict[str, int] = field(default_factory=dict)
+    # Semantic stagnation detection: ordered fingerprints (#6627)
+    observation_fingerprints: list[ObservationFingerprint] = field(default_factory=list)
+    # Accumulated token vocabulary for novelty scoring
+    _seen_tokens: set[str] = field(default_factory=set, repr=False)
+
+    def record_observation(self, content: Any, iteration: int) -> "ObservationFingerprint":
+        """Fingerprint a tool result and append it to observation_fingerprints.
+
+        Returns the new fingerprint.  Mutates _seen_tokens in place.
+        Issue #6627.
+        """
+        from agent_loop.fingerprint import (
+            compute_novel_token_ratio,
+            content_hash as _hash,
+            normalize_content,
+        )
+
+        normalized = normalize_content(content)
+        ratio = compute_novel_token_ratio(content, self._seen_tokens)
+        fp = ObservationFingerprint(
+            iteration=iteration,
+            content_hash=_hash(content),
+            content_size=len(normalized),
+            novel_token_ratio=ratio,
+        )
+        self.observation_fingerprints.append(fp)
+        return fp
 
     def add_tool(self, tool_name: str) -> None:
         """Record tool execution."""
