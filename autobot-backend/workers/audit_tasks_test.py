@@ -14,8 +14,8 @@ from unittest.mock import MagicMock, call, patch
 import pytest
 
 from workers.audit_tasks import (
-    _dedupe_and_file,
     _dead_code_fingerprint,
+    _dedupe_and_file,
     _find_test_file,
     _testgap_findings,
     audit_claims,
