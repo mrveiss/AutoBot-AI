@@ -19,7 +19,6 @@ _npu_pipeline_path = _repo_root / "autobot-backend" / "services" / "npu_pipeline
 sys.path.insert(0, str(_npu_pipeline_path))
 from npu_client import NPUClient, NPUWorkerError
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -105,9 +104,7 @@ class TestNPUClientPartialForward:
 
         session = MagicMock()
         err_resp = MagicMock()
-        err_resp.__aenter__ = AsyncMock(side_effect=aiohttp.ClientConnectorError(
-            MagicMock(), OSError("refused")
-        ))
+        err_resp.__aenter__ = AsyncMock(side_effect=aiohttp.ClientConnectorError(MagicMock(), OSError("refused")))
         err_resp.__aexit__ = AsyncMock(return_value=False)
         session.post = MagicMock(return_value=err_resp)
 

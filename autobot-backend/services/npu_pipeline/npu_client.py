@@ -99,7 +99,10 @@ class NPUClient:
         url = f"{self._base_url}/partial_forward"
         logger.debug(
             "NPUClient: POST %s model=%s layers=[%d-%d]",
-            url, model_id, layer_start, layer_end,
+            url,
+            model_id,
+            layer_start,
+            layer_end,
         )
 
         session = self._get_session()
@@ -107,14 +110,10 @@ class NPUClient:
             async with session.post(url, json=payload) as resp:
                 if resp.status != 200:
                     body = await resp.text()
-                    raise NPUWorkerError(
-                        f"Worker at {self._base_url} returned HTTP {resp.status}: {body}"
-                    )
+                    raise NPUWorkerError(f"Worker at {self._base_url} returned HTTP {resp.status}: {body}")
                 data: Dict[str, Any] = await resp.json()
         except aiohttp.ClientError as exc:
-            raise NPUWorkerError(
-                f"Network error reaching {self._base_url}: {exc}"
-            ) from exc
+            raise NPUWorkerError(f"Network error reaching {self._base_url}: {exc}") from exc
 
         return data
 
@@ -135,14 +134,10 @@ class NPUClient:
             async with session.get(url) as resp:
                 if resp.status != 200:
                     body = await resp.text()
-                    raise NPUWorkerError(
-                        f"Worker at {self._base_url} returned HTTP {resp.status}: {body}"
-                    )
+                    raise NPUWorkerError(f"Worker at {self._base_url} returned HTTP {resp.status}: {body}")
                 return await resp.json()
         except aiohttp.ClientError as exc:
-            raise NPUWorkerError(
-                f"Network error reaching {self._base_url}: {exc}"
-            ) from exc
+            raise NPUWorkerError(f"Network error reaching {self._base_url}: {exc}") from exc
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -151,8 +146,7 @@ class NPUClient:
     def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None:
             raise RuntimeError(
-                "NPUClient used outside of an async context manager. "
-                "Use `async with NPUClient(...) as client:`."
+                "NPUClient used outside of an async context manager. " "Use `async with NPUClient(...) as client:`."
             )
         return self._session
 

@@ -120,16 +120,11 @@ def handle_partial_forward(
     """
     layer_start, layer_end = layer_range
     if layer_start < 0 or layer_end < layer_start:
-        raise ValueError(
-            f"Invalid layer_range ({layer_start}, {layer_end}): "
-            "must satisfy 0 <= start <= end."
-        )
+        raise ValueError(f"Invalid layer_range ({layer_start}, {layer_end}): " "must satisfy 0 <= start <= end.")
 
     layers = model_loader.get_layers(model_id)
     if layer_end >= len(layers):
-        raise ValueError(
-            f"layer_end={layer_end} exceeds model depth {len(layers) - 1}."
-        )
+        raise ValueError(f"layer_end={layer_end} exceeds model depth {len(layers) - 1}.")
 
     hidden = hidden_state_in
     for idx in range(layer_start, layer_end + 1):
