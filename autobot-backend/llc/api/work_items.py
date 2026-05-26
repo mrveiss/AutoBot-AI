@@ -40,13 +40,23 @@ from user_management.database import get_async_session_factory
 from user_management.models.user import User
 
 from ..kb.collections import KbCollectionManager
-from ..models.enums import WorkItemPriority, WorkItemRelationType, WorkItemStatus, WorkItemType
+from ..models.enums import (
+    WorkItemPriority,
+    WorkItemRelationType,
+    WorkItemStatus,
+    WorkItemType,
+)
 from ..services.attachment_service import (
     AttachmentNotFound,
     AttachmentService,
     AttachmentTooLarge,
 )
-from ..services.handoff import HandoffAttachment, HandoffNotAllowed, HandoffNotAuthorized, HandoffService
+from ..services.handoff import (
+    HandoffAttachment,
+    HandoffNotAllowed,
+    HandoffNotAuthorized,
+    HandoffService,
+)
 from ..services.work_item_relations import RelationConflict, WorkItemRelationService
 from ..services.work_item_service import (
     CheckoutConflict,
@@ -220,20 +230,40 @@ class RelationDelete(BaseModel):
     actor_user_id: Optional[str] = None
 
 
-async def _assignee_display(item: Any, session: AsyncSession) -> Optional[Dict[str, Any]]:
+async def _assignee_display(
+    item: Any, session: AsyncSession
+) -> Optional[Dict[str, Any]]:
     """Return structured assignee display info resolved from user_management.users (GH#8476)."""
     if item.assignee_type == "user" and item.assignee_user_id:
         row = (
-            await session.execute(select(User.display_name, User.username).where(User.id == item.assignee_user_id))
+            await session.execute(
+                select(User.display_name, User.username).where(
+                    User.id == item.assignee_user_id
+                )
+            )
         ).one_or_none()
         name = (row.display_name or row.username) if row else None
-        return {"type": "user", "id": str(item.assignee_user_id), "display_name": name, "name": name}
+        return {
+            "type": "user",
+            "id": str(item.assignee_user_id),
+            "display_name": name,
+            "name": name,
+        }
     if item.assignee_type == "agent" and item.assignee_agent_id:
         row = (
-            await session.execute(select(AgentOrgNode.name).where(AgentOrgNode.id == item.assignee_agent_id))
+            await session.execute(
+                select(AgentOrgNode.name).where(
+                    AgentOrgNode.id == item.assignee_agent_id
+                )
+            )
         ).one_or_none()
         name = row.name if row else None
-        return {"type": "agent", "id": str(item.assignee_agent_id), "display_name": name, "name": name}
+        return {
+            "type": "agent",
+            "id": str(item.assignee_agent_id),
+            "display_name": name,
+            "name": name,
+        }
     return None
 
 
@@ -293,17 +323,31 @@ async def _item_to_dict(item: Any, session: AsyncSession) -> Dict[str, Any]:
         "project_id": str(item.project_id) if item.project_id else None,
         "sprint_id": str(item.sprint_id) if item.sprint_id else None,
         "goal_id": str(item.goal_id) if item.goal_id else None,
-        "assignee_agent_id": str(item.assignee_agent_id) if item.assignee_agent_id else None,
-        "assignee_user_id": str(item.assignee_user_id) if item.assignee_user_id else None,
+        "assignee_agent_id": (
+            str(item.assignee_agent_id) if item.assignee_agent_id else None
+        ),
+        "assignee_user_id": (
+            str(item.assignee_user_id) if item.assignee_user_id else None
+        ),
         "assignee_type": item.assignee_type,
         "assignee_display": await _assignee_display(item, session),
         "checkout_run_id": item.checkout_run_id,
-        "checkout_locked_at": item.checkout_locked_at.isoformat() if item.checkout_locked_at else None,
+        "checkout_locked_at": (
+            item.checkout_locked_at.isoformat() if item.checkout_locked_at else None
+        ),
         "version": item.version,
-        "created_by_agent_id": str(item.created_by_agent_id) if item.created_by_agent_id else None,
-        "created_by_user_id": str(item.created_by_user_id) if item.created_by_user_id else None,
-        "reviewer_user_id": str(item.reviewer_user_id) if item.reviewer_user_id else None,
-        "reviewer_agent_id": str(item.reviewer_agent_id) if item.reviewer_agent_id else None,
+        "created_by_agent_id": (
+            str(item.created_by_agent_id) if item.created_by_agent_id else None
+        ),
+        "created_by_user_id": (
+            str(item.created_by_user_id) if item.created_by_user_id else None
+        ),
+        "reviewer_user_id": (
+            str(item.reviewer_user_id) if item.reviewer_user_id else None
+        ),
+        "reviewer_agent_id": (
+            str(item.reviewer_agent_id) if item.reviewer_agent_id else None
+        ),
         "review_brief": item.review_brief,
         "started_at": item.started_at.isoformat() if item.started_at else None,
         "completed_at": item.completed_at.isoformat() if item.completed_at else None,
@@ -451,7 +495,9 @@ async def release_work_item(
     session: AsyncSession = Depends(get_session),
 ) -> Dict[str, Any]:
     try:
-        item = await _service().release(session, work_item_id=work_item_id, agent_id=body.agent_id)
+        item = await _service().release(
+            session, work_item_id=work_item_id, agent_id=body.agent_id
+        )
         await session.commit()
         redis = await get_async_redis_client()
         if redis is not None:
@@ -471,7 +517,9 @@ async def transition_work_item(
         item = await _service().transition_status(session, work_item_id, body.status)
         await session.commit()
         if item.status == WorkItemStatus.DONE:
-            await _kb_manager.archive_collection(KbCollectionManager.WORK_ITEM_PREFIX, item.id)
+            await _kb_manager.archive_collection(
+                KbCollectionManager.WORK_ITEM_PREFIX, item.id
+            )
         return await _item_to_dict(item, session)
     except InvalidTransition as exc:
         raise HTTPException(status_code=422, detail=str(exc))
@@ -550,7 +598,11 @@ async def set_coworker(
     Returns 404 when the work item is not found, 403 when the caller lacks
     permission, and 422 for invalid co-worker identity values.
     """
-    actor_id = current_user.get("id") or current_user.get("user_id")
+    actor_id = (
+        current_user.get("user_id")
+        or current_user.get("agent_id")
+        or current_user.get("id")
+    )
     if not actor_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
@@ -597,8 +649,12 @@ async def add_comment(
         "work_item_id": str(comment.work_item_id),
         "company_id": str(comment.company_id),
         "body": comment.body,
-        "author_agent_id": str(comment.author_agent_id) if comment.author_agent_id else None,
-        "author_user_id": str(comment.author_user_id) if comment.author_user_id else None,
+        "author_agent_id": (
+            str(comment.author_agent_id) if comment.author_agent_id else None
+        ),
+        "author_user_id": (
+            str(comment.author_user_id) if comment.author_user_id else None
+        ),
         "created_at": comment.created_at.isoformat() if comment.created_at else None,
     }
 
@@ -799,7 +855,9 @@ async def list_work_products(
                 "storage_path": p.storage_path,
                 "url": p.url,
                 "kb_indexed": p.kb_indexed,
-                "heartbeat_run_id": str(p.heartbeat_run_id) if p.heartbeat_run_id else None,
+                "heartbeat_run_id": (
+                    str(p.heartbeat_run_id) if p.heartbeat_run_id else None
+                ),
                 "created_at": p.created_at.isoformat() if p.created_at else None,
             }
             for p in products
@@ -876,8 +934,12 @@ def _attachment_to_dict(row: Any) -> Dict[str, Any]:
         "content_type": row.content_type,
         "size_bytes": row.size_bytes,
         "text_extracted": row.text_extracted,
-        "uploaded_by_agent_id": str(row.uploaded_by_agent_id) if row.uploaded_by_agent_id else None,
-        "uploaded_by_user_id": str(row.uploaded_by_user_id) if row.uploaded_by_user_id else None,
+        "uploaded_by_agent_id": (
+            str(row.uploaded_by_agent_id) if row.uploaded_by_agent_id else None
+        ),
+        "uploaded_by_user_id": (
+            str(row.uploaded_by_user_id) if row.uploaded_by_user_id else None
+        ),
         "created_at": row.created_at.isoformat() if row.created_at else None,
     }
 
@@ -914,7 +976,9 @@ async def list_attachments(
     company_id: str = Query(...),
     session: AsyncSession = Depends(get_session),
 ) -> Dict[str, Any]:
-    rows = await _attachment_service().list_attachments(session, work_item_id=work_item_id, company_id=company_id)
+    rows = await _attachment_service().list_attachments(
+        session, work_item_id=work_item_id, company_id=company_id
+    )
     return {"attachments": [_attachment_to_dict(r) for r in rows]}
 
 
@@ -954,7 +1018,11 @@ async def get_attachment_text(
         work_item_id=work_item_id,
         company_id=company_id,
     )
-    return {"attachment_id": attachment_id, "text": text, "text_extracted": text is not None}
+    return {
+        "attachment_id": attachment_id,
+        "text": text,
+        "text_extracted": text is not None,
+    }
 
 
 @router.delete("/{work_item_id}/attachments/{attachment_id}", status_code=204)
