@@ -51,6 +51,7 @@
             <th>Email</th>
             <th>Display Name</th>
             <th>Role</th>
+            <th>Voice Bundle</th>
             <th>Status</th>
             <th>Actions</th>
           </tr>
@@ -73,6 +74,12 @@
                 <option value="user">user</option>
                 <option value="readonly">readonly</option>
               </select>
+            </td>
+            <td class="bundle-cell">
+              <span v-if="userBundles[user.id] !== undefined" class="badge badge-bundle">
+                {{ userBundles[user.id] ? VOICE_BUNDLE_LABELS[userBundles[user.id]!] : '—' }}
+              </span>
+              <Icon v-else name="sync-alt" :spin="true" class="bundle-loading" />
             </td>
             <td>
               <span class="badge" :class="user.is_active ? 'badge-active' : 'badge-inactive'">
@@ -97,6 +104,13 @@
                 <Icon name="check-circle" />
               </button>
               <button
+                class="btn-icon btn-info"
+                title="Assign Voice Bundle"
+                @click="openBundleModal(user)"
+              >
+                <Icon name="microphone" />
+              </button>
+              <button
                 class="btn-icon btn-danger"
                 title="Delete"
                 @click="confirmDelete(user)"
@@ -106,7 +120,7 @@
             </td>
           </tr>
           <tr v-if="!loading && users.length === 0">
-            <td colspan="6" class="empty-row">No users found.</td>
+            <td colspan="7" class="empty-row">No users found.</td>
           </tr>
         </tbody>
       </table>
@@ -175,6 +189,48 @@
       </div>
     </div>
 
+    <!-- Assign Voice Bundle Modal -->
+    <div v-if="bundleTarget" class="modal-overlay" @click.self="bundleTarget = null">
+      <div class="modal modal-sm">
+        <div class="modal-header">
+          <h3>Assign Voice Bundle</h3>
+          <button
+            class="btn-close"
+            @click="bundleTarget = null"
+            :aria-label="$t('common.close')"
+            type="button"
+          ><Icon name="times" /></button>
+        </div>
+        <div class="modal-body">
+          <p class="bundle-user-name">
+            User: <strong>{{ bundleTarget.username }}</strong>
+          </p>
+          <div class="form-group">
+            <label>Voice Bundle</label>
+            <select v-model="newBundleName" class="form-input">
+              <option :value="null">— Use role default —</option>
+              <option v-for="name in VOICE_BUNDLE_NAMES" :key="name" :value="name">
+                {{ VOICE_BUNDLE_LABELS[name] }}
+              </option>
+            </select>
+          </div>
+          <div v-if="bundleError" class="error-inline">{{ bundleError }}</div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-action-secondary" @click="bundleTarget = null">Cancel</button>
+          <button
+            type="button"
+            class="btn-action-primary"
+            :disabled="bundleSaving"
+            @click="doAssignBundle"
+          >
+            <Icon v-if="bundleSaving" name="sync-alt" :spin="true" />
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Delete Confirm Modal -->
     <div v-if="deleteTarget" class="modal-overlay" @click.self="deleteTarget = null">
       <div class="modal modal-sm">
@@ -199,6 +255,12 @@ import { getBackendUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import Icon from '@/components/ui/Icon.vue'
+import {
+  useAdminVoiceBundle,
+  VOICE_BUNDLE_NAMES,
+  VOICE_BUNDLE_LABELS,
+} from '@/composables/useVoiceBundle'
+import type { VoiceBundleName } from '@/composables/useVoiceBundle'
 
 const logger = createLogger('AdminUsersView')
 
@@ -235,6 +297,12 @@ const newUser = ref<NewUserForm>({ email: '', username: '', password: '', displa
 
 const deleteTarget = ref<UserRecord | null>(null)
 
+// Voice bundle state
+const { saving: bundleSaving, saveError: bundleError, assignBundle, getUserBundle } = useAdminVoiceBundle()
+const userBundles = ref<Record<string, VoiceBundleName | null | undefined>>({})
+const bundleTarget = ref<UserRecord | null>(null)
+const newBundleName = ref<VoiceBundleName | null>(null)
+
 const totalPages = computed(() => Math.ceil(total.value / pageSize))
 
 function primaryRole(user: UserRecord): string {
@@ -262,11 +330,40 @@ async function loadUsers(): Promise<void> {
     const data = await res.json() as { users: UserRecord[]; total: number }
     users.value = data.users
     total.value = data.total
+    loadUserBundles(data.users)
   } catch (err) {
     logger.error('Failed to load users:', err)
     error.value = err instanceof Error ? err.message : 'Failed to load users'
   } finally {
     loading.value = false
+  }
+}
+
+function loadUserBundles(userList: UserRecord[]): void {
+  for (const user of userList) {
+    // Mark as loading (undefined = in-flight, null = no assignment, string = assigned)
+    if (userBundles.value[user.id] === undefined) {
+      getUserBundle(user.id).then((assignment) => {
+        userBundles.value[user.id] = assignment?.bundle_name ?? null
+      }).catch(() => {
+        userBundles.value[user.id] = null
+      })
+    }
+  }
+}
+
+function openBundleModal(user: UserRecord): void {
+  bundleTarget.value = user
+  newBundleName.value = (userBundles.value[user.id] as VoiceBundleName | null) ?? null
+}
+
+async function doAssignBundle(): Promise<void> {
+  if (!bundleTarget.value) return
+  const userId = bundleTarget.value.id
+  const ok = await assignBundle(userId, newBundleName.value)
+  if (ok) {
+    userBundles.value[userId] = newBundleName.value
+    bundleTarget.value = null
   }
 }
 
@@ -522,6 +619,26 @@ onMounted(loadUsers)
   color: var(--color-error, #dc2626);
 }
 
+.badge-bundle {
+  background: var(--color-info-bg, #eff6ff);
+  color: var(--color-info, #2563eb);
+  white-space: nowrap;
+}
+
+.bundle-cell {
+  min-width: 8rem;
+}
+
+.bundle-loading {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary, #6b7280);
+}
+
+.bundle-user-name {
+  margin: 0 0 var(--spacing-4);
+  font-size: var(--text-sm);
+}
+
 .role-select {
   padding: var(--spacing-1) var(--spacing-2);
   border: 1px solid var(--color-border, #d1d5db);
@@ -550,6 +667,11 @@ onMounted(loadUsers)
 .btn-warning {
   background: var(--color-warning-bg, #fffbeb);
   color: var(--color-warning, #d97706);
+}
+
+.btn-info {
+  background: var(--color-info-bg, #eff6ff);
+  color: var(--color-info, #2563eb);
 }
 
 .btn-success {
