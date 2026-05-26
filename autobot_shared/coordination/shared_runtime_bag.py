@@ -112,7 +112,9 @@ class SharedRuntimeBag(Generic[T]):
         """Return the value stored under *key*, or None if absent / expired."""
         redis = await get_async_redis_client(database="main")
         if redis is None:
-            raise RuntimeError(f"SharedRuntimeBag: Redis client unavailable (namespace='{self._namespace}')")
+            raise RuntimeError(
+                f"SharedRuntimeBag: Redis client unavailable (namespace='{self._namespace}')"
+            )
         raw = await redis.get(_value_key(self._namespace, key))
         if raw is None:
             return None
@@ -127,7 +129,9 @@ class SharedRuntimeBag(Generic[T]):
         """Persist *value* under *key* with an optional TTL (defaults to namespace TTL)."""
         redis = await get_async_redis_client(database="main")
         if redis is None:
-            raise RuntimeError(f"SharedRuntimeBag: Redis client unavailable (namespace='{self._namespace}')")
+            raise RuntimeError(
+                f"SharedRuntimeBag: Redis client unavailable (namespace='{self._namespace}')"
+            )
         encoded = self._encode(value)
         ttl = ttl_s if ttl_s is not None else self._default_ttl_s
         await redis.set(_value_key(self._namespace, key), encoded, ex=ttl)
@@ -152,7 +156,9 @@ class SharedRuntimeBag(Generic[T]):
         """
         redis = await get_async_redis_client(database="main")
         if redis is None:
-            raise RuntimeError(f"SharedRuntimeBag: Redis client unavailable (namespace='{self._namespace}')")
+            raise RuntimeError(
+                f"SharedRuntimeBag: Redis client unavailable (namespace='{self._namespace}')"
+            )
         rkey = _value_key(self._namespace, key)
         ttl = ttl_s if ttl_s is not None else self._default_ttl_s
 
@@ -181,7 +187,8 @@ class SharedRuntimeBag(Generic[T]):
                         raise
                     if attempt == retries:
                         raise RuntimeError(
-                            f"SharedRuntimeBag.update: CAS failed after {retries} retries for key '{key}' in namespace '{self._namespace}'"
+                            f"SharedRuntimeBag.update: CAS failed after {retries} retries"
+                            f" for key '{key}' in namespace '{self._namespace}'"
                         ) from exc
                     logger.debug(
                         "SharedRuntimeBag CAS conflict on '%s/%s', retry %d/%d",
@@ -197,7 +204,9 @@ class SharedRuntimeBag(Generic[T]):
         """Remove *key* from the bag and publish a delete change event."""
         redis = await get_async_redis_client(database="main")
         if redis is None:
-            raise RuntimeError(f"SharedRuntimeBag: Redis client unavailable (namespace='{self._namespace}')")
+            raise RuntimeError(
+                f"SharedRuntimeBag: Redis client unavailable (namespace='{self._namespace}')"
+            )
         await redis.delete(_value_key(self._namespace, key))
         await self._publish(redis, key, "delete", None)
 
@@ -208,11 +217,16 @@ class SharedRuntimeBag(Generic[T]):
         """
         redis = await get_async_redis_client(database="main")
         if redis is None:
-            raise RuntimeError(f"SharedRuntimeBag: Redis client unavailable (namespace='{self._namespace}')")
+            raise RuntimeError(
+                f"SharedRuntimeBag: Redis client unavailable (namespace='{self._namespace}')"
+            )
         prefix = f"runtime_bag:{self._namespace}:"
         full_pattern = f"{prefix}{pattern}"
         raw_keys = await redis.keys(full_pattern)
-        return [(k.decode() if isinstance(k, bytes) else k).removeprefix(prefix) for k in raw_keys]
+        return [
+            (k.decode() if isinstance(k, bytes) else k).removeprefix(prefix)
+            for k in raw_keys
+        ]
 
     async def subscribe_changes(self) -> AsyncIterator[ChangeEvent]:
         """Yield ChangeEvent for every set/delete in this namespace.
@@ -228,7 +242,9 @@ class SharedRuntimeBag(Generic[T]):
         """
         redis = await get_async_redis_client(database="main")
         if redis is None:
-            raise RuntimeError(f"SharedRuntimeBag: Redis client unavailable (namespace='{self._namespace}')")
+            raise RuntimeError(
+                f"SharedRuntimeBag: Redis client unavailable (namespace='{self._namespace}')"
+            )
         channel = _changes_channel(self._namespace)
         pubsub = redis.pubsub()
         await pubsub.subscribe(channel)
@@ -289,4 +305,6 @@ class SharedRuntimeBag(Generic[T]):
             await redis.publish(channel, payload)
         except Exception as exc:
             # pub/sub is best-effort — never let it break callers
-            logger.warning("SharedRuntimeBag: publish failed in '%s': %s", self._namespace, exc)
+            logger.warning(
+                "SharedRuntimeBag: publish failed in '%s': %s", self._namespace, exc
+            )

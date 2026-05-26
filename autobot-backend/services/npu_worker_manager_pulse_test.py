@@ -10,9 +10,8 @@ Covers:
 - Recovery: clean pulse after DEGRADED → ONLINE
 """
 
-import asyncio
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -108,7 +107,9 @@ async def test_pulse_failure_leads_to_degraded(mgr, online_status):
     degrade_k = int(mgr._pulse_defaults["degrade_after_failures"])
 
     client_mock = AsyncMock()
-    client_mock.get_available_models = AsyncMock(return_value={"models": ["gemma-3-4b"]})
+    client_mock.get_available_models = AsyncMock(
+        return_value={"models": ["gemma-3-4b"]}
+    )
     client_mock.run_inference = AsyncMock(return_value={"error": "model load failed"})
     mgr._worker_clients[worker_id] = client_mock
 
@@ -141,7 +142,9 @@ async def test_pulse_failure_leads_to_unhealthy(mgr, online_status):
     unhealthy_m = int(mgr._pulse_defaults["unhealthy_after_failures"])
 
     client_mock = AsyncMock()
-    client_mock.get_available_models = AsyncMock(return_value={"models": ["gemma-3-4b"]})
+    client_mock.get_available_models = AsyncMock(
+        return_value={"models": ["gemma-3-4b"]}
+    )
     client_mock.run_inference = AsyncMock(return_value={"error": "inference failed"})
     mgr._worker_clients[worker_id] = client_mock
 
@@ -172,12 +175,16 @@ async def test_pulse_recovery_from_degraded(mgr, degraded_status):
     worker_id = "test-worker-1"
 
     client_mock = AsyncMock()
-    client_mock.get_available_models = AsyncMock(return_value={"models": ["gemma-3-4b"]})
+    client_mock.get_available_models = AsyncMock(
+        return_value={"models": ["gemma-3-4b"]}
+    )
     client_mock.run_inference = AsyncMock(return_value={"output": "PULSE_OK"})
     mgr._worker_clients[worker_id] = client_mock
 
     # Seed pre-existing failure count at degrade threshold
-    mgr._pulse_failure_counts[worker_id] = int(mgr._pulse_defaults["degrade_after_failures"])
+    mgr._pulse_failure_counts[worker_id] = int(
+        mgr._pulse_defaults["degrade_after_failures"]
+    )
 
     stored_statuses = []
 

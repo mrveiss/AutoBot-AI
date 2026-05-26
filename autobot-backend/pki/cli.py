@@ -25,6 +25,8 @@ import logging
 import sys
 from pathlib import Path
 
+from autobot_shared.logging_manager import get_logger
+
 logger = get_logger(__name__)
 
 # Add project root to path
@@ -111,16 +113,24 @@ Examples:
 
     # Setup command
     setup_parser = subparsers.add_parser("setup", help="Run PKI setup")
-    setup_parser.add_argument("--force", "-f", action="store_true", help="Force certificate regeneration")
-    setup_parser.add_argument("--no-dist", action="store_true", help="Skip certificate distribution")
-    setup_parser.add_argument("--no-config", action="store_true", help="Skip service configuration")
+    setup_parser.add_argument(
+        "--force", "-f", action="store_true", help="Force certificate regeneration"
+    )
+    setup_parser.add_argument(
+        "--no-dist", action="store_true", help="Skip certificate distribution"
+    )
+    setup_parser.add_argument(
+        "--no-config", action="store_true", help="Skip service configuration"
+    )
 
     # Status command
     subparsers.add_parser("status", help="Show certificate status")
 
     # Renew command
     renew_parser = subparsers.add_parser("renew", help="Renew certificates")
-    renew_parser.add_argument("certificates", nargs="*", help="Specific certificates to renew (optional)")
+    renew_parser.add_argument(
+        "certificates", nargs="*", help="Specific certificates to renew (optional)"
+    )
 
     # Verify command
     subparsers.add_parser("verify", help="Verify certificate distribution")

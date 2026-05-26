@@ -88,7 +88,11 @@ async def record(event: AuditEvent) -> None:
     """Persist a single audit event to the unified Redis sorted set."""
     redis = await get_async_redis_client(database="main")
     if redis is None:
-        logger.debug("unified_audit: Redis unavailable, event dropped: %s/%s", event.category, event.action)
+        logger.debug(
+            "unified_audit: Redis unavailable, event dropped: %s/%s",
+            event.category,
+            event.action,
+        )
         return
     raw = json.dumps(event.to_dict(), ensure_ascii=False)
     ttl = _CATEGORY_TTL.get(event.category.value, _COMPLIANCE_TTL)
@@ -243,7 +247,9 @@ with _warnings.catch_warnings():
     # Suppress the DeprecationWarnings these modules emit at import time — they
     # are designed to warn external callers, not the canonical migration target.
     _warnings.simplefilter("ignore", DeprecationWarning)
-    from knowledge.audit_log import AuditEventType
+    from knowledge.audit_log import (
+        AuditEventType,
+    )
     from knowledge.audit_log import KnowledgeAuditLog as _KnowledgeAuditLog  # noqa: E402
     from services.audit.audit_log import AuditAction  # noqa: E402
     from services.event_log import EventType  # noqa: E402
@@ -252,7 +258,7 @@ with _warnings.catch_warnings():
 # --- Drop-in replacements for services/event_log.emit() and query_events() -
 
 
-def emit(  # type: ignore[misc]  — intentional override of local name
+def emit(  # type: ignore[misc]  — intentional override of local name  # noqa: F811
     event_type: "EventType",
     user_id: str | None = None,
     resource_type: str | None = None,
@@ -348,7 +354,9 @@ class KnowledgeAuditLog(_KnowledgeAuditLog):
         )
         # Also write to unified stream
         await emit_knowledge(
-            action=event_type.value if hasattr(event_type, "value") else str(event_type),
+            action=(
+                event_type.value if hasattr(event_type, "value") else str(event_type)
+            ),
             actor_id=user_id,
             resource_type="fact" if fact_id else "knowledge",
             resource_id=fact_id or organization_id,

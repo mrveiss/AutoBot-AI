@@ -46,7 +46,9 @@ class OllamaHealth(BaseProviderHealth):
             tags_url = f"{self.ollama_host}/api/tags"
 
             http_client = get_http_client()
-            async with await http_client.get(tags_url, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
+            async with await http_client.get(
+                tags_url, timeout=aiohttp.ClientTimeout(total=timeout)
+            ) as response:
                 response_time = time.time() - start_time
 
                 if response.status == 200:
@@ -62,7 +64,9 @@ class OllamaHealth(BaseProviderHealth):
                         details={
                             "endpoint": self.ollama_host,
                             "model_count": model_count,
-                            "models": [m.get("name") for m in models[:5]],  # First 5 models
+                            "models": [
+                                m.get("name") for m in models[:5]
+                            ],  # First 5 models
                         },
                     )
                 else:
@@ -105,11 +109,13 @@ class OpenAIHealth(BaseProviderHealth):
     def __init__(self) -> None:
         """Initialize OpenAI health checker with API key configuration."""
         super().__init__("openai")
-        self.api_key = config.openai_api_key
+        self.api_key = ssot_config.openai_api_key
         # Use env var for base URL, fallback to standard OpenAI API
-        self.base_url = config.openai_api_base_url
+        self.base_url = ssot_config.openai_api_base_url
 
-    def _build_response_result(self, response_status: int, data: dict, response_time: float) -> ProviderHealthResult:
+    def _build_response_result(
+        self, response_status: int, data: dict, response_time: float
+    ) -> ProviderHealthResult:
         """Build result based on HTTP response status. (Issue #315 - extracted)"""
         if response_status == 200:
             models = data.get("data", [])
@@ -131,7 +137,9 @@ class OpenAIHealth(BaseProviderHealth):
             429: "OpenAI rate limit exceeded",
         }
         status = _API_STATUS_RESPONSES.get(response_status, ProviderStatus.UNAVAILABLE)
-        msg = error_messages.get(response_status, f"OpenAI returned status {response_status}")
+        msg = error_messages.get(
+            response_status, f"OpenAI returned status {response_status}"
+        )
         details = {"api_key_set": True, "status_code": response_status}
         if response_status == 429:
             details["rate_limited"] = True
@@ -204,11 +212,13 @@ class AnthropicHealth(BaseProviderHealth):
     def __init__(self) -> None:
         """Initialize Anthropic health checker with API key configuration."""
         super().__init__("anthropic")
-        self.api_key = config.anthropic_api_key
+        self.api_key = ssot_config.anthropic_api_key
         # Use env var for base URL, fallback to standard Anthropic API
-        self.base_url = config.anthropic_api_base_url
+        self.base_url = ssot_config.anthropic_api_base_url
 
-    def _build_anthropic_result(self, response_status: int, response_time: float) -> ProviderHealthResult:
+    def _build_anthropic_result(
+        self, response_status: int, response_time: float
+    ) -> ProviderHealthResult:
         """Build result based on HTTP response status. (Issue #315 - extracted)"""
         if response_status == 200:
             return self._create_result(
@@ -224,7 +234,9 @@ class AnthropicHealth(BaseProviderHealth):
             429: "Anthropic rate limit exceeded",
         }
         status = _API_STATUS_RESPONSES.get(response_status, ProviderStatus.UNAVAILABLE)
-        msg = error_messages.get(response_status, f"Anthropic returned status {response_status}")
+        msg = error_messages.get(
+            response_status, f"Anthropic returned status {response_status}"
+        )
         details = {"api_key_set": True, "status_code": response_status}
         if response_status == 429:
             details["rate_limited"] = True
@@ -306,10 +318,12 @@ class GoogleHealth(BaseProviderHealth):
     def __init__(self) -> None:
         """Initialize Google health checker with API key from environment."""
         super().__init__("google")
-        self.api_key = config.google_api_key
+        self.api_key = ssot_config.google_api_key
         self.base_url = "https://generativelanguage.googleapis.com/v1"
 
-    def _build_google_result(self, response_status: int, data: dict, response_time: float) -> ProviderHealthResult:
+    def _build_google_result(
+        self, response_status: int, data: dict, response_time: float
+    ) -> ProviderHealthResult:
         """Build result based on HTTP response status. (Issue #315 - extracted)"""
         if response_status == 200:
             models = data.get("models", [])
@@ -332,7 +346,9 @@ class GoogleHealth(BaseProviderHealth):
             429: "Google rate limit exceeded",
         }
         status = _API_STATUS_RESPONSES.get(response_status, ProviderStatus.UNAVAILABLE)
-        msg = error_messages.get(response_status, f"Google returned status {response_status}")
+        msg = error_messages.get(
+            response_status, f"Google returned status {response_status}"
+        )
         details = {"api_key_set": True, "status_code": response_status}
         if response_status == 429:
             details["rate_limited"] = True
@@ -418,7 +434,9 @@ class LMStudioHealth(BaseProviderHealth):
             models_url = f"{self.lmstudio_host}/v1/models"
 
             http_client = get_http_client()
-            async with await http_client.get(models_url, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
+            async with await http_client.get(
+                models_url, timeout=aiohttp.ClientTimeout(total=timeout)
+            ) as response:
                 response_time = time.time() - start_time
 
                 if response.status == 200:
@@ -479,7 +497,7 @@ class VLLMHealth(BaseProviderHealth):
         """Initialize vLLM health checker with host configuration."""
         super().__init__("vllm")
         # vLLM default port is 8000
-        self.vllm_host = config.vllm_host
+        self.vllm_host = ssot_config.vllm_host
 
     async def check_health(self, timeout: float = 5.0) -> ProviderHealthResult:
         """Check vLLM service health"""
@@ -490,7 +508,9 @@ class VLLMHealth(BaseProviderHealth):
             models_url = f"{self.vllm_host}/v1/models"
 
             http_client = get_http_client()
-            async with await http_client.get(models_url, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
+            async with await http_client.get(
+                models_url, timeout=aiohttp.ClientTimeout(total=timeout)
+            ) as response:
                 response_time = time.time() - start_time
 
                 if response.status == 200:

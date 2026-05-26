@@ -58,7 +58,9 @@ class KbCollectionManager:
         Returns:
             Collection name in format: prefix:id or prefix:id:suffix
         """
-        entity_id_str = str(entity_id) if isinstance(entity_id, uuid.UUID) else entity_id
+        entity_id_str = (
+            str(entity_id) if isinstance(entity_id, uuid.UUID) else entity_id
+        )
         name = f"{entity_type}:{entity_id_str}"
         if suffix:
             name = f"{name}:{suffix}"
@@ -88,7 +90,7 @@ class KbCollectionManager:
         try:
             kb = await _get_kb()
             # get_or_create_collection is idempotent
-            collection = await kb._async_chroma_client.get_or_create_collection(
+            await kb._async_chroma_client.get_or_create_collection(
                 name=collection_name,
                 metadata={"entity_type": entity_type, "entity_id": str(entity_id)},
             )
@@ -100,7 +102,9 @@ class KbCollectionManager:
                 collection_name,
                 str(e),
             )
-            raise RuntimeError(f"Failed to ensure KB collection {collection_name}") from e
+            raise RuntimeError(
+                f"Failed to ensure KB collection {collection_name}"
+            ) from e
 
     async def archive_collection(
         self,
@@ -179,7 +183,9 @@ class KbCollectionManager:
                 original_name,
                 str(e),
             )
-            raise RuntimeError(f"Failed to archive KB collection {original_name}") from e
+            raise RuntimeError(
+                f"Failed to archive KB collection {original_name}"
+            ) from e
 
     async def merge_collection(
         self,
@@ -214,7 +220,8 @@ class KbCollectionManager:
 
         if summarize:
             logger.info(
-                "Collection merge with summarization requested (%s -> %s); " "deferring to GH#8238",
+                "Collection merge with summarization requested (%s -> %s); "
+                "deferring to GH#8238",
                 src_name,
                 dst_name,
             )
@@ -270,4 +277,6 @@ class KbCollectionManager:
                 dst_name,
                 str(e),
             )
-            raise RuntimeError(f"Failed to merge KB collection {src_name} -> {dst_name}") from e
+            raise RuntimeError(
+                f"Failed to merge KB collection {src_name} -> {dst_name}"
+            ) from e

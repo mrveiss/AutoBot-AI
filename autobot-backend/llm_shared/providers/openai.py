@@ -21,6 +21,7 @@ import time
 from typing import Any, AsyncIterator, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from circuit_breaker import circuit_breaker_async
 from constants.model_constants import OPENAI_O1_MINI  # used in _OPENAI_MODELS list
 from constants.model_constants import (
@@ -87,11 +88,14 @@ class OpenAIProvider(BaseProvider):
         try:
             import openai
         except ImportError as exc:
-            raise ImportError("openai package not installed. Run: pip install openai") from exc
+            raise ImportError(
+                "openai package not installed. Run: pip install openai"
+            ) from exc
         api_key = self._resolve_api_key()
         if not api_key:
             raise ValueError(
-                "OpenAI API key not configured. " "Set OPENAI_API_KEY or provide api_key in provider settings."
+                "OpenAI API key not configured. "
+                "Set OPENAI_API_KEY or provide api_key in provider settings."
             )
         base_url = self._get_setting("base_url") or config.openai_api_base_url
         kwargs: Dict[str, Any] = {"api_key": api_key}
@@ -109,7 +113,9 @@ class OpenAIProvider(BaseProvider):
         """
         self._total_requests += 1
         start = time.time()
-        model = request.model_name or self._get_setting("default_model", OPENAI_GPT4O_MINI)
+        model = request.model_name or self._get_setting(
+            "default_model", OPENAI_GPT4O_MINI
+        )
         try:
             client = self._ensure_client()
             params: Dict[str, Any] = {
@@ -146,10 +152,16 @@ class OpenAIProvider(BaseProvider):
 
                 for tc in choice.message.tool_calls:
                     try:
-                        args = _json.loads(tc.function.arguments) if tc.function.arguments else {}
+                        args = (
+                            _json.loads(tc.function.arguments)
+                            if tc.function.arguments
+                            else {}
+                        )
                     except Exception:
                         args = {}
-                    tool_calls.append(ToolCall(id=tc.id, name=tc.function.name, arguments=args))
+                    tool_calls.append(
+                        ToolCall(id=tc.id, name=tc.function.name, arguments=args)
+                    )
             return LLMResponse(
                 content=choice.message.content or "",
                 model=response.model,
@@ -184,7 +196,9 @@ class OpenAIProvider(BaseProvider):
     async def stream_completion(self, request: LLMRequest) -> AsyncIterator[str]:
         """Stream a chat completion from OpenAI, yielding text chunks."""
         self._total_requests += 1
-        model = request.model_name or self._get_setting("default_model", OPENAI_GPT4O_MINI)
+        model = request.model_name or self._get_setting(
+            "default_model", OPENAI_GPT4O_MINI
+        )
         try:
             client = self._ensure_client()
             params: Dict[str, Any] = {

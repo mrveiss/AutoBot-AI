@@ -58,7 +58,7 @@ def _dev_auth_bypass_enabled() -> bool:
     is opt-in. Without the flag, /login behaves like production modes and
     refuses to mint tokens without a real user store backing the request.
     """
-    return config.dev_auth_bypass.strip().lower() in _DEV_AUTH_BYPASS_TRUTHY
+    return ssot_config.dev_auth_bypass.strip().lower() in _DEV_AUTH_BYPASS_TRUTHY
 
 
 async def _enrich_user_with_org_context(user_data: Dict) -> Dict:
@@ -99,7 +99,9 @@ class PasswordChangeRateLimiter:
         """Check if password change attempt is allowed."""
         now = time()
         # Clean old attempts
-        self.attempts[client_id] = [t for t in self.attempts[client_id] if now - t < self.window]
+        self.attempts[client_id] = [
+            t for t in self.attempts[client_id] if now - t < self.window
+        ]
         # Check limit
         if len(self.attempts[client_id]) >= self.max_attempts:
             return False
@@ -110,7 +112,9 @@ class PasswordChangeRateLimiter:
     def get_remaining(self, client_id: str) -> int:
         """Get remaining attempts for client."""
         now = time()
-        self.attempts[client_id] = [t for t in self.attempts[client_id] if now - t < self.window]
+        self.attempts[client_id] = [
+            t for t in self.attempts[client_id] if now - t < self.window
+        ]
         return max(0, self.max_attempts - len(self.attempts[client_id]))
 
 
@@ -118,7 +122,9 @@ class PasswordChangeRateLimiter:
 password_change_limiter = PasswordChangeRateLimiter()
 
 
-async def _authenticate_and_build_user_data(username: str, password: str, ip_address: str) -> Dict:
+async def _authenticate_and_build_user_data(
+    username: str, password: str, ip_address: str
+) -> Dict:
     """Helper for login. Ref: #1088.
 
     Authenticates credentials against PostgreSQL and returns the user data dict
@@ -141,7 +147,9 @@ async def _authenticate_and_build_user_data(username: str, password: str, ip_add
             "user_id": str(user.id),
             "role": "admin" if user.is_platform_admin else "user",
             "email": user.email,
-            "last_login": (user.last_login_at.isoformat() if user.last_login_at else None),
+            "last_login": (
+                user.last_login_at.isoformat() if user.last_login_at else None
+            ),
         }
         if user.org_id:
             user_data["org_id"] = str(user.org_id)
@@ -188,9 +196,15 @@ async def login(request: Request, login_data: LoginRequest):
                 "last_login": None,
             }
             jwt_token = get_auth_middleware().create_jwt_token(
-                {"username": "admin", "role": "admin", "email": f"admin@{ssot_config.auth.domain}"}
+                {
+                    "username": "admin",
+                    "role": "admin",
+                    "email": f"admin@{ssot_config.auth.domain}",
+                }
             )
-            session_id = get_auth_middleware().create_session({"username": "admin", "role": "admin"}, request)
+            session_id = get_auth_middleware().create_session(
+                {"username": "admin", "role": "admin"}, request
+            )
             _emit_event(EventType.USER_LOGIN, user_id="admin", ip_address=ip_address)
             return LoginResponse(
                 success=True,
@@ -201,7 +215,9 @@ async def login(request: Request, login_data: LoginRequest):
             )
 
         # Authenticate against PostgreSQL and build user data (Issue #888, #898)
-        user_data = await _authenticate_and_build_user_data(login_data.username, login_data.password, ip_address)
+        user_data = await _authenticate_and_build_user_data(
+            login_data.username, login_data.password, ip_address
+        )
 
         jwt_token = get_auth_middleware().create_jwt_token(user_data)
         session_id = get_auth_middleware().create_session(user_data, request)
@@ -231,7 +247,9 @@ async def login(request: Request, login_data: LoginRequest):
         raise
     except Exception as e:
         logger.error("Login error for user %s: %s", login_data.username, e)
-        raise HTTPException(status_code=500, detail="Authentication service temporarily unavailable")
+        raise HTTPException(
+            status_code=500, detail="Authentication service temporarily unavailable"
+        )
 
 
 @router.post("/logout", response_model=DataResponse[AuthLogoutData])
@@ -254,7 +272,11 @@ async def logout(request: Request, logout_data: LogoutRequest):
             get_auth_middleware().invalidate_session(session_id)
 
         user_data = get_auth_middleware().get_user_from_request(request)
-        user_id = user_data.get("user_id", user_data.get("username", "unknown")) if user_data else "unknown"
+        user_id = (
+            user_data.get("user_id", user_data.get("username", "unknown"))
+            if user_data
+            else "unknown"
+        )
         _emit_event(EventType.USER_LOGOUT, user_id=user_id, ip_address=ip_address)
 
         return {"success": True, "message": "Logged out successfully"}
@@ -369,7 +391,9 @@ async def check_permission(request: Request, operation: str):
     Check if current user has permission for specific operation
     """
     try:
-        has_permission, user_data = get_auth_middleware().check_file_permissions(request, operation)
+        has_permission, user_data = get_auth_middleware().check_file_permissions(
+            request, operation
+        )
 
         return {
             "permitted": has_permission,
@@ -404,7 +428,9 @@ def _check_password_change_rate_limit(username: str, ip_address: str) -> None:
         )
 
 
-def _verify_current_password(username: str, current_password: str, ip_address: str) -> str:
+def _verify_current_password(
+    username: str, current_password: str, ip_address: str
+) -> str:
     """Verify current password and return the hash. Raises HTTPException on failure."""
     allowed_users = get_auth_middleware().security_config.get("allowed_users", {})
     if username not in allowed_users:
@@ -413,7 +439,9 @@ def _verify_current_password(username: str, current_password: str, ip_address: s
     user_config = allowed_users[username]
     current_password_hash = user_config.get("password_hash", "")
 
-    if not get_auth_middleware().verify_password(current_password, current_password_hash):
+    if not get_auth_middleware().verify_password(
+        current_password, current_password_hash
+    ):
         get_auth_middleware().security_layer.audit_log(
             action="password_change_failed",
             user=username,
@@ -479,7 +507,9 @@ async def change_password(request: Request, password_data: ChangePasswordRequest
         _check_password_change_rate_limit(username, ip_address)
         _verify_current_password(username, password_data.current_password, ip_address)
 
-        new_password_hash = get_auth_middleware().hash_password(password_data.new_password)
+        new_password_hash = get_auth_middleware().hash_password(
+            password_data.new_password
+        )
         _persist_password_change(username, new_password_hash)
 
         get_auth_middleware().security_layer.audit_log(
@@ -490,13 +520,17 @@ async def change_password(request: Request, password_data: ChangePasswordRequest
         )
         logger.info("Password changed successfully for user: %s", username)
 
-        return ChangePasswordResponse(success=True, message="Password changed successfully")
+        return ChangePasswordResponse(
+            success=True, message="Password changed successfully"
+        )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Password change error: %s", e)
-        raise HTTPException(status_code=500, detail="Failed to change password. Please try again.")
+        raise HTTPException(
+            status_code=500, detail="Failed to change password. Please try again."
+        )
 
 
 @router.post("/signup", response_model=SignupResponse)
@@ -545,7 +579,9 @@ async def signup(request: Request, signup_data: SignupRequest):
         if isinstance(exc, DuplicateUserError):
             raise HTTPException(status_code=409, detail="Username already taken")
         logger.error("Signup error for %s: %s", signup_data.username, exc)
-        raise HTTPException(status_code=500, detail="Registration failed. Please try again.")
+        raise HTTPException(
+            status_code=500, detail="Registration failed. Please try again."
+        )
 
 
 def _decode_refresh_token(token: str) -> Dict:

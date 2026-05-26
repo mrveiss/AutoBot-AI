@@ -59,7 +59,9 @@ class HandoffBriefGenerator:
                 query_text=query_text,
             )
 
-            formatted_context = self._format_context_for_llm(context.chunks, "agent_to_human")
+            formatted_context = self._format_context_for_llm(
+                context.chunks, "agent_to_human"
+            )
 
             from services.llm_service import get_llm_service
 
@@ -88,7 +90,9 @@ class HandoffBriefGenerator:
             )
 
             if response.error:
-                logger.error("LLM error generating agent_to_human brief: %s", response.error)
+                logger.error(
+                    "LLM error generating agent_to_human brief: %s", response.error
+                )
                 return self._fallback_agent_to_human_brief()
 
             try:
@@ -145,7 +149,9 @@ class HandoffBriefGenerator:
                 query_text=work_item_title,
             )
 
-            formatted_context = self._format_context_for_llm(context.chunks, "human_to_agent")
+            formatted_context = self._format_context_for_llm(
+                context.chunks, "human_to_agent"
+            )
 
             from services.llm_service import get_llm_service
 
@@ -174,7 +180,9 @@ class HandoffBriefGenerator:
             )
 
             if response.error:
-                logger.error("LLM error generating human_to_agent brief: %s", response.error)
+                logger.error(
+                    "LLM error generating human_to_agent brief: %s", response.error
+                )
                 return self._fallback_human_to_agent_brief(human_notes)
 
             try:
@@ -196,7 +204,9 @@ class HandoffBriefGenerator:
             logger.exception("Error generating human_to_agent brief: %s", e)
             return self._fallback_human_to_agent_brief(human_notes)
 
-    def _format_context_for_llm(self, chunks: List[Dict[str, Any]], brief_type: str) -> str:
+    def _format_context_for_llm(
+        self, chunks: List[Dict[str, Any]], brief_type: str
+    ) -> str:
         """Format RAG chunks into human-readable context for LLM."""
         if not chunks:
             return "(No KB context available)"
@@ -204,7 +214,6 @@ class HandoffBriefGenerator:
         lines = []
         for chunk in chunks:
             content = chunk.get("content", "")
-            metadata = chunk.get("metadata", {})
             source = chunk.get("source", "unknown")
             similarity = chunk.get("similarity_score", 0.0)
 

@@ -43,7 +43,7 @@ logger = get_logger(__name__)
 
 # Issue #3094: Use SSOT config port so the default (8100) matches Ansible deployment.
 # Host remains os.getenv-based: empty string = use local PersistentClient (dev mode).
-_CHROMADB_HOST = config.chromadb_host
+_CHROMADB_HOST = _ssot_config.vm.chromadb
 _CHROMADB_PORT = _ssot_config.port.chromadb
 
 # Module exports
@@ -66,7 +66,8 @@ def _read_hnsw_params(cursor: sqlite3.Cursor, collection_id: str) -> dict:
     Ref: #2735. Helper for _migrate_legacy_collection_configs.
     """
     cursor.execute(
-        "SELECT key, str_value, int_value, float_value " "FROM collection_metadata WHERE collection_id=?",
+        "SELECT key, str_value, int_value, float_value "
+        "FROM collection_metadata WHERE collection_id=?",
         (collection_id,),
     )
     hnsw: dict = {}
@@ -133,7 +134,9 @@ def _migrate_legacy_collection_configs(chroma_path: Path) -> None:
 
         if fixed:
             conn.commit()
-            logger.info("Migrated %d ChromaDB collection config(s) to 0.5.x format", fixed)
+            logger.info(
+                "Migrated %d ChromaDB collection config(s) to 0.5.x format", fixed
+            )
         conn.close()
     except Exception as e:
         logger.warning("ChromaDB config migration check failed: %s", e)
@@ -170,13 +173,16 @@ def _fix_segment_hnsw_space(chroma_path: Path) -> None:
         for seg_id, space_val in rows:
             # Check if segment_metadata already has hnsw:space
             c.execute(
-                "SELECT 1 FROM segment_metadata " "WHERE segment_id = ? AND key = 'hnsw:space'",
+                "SELECT 1 FROM segment_metadata "
+                "WHERE segment_id = ? AND key = 'hnsw:space'",
                 (seg_id,),
             )
             if c.fetchone():
                 continue
             c.execute(
-                "INSERT INTO segment_metadata " "(segment_id, key, str_value) " "VALUES (?, 'hnsw:space', ?)",
+                "INSERT INTO segment_metadata "
+                "(segment_id, key, str_value) "
+                "VALUES (?, 'hnsw:space', ?)",
                 (seg_id, space_val),
             )
             fixed += 1

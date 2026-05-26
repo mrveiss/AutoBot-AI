@@ -19,6 +19,7 @@ Public functions
 import asyncio
 from typing import Callable
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
 from .chromadb_storage import (
@@ -70,7 +71,9 @@ async def _init_chromadb_with_retry(
     Issue #1249: Retry once on transient connection failure.
     Issue #1710: source_id scopes cleanup to one project.
     """
-    code_collection = await _initialize_chromadb_collection(task_id, update_progress, update_phase, source_id=source_id)
+    code_collection = await _initialize_chromadb_collection(
+        task_id, update_progress, update_phase, source_id=source_id
+    )
     if not code_collection:
         logger.warning("[Task %s] ChromaDB init failed, retrying once (#1249)", task_id)
         await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
@@ -116,7 +119,8 @@ async def _scan_and_log_analysis(
     )
     update_phase("scan", "completed")
     logger.info(
-        "[Task %s] #1712 pre-store: %d functions, %d classes, " "%d problems, %d hardcodes, %d files",
+        "[Task %s] #1712 pre-store: %d functions, %d classes, "
+        "%d problems, %d hardcodes, %d files",
         task_id,
         len(analysis_results.get("all_functions", [])),
         len(analysis_results.get("all_classes", [])),
@@ -191,7 +195,9 @@ async def _run_indexing_phases(
     Issue #1710: source_id scopes cleanup and metadata to one project.
     scan_codebase_fn is injected to avoid circular imports.
     """
-    code_collection = await _init_chromadb_with_retry(task_id, update_progress, update_phase, source_id=source_id)
+    code_collection = await _init_chromadb_with_retry(
+        task_id, update_progress, update_phase, source_id=source_id
+    )
     update_phase("init", "completed")
     update_phase("scan", "running")
 

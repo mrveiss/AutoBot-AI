@@ -36,7 +36,7 @@ from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
 from config.manager import get_config_manager as _get_config_manager
-from constants.threshold_constants import TimingConstants
+from constants.threshold_constants import LLMDefaults, TimingConstants
 from enhanced_orchestration.agent_router import AgentRouter
 from enhanced_orchestration.collaboration_coordinator import CollaborationCoordinator
 
@@ -68,7 +68,9 @@ from orchestration import (
     WorkflowPlanner,
     get_recovery_recommender,
 )
-from orchestration.causal_error_analyzer import CausalErrorAnalyzer  # noqa: F401 (GH #6816)
+from orchestration.causal_error_analyzer import (  # noqa: F401 (GH #6816)
+    CausalErrorAnalyzer,
+)
 from orchestration.causal_validator import CausalValidator  # noqa: F401 (GH #6816)
 from orchestration.orchestrator_config import OrchestratorConfig
 from orchestration.orchestrator_legacy_api import _DeprecatedRequestMixin
@@ -83,7 +85,9 @@ from orchestration.orchestrator_stubs import (
 from orchestration.performance_tracker import PerformanceTracker
 from orchestration.primitives.events import PersistStrategy
 from orchestration.primitives.events import publish_event as _publish_event
-from orchestration.primitives.retry import retry_with_backoff  # noqa: F401 — re-exported
+from orchestration.primitives.retry import (  # noqa: F401 — re-exported
+    retry_with_backoff,
+)
 from services.llm_service import get_llm_service
 
 # Shared agent selection utilities (Issue #292)
@@ -183,12 +187,18 @@ class Orchestrator(_DeprecatedRequestMixin):
         # Agent capabilities registry (task-routing layer distinct from agent_registry)
         self.agent_capabilities: Dict[str, Set] = {
             "research_agent": {AgentCapability.RESEARCH, AgentCapability.ANALYSIS},
-            "classification_agent": {AgentCapability.ANALYSIS, AgentCapability.VALIDATION},
+            "classification_agent": {
+                AgentCapability.ANALYSIS,
+                AgentCapability.VALIDATION,
+            },
             "kb_librarian": {AgentCapability.RESEARCH, AgentCapability.SYNTHESIS},
             "system_commands": {AgentCapability.EXECUTION, AgentCapability.MONITORING},
             "security_scanner": {AgentCapability.SECURITY, AgentCapability.VALIDATION},
             "npu_code_search": {AgentCapability.ANALYSIS, AgentCapability.OPTIMIZATION},
-            "development_speedup": {AgentCapability.ANALYSIS, AgentCapability.OPTIMIZATION},
+            "development_speedup": {
+                AgentCapability.ANALYSIS,
+                AgentCapability.OPTIMIZATION,
+            },
             "json_formatter": {AgentCapability.VALIDATION, AgentCapability.SYNTHESIS},
             "llm_failsafe": {AgentCapability.SYNTHESIS},
         }
@@ -254,31 +264,56 @@ class Orchestrator(_DeprecatedRequestMixin):
                 agent_id="research_agent",
                 agent_type="research",
                 capabilities={AgentCapability.RESEARCH, AgentCapability.ANALYSIS},
-                specializations=["web_search", "data_analysis", "information_synthesis"],
+                specializations=[
+                    "web_search",
+                    "data_analysis",
+                    "information_synthesis",
+                ],
                 max_concurrent_tasks=5,
                 preferred_task_types=["research", "information_gathering", "analysis"],
             ),
             AgentProfile(
                 agent_id="documentation_agent",
                 agent_type="librarian",
-                capabilities={AgentCapability.DOCUMENTATION, AgentCapability.KNOWLEDGE_MANAGEMENT},
-                specializations=["auto_documentation", "knowledge_extraction", "content_organization"],
+                capabilities={
+                    AgentCapability.DOCUMENTATION,
+                    AgentCapability.KNOWLEDGE_MANAGEMENT,
+                },
+                specializations=[
+                    "auto_documentation",
+                    "knowledge_extraction",
+                    "content_organization",
+                ],
                 max_concurrent_tasks=3,
                 preferred_task_types=["documentation", "knowledge_management"],
             ),
             AgentProfile(
                 agent_id="system_agent",
                 agent_type="system_commands",
-                capabilities={AgentCapability.SYSTEM_OPERATIONS, AgentCapability.CODE_GENERATION},
-                specializations=["command_execution", "system_administration", "automation"],
+                capabilities={
+                    AgentCapability.SYSTEM_OPERATIONS,
+                    AgentCapability.CODE_GENERATION,
+                },
+                specializations=[
+                    "command_execution",
+                    "system_administration",
+                    "automation",
+                ],
                 max_concurrent_tasks=2,
                 preferred_task_types=["system_operations", "command_execution"],
             ),
             AgentProfile(
                 agent_id="coordination_agent",
                 agent_type="orchestrator",
-                capabilities={AgentCapability.WORKFLOW_COORDINATION, AgentCapability.ANALYSIS},
-                specializations=["workflow_management", "resource_allocation", "decision_making"],
+                capabilities={
+                    AgentCapability.WORKFLOW_COORDINATION,
+                    AgentCapability.ANALYSIS,
+                },
+                specializations=[
+                    "workflow_management",
+                    "resource_allocation",
+                    "decision_making",
+                ],
                 max_concurrent_tasks=10,
                 preferred_task_types=["coordination", "planning", "optimization"],
             ),
@@ -291,9 +326,16 @@ class Orchestrator(_DeprecatedRequestMixin):
     async def register_agent(self, agent_profile: AgentProfile) -> bool:
         try:
             if agent_profile.agent_id in self.agent_registry:
-                logger.warning("Agent %s already registered, updating profile", agent_profile.agent_id)
+                logger.warning(
+                    "Agent %s already registered, updating profile",
+                    agent_profile.agent_id,
+                )
             self.agent_registry[agent_profile.agent_id] = agent_profile
-            logger.info("Agent %s registered with capabilities: %s", agent_profile.agent_id, agent_profile.capabilities)
+            logger.info(
+                "Agent %s registered with capabilities: %s",
+                agent_profile.agent_id,
+                agent_profile.capabilities,
+            )
             return True
         except Exception as e:
             logger.error("Failed to register agent %s: %s", agent_profile.agent_id, e)
@@ -332,9 +374,14 @@ class Orchestrator(_DeprecatedRequestMixin):
 
     async def _ensure_working_llm_model(self) -> None:
         if await self._validate_llm_model(self.config.orchestrator_llm_model):
-            logger.info("✅ Orchestrator model '%s' is working", self.config.orchestrator_llm_model)
+            logger.info(
+                "✅ Orchestrator model '%s' is working",
+                self.config.orchestrator_llm_model,
+            )
             return
-        logger.warning("⚠️ Orchestrator model '%s' test failed", self.config.orchestrator_llm_model)
+        logger.warning(
+            "⚠️ Orchestrator model '%s' test failed", self.config.orchestrator_llm_model
+        )
         fallback_model = config_manager.get_default_llm_model()
         if await self._validate_llm_model(fallback_model):
             logger.info("✅ Using fallback model: %s", fallback_model)
@@ -354,9 +401,13 @@ class Orchestrator(_DeprecatedRequestMixin):
             # tuple is always truthy, so the prior `if not <tuple>:` guard
             # never fired and ollama-down failures fell through to the
             # less-specific model validation step.
-            ollama_connected, ollama_error = await self.llm_service.is_provider_healthy(provider_name="ollama")
+            ollama_connected, ollama_error = await self.llm_service.is_provider_healthy(
+                provider_name="ollama"
+            )
             if not ollama_connected:
-                raise Exception(f"Failed to connect to Ollama: {ollama_error or 'unknown error'}")
+                raise Exception(
+                    f"Failed to connect to Ollama: {ollama_error or 'unknown error'}"
+                )
             logger.info("✅ Ollama connection established")
             await self._ensure_working_llm_model()
             # #7431 ADR-006 §Q1: start the BlockedPlanResumer so plans
@@ -381,7 +432,9 @@ class Orchestrator(_DeprecatedRequestMixin):
         logger.info("Shutting down Consolidated Orchestrator...")
         self.is_running = False
         if self.active_tasks:
-            logger.info("Waiting for %d active tasks to complete...", len(self.active_tasks))
+            logger.info(
+                "Waiting for %d active tasks to complete...", len(self.active_tasks)
+            )
             await asyncio.sleep(TimingConstants.STANDARD_DELAY)
         # #7431 ADR-006 §Q1: cancel the BlockedPlanResumer subscriber.
         # Best-effort — never block shutdown on resumer plumbing.
@@ -398,9 +451,17 @@ class Orchestrator(_DeprecatedRequestMixin):
             )
         except Exception as e:
             logger.warning("Cleanup warning: %s", e)
-        uptime = datetime.now(tz=timezone.utc) - self.start_time if self.start_time else 0
-        logger.info("Orchestrator session %s completed (uptime %s)", self.session_id, uptime)
-        logger.info("  Tasks completed: %s  failed: %s", self.metrics["tasks_completed"], self.metrics["tasks_failed"])
+        uptime = (
+            datetime.now(tz=timezone.utc) - self.start_time if self.start_time else 0
+        )
+        logger.info(
+            "Orchestrator session %s completed (uptime %s)", self.session_id, uptime
+        )
+        logger.info(
+            "  Tasks completed: %s  failed: %s",
+            self.metrics["tasks_completed"],
+            self.metrics["tasks_failed"],
+        )
 
     # process_user_request and its helpers (_start_request_tracking,
     # _update_success_metrics, _classify_task, _select_model_for_task,
@@ -452,7 +513,9 @@ class Orchestrator(_DeprecatedRequestMixin):
                 title=f"Workflow: {user_request[:50]}...",
                 description=user_request,
             )
-            doc.content.update({"request": user_request, "context": context, "start_time": start_time})
+            doc.content.update(
+                {"request": user_request, "context": context, "start_time": start_time}
+            )
             self.workflow_documentation[workflow_id] = doc
 
         try:
@@ -467,18 +530,24 @@ class Orchestrator(_DeprecatedRequestMixin):
             total = self.workflow_metrics["total_workflows"]
             elapsed = time.time() - start_time
             cur_avg = self.workflow_metrics["average_execution_time"]
-            self.workflow_metrics["average_execution_time"] = ((cur_avg * (total - 1)) + elapsed) / total
+            self.workflow_metrics["average_execution_time"] = (
+                (cur_avg * (total - 1)) + elapsed
+            ) / total
 
             if auto_document:
                 documenter = self._get_enhanced_documenter()
-                await documenter.generate_workflow_documentation(workflow_id, exec_result)
+                await documenter.generate_workflow_documentation(
+                    workflow_id, exec_result
+                )
                 doc = documenter.get_doc(workflow_id)
                 if doc:
                     self.workflow_documentation[workflow_id] = doc
 
             if self.knowledge_extraction_enabled:
                 documenter = self._get_enhanced_documenter()
-                await documenter.extract_workflow_knowledge(workflow_id, user_request, exec_result, self.agent_registry)
+                await documenter.extract_workflow_knowledge(
+                    workflow_id, user_request, exec_result, self.agent_registry
+                )
 
             return {
                 "workflow_id": workflow_id,
@@ -517,13 +586,17 @@ class Orchestrator(_DeprecatedRequestMixin):
             return TaskComplexity.COMPLEX
         try:
             if self.classification_agent:
-                result = await self.classification_agent.classify_user_request(user_request)
+                result = await self.classification_agent.classify_user_request(
+                    user_request
+                )
                 return result.complexity
         except Exception as e:
             logger.error("Classification failed: %s, defaulting to COMPLEX", e)
         return TaskComplexity.COMPLEX
 
-    async def plan_workflow_steps(self, user_request: str, complexity: TaskComplexity) -> List[WorkflowStep]:
+    async def plan_workflow_steps(
+        self, user_request: str, complexity: TaskComplexity
+    ) -> List[WorkflowStep]:
         """Plan WorkflowStep objects based on complexity.
 
         Retained for callers in orchestration/workflow_planner.py,
@@ -585,7 +658,10 @@ class Orchestrator(_DeprecatedRequestMixin):
 
     def _build_planning_prompt(self, goal: str) -> str:
         capabilities_json = json.dumps(
-            {agent: [cap.value for cap in caps] for agent, caps in self.agent_capabilities.items()},
+            {
+                agent: [cap.value for cap in caps]
+                for agent, caps in self.agent_capabilities.items()
+            },
             indent=2,
         )
         return build_planning_prompt(goal, capabilities_json)
@@ -600,7 +676,9 @@ class Orchestrator(_DeprecatedRequestMixin):
             return parse_result.data
         return self._strategy_planner.create_fallback_plan(goal)
 
-    async def create_workflow_plan(self, goal: str, context: Dict[str, Any] | None = None) -> WorkflowPlan:
+    async def create_workflow_plan(
+        self, goal: str, context: Dict[str, Any] | None = None
+    ) -> WorkflowPlan:
         """Create an intelligent workflow plan for a goal via LLM planning.
 
         Issue #5040: merged from EnhancedMultiAgentOrchestrator.
@@ -640,7 +718,12 @@ class Orchestrator(_DeprecatedRequestMixin):
         logger.info("Phi-2 enabled status set to: %s", self.config.phi2_enabled)
         try:
             asyncio.get_running_loop().create_task(
-                _publish_event("global", "settings_update", {"phi2_enabled": enabled}, persist=PersistStrategy.NONE)
+                _publish_event(
+                    "global",
+                    "settings_update",
+                    {"phi2_enabled": enabled},
+                    persist=PersistStrategy.NONE,
+                )
             )
         except RuntimeError:
             logger.debug("No running event loop; settings_update event not published")
@@ -648,7 +731,9 @@ class Orchestrator(_DeprecatedRequestMixin):
             logger.debug("Event bus not available for settings update")
 
     async def get_status(self) -> Dict[str, Any]:
-        uptime = datetime.now(tz=timezone.utc) - self.start_time if self.start_time else 0
+        uptime = (
+            datetime.now(tz=timezone.utc) - self.start_time if self.start_time else 0
+        )
         return {
             "session_id": self.session_id,
             "is_running": self.is_running,
@@ -657,7 +742,9 @@ class Orchestrator(_DeprecatedRequestMixin):
             "queued_tasks": len(self.task_queue),
             "metrics": self.metrics,
             "workflow_metrics": self.workflow_metrics,
-            "capabilities_coverage": self._runner.get_performance_report()["capabilities_coverage"],
+            "capabilities_coverage": self._runner.get_performance_report()[
+                "capabilities_coverage"
+            ],
             "configuration": {
                 "orchestrator_model": self.config.orchestrator_llm_model,
                 "task_model": self.config.task_llm_model,
@@ -700,7 +787,9 @@ class Orchestrator(_DeprecatedRequestMixin):
 # ============================================================================
 
 
-async def create_and_execute_workflow(goal: str, context: Dict[str, Any] | None = None) -> Dict[str, Any]:
+async def create_and_execute_workflow(
+    goal: str, context: Dict[str, Any] | None = None
+) -> Dict[str, Any]:
     """Create and execute a multi-agent workflow plan.
 
     Issue #5040: Replaces enhanced_orchestration.create_and_execute_workflow.

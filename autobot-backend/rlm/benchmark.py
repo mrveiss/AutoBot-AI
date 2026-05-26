@@ -27,6 +27,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
 from autobot_shared.ssot_config import config as _ssot_config
 from rlm.evaluator import ResponseQualityEvaluator
@@ -201,7 +202,9 @@ async def _run_rlm_pass(
         response = await _generate(prompt, model=model)
         total_tokens += len(response.split())
 
-        result = await evaluator.evaluate(query=query, response=response, iteration=i + 1)
+        result = await evaluator.evaluate(
+            query=query, response=response, iteration=i + 1
+        )
         scores.append(result.quality_score)
 
         if result.quality_score >= cfg.quality_threshold:
@@ -209,7 +212,11 @@ async def _run_rlm_pass(
 
         if i < cfg.max_reflections:
             hint = result.refinement_hint or result.critique
-            prompt = f"{query}\n\n" f"[Self-reflection feedback — please improve your " f"answer: {hint}]"
+            prompt = (
+                f"{query}\n\n"
+                f"[Self-reflection feedback — please improve your "
+                f"answer: {hint}]"
+            )
 
     total_latency = (time.monotonic() - t0) * 1000
 
@@ -299,7 +306,9 @@ def _compute_summary(
     avg_rl = sum(r.total_latency_ms for r in rlm) / n
     avg_st = sum(r.response_tokens for r in single) / n
     avg_rt = sum(r.total_response_tokens for r in rlm) / n
-    improved = sum(1 for s, r in zip(single, rlm) if r.final_quality_score > s.quality_score)
+    improved = sum(
+        1 for s, r in zip(single, rlm) if r.final_quality_score > s.quality_score
+    )
 
     return BenchmarkSummary(
         queries_run=n,
@@ -308,10 +317,14 @@ def _compute_summary(
         score_delta=round(avg_rs - avg_ss, 3),
         avg_single_latency_ms=round(avg_sl, 1),
         avg_rlm_latency_ms=round(avg_rl, 1),
-        latency_overhead_pct=round(((avg_rl - avg_sl) / avg_sl * 100) if avg_sl > 0 else 0, 1),
+        latency_overhead_pct=round(
+            ((avg_rl - avg_sl) / avg_sl * 100) if avg_sl > 0 else 0, 1
+        ),
         avg_single_tokens=round(avg_st, 1),
         avg_rlm_tokens=round(avg_rt, 1),
-        token_overhead_pct=round(((avg_rt - avg_st) / avg_st * 100) if avg_st > 0 else 0, 1),
+        token_overhead_pct=round(
+            ((avg_rt - avg_st) / avg_st * 100) if avg_st > 0 else 0, 1
+        ),
         rlm_improved_count=improved,
     )
 

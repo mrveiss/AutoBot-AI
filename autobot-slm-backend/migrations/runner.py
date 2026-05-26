@@ -108,7 +108,9 @@ def _parse_db_url(url: str) -> dict:
     }
 
 
-def get_connection(db_url: str = None, timeout: int = 10) -> psycopg2.extensions.connection:
+def get_connection(
+    db_url: str = None, timeout: int = 10
+) -> psycopg2.extensions.connection:
     """Get a PostgreSQL connection (#786).
 
     Args:
@@ -223,8 +225,10 @@ def run_all_migrations(db_url: str = None) -> List[Tuple[str, bool, str]]:
         logger.info("Database connection established")
     except Exception as e:
         logger.error("Failed to connect to database after 10s timeout: %s", e)
-        logger.error("Check that PostgreSQL is running and accepting connections on the configured host/port")
-        return [(f"database_connection", False, f"Connection failed: {e}")]
+        logger.error(
+            "Check that PostgreSQL is running and accepting connections on the configured host/port"
+        )
+        return [("database_connection", False, f"Connection failed: {e}")]
 
     try:
         ensure_migrations_table(conn)

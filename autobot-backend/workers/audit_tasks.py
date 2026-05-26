@@ -101,7 +101,19 @@ def _repo_root() -> Path:
 
 def _list_open_issues(label: str | None = None) -> list[str]:
     """Return titles of open GitHub issues (optionally filtered by label)."""
-    cmd = ["gh", "issue", "list", "--repo", _GH_REPO, "--state", "open", "--json", "title", "--limit", "500"]
+    cmd = [
+        "gh",
+        "issue",
+        "list",
+        "--repo",
+        _GH_REPO,
+        "--state",
+        "open",
+        "--json",
+        "title",
+        "--limit",
+        "500",
+    ]
     if label:
         cmd += ["--label", label]
     code, out, _ = _run(cmd)
@@ -116,7 +128,19 @@ def _list_open_issues(label: str | None = None) -> list[str]:
 def _file_issue(title: str, body: str, labels: str = _AUDIT_LABELS) -> bool:
     """Create a GitHub issue. Returns True on success."""
     code, _, err = _run(
-        ["gh", "issue", "create", "--repo", _GH_REPO, "--title", title, "--body", body, "--label", labels]
+        [
+            "gh",
+            "issue",
+            "create",
+            "--repo",
+            _GH_REPO,
+            "--title",
+            title,
+            "--body",
+            body,
+            "--label",
+            labels,
+        ]
     )
     if code != 0:
         logger.error("gh issue create failed (%s): %s", title, err[:_MAX_LOG_CHARS])
@@ -124,7 +148,9 @@ def _file_issue(title: str, body: str, labels: str = _AUDIT_LABELS) -> bool:
     return True
 
 
-def _dedupe_and_file(findings: list[dict], existing_titles: set[str], label: str) -> int:
+def _dedupe_and_file(
+    findings: list[dict], existing_titles: set[str], label: str
+) -> int:
     """File GitHub issues for findings whose title is not in *existing_titles*.
 
     Returns the number of newly filed issues.
@@ -180,7 +206,12 @@ def _changed_python_modules(since_iso: str | None, repo_root: Path) -> list[Path
         line = line.strip()
         if not line or not line.endswith(".py"):
             continue
-        if "_test" in line or "test_" in line or "/tests/" in line or "/conftest" in line:
+        if (
+            "_test" in line
+            or "test_" in line
+            or "/tests/" in line
+            or "/conftest" in line
+        ):
             continue
         p = repo_root / line
         if p.is_file():
@@ -299,7 +330,7 @@ def audit_dead_code(self) -> dict:
 
     repo_root = _repo_root()
     current_lines = _run_vulture(repo_root)
-    current_fps = {_dead_code_fingerprint(l): l for l in current_lines}
+    current_fps = {_dead_code_fingerprint(ln): ln for ln in current_lines}
 
     new_findings_raw = [v for k, v in current_fps.items() if k not in last_set]
 
@@ -354,7 +385,9 @@ def _extract_capability_claims(repo_root: Path) -> list[dict]:
         re.IGNORECASE,
     )
     claims = []
-    search_paths = [repo_root / "README.md"] + list((repo_root / "docs").glob("**/*.md"))
+    search_paths = [repo_root / "README.md"] + list(
+        (repo_root / "docs").glob("**/*.md")
+    )
 
     for src in search_paths:
         if not src.is_file():
@@ -362,9 +395,15 @@ def _extract_capability_claims(repo_root: Path) -> list[dict]:
         rel = src.relative_to(repo_root)
         for lineno, line in enumerate(src.read_text(errors="ignore").splitlines(), 1):
             stripped = line.strip()
-            if stripped.startswith("#") or stripped.startswith("-") or stripped.startswith("*"):
+            if (
+                stripped.startswith("#")
+                or stripped.startswith("-")
+                or stripped.startswith("*")
+            ):
                 if claim_pattern.search(stripped):
-                    claims.append({"source": str(rel), "lineno": lineno, "text": stripped[:200]})
+                    claims.append(
+                        {"source": str(rel), "lineno": lineno, "text": stripped[:200]}
+                    )
     return claims
 
 
@@ -393,17 +432,17 @@ def _write_verification_doc(repo_root: Path, verified: list, unverified: list) -
     """Write docs/verification.md and return the path."""
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     lines = [
-        f"# AutoBot Capability Verification Report",
-        f"",
+        "# AutoBot Capability Verification Report",
+        "",
         f"Generated: {now} by `audit_claims` Celery Beat task (GH#7356).",
-        f"",
-        f"## Summary",
-        f"",
-        f"| Status | Count |",
-        f"|--------|-------|",
+        "",
+        "## Summary",
+        "",
+        "| Status | Count |",
+        "|--------|-------|",
         f"| Verified | {len(verified)} |",
         f"| Unverified | {len(unverified)} |",
-        f"",
+        "",
     ]
     if unverified:
         lines += ["## Unverified Claims", ""]
@@ -426,7 +465,7 @@ def _write_verification_doc(repo_root: Path, verified: list, unverified: list) -
 def audit_claims(self) -> dict:
     """Weekly task: verify README/docs capability claims have wired implementations."""
     redis = _get_redis()
-    last_run = _redis_get(redis, _CLAIMS_LAST_RUN_KEY)
+    _redis_get(redis, _CLAIMS_LAST_RUN_KEY)
     run_at = datetime.now(timezone.utc).isoformat()
 
     repo_root = _repo_root()
@@ -443,7 +482,9 @@ def audit_claims(self) -> dict:
     doc_path = _write_verification_doc(repo_root, verified, unverified)
 
     # Load previous unverified set for dedup
-    prev_unverified: list[str] = _redis_get(redis, _CLAIMS_LAST_RUN_KEY + ":unverified") or []
+    prev_unverified: list[str] = (
+        _redis_get(redis, _CLAIMS_LAST_RUN_KEY + ":unverified") or []
+    )
     prev_set = set(prev_unverified)
 
     findings = []
@@ -467,7 +508,11 @@ def audit_claims(self) -> dict:
     filed = _dedupe_and_file(findings, existing_titles, _AUDIT_LABELS)
 
     _redis_set(redis, _CLAIMS_LAST_RUN_KEY, run_at)
-    _redis_set(redis, _CLAIMS_LAST_RUN_KEY + ":unverified", [f"{c['source']}:{c['lineno']}" for c in unverified])
+    _redis_set(
+        redis,
+        _CLAIMS_LAST_RUN_KEY + ":unverified",
+        [f"{c['source']}:{c['lineno']}" for c in unverified],
+    )
 
     result = {
         "status": "success",

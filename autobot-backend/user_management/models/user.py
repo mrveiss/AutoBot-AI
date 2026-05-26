@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
 # Runtime imports for SQLAlchemy relationships (avoid circular imports)
 try:
-    from models.activities import (  # noqa: F401
+    from models.activities import (  # noqa: F401, F811
         BrowserActivityModel,
         DesktopActivityModel,
         FileActivityModel,

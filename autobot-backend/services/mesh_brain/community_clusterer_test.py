@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from autobot_shared.logging_manager import get_logger as _get_logger
 from services.mesh_brain.community_clusterer import CommunityClusterer, cluster_graph
 
 
@@ -269,6 +270,8 @@ async def test_loop_body_logs_warning_and_sleeps_on_import_error(caplog):
     assert continued, "Loop should have continued (not exited) after ImportError"
     assert slept_seconds == [86400], "Loop should sleep 86400s (24h) on ImportError"
     assert any(
-        "graspologic not installed" in record.message for record in caplog.records if record.levelno == logging.WARNING
+        "graspologic not installed" in record.message
+        for record in caplog.records
+        if record.levelno == logging.WARNING
     ), "Expected WARNING log message about missing graspologic"
     db.promote_to_anchor.assert_not_called()

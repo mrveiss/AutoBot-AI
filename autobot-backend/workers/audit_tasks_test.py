@@ -7,17 +7,12 @@ Focus: the dedupe-against-existing-issues logic must not spam GitHub with
 duplicate issues when an audit task runs multiple times without new findings.
 """
 
-import json
-from pathlib import Path
-from unittest.mock import MagicMock, call, patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from workers.audit_tasks import (
     _dead_code_fingerprint,
     _dedupe_and_file,
     _find_test_file,
-    _testgap_findings,
     audit_claims,
     audit_dead_code,
     audit_testgaps,
@@ -39,7 +34,9 @@ class TestDedupeAndFile:
             filed = _dedupe_and_file(findings, existing, "enhancement")
 
         assert filed == 1
-        mock_file.assert_called_once_with("discovery: new issue", "body2", "enhancement")
+        mock_file.assert_called_once_with(
+            "discovery: new issue", "body2", "enhancement"
+        )
 
     def test_no_filing_when_all_duplicates(self):
         existing = {"discovery: gap A", "discovery: gap B"}
@@ -62,7 +59,9 @@ class TestDedupeAndFile:
         with patch("workers.audit_tasks._file_issue", return_value=True):
             filed = _dedupe_and_file(findings, existing, "enhancement")
 
-        assert filed == 1  # second identical title skipped because first added it to set
+        assert (
+            filed == 1
+        )  # second identical title skipped because first added it to set
 
     def test_zero_findings_files_nothing(self):
         with patch("workers.audit_tasks._file_issue") as mock_file:
@@ -191,7 +190,9 @@ class TestAuditTestgaps:
 class TestAuditDeadCode:
     def test_second_run_with_same_inventory_files_zero(self, tmp_path):
         finding = "autobot-backend/foo.py:10: unused function 'bar' (80% confidence)"
-        inventory = {"audit:dead_code:last_inventory": [_dead_code_fingerprint(finding)]}
+        inventory = {
+            "audit:dead_code:last_inventory": [_dead_code_fingerprint(finding)]
+        }
 
         open_issues = set()
 
@@ -201,10 +202,15 @@ class TestAuditDeadCode:
 
         with (
             patch("workers.audit_tasks._get_redis", return_value=MagicMock()),
-            patch("workers.audit_tasks._redis_get", side_effect=lambda _, k: inventory.get(k)),
+            patch(
+                "workers.audit_tasks._redis_get",
+                side_effect=lambda _, k: inventory.get(k),
+            ),
             patch("workers.audit_tasks._redis_set"),
             patch("workers.audit_tasks._run_vulture", return_value=[finding]),
-            patch("workers.audit_tasks._list_open_issues", return_value=list(open_issues)),
+            patch(
+                "workers.audit_tasks._list_open_issues", return_value=list(open_issues)
+            ),
             patch("workers.audit_tasks._file_issue", side_effect=fake_file_issue),
         ):
             result = audit_dead_code.run()
@@ -222,7 +228,9 @@ class TestAuditDeadCode:
 
         with (
             patch("workers.audit_tasks._get_redis", return_value=MagicMock()),
-            patch("workers.audit_tasks._redis_get", return_value=[]),  # empty prior inventory
+            patch(
+                "workers.audit_tasks._redis_get", return_value=[]
+            ),  # empty prior inventory
             patch("workers.audit_tasks._redis_set"),
             patch("workers.audit_tasks._run_vulture", return_value=[finding]),
             patch("workers.audit_tasks._list_open_issues", return_value=[]),
@@ -234,7 +242,9 @@ class TestAuditDeadCode:
 
     def test_integration_simulate_finding_then_no_new_finding(self):
         """Integration: first run files one issue; second identical run files zero."""
-        finding = "autobot-backend/legacy.py:99: unused class 'OldCache' (80% confidence)"
+        finding = (
+            "autobot-backend/legacy.py:99: unused class 'OldCache' (80% confidence)"
+        )
         stored = {}
         open_issues = set()
 
@@ -244,17 +254,27 @@ class TestAuditDeadCode:
 
         with (
             patch("workers.audit_tasks._get_redis", return_value=MagicMock()),
-            patch("workers.audit_tasks._redis_get", side_effect=lambda _, k: stored.get(k)),
-            patch("workers.audit_tasks._redis_set", side_effect=lambda _, k, v, **kw: stored.update({k: v})),
+            patch(
+                "workers.audit_tasks._redis_get", side_effect=lambda _, k: stored.get(k)
+            ),
+            patch(
+                "workers.audit_tasks._redis_set",
+                side_effect=lambda _, k, v, **kw: stored.update({k: v}),
+            ),
             patch("workers.audit_tasks._run_vulture", return_value=[finding]),
-            patch("workers.audit_tasks._list_open_issues", side_effect=lambda **kw: list(open_issues)),
+            patch(
+                "workers.audit_tasks._list_open_issues",
+                side_effect=lambda **kw: list(open_issues),
+            ),
             patch("workers.audit_tasks._file_issue", side_effect=fake_file_issue),
         ):
             r1 = audit_dead_code.run()
             assert r1["issues_filed"] == 1
 
             r2 = audit_dead_code.run()
-            assert r2["issues_filed"] == 0, "second run must not refile the same finding"
+            assert (
+                r2["issues_filed"] == 0
+            ), "second run must not refile the same finding"
 
 
 # ---------------------------------------------------------------------------
@@ -275,11 +295,15 @@ class TestAuditClaims:
 
         with (
             patch("workers.audit_tasks._get_redis", return_value=MagicMock()),
-            patch("workers.audit_tasks._redis_get", side_effect=lambda _, k: stored.get(k)),
+            patch(
+                "workers.audit_tasks._redis_get", side_effect=lambda _, k: stored.get(k)
+            ),
             patch("workers.audit_tasks._redis_set"),
             patch("workers.audit_tasks._repo_root", return_value=tmp_path),
             patch("workers.audit_tasks._verify_claim", return_value=False),
-            patch("workers.audit_tasks._list_open_issues", return_value=list(open_issues)),
+            patch(
+                "workers.audit_tasks._list_open_issues", return_value=list(open_issues)
+            ),
             patch("workers.audit_tasks._file_issue") as mock_file,
         ):
             result = audit_claims.run()
@@ -294,7 +318,9 @@ class TestAuditClaims:
 
         with (
             patch("workers.audit_tasks._get_redis", return_value=MagicMock()),
-            patch("workers.audit_tasks._redis_get", return_value=[]),  # no prior unverified
+            patch(
+                "workers.audit_tasks._redis_get", return_value=[]
+            ),  # no prior unverified
             patch("workers.audit_tasks._redis_set"),
             patch("workers.audit_tasks._repo_root", return_value=tmp_path),
             patch("workers.audit_tasks._verify_claim", return_value=False),

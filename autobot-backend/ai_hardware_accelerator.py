@@ -96,9 +96,13 @@ def _get_gpu_metrics_with_pynvml() -> Dict[str, Any] | None:
 
         return {
             "utilization_percent": utilization.gpu,
-            "temperature_c": pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU),
+            "temperature_c": pynvml.nvmlDeviceGetTemperature(
+                handle, pynvml.NVML_TEMPERATURE_GPU
+            ),
             "power_usage_w": pynvml.nvmlDeviceGetPowerUsage(handle) / 1000.0,
-            "available_memory_mb": pynvml.nvmlDeviceGetMemoryInfo(handle).free / 1024 / 1024,
+            "available_memory_mb": pynvml.nvmlDeviceGetMemoryInfo(handle).free
+            / 1024
+            / 1024,
         }
     except ImportError:
         return None
@@ -190,14 +194,16 @@ class AIHardwareAccelerator:
         self.device_metrics = {}
         self.task_history = []
 
-        npu_worker_host = config.npu_worker_host
-        npu_worker_port = config.npu_worker_port
+        npu_worker_host = _ssot_config.npu_worker_host
+        npu_worker_port = _ssot_config.npu_worker_port
         if not npu_worker_host or not npu_worker_port:
             raise ValueError(
                 "NPU Worker configuration missing: AUTOBOT_NPU_WORKER_HOST and "
                 "AUTOBOT_NPU_WORKER_PORT environment variables must be set"
             )
-        self.npu_worker_url = cfg.get("npu_worker.url", f"http://{npu_worker_host}:{npu_worker_port}")
+        self.npu_worker_url = cfg.get(
+            "npu_worker.url", f"http://{npu_worker_host}:{npu_worker_port}"
+        )
         self.routing_strategy = cfg.get("ai_acceleration.routing_strategy", "optimal")
 
         # Performance thresholds for device selection (Issue #376 - use named constants)
@@ -212,7 +218,10 @@ class AIHardwareAccelerator:
         self.device_status = {
             HardwareDevice.NPU: {"available": False, "last_check": None},
             HardwareDevice.GPU: {"available": False, "last_check": None},
-            HardwareDevice.CPU: {"available": True, "last_check": datetime.now(tz=timezone.utc)},
+            HardwareDevice.CPU: {
+                "available": True,
+                "last_check": datetime.now(tz=timezone.utc),
+            },
         }
 
         # Multi-modal models
@@ -261,7 +270,9 @@ class AIHardwareAccelerator:
 
         # CPU is always available
         self.device_status[HardwareDevice.CPU]["available"] = True
-        self.device_status[HardwareDevice.CPU]["last_check"] = datetime.now(tz=timezone.utc)
+        self.device_status[HardwareDevice.CPU]["last_check"] = datetime.now(
+            tz=timezone.utc
+        )
 
     async def _check_npu_availability(self):
         """Check NPU Worker availability."""
@@ -276,13 +287,17 @@ class AIHardwareAccelerator:
                     npu_available = health_data.get("npu_available", False)
 
                     self.device_status[HardwareDevice.NPU]["available"] = npu_available
-                    self.device_status[HardwareDevice.NPU]["last_check"] = datetime.now(tz=timezone.utc)
+                    self.device_status[HardwareDevice.NPU]["last_check"] = datetime.now(
+                        tz=timezone.utc
+                    )
 
                     if npu_available:
                         logger.info("NPU Worker available and ready")
                         await self._update_npu_metrics(health_data)
                     else:
-                        logger.warning("NPU Worker connected but NPU hardware unavailable")
+                        logger.warning(
+                            "NPU Worker connected but NPU hardware unavailable"
+                        )
                 else:
                     logger.warning(f"NPU Worker health check failed: {response.status}")
                     self.device_status[HardwareDevice.NPU]["available"] = False
@@ -294,7 +309,9 @@ class AIHardwareAccelerator:
         """Check GPU availability (Issue #315 - refactored to reduce nesting)."""
         torch = _get_torch()
 
-        self.device_status[HardwareDevice.GPU]["last_check"] = datetime.now(tz=timezone.utc)
+        self.device_status[HardwareDevice.GPU]["last_check"] = datetime.now(
+            tz=timezone.utc
+        )
 
         if not torch.cuda.is_available() or torch.cuda.device_count() == 0:
             self.device_status[HardwareDevice.GPU]["available"] = False
@@ -330,12 +347,17 @@ class AIHardwareAccelerator:
             loaded_models * HardwareAcceleratorConfig.NPU_UTILIZATION_PER_MODEL, 100.0
         )  # Rough estimation
 
-        power_delta = HardwareAcceleratorConfig.NPU_MAX_POWER_W - HardwareAcceleratorConfig.NPU_BASE_POWER_W
+        power_delta = (
+            HardwareAcceleratorConfig.NPU_MAX_POWER_W
+            - HardwareAcceleratorConfig.NPU_BASE_POWER_W
+        )
         self.device_metrics[HardwareDevice.NPU] = HardwareMetrics(
             device=HardwareDevice.NPU,
             utilization_percent=utilization,
             temperature_c=HardwareAcceleratorConfig.NPU_BASE_TEMPERATURE_C
-            + (utilization * HardwareAcceleratorConfig.NPU_TEMP_UTILIZATION_FACTOR),  # Estimated
+            + (
+                utilization * HardwareAcceleratorConfig.NPU_TEMP_UTILIZATION_FACTOR
+            ),  # Estimated
             power_usage_w=HardwareAcceleratorConfig.NPU_BASE_POWER_W
             + (utilization / 100.0 * power_delta),  # 2-10W range
             available_memory_mb=HardwareAcceleratorConfig.NPU_MEMORY_MB,
@@ -351,7 +373,9 @@ class AIHardwareAccelerator:
             except Exception as e:
                 logger.error("Hardware monitoring error: %s", e)
 
-    def _classify_by_threshold(self, value: int, light_threshold: int, mod_threshold: int) -> ProcessingLoad:
+    def _classify_by_threshold(
+        self, value: int, light_threshold: int, mod_threshold: int
+    ) -> ProcessingLoad:
         """Classify by value thresholds (Issue #315 - extracted helper)."""
         if value < light_threshold:
             return ProcessingLoad.LIGHTWEIGHT
@@ -381,7 +405,9 @@ class AIHardwareAccelerator:
             )
 
         if task_type == "chat_inference":
-            model_size = input_data.get("model_size_mb", model_config.MODEL_SIZE_LIGHTWEIGHT_THRESHOLD_MB)
+            model_size = input_data.get(
+                "model_size_mb", model_config.MODEL_SIZE_LIGHTWEIGHT_THRESHOLD_MB
+            )
             return self._classify_by_threshold(
                 model_size,
                 model_config.MODEL_SIZE_LIGHTWEIGHT_THRESHOLD_MB,
@@ -390,7 +416,9 @@ class AIHardwareAccelerator:
 
         return ProcessingLoad.MODERATE  # Conservative default
 
-    def _is_device_under_threshold(self, device: HardwareDevice, threshold: float) -> bool:
+    def _is_device_under_threshold(
+        self, device: HardwareDevice, threshold: float
+    ) -> bool:
         """
         Check if a device's utilization is under the specified threshold.
 
@@ -413,10 +441,14 @@ class AIHardwareAccelerator:
         Returns:
             Selected hardware device for lightweight task. Issue #620.
         """
-        if self._is_device_under_threshold(HardwareDevice.NPU, ResourceThresholds.NPU_BUSY_THRESHOLD):
+        if self._is_device_under_threshold(
+            HardwareDevice.NPU, ResourceThresholds.NPU_BUSY_THRESHOLD
+        ):
             return HardwareDevice.NPU
 
-        if self._is_device_under_threshold(HardwareDevice.GPU, ResourceThresholds.GPU_MODERATE_THRESHOLD):
+        if self._is_device_under_threshold(
+            HardwareDevice.GPU, ResourceThresholds.GPU_MODERATE_THRESHOLD
+        ):
             return HardwareDevice.GPU
 
         return HardwareDevice.CPU
@@ -428,10 +460,14 @@ class AIHardwareAccelerator:
         Returns:
             Selected hardware device for moderate task. Issue #620.
         """
-        if self._is_device_under_threshold(HardwareDevice.GPU, ResourceThresholds.GPU_BUSY_THRESHOLD):
+        if self._is_device_under_threshold(
+            HardwareDevice.GPU, ResourceThresholds.GPU_BUSY_THRESHOLD
+        ):
             return HardwareDevice.GPU
 
-        if self._is_device_under_threshold(HardwareDevice.NPU, ResourceThresholds.NPU_AVAILABLE_THRESHOLD):
+        if self._is_device_under_threshold(
+            HardwareDevice.NPU, ResourceThresholds.NPU_AVAILABLE_THRESHOLD
+        ):
             return HardwareDevice.NPU
 
         return HardwareDevice.CPU
@@ -452,7 +488,10 @@ class AIHardwareAccelerator:
         complexity = self._classify_task_complexity(task)
 
         # Honor preferred device if specified and available
-        if task.preferred_device and self.device_status[task.preferred_device]["available"]:
+        if (
+            task.preferred_device
+            and self.device_status[task.preferred_device]["available"]
+        ):
             return task.preferred_device
 
         # Intelligent routing based on complexity and availability
@@ -471,12 +510,18 @@ class AIHardwareAccelerator:
 
         try:
             result = await self._route_to_processor(task, selected_device)
-            return self._create_success_result(task, selected_device, result, start_time)
+            return self._create_success_result(
+                task, selected_device, result, start_time
+            )
         except Exception as e:
-            logger.error("Task %s failed on %s: %s", task.task_id, selected_device.value, e)
+            logger.error(
+                "Task %s failed on %s: %s", task.task_id, selected_device.value, e
+            )
             return await self._handle_task_failure(task, selected_device, e, start_time)
 
-    async def _route_to_processor(self, task: ProcessingTask, device: HardwareDevice) -> Dict[str, Any]:
+    async def _route_to_processor(
+        self, task: ProcessingTask, device: HardwareDevice
+    ) -> Dict[str, Any]:
         """Route task to appropriate processor (Issue #315 - extracted)."""
         if device == HardwareDevice.NPU:
             return await self._process_on_npu(task)
@@ -518,7 +563,9 @@ class AIHardwareAccelerator:
                 task, fallback_device, self._process_on_gpu, self._process_on_cpu
             )
             if fallback_result is not None:
-                return self._create_success_result(task, fallback_device, fallback_result, start_time)
+                return self._create_success_result(
+                    task, fallback_device, fallback_result, start_time
+                )
 
         processing_time = (time.time() - start_time) * 1000
         return ProcessingResult(
@@ -529,7 +576,9 @@ class AIHardwareAccelerator:
             processing_time_ms=processing_time,
         )
 
-    def _get_fallback_device(self, primary_device: HardwareDevice) -> HardwareDevice | None:
+    def _get_fallback_device(
+        self, primary_device: HardwareDevice
+    ) -> HardwareDevice | None:
         """Get fallback device for failed processing."""
         if primary_device == HardwareDevice.NPU:
             if self.device_status[HardwareDevice.GPU]["available"]:
@@ -562,7 +611,9 @@ class AIHardwareAccelerator:
                 if result_data.get("status") == "completed":
                     return result_data.get("result", {})
                 else:
-                    raise Exception(f"NPU processing failed: {result_data.get('error')}")
+                    raise Exception(
+                        f"NPU processing failed: {result_data.get('error')}"
+                    )
             else:
                 raise Exception(f"NPU Worker HTTP error: {response.status}")
 
@@ -600,7 +651,9 @@ class AIHardwareAccelerator:
         """
         torch = _get_torch()
 
-        self.clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32", resume_download=True)
+        self.clip_processor = CLIPProcessor.from_pretrained(
+            "openai/clip-vit-base-patch32", resume_download=True
+        )
         self.clip_model = CLIPModel.from_pretrained(
             "openai/clip-vit-base-patch32",
             torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
@@ -616,7 +669,9 @@ class AIHardwareAccelerator:
         """
         torch = _get_torch()
 
-        self.wav2vec_processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base-960h", resume_download=True)
+        self.wav2vec_processor = Wav2Vec2Processor.from_pretrained(
+            "facebook/wav2vec2-base-960h", resume_download=True
+        )
         self.wav2vec_model = Wav2Vec2Model.from_pretrained(
             "facebook/wav2vec2-base-960h",
             torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
@@ -633,18 +688,24 @@ class AIHardwareAccelerator:
         """
         torch = _get_torch()
 
-        self.text_projection = torch.nn.Linear(HardwareAcceleratorConfig.MINILM_OUTPUT_DIM, self.unified_dim).to(device)
-        self.image_projection = torch.nn.Linear(HardwareAcceleratorConfig.CLIP_OUTPUT_DIM, self.unified_dim).to(device)
-        self.audio_projection = torch.nn.Linear(HardwareAcceleratorConfig.WAV2VEC_OUTPUT_DIM, self.unified_dim).to(
-            device
-        )
+        self.text_projection = torch.nn.Linear(
+            HardwareAcceleratorConfig.MINILM_OUTPUT_DIM, self.unified_dim
+        ).to(device)
+        self.image_projection = torch.nn.Linear(
+            HardwareAcceleratorConfig.CLIP_OUTPUT_DIM, self.unified_dim
+        ).to(device)
+        self.audio_projection = torch.nn.Linear(
+            HardwareAcceleratorConfig.WAV2VEC_OUTPUT_DIM, self.unified_dim
+        ).to(device)
 
     async def _initialize_multimodal_models(self):
         """Initialize multi-modal models for embeddings."""
         torch = _get_torch()
 
         if not MULTIMODAL_MODELS_AVAILABLE:
-            logger.warning("Multi-modal models not available. Install transformers library.")
+            logger.warning(
+                "Multi-modal models not available. Install transformers library."
+            )
             return
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -670,7 +731,11 @@ class AIHardwareAccelerator:
 
         sentences = [content] if isinstance(content, str) else content
         embeddings = await chunker._compute_sentence_embeddings_async(sentences)
-        raw_embedding = embeddings[0] if len(embeddings) > 0 else np.zeros(HardwareAcceleratorConfig.MINILM_OUTPUT_DIM)
+        raw_embedding = (
+            embeddings[0]
+            if len(embeddings) > 0
+            else np.zeros(HardwareAcceleratorConfig.MINILM_OUTPUT_DIM)
+        )
 
         if self.text_projection:
             with torch.no_grad():
@@ -722,7 +787,9 @@ class AIHardwareAccelerator:
             audio_array = content
 
         with torch.no_grad():
-            inputs = self.wav2vec_processor(audio_array, sampling_rate=16000, return_tensors="pt")
+            inputs = self.wav2vec_processor(
+                audio_array, sampling_rate=16000, return_tensors="pt"
+            )
             inputs = {k: v.to(device) for k, v in inputs.items()}
 
             if torch.cuda.is_available():
@@ -739,7 +806,9 @@ class AIHardwareAccelerator:
                 return unified_embedding.cpu().numpy()
             return audio_embedding.cpu().numpy()
 
-    async def _gpu_embedding_generation(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def _gpu_embedding_generation(
+        self, input_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Generate embeddings using GPU acceleration (Issue #315 - dispatch table)."""
         torch = _get_torch()
 
@@ -808,8 +877,16 @@ class AIHardwareAccelerator:
             "devices": {
                 device.value: {
                     "available": status["available"],
-                    "last_check": (status["last_check"].isoformat() if status["last_check"] else None),
-                    "metrics": (self.device_metrics.get(device).__dict__ if device in self.device_metrics else None),
+                    "last_check": (
+                        status["last_check"].isoformat()
+                        if status["last_check"]
+                        else None
+                    ),
+                    "metrics": (
+                        self.device_metrics.get(device).__dict__
+                        if device in self.device_metrics
+                        else None
+                    ),
                 }
                 for device, status in self.device_status.items()
             },
@@ -847,7 +924,9 @@ class AIHardwareAccelerator:
 
         return {
             "performance_analysis": device_performance,
-            "recommendations": self._generate_optimization_recommendations(device_performance),
+            "recommendations": self._generate_optimization_recommendations(
+                device_performance
+            ),
         }
 
     def _generate_optimization_recommendations(self, performance: Dict) -> List[str]:
@@ -858,17 +937,25 @@ class AIHardwareAccelerator:
         if HardwareDevice.NPU in performance:
             npu_perf = performance[HardwareDevice.NPU]
             if npu_perf["success_rate"] < 90:
-                recommendations.append("NPU success rate is low - check NPU Worker stability")
+                recommendations.append(
+                    "NPU success rate is low - check NPU Worker stability"
+                )
             if npu_perf["avg_time"] > 2000:
-                recommendations.append("NPU response times are high - consider model optimization")
+                recommendations.append(
+                    "NPU response times are high - consider model optimization"
+                )
         else:
-            recommendations.append("NPU not being utilized - verify NPU Worker connection")
+            recommendations.append(
+                "NPU not being utilized - verify NPU Worker connection"
+            )
 
         # Analyze GPU performance
         if HardwareDevice.GPU in performance:
             gpu_perf = performance[HardwareDevice.GPU]
             if gpu_perf["avg_time"] > 5000:
-                recommendations.append("GPU response times are high - check GPU utilization")
+                recommendations.append(
+                    "GPU response times are high - check GPU utilization"
+                )
 
         return recommendations
 
@@ -919,7 +1006,11 @@ async def accelerated_embedding_generation(
             "modality": modality,
             "text": content if modality == "text" else None,  # Backward compatibility
         },
-        complexity=(ProcessingLoad.LIGHTWEIGHT if modality == "text" else ProcessingLoad.MODERATE),
+        complexity=(
+            ProcessingLoad.LIGHTWEIGHT
+            if modality == "text"
+            else ProcessingLoad.MODERATE
+        ),
         preferred_device=preferred_device,
     )
 
@@ -931,7 +1022,9 @@ async def accelerated_embedding_generation(
         raise Exception(f"Embedding generation failed for {modality}: {result.error}")
 
 
-async def compute_cross_modal_similarity(embedding1: np.ndarray, embedding2: np.ndarray) -> float:
+async def compute_cross_modal_similarity(
+    embedding1: np.ndarray, embedding2: np.ndarray
+) -> float:
     """
     Compute cosine similarity between embeddings from different modalities.
 

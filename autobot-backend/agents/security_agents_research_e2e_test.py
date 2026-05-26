@@ -6,6 +6,8 @@ Test security agents with research-based tool discovery
 import asyncio
 import sys
 
+from autobot_shared.ssot_config import config
+
 sys.path.append(config.project_root)
 
 from agents.security_scanner_agent import security_scanner_agent
@@ -34,7 +36,9 @@ async def test_tool_research_workflow():
         print(f"Recommended tools: {', '.join(recommended_tools)}")  # noqa: print
 
         research_results = scan_result.get("research_results", {})
-        print(f"Research confidence: {research_results.get('confidence', 'unknown')}")  # noqa: print  # noqa: print
+        print(
+            f"Research confidence: {research_results.get('confidence', 'unknown')}"
+        )  # noqa: print  # noqa: print
 
         next_steps = scan_result.get("next_steps", [])
         print("Next steps:")  # noqa: print
@@ -49,10 +53,14 @@ async def test_tool_research_workflow():
         if tools:
             first_tool = tools[0]
 
-            install_guide = await security_scanner_agent.get_tool_installation_guide(first_tool)
+            install_guide = await security_scanner_agent.get_tool_installation_guide(
+                first_tool
+            )
 
             print(f"Tool: {install_guide.get('tool')}")  # noqa: print
-            print(f"Package manager: {install_guide.get('package_manager')}")  # noqa: print  # noqa: print
+            print(
+                f"Package manager: {install_guide.get('package_manager')}"
+            )  # noqa: print  # noqa: print
             print("Install commands:")  # noqa: print
             for cmd in install_guide.get("install_commands", []):
                 print(f"  $ {cmd}")  # noqa: print
@@ -76,7 +84,9 @@ async def test_tool_research_workflow():
 
         if test_result.get("status") == "tool_required":
             tools = test_result.get("required_tools", [])
-            print(f"  Recommended: {', '.join(tools[:3])}")  # noqa: print  # Show first 3  # noqa: print
+            print(
+                f"  Recommended: {', '.join(tools[:3])}"
+            )  # noqa: print  # Show first 3  # noqa: print
         else:
             print(f"  Status: {test_result.get('status')}")  # noqa: print
 

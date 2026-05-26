@@ -14,7 +14,7 @@ Tests cover:
 import json
 from datetime import datetime, timezone
 from typing import Any, Dict, List
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -102,7 +102,12 @@ def test_reward_from_execution_success_with_retry():
 
 
 def test_reward_from_execution_failure_partial():
-    assert reward_from_execution({"success": False, "criteria_evaluation": {"overall": "partial"}}) == 0.5
+    assert (
+        reward_from_execution(
+            {"success": False, "criteria_evaluation": {"overall": "partial"}}
+        )
+        == 0.5
+    )
 
 
 def test_reward_from_execution_failure():
@@ -245,7 +250,9 @@ async def test_find_similar_returns_results():
     col = _make_collection(stored)
     store = await _store_with_collection(col)
 
-    results = await store.find_similar_trajectories("task text", top_k=3, min_reward=0.0)
+    results = await store.find_similar_trajectories(
+        "task text", top_k=3, min_reward=0.0
+    )
     assert len(results) == 3
 
 
@@ -259,7 +266,9 @@ async def test_find_similar_filters_by_min_reward():
     col = _make_collection(stored)
     store = await _store_with_collection(col)
 
-    results = await store.find_similar_trajectories("task text", top_k=5, min_reward=0.6)
+    results = await store.find_similar_trajectories(
+        "task text", top_k=5, min_reward=0.6
+    )
     assert all(r["reward"] >= 0.6 for r in results)
     assert len(results) == 1
 
@@ -326,7 +335,10 @@ async def test_find_similar_invalid_top_k_raises():
 @pytest.mark.asyncio
 async def test_retrieval_10_trajectories_for_similar_task():
     """Insert 10 successful trajectories for task A; query with similar A' → all 10 returned."""
-    stored = [_store_entry(i, task_text="Deploy service X to staging", reward=1.0) for i in range(10)]
+    stored = [
+        _store_entry(i, task_text="Deploy service X to staging", reward=1.0)
+        for i in range(10)
+    ]
     col = _make_collection(stored)
     store = await _store_with_collection(col)
 

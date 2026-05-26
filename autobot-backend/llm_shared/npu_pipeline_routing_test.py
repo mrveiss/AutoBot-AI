@@ -20,7 +20,7 @@ import importlib.util
 import sys
 import types
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 # ---------------------------------------------------------------------------
 # Bootstrap: load real provider_registry module without triggering the
@@ -54,7 +54,9 @@ def _bootstrap_provider_registry():
             sys.modules[heavy] = stub
 
     # ssot_config.config must be an object with attribute access
-    cfg_stub = sys.modules.setdefault("autobot_shared.ssot_config", types.ModuleType("autobot_shared.ssot_config"))
+    cfg_stub = sys.modules.setdefault(
+        "autobot_shared.ssot_config", types.ModuleType("autobot_shared.ssot_config")
+    )
     if not hasattr(cfg_stub, "config"):
         cfg_stub.config = MagicMock()
 
@@ -115,7 +117,13 @@ _NPU_POOL_PROVIDER_NAME = _pr_mod._NPU_POOL_PROVIDER_NAME
 def _bootstrap_pipeline_dispatcher():
     import os
 
-    path = os.path.join(os.path.dirname(__file__), "..", "services", "npu_pipeline", "pipeline_dispatcher.py")
+    path = os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "services",
+        "npu_pipeline",
+        "pipeline_dispatcher.py",
+    )
     return _load_module_from_file("services.npu_pipeline.pipeline_dispatcher", path)
 
 
@@ -221,7 +229,9 @@ class TestNpuPipelineRouting(unittest.IsolatedAsyncioTestCase):
         registry, npu_provider = self._make_registry_with_npu_provider(dispatcher)
 
         request = _make_request(model_bytes=16 * (1024**3))
-        should_pipeline = await registry._should_use_npu_pipeline(request, baseline_ttft_ms=200.0)
+        should_pipeline = await registry._should_use_npu_pipeline(
+            request, baseline_ttft_ms=200.0
+        )
         self.assertFalse(should_pipeline)
 
     async def test_pipeline_disabled_skips_pipeline(self):

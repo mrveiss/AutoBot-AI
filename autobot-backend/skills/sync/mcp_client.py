@@ -20,6 +20,7 @@ from autobot_shared.logging_manager import get_logger
 import asyncio
 from typing import Any, AsyncIterator, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from skills.sync.mcp_transport import MCPTransport, create_transport
 from type_defs.mcp import (
     MCPPromptDefinition,
@@ -109,11 +110,15 @@ class MCPClient:
             try:
                 tools.append(MCPToolDefinition.model_validate(raw))
             except Exception as exc:  # noqa: BLE001
-                logger.warning("MCPClient: could not parse tool %s: %s", raw.get("name"), exc)
+                logger.warning(
+                    "MCPClient: could not parse tool %s: %s", raw.get("name"), exc
+                )
         logger.info("MCPClient: discovered %d tools", len(tools))
         return tools
 
-    async def call_tool(self, name: str, arguments: Dict[str, Any] | None = None) -> Any:
+    async def call_tool(
+        self, name: str, arguments: Dict[str, Any] | None = None
+    ) -> Any:
         """Invoke a named tool on the MCP server.
 
         Args:
@@ -145,7 +150,9 @@ class MCPClient:
             try:
                 resources.append(MCPResourceDefinition.model_validate(raw))
             except Exception as exc:  # noqa: BLE001
-                logger.warning("MCPClient: could not parse resource %s: %s", raw.get("uri"), exc)
+                logger.warning(
+                    "MCPClient: could not parse resource %s: %s", raw.get("uri"), exc
+                )
         logger.info("MCPClient: found %d resources", len(resources))
         return resources
 
@@ -163,7 +170,9 @@ class MCPClient:
         """
         await self._call("resources/subscribe", {"uri": uri})
         logger.info("MCPClient: subscribed to resource %s", uri)
-        return ResourceSubscription(uri=uri, transport=self._transport, timeout=self._timeout)
+        return ResourceSubscription(
+            uri=uri, transport=self._transport, timeout=self._timeout
+        )
 
     async def read_resource(self, uri: str) -> Any:
         """Read the current content of a resource.
@@ -195,11 +204,15 @@ class MCPClient:
             try:
                 prompts.append(MCPPromptDefinition.model_validate(raw))
             except Exception as exc:  # noqa: BLE001
-                logger.warning("MCPClient: could not parse prompt %s: %s", raw.get("name"), exc)
+                logger.warning(
+                    "MCPClient: could not parse prompt %s: %s", raw.get("name"), exc
+                )
         logger.info("MCPClient: found %d prompts", len(prompts))
         return prompts
 
-    async def get_prompt(self, name: str, arguments: Dict[str, str] | None = None) -> Any:
+    async def get_prompt(
+        self, name: str, arguments: Dict[str, str] | None = None
+    ) -> Any:
         """Retrieve a rendered prompt template.
 
         Args:
@@ -249,7 +262,9 @@ class ResourceSubscription:
         """Yield server-push notifications for the subscribed resource."""
         while True:
             try:
-                msg = await asyncio.wait_for(self._transport.receive(), timeout=self._timeout)
+                msg = await asyncio.wait_for(
+                    self._transport.receive(), timeout=self._timeout
+                )
             except (asyncio.TimeoutError, TimeoutError):
                 logger.debug(
                     "ResourceSubscription: timeout waiting for %s notification",

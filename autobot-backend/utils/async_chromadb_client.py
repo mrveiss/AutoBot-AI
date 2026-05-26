@@ -35,6 +35,7 @@ import asyncio
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
 
 if TYPE_CHECKING:
@@ -463,7 +464,9 @@ async def get_async_chromadb_client(
     import chromadb  # noqa: F811
     from chromadb.config import Settings as ChromaSettings
 
-    cache_key = f"http://{_CHROMADB_HOST}:{_CHROMADB_PORT}" if _CHROMADB_HOST else db_path
+    cache_key = (
+        f"http://{_CHROMADB_HOST}:{_CHROMADB_PORT}" if _CHROMADB_HOST else db_path
+    )
 
     if cache_key in _async_client_cache:
         return _async_client_cache[cache_key]

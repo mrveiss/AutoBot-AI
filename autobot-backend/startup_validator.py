@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Tuple
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 from constants.path_constants import PATH
@@ -136,7 +137,9 @@ class StartupValidator:
 
         # Report results
         if self.result.success:
-            logger.info(f"✅ Startup validation completed successfully. {len(self.result.warnings)} warnings.")
+            logger.info(
+                f"✅ Startup validation completed successfully. {len(self.result.warnings)} warnings."
+            )
         else:
             logger.error(
                 "❌ Startup validation failed with %d errors and %d warnings.",
@@ -183,7 +186,9 @@ class StartupValidator:
                 )
             except Exception as e:
                 # Module imported but failed to initialize
-                logger.error("AutoBot module initialization failed: %s: %s", module_name, e)
+                logger.error(
+                    "AutoBot module initialization failed: %s: %s", module_name, e
+                )
                 self.result.add_error(
                     f"AutoBot module initialization failed: {module_name}",
                     {"error": type(e).__name__},
@@ -204,7 +209,9 @@ class StartupValidator:
                     {"error": type(e).__name__},
                 )
             except Exception as e:
-                logger.debug("Optional module initialization failed: %s: %s", module_name, e)
+                logger.debug(
+                    "Optional module initialization failed: %s: %s", module_name, e
+                )
                 self.result.add_warning(
                     f"Optional module initialization failed: {module_name}",
                     {"error": type(e).__name__},
@@ -252,23 +259,32 @@ class StartupValidator:
                 logger.debug("✅ Service connectivity: %s", service_name)
                 return service_name, None
             except Exception as e:
-                logger.error("Service connectivity check failed for %s: %s", service_name, e)
+                logger.error(
+                    "Service connectivity check failed for %s: %s", service_name, e
+                )
                 return service_name, "Service connectivity check failed"
 
         results = await asyncio.gather(
-            *[validate_single_service(name, func) for name, func in self.services.items()],
+            *[
+                validate_single_service(name, func)
+                for name, func in self.services.items()
+            ],
             return_exceptions=True,
         )
 
         for result in results:
             if isinstance(result, Exception):
                 # Gather itself failed for some reason
-                self.result.add_warning(f"Service validation error: {result}", {"error": str(result)})
+                self.result.add_warning(
+                    f"Service validation error: {result}", {"error": str(result)}
+                )
             elif result[1] is not None:
                 # Service connectivity issues are warnings, not errors
                 # The system should still start but with reduced functionality
                 service_name, error = result
-                self.result.add_warning(f"Service connectivity failed: {service_name}", {"error": error})
+                self.result.add_warning(
+                    f"Service connectivity failed: {service_name}", {"error": error}
+                )
 
     async def _validate_redis_connectivity(self):
         """Test Redis connectivity using canonical Redis utility"""
@@ -303,7 +319,9 @@ class StartupValidator:
 
             # Use singleton HTTP client for connection pooling
             http_client = get_http_client()
-            async with await http_client.get(health_url, timeout=aiohttp.ClientTimeout(total=5)) as response:
+            async with await http_client.get(
+                health_url, timeout=aiohttp.ClientTimeout(total=5)
+            ) as response:
                 if response.status != 200:
                     raise Exception(f"Ollama returned status {response.status}")
 
@@ -327,7 +345,9 @@ class StartupValidator:
             free_gb = free_space / (1024**3)
 
             if free_gb < 1:
-                self.result.add_error(f"Insufficient disk space: {free_gb:.1f}GB available, minimum 1GB required")
+                self.result.add_error(
+                    f"Insufficient disk space: {free_gb:.1f}GB available, minimum 1GB required"
+                )
             elif free_gb < 5:
                 self.result.add_warning(f"Low disk space: {free_gb:.1f}GB available")
 

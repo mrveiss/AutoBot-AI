@@ -30,7 +30,9 @@ class LLCWorkProduct(Base):
         primary_key=True,
         server_default=sa.text("gen_random_uuid()"),
     )
-    company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
     work_item_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         sa.ForeignKey("llc_work_items.id", ondelete="CASCADE"),
@@ -50,14 +52,16 @@ class LLCWorkProduct(Base):
     content_text: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
     storage_path: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
     url: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
-    kb_indexed: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, server_default="false")
+    kb_indexed: Mapped[bool] = mapped_column(
+        sa.Boolean, nullable=False, server_default="false"
+    )
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True),
         nullable=False,
         server_default=sa.func.now(),
     )
 
-    work_item: Mapped["LLCWorkItem"] = relationship(  # type: ignore[name-defined]
+    work_item: Mapped["LLCWorkItem"] = relationship(  # type: ignore[name-defined]  # noqa: F821
         "LLCWorkItem",
         back_populates="work_products",
         lazy="selectin",

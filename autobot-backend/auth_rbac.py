@@ -42,6 +42,7 @@ from autobot_shared.auth.permissions import (  # noqa: F401 — re-exported for 
     Permission,
     Role,
 )
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error
@@ -69,7 +70,9 @@ def _get_user_permissions(user_role: str) -> List[str]:
     try:
         role_enum = Role(user_role.lower())
         role_perms = ROLE_PERMISSIONS.get(role_enum, [])
-        permissions.extend([p.value if isinstance(p, Permission) else p for p in role_perms])
+        permissions.extend(
+            [p.value if isinstance(p, Permission) else p for p in role_perms]
+        )
     except ValueError:
         # Unknown role, check if it's in SecurityLayer defaults
         pass
@@ -190,7 +193,9 @@ def require_permission(
         if not user_data:
             raise_auth_error("AUTH_0002", "Authentication required")
 
-        perm_str = permission.value if isinstance(permission, Permission) else permission
+        perm_str = (
+            permission.value if isinstance(permission, Permission) else permission
+        )
         if not has_permission(user_data, permission):
             _deny_permission_access(user_data, perm_str, request)
 
@@ -199,7 +204,9 @@ def require_permission(
     return dependency
 
 
-def _deny_role_access(user_data: dict, allowed_roles: List[str], user_role: str, request: Request) -> None:
+def _deny_role_access(
+    user_data: dict, allowed_roles: List[str], user_role: str, request: Request
+) -> None:
     """
     Log denied role access and raise auth error. Issue #620.
 
@@ -228,7 +235,9 @@ def _deny_role_access(user_data: dict, allowed_roles: List[str], user_role: str,
     )
 
 
-def _deny_any_permission_access(user_data: dict, perm_strs: List[str], request: Request) -> None:
+def _deny_any_permission_access(
+    user_data: dict, perm_strs: List[str], request: Request
+) -> None:
     """
     Log denied permission access when none of required permissions match. Issue #620.
 
@@ -371,4 +380,6 @@ def check_agent_execute_permission(request: Request) -> bool:
 
 def check_shell_execute_permission(request: Request) -> bool:
     """Dependency for shell execution (dangerous). Issue #744."""
-    return require_permission(Permission.SHELL_EXECUTE, allow_single_user_bypass=False)(request)
+    return require_permission(Permission.SHELL_EXECUTE, allow_single_user_bypass=False)(
+        request
+    )
