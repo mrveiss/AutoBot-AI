@@ -33,7 +33,6 @@ Key Features:
 
 import importlib
 import importlib.metadata
-import importlib.util
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
@@ -252,6 +251,9 @@ class MCPBridgeToggleService(AsyncRedisClientMixin):
         """Set the enabled state for a bridge (no TTL — state is intentionally persistent)."""
         try:
             redis = await self._get_redis()
+            if redis is None:
+                logger.warning("Redis unavailable; bridge toggle for '%s' not persisted", name)
+                return
             await redis.set(f"mcp_bridge:enabled:{name}", "true" if enabled else "false")
         except Exception as e:
             logger.error("Failed to set bridge enabled state for %s: %s", name, e)
@@ -389,7 +391,7 @@ def discover_bridges() -> List[Tuple[str, str, str, List[str]]]:
                 features=features,
                 endpoint=endpoint,
             )
-            logger.debug("Built minimal manifest for bridge: %s", name)
+            logger.warning("Bridge '%s' has no MANIFEST attribute — using minimal fallback (version=0.0.0)", name)
 
         manifests.append(manifest)
         _MANIFEST_REGISTRY[name] = (manifest, module_path)
@@ -508,56 +510,59 @@ async def _fetch_bridges_info() -> Metadata:
     http_client = get_http_client()
     toggle_svc = get_toggle_service()
 
-    bridge_names = [b[0] for b in MCP_BRIDGES]
+    # Iterate _MANIFEST_REGISTRY so reloaded manifests are always fresh (blocker #1)
+    bridge_names = list(_MANIFEST_REGISTRY.keys())
     enabled_map = await toggle_svc.get_enabled_batch(bridge_names)
 
-    for bridge_name, bridge_desc, endpoint, features in MCP_BRIDGES:
-        manifest_entry = _MANIFEST_REGISTRY.get(bridge_name)
-        manifest_dict: Optional[dict] = None
-        if manifest_entry:
-            m = manifest_entry[0]
-            manifest_dict = MCPBridgeManifestSchema(
-                name=m.name,
-                version=m.version,
-                description=m.description,
-                features=m.features,
-                endpoint=m.endpoint,
-                resource_limits=m.resource_limits,
-            ).model_dump()
+    for bridge_name, (manifest, _module_path) in _MANIFEST_REGISTRY.items():
+        endpoint = manifest.endpoint or ""
+        manifest_dict = MCPBridgeManifestSchema(
+            name=manifest.name,
+            version=manifest.version,
+            description=manifest.description,
+            features=manifest.features,
+            endpoint=manifest.endpoint,
+            resource_limits=manifest.resource_limits,
+        ).model_dump()
 
         enabled = enabled_map.get(bridge_name, True)
 
         bridge_info = {
             "name": bridge_name,
-            "description": bridge_desc,
+            "description": manifest.description,
             "endpoint": endpoint,
-            "features": features,
+            "features": manifest.features,
             "status": "unavailable",
             "tool_count": 0,
             "manifest": manifest_dict,
             "enabled": enabled,
         }
 
-        try:
-            async with await http_client.get(
-                f"{backend_url}{endpoint}",
-                timeout=aiohttp.ClientTimeout(total=3),
-            ) as response:
-                if response.status == 200:
-                    tools = await response.json()
-                    bridge_info["status"] = "healthy"
-                    bridge_info["tool_count"] = len(tools)
-                else:
-                    bridge_info["status"] = "degraded"
-                    bridge_info["error"] = f"HTTP {response.status}"
-        except aiohttp.ClientError as e:
-            bridge_info["status"] = "unavailable"
-            bridge_info["error"] = str(e)
-            logger.error("HTTP error during health check for %s: %s", bridge_name, e)
-        except Exception as e:
-            bridge_info["status"] = "unavailable"
-            bridge_info["error"] = str(e)
-            logger.error("Health check failed for %s: %s", bridge_name, e)
+        if not endpoint:
+            # Entry-point bridges with no declared endpoint cannot be health-checked
+            bridge_info["status"] = "unknown"
+            bridge_info["error"] = "no endpoint configured"
+        else:
+            try:
+                async with await http_client.get(
+                    f"{backend_url}{endpoint}",
+                    timeout=aiohttp.ClientTimeout(total=3),
+                ) as response:
+                    if response.status == 200:
+                        tools = await response.json()
+                        bridge_info["status"] = "healthy"
+                        bridge_info["tool_count"] = len(tools)
+                    else:
+                        bridge_info["status"] = "degraded"
+                        bridge_info["error"] = f"HTTP {response.status}"
+            except aiohttp.ClientError as e:
+                bridge_info["status"] = "unavailable"
+                bridge_info["error"] = str(e)
+                logger.error("HTTP error during health check for %s: %s", bridge_name, e)
+            except Exception as e:
+                bridge_info["status"] = "unavailable"
+                bridge_info["error"] = str(e)
+                logger.error("Health check failed for %s: %s", bridge_name, e)
 
         bridges.append(bridge_info)
 
@@ -898,19 +903,31 @@ async def disable_mcp_bridge(name: str) -> Metadata:
     }
 
 
-@router.post("/bridges/{name}/reload", response_model=MCPBridgeToggleResponse)
+@router.post("/bridges/{name}/reload", response_model=MCPBridgeToggleResponse, status_code=202)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reload_mcp_bridge",
     error_code_prefix="MCP_REGISTRY",
 )
 async def reload_mcp_bridge(name: str) -> Metadata:
-    """Hot-reload a bridge module and refresh its manifest (Issue #4462)."""
+    """Hot-reload a bridge module and refresh its manifest (Issue #4462).
+
+    Returns 202 because importlib.reload only affects the current uvicorn worker;
+    other workers retain the previous state until they are restarted.
+    """
     _find_bridge_by_name(name)
     manifest_entry = _MANIFEST_REGISTRY.get(name)
-    if not manifest_entry or not manifest_entry[1]:
-        raise HTTPException(status_code=400, detail=f"No reloadable module path for bridge '{name}'")
+    if not manifest_entry:
+        raise HTTPException(status_code=404, detail=f"Bridge '{name}' not found in manifest registry")
     _, module_path = manifest_entry
+    if not module_path:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Bridge '{name}' was registered via an entry-point (module path unknown) "
+                "and cannot be hot-reloaded. Restart the server to pick up changes."
+            ),
+        )
     logger.warning(
         "reload_mcp_bridge('%s'): importlib.reload affects only the current uvicorn worker. "
         "Other workers retain the previous module state until restarted.",
@@ -932,10 +949,13 @@ async def reload_mcp_bridge(name: str) -> Metadata:
     toggle_svc = get_toggle_service()
     enabled = await toggle_svc.is_bridge_enabled(name)
     return {
-        "status": "success",
+        "status": "accepted",
         "bridge": name,
         "enabled": enabled,
-        "message": f"Bridge '{name}' reloaded",
+        "message": (
+            f"Bridge '{name}' reloaded on this worker. "
+            "Other uvicorn workers retain the previous state until restarted."
+        ),
         "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 

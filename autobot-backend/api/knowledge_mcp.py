@@ -15,15 +15,6 @@ import asyncio
 from typing import List
 
 from fastapi import APIRouter, Depends
-from services.mcp_bridge_manifest import MCPBridgeManifest
-
-MANIFEST = MCPBridgeManifest(
-    name="knowledge_mcp",
-    version="1.0.0",
-    description="Knowledge Base Operations (LlamaIndex + Redis Vectors)",
-    features=["search", "add_documents", "vector_similarity", "statistics"],
-    endpoint="/api/knowledge/mcp/tools",
-)
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -46,6 +37,15 @@ from knowledge.schemas.mcp import (
     McpSummarizeTopicResponse,
     McpToolsResponse,
     McpVectorSimilarityResponse,
+)
+from services.mcp_bridge_manifest import MCPBridgeManifest
+
+MANIFEST = MCPBridgeManifest(
+    name="knowledge_mcp",
+    version="1.0.0",
+    description="Knowledge Base Operations (LlamaIndex + Redis Vectors)",
+    features=["search", "add_documents", "vector_similarity", "statistics"],
+    endpoint="/api/knowledge/mcp/tools",
 )
 from knowledge_base import KnowledgeBase
 from type_defs.common import Metadata
