@@ -145,7 +145,7 @@ def check_npu_worker_registry() -> CheckResult:
         npu_host = os.environ.get("NPU_WORKER_HOST", "localhost")
         npu_port = os.environ.get("NPU_WORKER_PORT", "8080")  # ssot-config-exempt: diagnostic CLI, NPU_* namespace
         url = f"http://{npu_host}:{npu_port}/health"
-        with urllib.request.urlopen(url, timeout=2) as resp:
+        with urllib.request.urlopen(url, timeout=2) as resp:  # nosec B310
             if resp.status == 200:
                 return CheckResult(
                     name="NPU worker registry",
