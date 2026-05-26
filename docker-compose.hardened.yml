@@ -75,6 +75,7 @@ services:
     tmpfs:
       - /tmp
       - /var/run
+      - /chroma
     deploy:
       resources:
         limits:
