@@ -41,6 +41,7 @@ from .types import (
     ErrorReport,
     ErrorSeverity,
     RecoveryStrategy,
+    classify_error,
 )
 
 # Backward compatibility aliases with underscore prefix (Issue #380)
@@ -87,4 +88,6 @@ __all__ = [
     "with_error_boundary",
     "with_async_error_boundary",
     "get_error_statistics",
+    # Classification helper (GH#6628)
+    "classify_error",
 ]

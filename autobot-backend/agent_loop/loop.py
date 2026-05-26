@@ -36,6 +36,12 @@ from agent_loop.types import (
     TaskContext,
     ThinkCategory,
 )
+from autobot_shared.error_boundaries import (
+    CRITICAL_ERROR_TYPES,
+    FALLBACK_ERROR_TYPES,
+    ErrorSeverity,
+    classify_error,
+)
 from autobot_shared.logging_manager import get_logger
 from events import EventStreamManager, EventType
 from events.bus import PersistStrategy
@@ -155,6 +161,9 @@ class AgentLoop:
         # GH#6626: confidence-based abstention state
         self._abstained: bool = False
         self._abstention_reason: str | None = None
+        # GH#6628: set when a CRITICAL error causes an immediate halt
+        self._fatal_error: Exception | None = None
+        self._fatal_reason: str | None = None
 
     # =========================================================================
     # Properties
@@ -211,6 +220,8 @@ class AgentLoop:
         self._halted_on_repetition = False
         self._abstained = False
         self._abstention_reason = None
+        self._fatal_error = None
+        self._fatal_reason = None
 
     async def _execute_main_loop(self) -> list[IterationResult]:
         """Execute the main iteration loop.
@@ -982,8 +993,11 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
         Issue #3877: Also returns False when a repetition halt has fired so the
         main while-loop exits even if _should_iterate() did not catch the error.
         GH#6626: Also returns False when confidence-based abstention fires.
+        GH#6628: Returns False immediately when a fatal error has been recorded.
         """
         if self._halted_on_repetition:
+            return False
+        if self._fatal_error is not None:
             return False
         if self._state not in (LoopState.RUNNING, LoopState.PAUSED):
             return False
@@ -1012,18 +1026,68 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
                 return False
         return True
 
+    def _max_retries_for_severity(self, severity: ErrorSeverity) -> int:
+        """Return the configured retry budget for the given severity (GH#6628)."""
+        mapping = {
+            ErrorSeverity.CRITICAL: self.config.max_retries_critical,
+            ErrorSeverity.HIGH: self.config.max_retries_high,
+            ErrorSeverity.MEDIUM: self.config.max_retries_medium,
+            ErrorSeverity.LOW: self.config.max_retries_low,
+        }
+        return mapping.get(severity, self.config.max_consecutive_errors)
+
+    async def _try_fallback_strategy(self, error: Exception) -> None:
+        """Placeholder hook for FALLBACK_ERROR_TYPES (GH#6628).
+
+        Real fallback strategies are separate work; this logs the attempt.
+        """
+        logger.warning(
+            "AgentLoop: Fallback-class error %s — fallback hook not yet implemented",
+            type(error).__name__,
+        )
+
     async def _handle_iteration_error(self, error: Exception) -> bool:
-        """Handle an error during iteration."""
+        """Handle an error during iteration (GH#6628: severity-aware).
+
+        CRITICAL errors halt immediately without retry.  All other errors
+        consume their per-severity retry budget before halting.
+        """
+        severity = classify_error(error)
+
+        if isinstance(error, CRITICAL_ERROR_TYPES):
+            self._fatal_error = error
+            self._fatal_reason = (
+                f"Critical error {type(error).__name__} — halting without retry"
+            )
+            logger.error(
+                "AgentLoop: FATAL %s (severity=%s) — %s",
+                type(error).__name__,
+                severity.value,
+                self._fatal_reason,
+            )
+            return False
+
+        if isinstance(error, FALLBACK_ERROR_TYPES):
+            await self._try_fallback_strategy(error)
+
         self._consecutive_errors += 1
+        max_for_severity = self._max_retries_for_severity(severity)
 
         logger.error(
-            "AgentLoop: Iteration error (%d consecutive): %s",
+            "AgentLoop: Iteration error (%d/%d, severity=%s): %s",
             self._consecutive_errors,
+            max_for_severity,
+            severity.value,
             error,
         )
 
-        if self._consecutive_errors >= self.config.max_consecutive_errors:
-            logger.error("AgentLoop: Max consecutive errors reached, stopping")
+        if self._consecutive_errors >= max_for_severity:
+            logger.error(
+                "AgentLoop: Retry budget exhausted (severity=%s, %d/%d), stopping",
+                severity.value,
+                self._consecutive_errors,
+                max_for_severity,
+            )
             return False
 
         # Think about error recovery
@@ -1036,7 +1100,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
             if self._current_context:
                 self._current_context.add_think(result)
 
-        return True  # Continue after error
+        return True
 
     async def _plan_steps_to_tools(
         self,
@@ -1107,4 +1171,6 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
         if self._abstained:
             result["abstained"] = True
             result["abstention_reason"] = self._abstention_reason
+        if self._fatal_reason:
+            result["fatal_reason"] = self._fatal_reason
         return result

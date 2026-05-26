@@ -31,6 +31,24 @@ class ErrorSeverity(Enum):
     CRITICAL = "critical"
 
 
+def classify_error(error: Exception) -> ErrorSeverity:
+    """Return the ErrorSeverity for an exception (GH#6628).
+
+    Precedence: RETRY_ERROR_TYPES → LOW (transient, high retry budget),
+    CRITICAL_ERROR_TYPES → CRITICAL, HIGH_SEVERITY_ERROR_TYPES → HIGH,
+    MEDIUM_SEVERITY_ERROR_TYPES → MEDIUM, else LOW.
+    """
+    if isinstance(error, RETRY_ERROR_TYPES):
+        return ErrorSeverity.LOW
+    if isinstance(error, CRITICAL_ERROR_TYPES):
+        return ErrorSeverity.CRITICAL
+    if isinstance(error, HIGH_SEVERITY_ERROR_TYPES):
+        return ErrorSeverity.HIGH
+    if isinstance(error, MEDIUM_SEVERITY_ERROR_TYPES):
+        return ErrorSeverity.MEDIUM
+    return ErrorSeverity.LOW
+
+
 class ErrorCategory(Enum):
     """Error categories for better organization and handling"""
 
