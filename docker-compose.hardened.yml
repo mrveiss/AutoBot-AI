@@ -10,7 +10,7 @@
 #   • Additional tmpfs mounts required when read_only is enabled
 #   • Docker Secrets replace plain-text env-var credentials (Postgres password,
 #     SLM admin password)
-#   • PID-namespace limit (pids_limit) on all services to cap fork-bomb risk
+#   • PID-namespace limit (deploy.resources.limits.pids) on all services to cap fork-bomb risk
 #   • Tighter resource limits (half the base allocation, tunable per operator)
 #
 # Secret files must be created by the operator before first `up`:
@@ -44,19 +44,18 @@ services:
     tmpfs:
       - /tmp
       - /var/run
-    pids_limit: 128
     deploy:
       resources:
         limits:
           memory: 768M
           cpus: '0.75'
+          pids: 128
 
   autobot-postgres:
     read_only: true
     tmpfs:
       - /tmp
       - /var/run/postgresql
-    pids_limit: 256
     secrets:
       - postgres_password
     environment:
@@ -69,18 +68,19 @@ services:
         limits:
           memory: 768M
           cpus: '0.75'
+          pids: 256
 
   autobot-chromadb:
     read_only: true
     tmpfs:
       - /tmp
       - /var/run
-    pids_limit: 128
     deploy:
       resources:
         limits:
           memory: 768M
           cpus: '0.75'
+          pids: 128
 
   # ── Application layer ─────────────────────────────────────────────────────
 
@@ -89,24 +89,24 @@ services:
     tmpfs:
       - /tmp
       - /app/autobot-backend/.cache:mode=1777
-    pids_limit: 256
     deploy:
       resources:
         limits:
           memory: 1536M
           cpus: '1.5'
+          pids: 256
 
   autobot-worker:
     read_only: true
     tmpfs:
       - /tmp
       - /app/autobot-backend/.cache:mode=1777
-    pids_limit: 256
     deploy:
       resources:
         limits:
           memory: 1536M
           cpus: '1.5'
+          pids: 256
 
   autobot-slm:
     read_only: true
@@ -114,7 +114,6 @@ services:
       - /tmp
       - /var/run
       - /app/data/tmp:mode=1777
-    pids_limit: 256
     secrets:
       - slm_admin_password
       - slm_jwt_secret
@@ -128,10 +127,14 @@ services:
         limits:
           memory: 768M
           cpus: '0.75'
+          pids: 256
 
   autobot-frontend:
-    pids_limit: 64
     # read_only + tmpfs already set in base compose
+    deploy:
+      resources:
+        limits:
+          pids: 64
 
   # ── Optional services ─────────────────────────────────────────────────────
 
@@ -139,11 +142,17 @@ services:
     read_only: true
     tmpfs:
       - /tmp
-    pids_limit: 128
+    deploy:
+      resources:
+        limits:
+          pids: 128
 
   autobot-grafana:
     read_only: true
     tmpfs:
       - /tmp
       - /var/run
-    pids_limit: 128
+    deploy:
+      resources:
+        limits:
+          pids: 128
