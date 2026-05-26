@@ -340,7 +340,9 @@ class TaskContext:
         """
         from agent_loop.fingerprint import (
             compute_novel_token_ratio,
-            content_hash as _hash,
+        )
+        from agent_loop.fingerprint import content_hash as _hash
+        from agent_loop.fingerprint import (
             normalize_content,
         )
 
