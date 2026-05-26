@@ -32,9 +32,7 @@ def _make_app() -> FastAPI:
 @pytest.fixture
 def mock_redis():
     redis = AsyncMock()
-    with patch(
-        "api.chat_presets.get_async_redis_client", new_callable=AsyncMock, return_value=redis
-    ) as p:
+    with patch("api.chat_presets.get_async_redis_client", new_callable=AsyncMock, return_value=redis) as p:
         p.return_value = redis
         yield redis
 
@@ -52,8 +50,22 @@ class TestListPresets:
         assert resp.json() == []
 
     def test_returns_sorted_by_created_at(self, client, mock_redis):
-        p1 = {"id": "a", "name": "A", "description": "", "content": "x", "createdAt": "2025-01-01T00:00:00+00:00", "updatedAt": "2025-01-01T00:00:00+00:00"}
-        p2 = {"id": "b", "name": "B", "description": "", "content": "y", "createdAt": "2025-01-02T00:00:00+00:00", "updatedAt": "2025-01-02T00:00:00+00:00"}
+        p1 = {
+            "id": "a",
+            "name": "A",
+            "description": "",
+            "content": "x",
+            "createdAt": "2025-01-01T00:00:00+00:00",
+            "updatedAt": "2025-01-01T00:00:00+00:00",
+        }
+        p2 = {
+            "id": "b",
+            "name": "B",
+            "description": "",
+            "content": "y",
+            "createdAt": "2025-01-02T00:00:00+00:00",
+            "updatedAt": "2025-01-02T00:00:00+00:00",
+        }
         mock_redis.hgetall.return_value = {"b": json.dumps(p2), "a": json.dumps(p1)}
         resp = client.get("/chat/presets")
         assert resp.status_code == 200
@@ -77,7 +89,14 @@ class TestCreatePreset:
 
 class TestUpdatePreset:
     def test_updates_existing(self, client, mock_redis):
-        existing = {"id": "abc", "name": "old", "description": "d", "content": "c", "createdAt": "2025-01-01T00:00:00+00:00", "updatedAt": "2025-01-01T00:00:00+00:00"}
+        existing = {
+            "id": "abc",
+            "name": "old",
+            "description": "d",
+            "content": "c",
+            "createdAt": "2025-01-01T00:00:00+00:00",
+            "updatedAt": "2025-01-01T00:00:00+00:00",
+        }
         mock_redis.hget.return_value = json.dumps(existing)
         mock_redis.hset.return_value = 0
         resp = client.put("/chat/presets/abc", json={"name": "new"})

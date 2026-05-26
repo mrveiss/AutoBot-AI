@@ -5,6 +5,9 @@
 
 Provides cost ingest with atomic DB update, hard-stop via BudgetExhausted,
 and soft alert via Redis publish on threshold crossing.
+
+GH#6630: integrates AgentBudgetTracker (SharedRuntimeBag-backed) so all
+uvicorn workers share live budget state without extra DB round-trips.
 """
 
 import json
@@ -20,9 +23,12 @@ from autobot_shared.ssot_constants import MODEL_PRICING_PER_1M_TOKENS
 from llc.exceptions import BudgetExhausted
 from llc.models.budget import LLCAgentBudget
 
+from .agent_budget_tracker import AgentBudgetState, AgentBudgetTracker
 from .base import LLCServiceBase
 
 logger = logging.getLogger(__name__)
+
+_tracker = AgentBudgetTracker()  # noqa: SRB001 — canonical SharedRuntimeBag consumer
 
 
 class BudgetService(LLCServiceBase):
@@ -75,6 +81,16 @@ class BudgetService(LLCServiceBase):
         limit = Decimal(str(row.budget_limit))
         threshold = Decimal(str(row.alert_threshold))
 
+        # Push updated state into cross-worker cache (GH#6630).
+        await _tracker.record_state(
+            AgentBudgetState(
+                agent_id=agent_id,
+                budget_spent=float(spent),
+                budget_limit=float(limit),
+                alert_threshold=float(threshold),
+            )
+        )
+
         if spent > limit:
             raise BudgetExhausted(agent_id=agent_id, spent=float(spent), limit=float(limit))
 
@@ -87,7 +103,14 @@ class BudgetService(LLCServiceBase):
         """Return (remaining, is_over_limit, alert_triggered) for an agent.
 
         remaining can be negative when spent exceeds limit.
+
+        Reads from SharedRuntimeBag cache first (GH#6630); falls back to DB
+        on cache miss so correctness is preserved.
         """
+        cached = await _tracker.get_state(agent_id)
+        if cached is not None:
+            return cached.remaining, cached.is_over_limit, cached.alert_triggered
+
         result = await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id))
         row = result.scalar_one_or_none()
 

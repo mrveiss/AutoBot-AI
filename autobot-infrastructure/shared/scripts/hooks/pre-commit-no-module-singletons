@@ -1,0 +1,211 @@
+#!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Pre-commit Hook: No New Module-Level Singletons in Agent/Runtime Paths
+# ======================================================================
+#
+# GH#6630: Warns when new module-level singleton assignments are introduced
+# in agent/ or runtime/ paths.  Module-level singletons create hidden shared
+# state that is invisible across uvicorn workers.  Use SharedRuntimeBag
+# (autobot_shared.coordination.shared_runtime_bag) instead.
+#
+# Detects patterns like:
+#   _cache = SomeClass()          # module-level mutable singleton
+#   _tracker = TrackerClass()     # module-level mutable singleton
+#
+# Exempt patterns:
+#   - Lines ending with  # noqa: SRB001
+#   - Assignments to plain literals (int, str, float, None, True, False)
+#   - Assignments to dict/list/set literals
+#   - Constant assignments (ALL_CAPS names)
+#   - SharedRuntimeBag itself (it is the recommended replacement)
+#   - Test files
+#   - Files outside agent/runtime paths
+#
+# Exit codes:
+#   0 — no violations
+#   1 — violations found (warnings only in pre-commit; fails in CI --strict mode)
+#
+# Usage:
+#   python3 pre-commit-no-module-singletons [--strict] [file ...]
+#   If no files given, uses `git diff --cached --name-only`.
+
+from __future__ import annotations
+
+import ast
+import subprocess
+import sys
+from pathlib import Path
+
+# Paths that count as "agent or runtime" for the purposes of this check.
+_AGENT_RUNTIME_PREFIXES = (
+    "autobot-backend/agents/",
+    "autobot-backend/agent_loop/",
+    "autobot-backend/orchestration/",
+    "autobot-backend/llc/",
+    "autobot-backend/services/",
+    "autobot-backend/tasks/",
+    "autobot-backend/worker_node",
+    "autobot_shared/",
+)
+
+# Call expressions that are explicitly allowed at module level (the safe
+# alternatives or framework necessities).
+_ALLOWED_CALLEES = frozenset(
+    {
+        "SharedRuntimeBag",
+        "get_logger",
+        "getLogger",
+        "logging.getLogger",
+        "TypeAdapter",
+        "Enum",
+        "Field",
+        "dataclass",
+    }
+)
+
+# Regex for simple literal RHS we never want to warn on.
+import re as _re  # noqa: E402 (needed after ast import for ordering clarity)
+
+_LITERAL_RHS_PATTERN = _re.compile(
+    r"^\s*[A-Za-z_][A-Za-z0-9_]*\s*="
+    r"\s*("
+    r"[\d\-\.]+|"          # numeric literal
+    r'["\'].*["\']|'       # string literal
+    r"None|True|False|"    # singletons
+    r"\[\]|\{\}|\(\)|"     # empty containers
+    r"\[.*\]|\{.*\}"       # list/dict/set literals (single-line)
+    r")"
+)
+
+# Constants (ALL_CAPS) are exempt — they are not mutable singletons.
+_CONSTANT_NAME = _re.compile(r"^[A-Z][A-Z0-9_]*$")
+
+NOQA_TOKEN = "noqa: SRB001"
+
+
+def _is_agent_runtime_path(path: str) -> bool:
+    return any(path.replace("\\", "/").startswith(p) for p in _AGENT_RUNTIME_PREFIXES)
+
+
+def _is_test_file(path: str) -> bool:
+    p = path.replace("\\", "/")
+    return (
+        "/tests/" in p
+        or p.endswith("_test.py")
+        or p.endswith("_test.py")
+        or "/test_" in p
+        or "conftest" in p
+    )
+
+
+def _get_staged_files() -> list[str]:
+    result = subprocess.run(
+        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
+        capture_output=True,
+        text=True,
+    )
+    return [f for f in result.stdout.splitlines() if f.endswith(".py")]
+
+
+def _callee_name(node: ast.expr) -> str:
+    """Extract a simple dotted name from a Call's func node."""
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return ""
+
+
+def check_file(path: str) -> list[tuple[int, str]]:
+    """Return list of (lineno, message) for singleton violations in *path*."""
+    try:
+        source = Path(path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+
+    try:
+        tree = ast.parse(source, filename=path)
+    except SyntaxError:
+        return []
+
+    lines = source.splitlines()
+    violations: list[tuple[int, str]] = []
+
+    for node in ast.iter_child_nodes(tree):
+        # Only top-level (module-level) assignments
+        if not isinstance(node, ast.Assign):
+            continue
+
+        lineno = node.lineno
+        line = lines[lineno - 1] if lineno <= len(lines) else ""
+
+        # Respect inline noqa
+        if NOQA_TOKEN in line:
+            continue
+
+        # Only flag Call expressions on the RHS
+        if not isinstance(node.value, ast.Call):
+            continue
+
+        # Exempt allowed callees
+        callee = _callee_name(node.value.func)
+        if callee in _ALLOWED_CALLEES:
+            continue
+
+        # Exempt ALL_CAPS constants
+        all_constant = all(
+            isinstance(t, ast.Name) and _CONSTANT_NAME.match(t.id)
+            for t in node.targets
+            if isinstance(t, ast.Name)
+        )
+        if all_constant:
+            continue
+
+        target_names = [
+            t.id for t in node.targets if isinstance(t, ast.Name)
+        ]
+        target_str = ", ".join(target_names) if target_names else "?"
+
+        violations.append(
+            (
+                lineno,
+                (
+                    f"SRB001 module-level singleton `{target_str} = {callee}(...)` "
+                    f"in agent/runtime path — use SharedRuntimeBag instead, "
+                    f"or add `# noqa: SRB001` to suppress"
+                ),
+            )
+        )
+
+    return violations
+
+
+def main() -> int:
+    strict = "--strict" in sys.argv
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+
+    files = args if args else _get_staged_files()
+    files = [f for f in files if _is_agent_runtime_path(f) and not _is_test_file(f)]
+
+    total_violations = 0
+
+    for path in files:
+        for lineno, msg in check_file(path):
+            total_violations += 1
+            print(f"{path}:{lineno}: {msg}")
+
+    if total_violations:
+        print(
+            f"\n⚠  {total_violations} singleton warning(s). "
+            "Migrate to SharedRuntimeBag or suppress with `# noqa: SRB001`."
+        )
+        return 1 if strict else 0
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
