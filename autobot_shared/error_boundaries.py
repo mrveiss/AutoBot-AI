@@ -47,6 +47,7 @@ from utils.error_boundaries import (
     GracefulDegradationHandler,
     RecoveryStrategy,
     RetryRecoveryHandler,
+    classify_error,
     error_boundary,
     get_error_boundary_manager,
     get_error_statistics,
@@ -99,6 +100,8 @@ __all__ = [
     "with_error_boundary",
     "with_async_error_boundary",
     "get_error_statistics",
+    # Classification helper (GH#6628)
+    "classify_error",
 ]
 
 
