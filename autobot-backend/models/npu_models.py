@@ -29,6 +29,8 @@ class WorkerStatus(str, Enum):
     BUSY = "busy"
     ERROR = "error"
     UNKNOWN = "unknown"
+    # GH#6739: pulse-probe detected inference degradation; still gets traffic at lower priority
+    DEGRADED = "degraded"
 
 
 class LoadBalancingStrategy(str, Enum):
