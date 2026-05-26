@@ -31,7 +31,7 @@ def _make_secret_row(
     """Build a mock LLCSecret row with an encrypted value."""
     from llc.services.secret import _derive_fernet_key
 
-    svc = SecretService()
+    SecretService()
     fernet = _derive_fernet_key(_MASTER_KEY.encode(), company_id)
     ciphertext = fernet.encrypt(plaintext.encode())
 
@@ -70,7 +70,7 @@ async def test_set_creates_new_secret() -> None:
 
     with patch.dict(os.environ, {_ENV_KEY: _MASTER_KEY}):
         svc = SecretService()
-        secret = await svc.set(session, _COMPANY_A, "api_key", "mysecretvalue", _ACTOR)
+        await svc.set(session, _COMPANY_A, "api_key", "mysecretvalue", _ACTOR)
 
     session.add.assert_called_once()
     session.flush.assert_awaited_once()

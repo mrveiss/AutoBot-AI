@@ -4,8 +4,7 @@
 """Tests for AcSuggester (GH#8240)."""
 
 import hashlib
-import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 

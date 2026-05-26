@@ -3,8 +3,6 @@ Tests for scripts/test_first_remediation.py — covers the limit-detection
 and safety-guard logic without requiring GitHub or a live Claude session.
 """
 
-import subprocess
-
 # Import the module under test
 import sys
 from pathlib import Path

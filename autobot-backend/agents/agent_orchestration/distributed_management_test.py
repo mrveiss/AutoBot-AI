@@ -604,7 +604,6 @@ class TestRedisPersistence:
     async def test_rehydrate_restores_assigned_at_from_redis(self):
         """Grace period must continue from original assignment after restart."""
         original_assigned_at = now_utc() - timedelta(seconds=250)
-        loaded = ({}, {}, {})
 
         async def _load_state(dep_id: str):
             return ({"task-x": original_assigned_at}, {}, {})

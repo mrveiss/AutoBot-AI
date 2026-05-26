@@ -511,7 +511,6 @@ class TestCanvasWebSocketStreaming:
     @pytest.mark.asyncio
     async def test_canvas_cancel_stops_streaming_task(self):
         from api.websockets import (
-            _canvas_streaming_tasks,
             _handle_canvas_cancel,
             register_canvas_streaming_task,
         )
@@ -542,7 +541,6 @@ class TestCanvasWebSocketStreaming:
     @pytest.mark.asyncio
     async def test_canvas_cancel_with_multiple_tasks(self):
         from api.websockets import (
-            _canvas_streaming_tasks,
             _handle_canvas_cancel,
             register_canvas_streaming_task,
         )
@@ -582,7 +580,6 @@ class TestCanvasWebSocketStreaming:
     async def test_canvas_cancel_cross_user_rejected(self):
         """User B cannot cancel User A's streaming task (MVA-362 security fix)."""
         from api.websockets import (
-            _canvas_streaming_tasks,
             _handle_canvas_cancel,
             register_canvas_streaming_task,
         )

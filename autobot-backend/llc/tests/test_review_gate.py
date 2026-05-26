@@ -12,10 +12,9 @@ Tests cover:
 - API routes (via FastAPI TestClient + mock service)
 """
 
-import json
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -429,8 +428,6 @@ class TestTransitionToDone:
 
         log_svc = AsyncMock()
         log_svc.record = AsyncMock()
-
-        from llc.services.activity_log import ActivityEventType
 
         svc = WorkItemService(activity_log=log_svc)
         await svc.transition_to_done(

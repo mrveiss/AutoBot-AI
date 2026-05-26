@@ -25,7 +25,7 @@ from agent_loop.fingerprint import (
     normalize_content,
     tokenize,
 )
-from agent_loop.loop import _STAGNATION_SENTINEL, AgentLoop
+from agent_loop.loop import AgentLoop
 from agent_loop.types import (
     AgentLoopConfig,
     LoopOutcome,

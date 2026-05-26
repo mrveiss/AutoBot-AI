@@ -15,7 +15,6 @@ Covers:
 - Performance: <50ms per normalize call
 """
 
-import os
 import time
 
 import pytest

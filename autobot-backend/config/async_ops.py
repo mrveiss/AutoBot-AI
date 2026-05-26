@@ -9,13 +9,13 @@ Asynchronous operations for unified config manager.
 import asyncio
 import copy
 import json
+import logging  # stdlib: avoids deadlock — config is on the logging-manager init path (GH#7765 pattern)
 from pathlib import Path
 from typing import Any, Dict
 
 import aiofiles
 import yaml
 
-import logging  # stdlib: avoids deadlock — config is on the logging-manager init path (GH#7765 pattern)
 from retry_mechanism import RetryConfig, RetryStrategy, with_retry
 
 logger = logging.getLogger(__name__)

@@ -378,7 +378,7 @@ class TestExportJsonPhase2:
 class TestVegaRenderSmoke:
     @pytest.mark.asyncio
     async def test_render_raises_on_missing_node(self):
-        import asyncio
+        pass
 
         from canvas.vega_render import VegaRenderError, render_vegalite_to_svg
 

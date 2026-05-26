@@ -54,7 +54,7 @@ class TestAddMember:
         user_id = str(uuid.uuid4())
         mock_session._result.scalar_one_or_none.return_value = None  # no existing
 
-        result = await service.add_member(mock_session, company_id, user_id, MembershipRole.ADMIN)
+        await service.add_member(mock_session, company_id, user_id, MembershipRole.ADMIN)
 
         mock_session.add.assert_called_once()
         added = mock_session.add.call_args[0][0]

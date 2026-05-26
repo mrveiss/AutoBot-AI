@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
-from httpx import AsyncClient
 
 from llc.models.goal import GoalLevel, GoalStatus, LLCGoal
 from llc.services.goal import GoalService

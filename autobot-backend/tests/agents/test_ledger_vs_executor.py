@@ -18,8 +18,6 @@ Tests:
 import re
 from pathlib import Path
 
-import pytest
-
 from autobot_shared.prompt_rules import LEDGER_VS_EXECUTOR_RULE
 
 

@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.datetime_utils import datetime_now
 from llc.models.company import (
     CompanyCreate,
     CompanyRead,
@@ -66,7 +67,7 @@ class TestCompanyCreate:
     @pytest.mark.asyncio
     async def test_create_root_company(self):
         svc = _make_service()
-        org = _make_org()
+        _make_org()
 
         # Stub _assert_prefix_unique: no conflict
         svc._assert_prefix_unique = AsyncMock()
@@ -213,12 +214,10 @@ class TestSchemas:
         assert data.issue_prefix == "ABC"
 
     def test_company_read_from_attributes(self):
-        import datetime
-
         org = _make_org(issue_prefix="ZZ", llc_status="active")
         org.id = uuid.uuid4()
-        org.created_at = datetime.datetime.utcnow()
-        org.updated_at = datetime.datetime.utcnow()
+        org.created_at = datetime_now()
+        org.updated_at = datetime_now()
 
         read = CompanyRead.model_validate(org)
         assert read.llc_status == LLCCompanyStatus.ACTIVE

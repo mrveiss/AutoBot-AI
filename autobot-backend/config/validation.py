@@ -9,11 +9,11 @@ Issue #3398: enhanced validation — startup warnings, conflict detection,
              invalid-value fast-fail, and startup summary log.
 """
 
+import logging  # stdlib: avoids deadlock — config is on the logging-manager init path (GH#7765 pattern)
 import os
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
-import logging  # stdlib: avoids deadlock — config is on the logging-manager init path (GH#7765 pattern)
 from config.loader import ENV_VAR_MAPPINGS
 
 logger = logging.getLogger(__name__)

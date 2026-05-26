@@ -3,8 +3,6 @@
 # Author: mrveiss
 """Tests for expected_output_tokens factor in TaskComplexityScorer (GH #7353)."""
 
-import pytest
-
 from llm_shared.tiered_routing.complexity_scorer import TaskComplexityScorer
 from llm_shared.tiered_routing.tier_config import TierConfig
 

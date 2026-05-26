@@ -11,8 +11,6 @@ and capabilities summary generation without any external dependencies.
 import pytest
 
 from services.npu_profile_suggester import (
-    ProfileSuggestion,
-    _capabilities_summary,
     _compute_class,
     _max_vram_gb,
     _recommend_models,

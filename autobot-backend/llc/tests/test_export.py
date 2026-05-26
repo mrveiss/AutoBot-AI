@@ -3,9 +3,7 @@
 # Author: mrveiss
 """Tests for PortabilityService — company template and snapshot export (GH#8245)."""
 
-import json
 import uuid
-from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -100,7 +98,7 @@ def company_id() -> uuid.UUID:
 @pytest.mark.asyncio
 async def test_export_template_returns_schema_version(company_id):
     svc = _make_service()
-    cid = str(company_id)
+    str(company_id)
 
     async def _fake_execute(stmt, params=None):
         mock = MagicMock()
@@ -235,7 +233,7 @@ async def test_export_stores_artifact_in_redis(company_id):
     redis_mock.keys = AsyncMock(return_value=[])
 
     with patch("llc.services.portability.get_async_redis_client", new=AsyncMock(return_value=redis_mock)):
-        result = await svc.export_template(company_id)
+        await svc.export_template(company_id)
 
     redis_mock.set.assert_called_once()
     call_kwargs = redis_mock.set.call_args

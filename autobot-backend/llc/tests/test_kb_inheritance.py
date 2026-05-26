@@ -4,7 +4,7 @@
 """Tests for KbInheritanceResolver (GH#8241)."""
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 

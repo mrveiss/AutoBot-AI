@@ -7,13 +7,13 @@ Configuration loading and merging logic.
 """
 
 import json
+import logging  # stdlib: avoids deadlock — config is on the logging-manager init path (GH#7765 pattern)
 import os
 from pathlib import Path
 from typing import Any, Dict, List
 
 import yaml
 
-import logging  # stdlib: avoids deadlock — config is on the logging-manager init path (GH#7765 pattern)
 from config.defaults import get_default_config
 from constants.threshold_constants import StringParsingConstants
 
