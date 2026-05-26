@@ -9,7 +9,7 @@ Computes what fraction of a tool result's tokens have not appeared in
 any prior result within the current task, allowing the caller to decide
 whether the agent is exploring genuinely new information.
 
-Issue #6627.
+Implements GH#6627.
 """
 
 import hashlib
