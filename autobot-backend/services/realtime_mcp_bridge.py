@@ -472,7 +472,7 @@ class RealtimeMCPBridge:
                         parts.append(item["text"])
                     else:
                         parts.append(str(item))
-                return "\n".join(parts) if parts else str(raw)
+                return "\n".join(parts) if parts else ""
         import json  # noqa: PLC0415
 
         try:

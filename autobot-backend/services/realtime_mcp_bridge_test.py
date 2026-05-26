@@ -204,10 +204,10 @@ class TestNameCollisionResolution:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("services.realtime_mcp_bridge.MCPClient", return_value=mock_client):
+        with patch("services.realtime_mcp_bridge._get_mcp_client_class", return_value=lambda uri: mock_client):
             with patch(
-                "services.realtime_mcp_bridge.filter_tools_for_bundle",
-                side_effect=lambda tools, **_: tools,
+                "services.realtime_mcp_bridge._get_filter_tools_for_bundle",
+                return_value=lambda tools, **_: tools,
             ):
                 result = await bridge.list_realtime_tools()
 
@@ -242,10 +242,10 @@ class TestNameCollisionResolution:
             call_count[0] += 1
             return client_a if "server-a" in uri else client_b
 
-        with patch("services.realtime_mcp_bridge.MCPClient", side_effect=_client_factory):
+        with patch("services.realtime_mcp_bridge._get_mcp_client_class", return_value=_client_factory):
             with patch(
-                "services.realtime_mcp_bridge.filter_tools_for_bundle",
-                side_effect=lambda tools, **_: tools,
+                "services.realtime_mcp_bridge._get_filter_tools_for_bundle",
+                return_value=lambda tools, **_: tools,
             ):
                 result = await bridge.list_realtime_tools()
 
@@ -276,10 +276,10 @@ class TestNameCollisionResolution:
         def _client_factory(uri, **_kwargs):
             return client_a if "server-a" in uri else client_b
 
-        with patch("services.realtime_mcp_bridge.MCPClient", side_effect=_client_factory):
+        with patch("services.realtime_mcp_bridge._get_mcp_client_class", return_value=_client_factory):
             with patch(
-                "services.realtime_mcp_bridge.filter_tools_for_bundle",
-                side_effect=lambda tools, **_: tools,
+                "services.realtime_mcp_bridge._get_filter_tools_for_bundle",
+                return_value=lambda tools, **_: tools,
             ):
                 result = await bridge.list_realtime_tools()
 
@@ -310,7 +310,7 @@ class TestCallToolSuccess:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("services.realtime_mcp_bridge.MCPClient", return_value=mock_client):
+        with patch("services.realtime_mcp_bridge._get_mcp_client_class", return_value=lambda uri: mock_client):
             with patch("services.realtime_mcp_bridge._audit_log", new_callable=AsyncMock):
                 result = await bridge.call_tool("search", {"q": "test"})
 
@@ -361,7 +361,7 @@ class TestCallToolError:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("services.realtime_mcp_bridge.MCPClient", return_value=mock_client):
+        with patch("services.realtime_mcp_bridge._get_mcp_client_class", return_value=lambda uri: mock_client):
             with patch("services.realtime_mcp_bridge._audit_log", new_callable=AsyncMock):
                 result = await bridge.call_tool("broken", {})
 
@@ -373,7 +373,7 @@ class TestCallToolError:
         """Calling a tool not in the registry returns is_error=True."""
         bridge = _make_bridge()
 
-        with patch("services.realtime_mcp_bridge.audit_log", new_callable=AsyncMock):
+        with patch("services.realtime_mcp_bridge._audit_log", new_callable=AsyncMock):
             result = await bridge.call_tool("nonexistent", {})
 
         assert result.is_error is True
@@ -406,10 +406,10 @@ class TestTransportDown:
         def _client_factory(uri, **_kwargs):
             return dead_client if "dead" in uri else alive_client
 
-        with patch("services.realtime_mcp_bridge.MCPClient", side_effect=_client_factory):
+        with patch("services.realtime_mcp_bridge._get_mcp_client_class", return_value=_client_factory):
             with patch(
-                "services.realtime_mcp_bridge.filter_tools_for_bundle",
-                side_effect=lambda tools, **_: tools,
+                "services.realtime_mcp_bridge._get_filter_tools_for_bundle",
+                return_value=lambda tools, **_: tools,
             ):
                 result = await bridge.list_realtime_tools()
 
@@ -426,10 +426,10 @@ class TestTransportDown:
         dead_client.__aenter__ = AsyncMock(side_effect=ConnectionRefusedError("no connection"))
         dead_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("services.realtime_mcp_bridge.MCPClient", return_value=dead_client):
+        with patch("services.realtime_mcp_bridge._get_mcp_client_class", return_value=lambda uri: dead_client):
             with patch(
-                "services.realtime_mcp_bridge.filter_tools_for_bundle",
-                side_effect=lambda tools, **_: tools,
+                "services.realtime_mcp_bridge._get_filter_tools_for_bundle",
+                return_value=lambda tools, **_: tools,
             ):
                 result = await bridge.list_realtime_tools()
 
@@ -450,7 +450,7 @@ class TestTransportDown:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("services.realtime_mcp_bridge.MCPClient", return_value=mock_client):
+        with patch("services.realtime_mcp_bridge._get_mcp_client_class", return_value=lambda uri: mock_client):
             with patch("services.realtime_mcp_bridge._audit_log", new_callable=AsyncMock):
                 result = await bridge.call_tool("flaky", {})
 

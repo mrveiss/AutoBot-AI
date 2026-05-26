@@ -33,6 +33,8 @@ from services.tts_client import get_tts_client
 router = APIRouter(
     dependencies=[Depends(check_admin_permission)],
 )
+# Separate router for Realtime MCP endpoints — authenticated users (not admin-only)
+realtime_router = APIRouter()
 logger = get_logger(__name__)
 
 
@@ -46,7 +48,12 @@ class _RealtimeToolCallRequest(BaseModel):
     arguments: Dict[str, Any] = {}
 
 
-@router.get("/realtime/tools")
+@realtime_router.get("/realtime/tools")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="voice_realtime_list_tools",
+    error_code_prefix="VOICE",
+)
 async def voice_realtime_list_tools(
     current_user: dict = Depends(get_current_user),
 ):
@@ -72,7 +79,12 @@ async def voice_realtime_list_tools(
     }
 
 
-@router.post("/realtime/tools/call")
+@realtime_router.post("/realtime/tools/call")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="voice_realtime_call_tool",
+    error_code_prefix="VOICE",
+)
 async def voice_realtime_call_tool(
     body: _RealtimeToolCallRequest,
     request: Request,
@@ -84,13 +96,18 @@ async def voice_realtime_call_tool(
     Errors surface as ``{is_error: true, content: "<message>"}`` so the
     Realtime model can self-correct verbally without the session crashing.
     """
+    from fastapi import HTTPException
+
     is_admin = current_user.get("role") == "admin"
-    user_id = current_user.get("id") or current_user.get("sub")
+    _id = current_user.get("id")
+    user_id = _id if _id is not None else current_user.get("sub")
     session_id = request.headers.get("X-Session-Id")
 
     bridge = await get_realtime_bridge(is_admin=is_admin)
-    # Ensure the routing registry is populated before calling
-    await bridge.list_realtime_tools()
+    allowed_tools = await bridge.list_realtime_tools()
+    allowed_names = {t.name for t in allowed_tools}
+    if body.name not in allowed_names:
+        raise HTTPException(status_code=403, detail="Tool not permitted in active voice bundle")
 
     result = await bridge.call_tool(
         body.name,
