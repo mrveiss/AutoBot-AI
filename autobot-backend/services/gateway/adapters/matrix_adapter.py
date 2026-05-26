@@ -48,9 +48,7 @@ class MatrixAdapter(BaseAdapter):
         metadata["e2ee"] = self._e2ee
         metadata["thread_id"] = relates_to.get("event_id") if relates_to.get("rel_type") == "m.thread" else None
         metadata["reply_to"] = (
-            relates_to.get("m.in_reply_to", {}).get("event_id")
-            if relates_to.get("rel_type") != "m.thread"
-            else None
+            relates_to.get("m.in_reply_to", {}).get("event_id") if relates_to.get("rel_type") != "m.thread" else None
         )
 
         return UnifiedMessage(

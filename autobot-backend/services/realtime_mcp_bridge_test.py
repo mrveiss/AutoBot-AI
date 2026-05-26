@@ -40,6 +40,7 @@ class MCPError(Exception):
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_tool(name: str, description: str = "A tool", schema: dict | None = None) -> MCPToolDefinition:
     """Build a minimal MCPToolDefinition for tests."""
     if schema is None:
@@ -88,9 +89,7 @@ class TestTranslateProperty:
     def test_nested_object(self):
         prop = {
             "type": "object",
-            "properties": {
-                "inner": {"type": "integer", "description": "inner field"}
-            },
+            "properties": {"inner": {"type": "integer", "description": "inner field"}},
             "required": ["inner"],
         }
         result = _translate_property(prop)
@@ -301,6 +300,7 @@ class TestCallToolSuccess:
 
         # Pre-populate registry
         from services.realtime_mcp_bridge import _ToolEntry
+
         bridge._registry = {
             "search": _ToolEntry(server_id="srv_8200", server_uri="http://srv:8200", original_name="search")
         }
@@ -323,9 +323,8 @@ class TestCallToolSuccess:
         bridge = _make_bridge()
 
         from services.realtime_mcp_bridge import _ToolEntry
-        bridge._registry = {
-            "kb.search": _ToolEntry(server_id="autobot", server_uri=None, original_name="kb.search")
-        }
+
+        bridge._registry = {"kb.search": _ToolEntry(server_id="autobot", server_uri=None, original_name="kb.search")}
 
         with patch(
             "services.realtime_mcp_bridge.RealtimeMCPBridge._call_inprocess",
@@ -350,14 +349,13 @@ class TestCallToolError:
         bridge = _make_bridge(server_uris=["http://srv:8200"])
 
         from services.realtime_mcp_bridge import _ToolEntry
+
         bridge._registry = {
             "broken": _ToolEntry(server_id="srv_8200", server_uri="http://srv:8200", original_name="broken")
         }
 
         mock_client = AsyncMock()
-        mock_client.call_tool = AsyncMock(
-            side_effect=MCPError(code=-32000, message="backend exploded")
-        )
+        mock_client.call_tool = AsyncMock(side_effect=MCPError(code=-32000, message="backend exploded"))
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
@@ -441,6 +439,7 @@ class TestTransportDown:
         bridge = _make_bridge(server_uris=["http://srv:8200"])
 
         from services.realtime_mcp_bridge import _ToolEntry
+
         bridge._registry = {
             "flaky": _ToolEntry(server_id="srv_8200", server_uri="http://srv:8200", original_name="flaky")
         }
