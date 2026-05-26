@@ -18,7 +18,10 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 
-from croniter import croniter
+try:
+    from croniter import croniter as croniter
+except ImportError:
+    croniter = None  # type: ignore[assignment,misc]  # croniter not installed
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -146,6 +149,8 @@ async def create_routine(
     session: AsyncSession = Depends(get_session),
     _current_user: dict = Depends(get_current_user),
 ) -> RoutineRead:
+    if croniter is None:
+        raise HTTPException(status_code=503, detail="Routine scheduling unavailable — croniter not installed")
     if not croniter.is_valid(body.cron_schedule):
         raise HTTPException(status_code=422, detail=f"Invalid cron expression: {body.cron_schedule!r}")
     routine = await _service().create(
@@ -200,6 +205,8 @@ async def update_routine(
 ) -> RoutineRead:
     updates = body.model_dump(exclude_unset=True)
     new_cron = updates.get("cron_schedule")
+    if croniter is None and new_cron is not None:
+        raise HTTPException(status_code=503, detail="Routine scheduling unavailable — croniter not installed")
     if new_cron is not None and not croniter.is_valid(new_cron):
         raise HTTPException(status_code=422, detail=f"Invalid cron expression: {new_cron!r}")
     try:
