@@ -30,7 +30,6 @@ from a2a.trust_score import (
     has_capability,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -376,9 +375,7 @@ class TestIntegrationAcceptanceCriteria:
       - One PII BLOCK event demotes to LIMITED instantly.
     """
 
-    def test_50_successes_promoted_to_standard_then_pii_block_demotes_to_limited(
-        self, tmp_path
-    ):
+    def test_50_successes_promoted_to_standard_then_pii_block_demotes_to_limited(self, tmp_path):
         mgr = _manager_no_redis(tmp_path)
         peer = "federation-partner"
 

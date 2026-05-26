@@ -64,9 +64,9 @@ PROMOTION_WINDOW: int = 50  # consecutive successes required for any promotion
 
 class TrustLevel(str, Enum):
     UNTRUSTED = "UNTRUSTED"  # score ≤ 0.30
-    LIMITED = "LIMITED"      # 0.30 < score ≤ 0.60
-    STANDARD = "STANDARD"    # 0.60 < score ≤ 0.85
-    TRUSTED = "TRUSTED"      # score > 0.85
+    LIMITED = "LIMITED"  # 0.30 < score ≤ 0.60
+    STANDARD = "STANDARD"  # 0.60 < score ≤ 0.85
+    TRUSTED = "TRUSTED"  # score > 0.85
 
 
 _LEVEL_ORDER = [TrustLevel.UNTRUSTED, TrustLevel.LIMITED, TrustLevel.STANDARD, TrustLevel.TRUSTED]
@@ -92,7 +92,7 @@ def _level_from_score(score: float) -> TrustLevel:
 
 
 class Capability(str, Enum):
-    DISCOVERY = "discovery"        # view agent card, list capabilities
+    DISCOVERY = "discovery"  # view agent card, list capabilities
     SUBMIT_TASKS = "submit_tasks"  # submit new A2A tasks
     QUERY_MEMORY = "query_memory"  # read knowledge / memory stores
     DEFINE_AGENTS = "define_agents"  # contribute new agent definitions
@@ -118,10 +118,7 @@ class TrustAccessDenied(Exception):
         self.peer_id = peer_id
         self.capability = capability
         self.level = level
-        super().__init__(
-            f"Peer {peer_id!r} at trust level {level.value} "
-            f"is not permitted to {capability.value}"
-        )
+        super().__init__(f"Peer {peer_id!r} at trust level {level.value} " f"is not permitted to {capability.value}")
 
 
 def get_capabilities(level: TrustLevel) -> Set[Capability]:
@@ -171,11 +168,7 @@ class TrustRecord:
         total = self.success_count + self.failure_count
         success_rate = self.success_count / total if total > 0 else 0.0
 
-        uptime = (
-            self.heartbeat_received / self.heartbeat_expected
-            if self.heartbeat_expected > 0
-            else 0.0
-        )
+        uptime = self.heartbeat_received / self.heartbeat_expected if self.heartbeat_expected > 0 else 0.0
 
         # Each threat event reduces threat_score by 0.20 (floor 0).
         threat_score = max(0.0, 1.0 - 0.20 * self.threat_event_count)
@@ -184,10 +177,7 @@ class TrustRecord:
         integrity_score = max(0.0, 1.0 - 0.25 * self.integrity_violation_count)
 
         return round(
-            0.4 * success_rate
-            + 0.2 * uptime
-            + 0.2 * threat_score
-            + 0.2 * integrity_score,
+            0.4 * success_rate + 0.2 * uptime + 0.2 * threat_score + 0.2 * integrity_score,
             6,
         )
 
@@ -209,9 +199,7 @@ class TrustRecord:
 
 _KEY_TRUST = "a2a:trust:{}"
 
-_SQLITE_DB_DEFAULT = Path(
-    os.environ.get("AUTOBOT_TRUST_AUDIT_DB", "/tmp/a2a_trust_audit.db")
-)
+_SQLITE_DB_DEFAULT = Path(os.environ.get("AUTOBOT_TRUST_AUDIT_DB", "/tmp/a2a_trust_audit.db"))
 
 
 # ---------------------------------------------------------------------------
@@ -405,8 +393,7 @@ class TrustScoreManager:
     def _ensure_schema(self) -> None:
         try:
             with sqlite3.connect(self._sqlite_path) as conn:
-                conn.execute(
-                    """
+                conn.execute("""
                     CREATE TABLE IF NOT EXISTS trust_audit (
                         id            INTEGER PRIMARY KEY AUTOINCREMENT,
                         peer_id       TEXT    NOT NULL,
@@ -417,8 +404,7 @@ class TrustScoreManager:
                         snapshot_json TEXT,
                         recorded_at   REAL    NOT NULL
                     )
-                    """
-                )
+                    """)
                 conn.commit()
         except Exception as exc:
             logger.warning("trust_score: SQLite schema init failed: %s", exc)
