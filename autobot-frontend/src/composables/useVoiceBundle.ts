@@ -10,6 +10,7 @@
  */
 
 import { ref } from 'vue'
+import type { InjectionKey, Ref } from 'vue'
 import { getBackendUrl } from '@/config/ssot-config'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
@@ -35,6 +36,15 @@ export interface UserBundleAssignment {
   user_id: string
   bundle_name: VoiceBundleName | null
 }
+
+export interface VoiceBundleInjectedState {
+  bundleInfo: Ref<UserBundleInfo | null>
+  loading: Ref<boolean>
+  error: Ref<string | null>
+}
+
+export const VOICE_BUNDLE_STATE_KEY: InjectionKey<VoiceBundleInjectedState> =
+  Symbol('VoiceBundleInfo.state')
 
 export function useVoiceBundle() {
   const bundleInfo = ref<UserBundleInfo | null>(null)
