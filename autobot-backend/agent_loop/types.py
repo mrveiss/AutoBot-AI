@@ -8,6 +8,7 @@ Type definitions for the agent loop system including states, phases,
 iteration results, and configuration.
 """
 
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
@@ -55,10 +56,13 @@ class LoopOutcome(Enum):
     ABSTAINED is distinct from FAILED: the agent recognised it could not
     produce a reliable answer and chose governed silence over hallucination.
     It is re-runnable with different inputs; FAILED typically is not.
+    STAGNATED: observation novelty plateaued — tool results carried no new
+    information across the stagnation window (#6627).
     """
 
     COMPLETED = "completed"
     ABSTAINED = "abstained"
+    STAGNATED = "stagnated"
     CANCELLED = "cancelled"
     HALTED = "halted"
     FAILED = "failed"
@@ -201,6 +205,11 @@ class AgentLoopConfig:
     # Repetitive tool-call detection (#3255)
     max_identical_tool_calls: int = 3  # Halt when same tool+args seen N times
 
+    # Semantic stagnation detection (#6627)
+    stagnation_window: int = 5  # Rolling window of observations to evaluate
+    min_observation_novelty: float = 0.05  # Min avg novel-token ratio to avoid halt
+    halt_on_stagnation: bool = True  # Enable stagnation-based halt
+
     # Schema self-correction (Issue #4482)
     max_schema_retries: int = 3  # Max retries when tool argument schema validation fails
 
@@ -269,6 +278,22 @@ class AgentMessage:
 
 
 # =============================================================================
+# Observation Fingerprint (Issue #6627)
+# =============================================================================
+
+
+@dataclass
+class ObservationFingerprint:
+    """SHA-256 content digest + novelty metrics for a single tool result."""
+
+    iteration: int
+    content_hash: str
+    content_size: int
+    novel_token_ratio: float
+    timestamp: datetime = field(default_factory=now_utc)
+
+
+# =============================================================================
 # Task Context
 # =============================================================================
 
@@ -290,6 +315,44 @@ class TaskContext:
     metadata: dict = field(default_factory=dict)
     # Repetitive tool-call detection: maps content-hash -> call count (#3255)
     tool_call_hashes: dict[str, int] = field(default_factory=dict)
+    # Semantic stagnation detection: ordered fingerprints (#6627)
+    observation_fingerprints: list[ObservationFingerprint] = field(default_factory=list)
+    # Rolling token-vocabulary window (last 50 observations) for novelty scoring.
+    # Bounded to prevent common tokens from saturating the vocabulary on long tasks
+    # and causing false stagnation detections (#6627 P1).
+    _token_windows: "deque[frozenset[str]]" = field(
+        default_factory=lambda: deque(maxlen=50), repr=False
+    )
+
+    def record_observation(self, content: Any, iteration: int) -> "ObservationFingerprint":
+        """Fingerprint a tool result and append it to observation_fingerprints.
+
+        Novelty is scored against the rolling vocabulary of the last 50
+        observations only, preventing unbounded saturation on long tasks.
+        Issue #6627.
+        """
+        from agent_loop.fingerprint import content_hash as _hash
+        from agent_loop.fingerprint import normalize_content, tokenize
+
+        normalized = normalize_content(content)
+        new_tokens = tokenize(normalized)
+        seen_vocab: set[str] = set().union(*self._token_windows) if self._token_windows else set()
+        if not new_tokens:
+            ratio = 1.0
+        elif not seen_vocab:
+            ratio = 1.0
+        else:
+            novel_count = sum(1 for t in new_tokens if t not in seen_vocab)
+            ratio = novel_count / len(new_tokens)
+        self._token_windows.append(frozenset(new_tokens))
+        fp = ObservationFingerprint(
+            iteration=iteration,
+            content_hash=_hash(content),
+            content_size=len(normalized),
+            novel_token_ratio=ratio,
+        )
+        self.observation_fingerprints.append(fp)
+        return fp
 
     def add_tool(self, tool_name: str) -> None:
         """Record tool execution."""
