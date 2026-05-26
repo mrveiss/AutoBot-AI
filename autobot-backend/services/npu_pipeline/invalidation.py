@@ -121,7 +121,7 @@ class PlanInvalidationHandler:
         """Return True when the key's plan_id contains *worker_id*."""
         key_str = redis_key.decode() if isinstance(redis_key, bytes) else redis_key
         # plan_id = everything after the prefix; worker IDs are comma-separated
-        plan_id = key_str[len(_KEY_PREFIX):]
+        plan_id = key_str[len(_KEY_PREFIX) :]
         return worker_id in plan_id
 
 

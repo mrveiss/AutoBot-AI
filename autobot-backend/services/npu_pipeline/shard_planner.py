@@ -90,9 +90,7 @@ def plan_shards(
     """
     active = [w for w in pool if w.enabled and w.vram_bytes > 0]
     if not active:
-        raise InsufficientPoolError(
-            f"No enabled workers with VRAM available for model '{model.model_id}'"
-        )
+        raise InsufficientPoolError(f"No enabled workers with VRAM available for model '{model.model_id}'")
 
     total_layers = model.total_layers
     if total_layers <= 0:

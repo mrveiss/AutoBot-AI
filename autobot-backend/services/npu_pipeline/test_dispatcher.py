@@ -67,6 +67,7 @@ async def _collect(gen) -> List[str]:
 # Happy path: 3 workers, full pipeline
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_happy_path_three_workers():
     plan = _make_plan("w0", "w1", "w2")
@@ -109,6 +110,7 @@ async def test_happy_path_three_workers():
 # ---------------------------------------------------------------------------
 # Worker drop mid-pass: failover to peer
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_worker_drop_mid_pass_failover():
@@ -161,6 +163,7 @@ async def test_worker_drop_mid_pass_failover():
 # Worker drop mid-pass: no peer → clear WorkerDropError
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_worker_drop_no_peer_raises():
     """w0 drops in forward pass and has no peers — expect WorkerDropError."""
@@ -184,6 +187,7 @@ async def test_worker_drop_no_peer_raises():
 # ---------------------------------------------------------------------------
 # Last worker produces tokens (single-worker plan)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_single_worker_produces_tokens():
@@ -218,6 +222,7 @@ async def test_single_worker_produces_tokens():
 # ---------------------------------------------------------------------------
 # Context manager teardown
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_context_manager_closes_session():
