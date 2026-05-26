@@ -51,6 +51,8 @@ EXPECTED_TASKS: list[str] = [
     "memory.extract_facts",
     "memory.update_graph",
     "memory.compact_snapshot",
+    # workspace_cleanup.py  (GH#6471)
+    "tasks.cleanup_stale_workspaces",
 ]
 
 

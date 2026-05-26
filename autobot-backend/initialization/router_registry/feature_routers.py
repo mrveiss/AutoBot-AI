@@ -355,6 +355,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["budget-policies"],
         "budget_policies",
     ),
+    # GH#6471: per-task git worktree workspace info
+    (
+        "api.task_workspace",
+        "/api",
+        ["task-workspace"],
+        "task_workspace",
+    ),
     # Long-running and validation
     # Moved back from core_routers — has _OPERATIONS_AVAILABLE graceful degradation (Issue #6306)
     (

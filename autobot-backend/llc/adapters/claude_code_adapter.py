@@ -113,7 +113,10 @@ class ClaudeCodeAdapter:
 
         cmd.append(prompt)
 
+        workspace_dir: str | None = context.get("workspace_dir")
         env = {**os.environ, "LLC_INVOKE_CONTEXT": json.dumps(context, default=str)}
+        if workspace_dir:
+            env["AUTOBOT_WORKSPACE_DIR"] = workspace_dir
 
         out_fh = open(output_file, "w", encoding="utf-8")  # noqa: WPS515
         proc = await asyncio.create_subprocess_exec(
@@ -121,6 +124,7 @@ class ClaudeCodeAdapter:
             stdout=out_fh,
             stderr=asyncio.subprocess.PIPE,
             env=env,
+            cwd=workspace_dir or None,
         )
 
         run_id = f"{proc.pid}/{session_id}"
