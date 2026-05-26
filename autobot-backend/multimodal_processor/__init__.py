@@ -31,6 +31,8 @@ Usage:
     result = await processor.process(input_data)
 """
 
+from __future__ import annotations
+
 import threading
 from typing import Any
 

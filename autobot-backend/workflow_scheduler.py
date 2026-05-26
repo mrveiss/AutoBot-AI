@@ -9,6 +9,8 @@ to be scheduled for future execution, queued for orderly processing,
 and managed with priority-based execution.
 """
 
+from __future__ import annotations
+
 import asyncio
 import threading
 

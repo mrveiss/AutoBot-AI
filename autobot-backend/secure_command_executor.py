@@ -6,6 +6,8 @@ Secure Command Executor with Sandboxing and Permission Controls
 Implements security measures to prevent arbitrary command execution
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import os

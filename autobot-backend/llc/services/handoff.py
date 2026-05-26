@@ -285,7 +285,7 @@ class HandoffService(LLCServiceBase):
         holder_user_id = str(item.assignee_user_id) if item.assignee_user_id else None
         if item.assignee_type != "user" or holder_user_id != user_id:
             raise HandoffNotAuthorized(
-                f"User {user_id} does not hold work item {work_item_id} (current holder: {holder_user_id!r}, type: {item.assignee_type!r})"
+                f"User {user_id} does not hold work item {work_item_id} (current holder: {holder_user_id!r}, type: {item.assignee_type!r})"  # noqa: E501
             )
         return item
 

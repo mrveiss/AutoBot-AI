@@ -7,6 +7,8 @@ Workflow Execution Module
 Handles workflow step execution, dependency checking, and command execution.
 """
 
+from __future__ import annotations
+
 import asyncio
 import re
 import time

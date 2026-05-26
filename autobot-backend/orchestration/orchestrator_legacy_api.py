@@ -64,7 +64,7 @@ class _DeprecatedRequestMixin:
             priority = TaskPriority.NORMAL
 
         warnings.warn(
-            "process_user_request is deprecated and has no live callers — use execute_enhanced_workflow directly. (GH#7423)",
+            "process_user_request is deprecated and has no live callers — use execute_enhanced_workflow directly. (GH#7423)",  # noqa: E501
             DeprecationWarning,
             stacklevel=2,
         )
