@@ -1067,6 +1067,8 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
             )
             return False
 
+        # FALLBACK errors intentionally do both: invoke the hook for recovery AND
+        # consume the per-severity (MEDIUM) retry budget on the same error.
         if isinstance(error, FALLBACK_ERROR_TYPES):
             await self._try_fallback_strategy(error)
 
