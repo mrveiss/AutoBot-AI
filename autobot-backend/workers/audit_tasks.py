@@ -115,7 +115,9 @@ def _list_open_issues(label: str | None = None) -> list[str]:
 
 def _file_issue(title: str, body: str, labels: str = _AUDIT_LABELS) -> bool:
     """Create a GitHub issue. Returns True on success."""
-    code, _, err = _run(["gh", "issue", "create", "--repo", _GH_REPO, "--title", title, "--body", body, "--label", labels])
+    code, _, err = _run(
+        ["gh", "issue", "create", "--repo", _GH_REPO, "--title", title, "--body", body, "--label", labels]
+    )
     if code != 0:
         logger.error("gh issue create failed (%s): %s", title, err[:_MAX_LOG_CHARS])
         return False
@@ -149,9 +151,25 @@ def _changed_python_modules(since_iso: str | None, repo_root: Path) -> list[Path
     Falls back to the last 6 hours when *since_iso* is None.
     """
     if since_iso:
-        cmd = ["git", "log", "origin/Dev_new_gui", f"--since={since_iso}", "--name-only", "--pretty=format:", "--diff-filter=ACMR"]
+        cmd = [
+            "git",
+            "log",
+            "origin/Dev_new_gui",
+            f"--since={since_iso}",
+            "--name-only",
+            "--pretty=format:",
+            "--diff-filter=ACMR",
+        ]
     else:
-        cmd = ["git", "log", "origin/Dev_new_gui", "--since=6 hours ago", "--name-only", "--pretty=format:", "--diff-filter=ACMR"]
+        cmd = [
+            "git",
+            "log",
+            "origin/Dev_new_gui",
+            "--since=6 hours ago",
+            "--name-only",
+            "--pretty=format:",
+            "--diff-filter=ACMR",
+        ]
 
     code, out, _ = _run(cmd, cwd=str(repo_root))
     if code != 0:
