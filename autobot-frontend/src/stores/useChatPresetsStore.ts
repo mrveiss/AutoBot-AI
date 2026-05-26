@@ -1,11 +1,7 @@
-/**
- * AutoBot - AI-Powered Automation Platform
- * Copyright (c) 2025 mrveiss
- * Author: mrveiss
- *
- * useChatPresetsStore.ts - Pinia store for user-defined slash command presets (GH#4449).
- * Persists to backend; provides CRUD actions consumed by useSlashCommands composable.
- */
+// AutoBot - AI-Powered Automation Platform
+// Copyright (c) 2025 mrveiss
+// Author: mrveiss
+
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { useApiClient } from '@/plugins/api'
