@@ -8,6 +8,7 @@ Type definitions for the agent loop system including states, phases,
 iteration results, and configuration.
 """
 
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
@@ -55,10 +56,13 @@ class LoopOutcome(Enum):
     ABSTAINED is distinct from FAILED: the agent recognised it could not
     produce a reliable answer and chose governed silence over hallucination.
     It is re-runnable with different inputs; FAILED typically is not.
+    STAGNATED: observation novelty plateaued — tool results carried no new
+    information across the stagnation window (#6627).
     """
 
     COMPLETED = "completed"
     ABSTAINED = "abstained"
+    STAGNATED = "stagnated"
     CANCELLED = "cancelled"
     HALTED = "halted"
     FAILED = "failed"
@@ -274,22 +278,6 @@ class AgentMessage:
 
 
 # =============================================================================
-# Loop Outcomes (Issue #6627)
-# =============================================================================
-
-
-class LoopOutcome(Enum):
-    """High-level reason a loop run terminated."""
-
-    COMPLETED = auto()  # Task finished normally
-    REPETITION_HALT = auto()  # Halted: identical tool calls (#3877)
-    STAGNATED = auto()  # Halted: observation novelty plateaued (#6627)
-    MAX_ITERATIONS = auto()  # Exceeded iteration budget
-    MAX_ERRORS = auto()  # Exceeded consecutive-error budget
-    CANCELLED = auto()  # Externally cancelled
-
-
-# =============================================================================
 # Observation Fingerprint (Issue #6627)
 # =============================================================================
 
@@ -329,25 +317,34 @@ class TaskContext:
     tool_call_hashes: dict[str, int] = field(default_factory=dict)
     # Semantic stagnation detection: ordered fingerprints (#6627)
     observation_fingerprints: list[ObservationFingerprint] = field(default_factory=list)
-    # Accumulated token vocabulary for novelty scoring
-    _seen_tokens: set[str] = field(default_factory=set, repr=False)
+    # Rolling token-vocabulary window (last 50 observations) for novelty scoring.
+    # Bounded to prevent common tokens from saturating the vocabulary on long tasks
+    # and causing false stagnation detections (#6627 P1).
+    _token_windows: "deque[frozenset[str]]" = field(
+        default_factory=lambda: deque(maxlen=50), repr=False
+    )
 
     def record_observation(self, content: Any, iteration: int) -> "ObservationFingerprint":
         """Fingerprint a tool result and append it to observation_fingerprints.
 
-        Returns the new fingerprint.  Mutates _seen_tokens in place.
+        Novelty is scored against the rolling vocabulary of the last 50
+        observations only, preventing unbounded saturation on long tasks.
         Issue #6627.
         """
-        from agent_loop.fingerprint import (
-            compute_novel_token_ratio,
-        )
         from agent_loop.fingerprint import content_hash as _hash
-        from agent_loop.fingerprint import (
-            normalize_content,
-        )
+        from agent_loop.fingerprint import normalize_content, tokenize
 
         normalized = normalize_content(content)
-        ratio = compute_novel_token_ratio(content, self._seen_tokens)
+        new_tokens = tokenize(normalized)
+        seen_vocab: set[str] = set().union(*self._token_windows) if self._token_windows else set()
+        if not new_tokens:
+            ratio = 1.0
+        elif not seen_vocab:
+            ratio = 1.0
+        else:
+            novel_count = sum(1 for t in new_tokens if t not in seen_vocab)
+            ratio = novel_count / len(new_tokens)
+        self._token_windows.append(frozenset(new_tokens))
         fp = ObservationFingerprint(
             iteration=iteration,
             content_hash=_hash(content),

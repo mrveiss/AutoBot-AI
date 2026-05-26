@@ -480,8 +480,6 @@ class AgentLoop:
             recent = fingerprints[-window:]
             avg_novelty = sum(f.novel_token_ratio for f in recent) / window
             self._halted_on_stagnation = True
-            from agent_loop.types import LoopOutcome
-
             self._halt_outcome = LoopOutcome.STAGNATED
             self._halt_reason = (
                 f"Halted: observation stagnation — avg novelty {avg_novelty:.3f} "
@@ -882,7 +880,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
         if not self._current_context:
             return
         for result in tool_results.values():
-            if isinstance(result, dict) and "error" in result:
+            if isinstance(result, dict) and result.get("error"):
                 continue
             self._current_context.record_observation(result, iteration=self._iteration_count)
 

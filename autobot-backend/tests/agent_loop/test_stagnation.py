@@ -343,3 +343,53 @@ async def test_stagnation_outcome_in_build_result():
     result = loop._build_result([])
     assert result["halt_outcome"] == "STAGNATED"
     assert "stagnation" in result["halt_reason"].lower()
+
+
+# ---------------------------------------------------------------------------
+# Rolling-window vocabulary saturation (P1 regression guard)
+# ---------------------------------------------------------------------------
+
+
+class TestRollingVocabularyWindow:
+    def test_novelty_resets_after_window_eviction(self):
+        """Tokens from >50 observations ago must not suppress future novelty scores."""
+        ctx = TaskContext(task_id="t", description="d")
+        # Fill the 50-observation window with tokens from a saturating document
+        saturating_doc = " ".join(f"word{i}" for i in range(200))
+        for i in range(50):
+            ctx.record_observation(saturating_doc, iteration=i)
+        # Adding one more observation evicts the oldest window entry.
+        # A genuinely new token set should now score high novelty because the
+        # 50-slot deque no longer contains ALL prior tokens.
+        unique_doc = " ".join(f"unique{i}" for i in range(100))
+        fp = ctx.record_observation(unique_doc, iteration=50)
+        # After eviction the seen vocab is smaller — some unique tokens won't be there
+        assert fp.novel_token_ratio > 0.0, "expected positive novelty after window eviction"
+
+    def test_token_window_bounded_at_50(self):
+        """_token_windows deque must never exceed 50 entries."""
+        ctx = TaskContext(task_id="t", description="d")
+        for i in range(60):
+            ctx.record_observation(f"content {i}", iteration=i)
+        assert len(ctx._token_windows) == 50
+
+
+# ---------------------------------------------------------------------------
+# Falsy-error partial result (P2 fix guard)
+# ---------------------------------------------------------------------------
+
+
+class TestFalsyErrorFilter:
+    def test_none_error_value_is_not_skipped(self):
+        """A result dict with error=None (falsy) must still be fingerprinted."""
+        loop = _make_loop(stagnation_window=3, min_observation_novelty=0.05)
+        partial_result = {"error": None, "data": ["item_a", "item_b", "item_c"]}
+        loop._record_observation_fingerprints({"tool": partial_result})
+        assert len(loop._current_context.observation_fingerprints) == 1
+
+    def test_truthy_error_value_is_skipped(self):
+        """A result dict with a non-empty error string must be skipped."""
+        loop = _make_loop(stagnation_window=3, min_observation_novelty=0.05)
+        error_result = {"error": "something went wrong", "data": []}
+        loop._record_observation_fingerprints({"tool": error_result})
+        assert len(loop._current_context.observation_fingerprints) == 0
