@@ -19,7 +19,6 @@ import pytest
 from models.npu_models import NPUWorkerConfig, NPUWorkerStatus, WorkerStatus
 from services.npu_worker_manager import NPUWorkerManager
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

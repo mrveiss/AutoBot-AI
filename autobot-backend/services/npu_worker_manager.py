@@ -479,9 +479,7 @@ class NPUWorkerManager(AsyncInitializable):
                 },
             )
             if _PULSE_METRICS_AVAILABLE:
-                _pulse_failure_total.labels(
-                    worker_id=worker_id, model_id=model_id, failure_class=failure_class
-                ).inc()
+                _pulse_failure_total.labels(worker_id=worker_id, model_id=model_id, failure_class=failure_class).inc()
 
             consecutive = self._pulse_failure_counts.get(worker_id, 0) + 1
             self._pulse_failure_counts[worker_id] = consecutive
@@ -492,7 +490,9 @@ class NPUWorkerManager(AsyncInitializable):
                     status=WorkerStatus.OFFLINE,
                     error_message=f"Pulse-probe: {consecutive} consecutive failures (last: {failure_class})",
                 )
-                await self._store_and_emit_status(worker_id, new_status, status.status if status else WorkerStatus.UNKNOWN)
+                await self._store_and_emit_status(
+                    worker_id, new_status, status.status if status else WorkerStatus.UNKNOWN
+                )
                 logger.error(
                     "Pulse-probe: worker %s marked OFFLINE after %d consecutive failures",
                     worker_id,
@@ -504,7 +504,9 @@ class NPUWorkerManager(AsyncInitializable):
                     status=WorkerStatus.DEGRADED,
                     error_message=f"Pulse-probe: {consecutive} consecutive failures (last: {failure_class})",
                 )
-                await self._store_and_emit_status(worker_id, new_status, status.status if status else WorkerStatus.UNKNOWN)
+                await self._store_and_emit_status(
+                    worker_id, new_status, status.status if status else WorkerStatus.UNKNOWN
+                )
                 logger.warning(
                     "Pulse-probe: worker %s marked DEGRADED after %d consecutive failures",
                     worker_id,
