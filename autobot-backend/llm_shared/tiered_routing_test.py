@@ -389,9 +389,7 @@ class TestLongContextTier:
 
     def test_complexity_result_is_long_context_property(self):
         """ComplexityResult.is_long_context returns True for long_context tier."""
-        result = ComplexityResult(
-            score=1.0, factors={}, tier="long_context", reasoning="long", input_tokens=20000
-        )
+        result = ComplexityResult(score=1.0, factors={}, tier="long_context", reasoning="long", input_tokens=20000)
         assert result.is_long_context is True
         assert result.is_simple is False
         assert result.is_complex is False

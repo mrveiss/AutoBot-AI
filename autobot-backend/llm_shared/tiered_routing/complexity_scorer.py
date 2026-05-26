@@ -236,9 +236,7 @@ class TaskComplexityScorer:
         Uses self._tokenizer if provided; falls back to char/4 estimate.
         Counts content from every role (system, user, assistant).
         """
-        all_content = " ".join(
-            msg.get("content", "") for msg in messages if msg.get("content")
-        )
+        all_content = " ".join(msg.get("content", "") for msg in messages if msg.get("content"))
         if self._tokenizer is not None:
             return self._tokenizer(all_content)
         return len(all_content) // 4
