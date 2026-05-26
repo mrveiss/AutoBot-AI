@@ -145,6 +145,18 @@ class TestHeartbeatEnabledHybridProperty:
         state.heartbeat_enabled = False
         assert state.status == AgentStatus.DISABLED.value
 
+    def test_setter_true_clears_pause_metadata(self):
+        """Re-enabling via setter must clear pause fields (P1 GH#6476)."""
+        state = self._make_state(AgentStatus.PAUSED.value)
+        state.paused_reason = "budget exceeded"
+        state.paused_at = "2026-01-01T00:00:00"
+        state.paused_by = "system:budget"
+        state.heartbeat_enabled = True
+        assert state.status == AgentStatus.ACTIVE.value
+        assert state.paused_reason is None
+        assert state.paused_at is None
+        assert state.paused_by is None
+
 
 # ---------------------------------------------------------------------------
 # Scheduler: _is_agent_paused

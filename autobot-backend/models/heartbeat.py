@@ -95,6 +95,11 @@ class AgentRuntimeState(Base):
     @heartbeat_enabled.setter
     def heartbeat_enabled(self, value: bool) -> None:
         self.status = AgentStatus.ACTIVE.value if value else AgentStatus.DISABLED.value
+        if value:
+            # Clear pause metadata whenever the agent is re-enabled (P1: GH#6476)
+            self.paused_reason = None
+            self.paused_at = None
+            self.paused_by = None
 
     @heartbeat_enabled.expression  # type: ignore[no-redef]
     @classmethod

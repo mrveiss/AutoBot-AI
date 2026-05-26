@@ -101,6 +101,9 @@ async def update_config(
     state = await _get_or_create_state(session, agent_id)
     if state.status == AgentStatus.TERMINATED.value:
         raise HTTPException(status_code=409, detail="Agent is terminated and cannot be reconfigured")
+    # P0-2: block re-enable via config while PAUSED — use POST /{agent_id}/resume (GH#6476)
+    if state.status == AgentStatus.PAUSED.value:
+        raise HTTPException(status_code=409, detail="Agent is paused; use POST /{agent_id}/resume to re-enable")
     was_enabled = state.heartbeat_enabled
     state.heartbeat_enabled = body.heartbeat_enabled  # drives status via hybrid setter
     state.heartbeat_interval_seconds = body.heartbeat_interval_seconds
@@ -314,10 +317,11 @@ async def resume_agent(
     if state.status != AgentStatus.PAUSED.value:
         raise HTTPException(status_code=409, detail=f"Agent is not paused (status={state.status})")
     # System-enforced pauses require admin approval (GH#6476)
+    # _user is always a Dict with keys "role" (str) and "username" (str)
     paused_by = state.paused_by or ""
     if paused_by.startswith("system:"):
-        user_roles = getattr(_user, "roles", []) or []
-        if "admin" not in user_roles:
+        user_role = _user.get("role", "") if isinstance(_user, dict) else getattr(_user, "role", "")
+        if user_role != "admin":
             raise HTTPException(
                 status_code=403,
                 detail=f"Agent was paused by {paused_by}; admin approval required to resume",
@@ -357,7 +361,8 @@ async def terminate_agent(
     state.status = AgentStatus.TERMINATED.value
     state.paused_reason = body.reason
     state.paused_at = now_utc()
-    state.paused_by = getattr(_user, "id", "user")
+    # _user is always a Dict; "id" key does not exist — use "username" (P1)
+    state.paused_by = _user.get("username", "unknown") if isinstance(_user, dict) else getattr(_user, "username", "unknown")
     await session.commit()
     await session.refresh(state)
     await scheduler.disable_agent(agent_id)
