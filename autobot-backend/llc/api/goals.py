@@ -179,8 +179,6 @@ async def list_tasks_for_goal(
     goal = await _svc.get(session, goal_id)
     if goal is None:
         raise HTTPException(status_code=404, detail="Goal not found")
-    result = await session.execute(
-        select(LLCWorkItem).where(LLCWorkItem.goal_id == goal_id)
-    )
+    result = await session.execute(select(LLCWorkItem).where(LLCWorkItem.goal_id == goal_id))
     items = result.scalars().all()
     return [WorkItemSummaryResponse.model_validate(item) for item in items]
