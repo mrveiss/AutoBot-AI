@@ -42,7 +42,7 @@ from pipeline_dispatcher import (  # noqa: E402
 # Constants
 # ---------------------------------------------------------------------------
 
-_8_GB = 8 * 1024 ** 3
+_8_GB = 8 * 1024**3
 _MODEL_ID = "llama3-70b"
 _TOTAL_PARAMS = 32  # 32 "layers" standing in for 32B params; 16 per shard
 _PROMPT = "Hello, pipeline"
@@ -96,7 +96,9 @@ async def test_pipeline_produces_tokens_across_two_workers(dispatcher):
 async def test_tokens_sourced_from_both_workers(dispatcher):
     result = await dispatcher.run(_MODEL_ID, _TOTAL_PARAMS, _PROMPT, max_tokens=8)
 
-    worker_ids_seen = {tok.split("_")[1] + "_" + tok.split("_")[2] if len(tok.split("_")) > 2 else "" for tok in result.tokens}
+    worker_ids_seen = {
+        tok.split("_")[1] + "_" + tok.split("_")[2] if len(tok.split("_")) > 2 else "" for tok in result.tokens
+    }
     # Tokens carry worker_id prefix: tok_{worker_id}_{i}
     prefixes = {tok.split("_")[1] for tok in result.tokens if tok.startswith("tok_")}
     assert "npu-0" in prefixes or "npu-1" in prefixes, "Tokens should originate from pipeline workers"

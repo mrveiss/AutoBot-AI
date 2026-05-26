@@ -21,7 +21,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # GB of VRAM reported by workers in the shard plan
-GB = 1024 ** 3
+GB = 1024**3
 
 
 class WorkerState(str, Enum):
@@ -79,9 +79,7 @@ class PipelineMetrics:
         self.layer_transfer_latency_ms += transfer_ms
 
     def record_worker_compute(self, worker_id: str, compute_ms: float) -> None:
-        self.per_worker_compute_ms[worker_id] = (
-            self.per_worker_compute_ms.get(worker_id, 0.0) + compute_ms
-        )
+        self.per_worker_compute_ms[worker_id] = self.per_worker_compute_ms.get(worker_id, 0.0) + compute_ms
 
 
 @dataclass
@@ -164,10 +162,7 @@ class PipelineDispatcher:
     def _distribute_layers(total_params: int, workers: List[WorkerNode]) -> List[int]:
         """Distribute model layers proportionally to worker VRAM."""
         total_vram = sum(w.vram_bytes for w in workers)
-        layers = [
-            max(1, round(total_params * (w.vram_bytes / total_vram)))
-            for w in workers
-        ]
+        layers = [max(1, round(total_params * (w.vram_bytes / total_vram))) for w in workers]
         # Ensure total sums exactly to total_params
         diff = total_params - sum(layers)
         layers[-1] += diff
@@ -263,9 +258,7 @@ class PipelineDispatcher:
         count = max(1, max_tokens // max(1, layer_count // 8 + 1))
         return [f"tok_{worker.worker_id}_{i}" for i in range(count)]
 
-    async def _simulate_layer_transfer(
-        self, src: WorkerNode, dst: WorkerNode
-    ) -> float:
+    async def _simulate_layer_transfer(self, src: WorkerNode, dst: WorkerNode) -> float:
         """Return simulated transfer latency in ms."""
         await asyncio.sleep(0)
         return 2.5  # nominal 2.5 ms cross-host hop
