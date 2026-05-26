@@ -504,6 +504,25 @@ class LLMCostTracker(AsyncRedisClientMixin):
             metadata,
         )
 
+    async def _redis_pricing_lookup(self, model_lower: str) -> Dict[str, float] | None:
+        """Check Redis cache for model pricing before falling back to hardcoded table (GH#6480).
+
+        Redis keys are written by services.pricing_refresh.refresh_pricing_daily.
+        Returns a legacy {input: float, output: float} dict or None on miss/error.
+        """
+        try:
+            from llm_shared.pricing.redis_store import PricingRedisStore
+
+            store = PricingRedisStore()
+            # Try known providers in order; first hit wins.
+            for provider in ("anthropic", "openai", "google", "deepseek"):
+                cached = await store.get(provider, model_lower)
+                if cached is not None:
+                    return cached.as_legacy_dict()
+        except Exception as exc:
+            logger.debug("_redis_pricing_lookup failed for %r: %s", model_lower, exc)
+        return None
+
     async def _build_and_persist_record(
         self,
         provider: str,
@@ -520,7 +539,15 @@ class LLMCostTracker(AsyncRedisClientMixin):
         metadata: Dict[str, Any] | None,
     ) -> LLMUsageRecord:
         """Helper for track_usage. Ref: #1088."""
-        cost = self.calculate_cost(model, input_tokens, output_tokens)
+        # GH#6480: check Redis-cached pricing before falling back to hardcoded table.
+        model_lower = model.lower()
+        redis_pricing = await self._redis_pricing_lookup(model_lower)
+        if redis_pricing is not None:
+            input_cost = (input_tokens / 1_000_000) * redis_pricing["input"]
+            output_cost = (output_tokens / 1_000_000) * redis_pricing["output"]
+            cost = round(input_cost + output_cost, 6)
+        else:
+            cost = self.calculate_cost(model, input_tokens, output_tokens)
         record = self._create_usage_record(
             provider,
             model,
