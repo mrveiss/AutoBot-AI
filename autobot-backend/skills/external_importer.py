@@ -95,8 +95,7 @@ def _validate_git_ref(ref: str) -> None:
     """Reject ref strings that look like flag injection or path traversal."""
     if not ref or ref.startswith("-") or ".." in ref or not _GIT_REF_RE.match(ref):
         raise RuntimeError(
-            f"Invalid git ref {ref!r}: refs must match [A-Za-z0-9._/-]+ "
-            "and cannot start with '-' or contain '..'"
+            f"Invalid git ref {ref!r}: refs must match [A-Za-z0-9._/-]+ " "and cannot start with '-' or contain '..'"
         )
 
 

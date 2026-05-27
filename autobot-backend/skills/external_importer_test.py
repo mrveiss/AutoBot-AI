@@ -7,7 +7,6 @@ import pytest
 
 from skills.external_importer import _parse_git_remote, _validate_git_ref, _validate_git_url
 
-
 # ---------------------------------------------------------------------------
 # _parse_git_remote — pure URL parsing, no network
 # ---------------------------------------------------------------------------
