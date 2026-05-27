@@ -18,7 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from api.schemas_system import (
+    AgentErrorRequest,
     AgentPauseRequest,
+    AgentRecoverRequest,
     AgentResumeRequest,
     AgentTerminateRequest,
     HeartbeatConfigRequest,
@@ -402,8 +404,75 @@ async def terminate_agent(
     return _state_to_response(state)
 
 
+@router.post("/{agent_id}/error", response_model=HeartbeatConfigResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="set_agent_error",
+    error_code_prefix="HEARTBEAT",
+)
+async def set_agent_error(
+    agent_id: str,
+    body: AgentErrorRequest,
+    session: AsyncSession = Depends(get_db_session),
+    scheduler: HeartbeatScheduler = Depends(_get_scheduler),
+    _user=Depends(get_current_user),
+) -> HeartbeatConfigResponse:
+    """Transition an agent to ERROR status (MVA-1411).
+
+    Suspends heartbeat execution and records error metadata.  The agent stays
+    in ERROR until recovered via POST /{agent_id}/recover.  TERMINATED agents
+    are not affected.
+    """
+    state = await _get_or_create_state(session, agent_id)
+    if state.status == AgentStatus.TERMINATED.value:
+        raise HTTPException(status_code=409, detail="Agent is terminated; cannot set error state")
+    if state.status == AgentStatus.ERROR.value:
+        return _state_to_response(state)
+    state.status = AgentStatus.ERROR.value
+    state.error_detail = body.error_detail
+    state.error_at = now_utc()
+    state.error_code = body.error_code
+    await session.commit()
+    await session.refresh(state)
+    await scheduler.disable_agent(agent_id)
+    logger.info("Agent %s entered error state: code=%s detail=%s", agent_id, state.error_code, state.error_detail)
+    return _state_to_response(state)
+
+
+@router.post("/{agent_id}/recover", response_model=HeartbeatConfigResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="recover_agent",
+    error_code_prefix="HEARTBEAT",
+)
+async def recover_agent(
+    agent_id: str,
+    body: AgentRecoverRequest,
+    session: AsyncSession = Depends(get_db_session),
+    scheduler: HeartbeatScheduler = Depends(_get_scheduler),
+    _user=Depends(get_current_user),
+) -> HeartbeatConfigResponse:
+    """Recover an agent from ERROR status back to ACTIVE (MVA-1411).
+
+    Clears error metadata and re-enables the heartbeat loop.  Only valid for
+    ERROR-state agents; raises 409 for any other status.
+    """
+    state = await _get_or_create_state(session, agent_id)
+    if state.status != AgentStatus.ERROR.value:
+        raise HTTPException(status_code=409, detail=f"Agent is not in error state (status={state.status})")
+    state.status = AgentStatus.ACTIVE.value
+    state.error_detail = None
+    state.error_at = None
+    state.error_code = None
+    await session.commit()
+    await session.refresh(state)
+    await scheduler.enable_agent(agent_id, state.heartbeat_interval_seconds)
+    logger.info("Agent %s recovered from error state", agent_id)
+    return _state_to_response(state)
+
+
 def _state_to_response(state: AgentRuntimeState) -> HeartbeatConfigResponse:
-    """Convert AgentRuntimeState ORM row to Pydantic response (#1407, GH#6476)."""
+    """Convert AgentRuntimeState ORM row to Pydantic response (#1407, GH#6476, MVA-1411)."""
     return HeartbeatConfigResponse(
         agent_id=state.agent_id,
         heartbeat_enabled=state.heartbeat_enabled,
@@ -411,6 +480,9 @@ def _state_to_response(state: AgentRuntimeState) -> HeartbeatConfigResponse:
         paused_reason=state.paused_reason,
         paused_at=(state.paused_at.isoformat() if state.paused_at else None),
         paused_by=state.paused_by,
+        error_detail=state.error_detail,
+        error_at=(state.error_at.isoformat() if state.error_at else None),
+        error_code=state.error_code,
         heartbeat_interval_seconds=state.heartbeat_interval_seconds,
         max_run_duration_seconds=state.max_run_duration_seconds,
         current_task_id=state.current_task_id,

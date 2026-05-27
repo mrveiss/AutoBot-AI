@@ -192,9 +192,9 @@ class HeartbeatScheduler:
 
     async def _run_once(self, agent_id: str, trigger: WakeupTrigger) -> None:
         """Execute one heartbeat run for agent_id (#1407)."""
-        # Skip paused agents — budget hard-stop (GH#6470)
-        if await self._is_agent_paused(agent_id):
-            logger.info("Skipping heartbeat for budget-paused agent %s", agent_id)
+        # Skip paused or error agents (GH#6470, MVA-1411)
+        if await self._should_skip_heartbeat(agent_id):
+            logger.info("Skipping heartbeat for paused/error agent %s", agent_id)
             return
         run_id, state_id, timeout, run_jwt, workspace_dir = await self._start_run(agent_id, trigger)
         final_status, error_msg, usage = await self._invoke_agent(
@@ -203,13 +203,29 @@ class HeartbeatScheduler:
         await self._finalize_run(agent_id, run_id, state_id, final_status, error_msg, usage, run_jwt)
 
     async def _is_agent_paused(self, agent_id: str) -> bool:
-        """Return True if AgentRuntimeState.status is 'paused' (GH#6470)."""
+        """Return True if AgentRuntimeState.status is 'paused' (GH#6470).
+
+        Deprecated: prefer _should_skip_heartbeat which also covers ERROR.
+        """
         async with self._session_factory() as session:
             result = await session.execute(
                 select(AgentRuntimeState.status).where(AgentRuntimeState.agent_id == agent_id)
             )
             status = result.scalar_one_or_none()
-            return status == "paused"
+            return status == AgentStatus.PAUSED.value
+
+    async def _should_skip_heartbeat(self, agent_id: str) -> bool:
+        """Return True if the agent's heartbeat should be suppressed (MVA-1411).
+
+        Suppressed when status is PAUSED (budget/admin hold) or ERROR (needs
+        operator recovery before resuming).
+        """
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(AgentRuntimeState.status).where(AgentRuntimeState.agent_id == agent_id)
+            )
+            status = result.scalar_one_or_none()
+            return status in (AgentStatus.PAUSED.value, AgentStatus.ERROR.value)
 
     async def _start_run(
         self, agent_id: str, trigger: WakeupTrigger

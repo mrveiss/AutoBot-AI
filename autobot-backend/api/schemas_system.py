@@ -2354,6 +2354,9 @@ class HeartbeatConfigResponse(BaseModel):
     paused_reason: str | None = None
     paused_at: str | None = None
     paused_by: str | None = None
+    error_detail: str | None = None
+    error_at: str | None = None
+    error_code: str | None = None
     heartbeat_interval_seconds: int
     max_run_duration_seconds: int
     current_task_id: str | None
@@ -2379,6 +2382,17 @@ class AgentTerminateRequest(BaseModel):
     """Request body for POST /heartbeat/{agent_id}/terminate (GH#6476)."""
 
     reason: str | None = None
+
+
+class AgentErrorRequest(BaseModel):
+    """Request body for POST /heartbeat/{agent_id}/error (MVA-1411)."""
+
+    error_detail: str | None = None
+    error_code: str | None = None
+
+
+class AgentRecoverRequest(BaseModel):
+    """Request body for POST /heartbeat/{agent_id}/recover (MVA-1411)."""
 
 
 class WakeupRequestCreate(BaseModel):

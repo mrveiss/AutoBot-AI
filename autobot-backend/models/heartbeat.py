@@ -55,12 +55,15 @@ class AgentStatus(str, Enum):
     DISABLED   — user disabled; re-enable freely via PUT config.
     PAUSED     — system-enforced pause (e.g. budget breach); resume requires
                  admin approval when paused_by starts with "system:".
+    ERROR      — agent entered an error state (e.g. repeated run failures);
+                 heartbeat suspended until recovered via POST /recover.
     TERMINATED — permanently stopped; cannot be resumed.
     """
 
     ACTIVE = "active"
     DISABLED = "disabled"
     PAUSED = "paused"
+    ERROR = "error"
     TERMINATED = "terminated"
 
 
@@ -82,6 +85,10 @@ class AgentRuntimeState(Base):
     paused_reason = Column(Text, nullable=True)
     paused_at = Column(DateTime, nullable=True)
     paused_by = Column(String(255), nullable=True)
+    # Error state metadata (MVA-1411)
+    error_detail = Column(Text, nullable=True)
+    error_at = Column(DateTime, nullable=True)
+    error_code = Column(String(64), nullable=True)
     # Per-task worktree workspace (GH#6471)
     workspace_dir = Column(String(1024), nullable=True)
     preview_url = Column(String(512), nullable=True)
