@@ -38,6 +38,7 @@ def _load_layers_module():
     # populated with the real module — the if-not-in guard would never fire.
     # Unconditionally patch the attribute on whatever config object is present.
     import autobot_shared.ssot_config as _ssot_cfg_mod
+
     _ssot_cfg_mod.config.tiered_context_enabled = "false"  # type: ignore[attr-defined]
 
     spec = importlib.util.spec_from_file_location("chat_history.layers", layers_path)

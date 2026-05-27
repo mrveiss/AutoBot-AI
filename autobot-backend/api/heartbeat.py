@@ -292,9 +292,7 @@ async def pause_agent(
     return _state_to_response(state)
 
 
-async def _request_skill_approval_for_resume(
-    agent_id: str, paused_by: str, requested_by: str
-) -> str:
+async def _request_skill_approval_for_resume(agent_id: str, paused_by: str, requested_by: str) -> str:
     """Queue a SkillApproval for a non-admin resume of a system-paused agent (GH#8734).
 
     Delegates to GovernanceEngine so the request appears in the SLM Approvals
@@ -346,9 +344,7 @@ async def resume_agent(
     # _user is always a Dict with keys "role" (str) and "username" (str).
     paused_by = state.paused_by or ""
     if paused_by.startswith("system:"):
-        username = (
-            _user.get("username", "") if isinstance(_user, dict) else getattr(_user, "username", "")
-        )
+        username = _user.get("username", "") if isinstance(_user, dict) else getattr(_user, "username", "")
         user_role = _user.get("role", "") if isinstance(_user, dict) else getattr(_user, "role", "")
         if user_role != "admin":
             approval_id = await _request_skill_approval_for_resume(agent_id, paused_by, username)
@@ -357,9 +353,7 @@ async def resume_agent(
                 content={
                     "approval_id": approval_id,
                     "status": "pending",
-                    "message": (
-                        f"Agent was paused by {paused_by}; resume request queued for admin approval"
-                    ),
+                    "message": (f"Agent was paused by {paused_by}; resume request queued for admin approval"),
                 },
             )
     state.status = AgentStatus.ACTIVE.value
