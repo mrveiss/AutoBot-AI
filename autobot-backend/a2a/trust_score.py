@@ -52,6 +52,7 @@ from pathlib import Path
 from typing import Dict, Optional, Set
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from utils.paths_manager import PathsManager
 
 logger = get_logger(__name__)
@@ -452,11 +453,4 @@ class TrustScoreManager:
 # Module-level singleton
 # ---------------------------------------------------------------------------
 
-_manager: Optional[TrustScoreManager] = None
-
-
-def get_trust_manager() -> TrustScoreManager:
-    global _manager
-    if _manager is None:
-        _manager = TrustScoreManager()
-    return _manager
+get_trust_manager = lazy_singleton(TrustScoreManager)
