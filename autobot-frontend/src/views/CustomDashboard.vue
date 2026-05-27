@@ -19,9 +19,15 @@
           <Icon name="plus" />
           {{ $t('views.customDashboard.addWidget') }}
         </button>
-        <button @click="saveDashboard" class="action-btn primary">
+        <button
+          @click="saveDashboard"
+          class="action-btn"
+          :class="{ primary: isDirty }"
+          :disabled="!isDirty"
+          :aria-label="isDirty ? $t('views.customDashboard.save') : $t('views.customDashboard.saved')"
+        >
           <Icon name="save" />
-          {{ $t('views.customDashboard.save') }}
+          {{ isDirty ? $t('views.customDashboard.save') : $t('views.customDashboard.saved') }}
         </button>
         <div class="dashboard-selector">
           <select v-model="currentDashboardId" @change="loadDashboard">
@@ -256,6 +262,7 @@ import { ref, computed, onMounted, shallowRef, markRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { usePollingJob } from '@/composables/usePollingJob'
+import { useToast } from '@/composables/useToast'
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 
@@ -267,6 +274,7 @@ import SystemArchitectureDiagram from '@/components/visualizations/SystemArchite
 
 const { t } = useI18n()
 const logger = createLogger('CustomDashboard')
+const { showToast } = useToast()
 
 // ============================================================================
 // Types
@@ -308,6 +316,7 @@ interface Dashboard {
 // ============================================================================
 
 const isEditMode = ref(false)
+const isDirty = ref(false)
 const widgets = ref<Widget[]>([])
 const currentDashboardId = ref('default')
 const availableDashboards = ref<Dashboard[]>([])
@@ -444,6 +453,7 @@ function loadDashboard() {
   if (dashboard) {
     widgets.value = [...dashboard.widgets]
   }
+  isDirty.value = false
 }
 
 function saveDashboard() {
@@ -452,6 +462,8 @@ function saveDashboard() {
     availableDashboards.value[dashboardIndex].widgets = [...widgets.value]
     availableDashboards.value[dashboardIndex].updatedAt = Date.now()
     saveDashboardsToStorage()
+    isDirty.value = false
+    showToast(t('views.customDashboard.dashboardSaved'), 'success')
   }
   isEditMode.value = false
 }
@@ -498,6 +510,7 @@ function confirmCreateDashboard() {
   saveDashboardsToStorage()
   currentDashboardId.value = id
   loadDashboard()
+  isDirty.value = false
   showNewDashboardModal.value = false
 }
 
@@ -527,11 +540,13 @@ function confirmAddWidget(widgetDef: WidgetDefinition) {
   }
 
   widgets.value.push(newWidget)
+  isDirty.value = true
   showAddWidgetModal.value = false
 }
 
 function removeWidget(widgetId: string) {
   widgets.value = widgets.value.filter(w => w.id !== widgetId)
+  isDirty.value = true
 }
 
 function configureWidget(widget: Widget) {
@@ -545,6 +560,7 @@ function saveWidgetConfig() {
   const index = widgets.value.findIndex(w => w.id === configWidget.value!.id)
   if (index !== -1) {
     widgets.value[index] = { ...configWidget.value, refreshKey: (widgets.value[index].refreshKey || 0) + 1 }
+    isDirty.value = true
   }
   showConfigModal.value = false
   configWidget.value = null
@@ -559,6 +575,7 @@ function resizeWidget(widget: Widget, action: 'expand' | 'shrink') {
   } else {
     widgets.value[index].width = Math.max(1, widgets.value[index].width - 1)
   }
+  isDirty.value = true
 }
 
 function getWidgetComponent(type: string) {
@@ -734,6 +751,12 @@ defineExpose({ stopDashboardPolling })
 
 .action-btn.primary:hover {
   box-shadow: var(--shadow-primary);
+}
+
+.action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .dashboard-selector {
