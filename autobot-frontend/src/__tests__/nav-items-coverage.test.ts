@@ -26,7 +26,7 @@
 import { describe, it, expect } from 'vitest'
 import type { RouteRecordRaw } from 'vue-router'
 import { routes } from '@/router'
-import { navItems } from '@/config/navItems'
+import { navItems, profileMenuItems, filterByFeatureFlag } from '@/config/navItems'
 
 /**
  * Routes that are intentionally NOT in main nav.
@@ -108,6 +108,21 @@ describe('navItems coverage (#6499)', () => {
     const stale = Object.keys(INTENTIONALLY_HIDDEN).filter((p) => !topLevelPaths.has(p))
 
     expect(stale).toEqual([])
+  })
+
+  it('canvas is hidden in profileMenuItems when VITE_FEATURE_CANVAS is unset', () => {
+    const result = filterByFeatureFlag(profileMenuItems, {})
+    expect(result.map((i) => i.to)).not.toContain('/canvas')
+  })
+
+  it('canvas is visible in profileMenuItems when VITE_FEATURE_CANVAS=true', () => {
+    const result = filterByFeatureFlag(profileMenuItems, { VITE_FEATURE_CANVAS: 'true' })
+    expect(result.map((i) => i.to)).toContain('/canvas')
+  })
+
+  it('canvas profileMenuItem has featureFlag set to "canvas"', () => {
+    const canvasItem = profileMenuItems.find((i) => i.to === '/canvas')
+    expect(canvasItem?.featureFlag).toBe('canvas')
   })
 
   it('allowlist size and route counts (regression sentinel)', () => {
