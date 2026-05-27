@@ -7,6 +7,8 @@ A2A Task Executor
 Issue #961: Bridges incoming A2A tasks to AutoBot's existing DistributedAgentCoordinator.
 Runs as a FastAPI BackgroundTask so the POST /tasks endpoint returns immediately
 with the task ID while execution continues asynchronously.
+Issue #7358: Phase 2 — records task outcomes to the behavioural trust score manager
+so peer trust levels evolve continuously from real interaction history.
 """
 
 from typing import Any, Dict
@@ -16,6 +18,7 @@ from autobot_shared.logging_manager import get_logger
 from .pii_pipeline import PIIBlocked, scrub_outbound
 from .self_evaluator import DEFAULT_EVAL_THRESHOLD, evaluate_task_output
 from .task_manager import get_task_manager
+from .trust_score import get_trust_manager
 from .types import TaskArtifact, TaskState
 
 logger = get_logger(__name__)
@@ -45,6 +48,7 @@ async def execute_a2a_task(
     input_text: str,
     context: Dict[str, Any] | None = None,
     eval_threshold: float = DEFAULT_EVAL_THRESHOLD,
+    peer_id: str | None = None,
 ) -> None:
     """
     Execute an A2A task via the existing DistributedAgentCoordinator.
@@ -63,6 +67,8 @@ async def execute_a2a_task(
         context: Optional extra context forwarded to the orchestrator.
         eval_threshold: Minimum self-eval confidence score required before
             transitioning to COMPLETED (default: DEFAULT_EVAL_THRESHOLD = 0.6).
+        peer_id: Caller's X-A2A-Agent-Id (Issue #7358 phase 2: used to record
+            behavioural trust outcomes against the submitting peer).
     """
     manager = get_task_manager()
     manager.update_state(task_id, TaskState.WORKING)
@@ -83,6 +89,12 @@ async def execute_a2a_task(
                 )
         except PIIBlocked as exc:
             logger.warning("A2A task %s: inbound payload blocked by PII pipeline: %s", task_id, exc)
+            # Issue #7358 phase 2: inbound PII block is a threat event.
+            if peer_id:
+                try:
+                    get_trust_manager().record_threat_event(peer_id)
+                except Exception as trust_exc:
+                    logger.warning("trust_score: threat_event record failed peer=%s: %s", peer_id, trust_exc)
             manager.update_state(task_id, TaskState.FAILED, message="Blocked: PII detected in request")
             manager.publish_event(
                 task_id,
@@ -114,6 +126,13 @@ async def execute_a2a_task(
         except PIIBlocked:
             # Response itself blocked — surface as failed rather than leaking
             logger.warning("A2A task %s: response blocked by PII pipeline", task_id)
+            # Issue #7358 phase 2: outbound PII in response is also a threat event
+            # (indicates the orchestrator produced sensitive data for an external peer).
+            if peer_id:
+                try:
+                    get_trust_manager().record_threat_event(peer_id)
+                except Exception as trust_exc:
+                    logger.warning("trust_score: threat_event record failed peer=%s: %s", peer_id, trust_exc)
             manager.update_state(task_id, TaskState.FAILED, message="Blocked: PII detected in response")
             manager.publish_event(
                 task_id,
@@ -168,6 +187,12 @@ async def execute_a2a_task(
                 task_id,
                 eval_result.confidence,
             )
+            # Issue #7358 phase 2: successful task → positive trust signal.
+            if peer_id:
+                try:
+                    get_trust_manager().record_success(peer_id)
+                except Exception as trust_exc:
+                    logger.warning("trust_score: record_success failed peer=%s: %s", peer_id, trust_exc)
         else:
             eval_artifact = TaskArtifact(
                 artifact_type="json",
@@ -200,6 +225,12 @@ async def execute_a2a_task(
                 eval_result.confidence,
                 eval_result.eval_reason,
             )
+            # Issue #7358 phase 2: self-eval failure → negative trust signal.
+            if peer_id:
+                try:
+                    get_trust_manager().record_failure(peer_id)
+                except Exception as trust_exc:
+                    logger.warning("trust_score: record_failure failed peer=%s: %s", peer_id, trust_exc)
 
     except Exception as exc:
         logger.error("A2A task %s failed: %s", task_id, exc)
@@ -218,3 +249,9 @@ async def execute_a2a_task(
                 "task_id": task_id,
             },
         )
+        # Issue #7358 phase 2: unexpected executor crash → negative trust signal.
+        if peer_id:
+            try:
+                get_trust_manager().record_failure(peer_id)
+            except Exception as trust_exc:
+                logger.warning("trust_score: record_failure failed peer=%s: %s", peer_id, trust_exc)

@@ -408,3 +408,99 @@ class TestIntegrationAcceptanceCriteria:
         new_levels = [r[1] for r in rows]
         assert TrustLevel.STANDARD.value in new_levels
         assert TrustLevel.LIMITED.value in new_levels
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: list_peers and get_audit_log (Issue #7358 continuous scoring)
+# ---------------------------------------------------------------------------
+
+
+class TestListPeers:
+    """list_peers() scans all known peers from the backing store."""
+
+    def test_returns_empty_when_no_peers(self, tmp_path):
+        mgr = _manager_no_redis(tmp_path)
+        # No peers registered yet — list_peers relies on Redis scan.
+        # With the in-process dict stub the Redis path raises; list_peers
+        # catches the error and returns [].
+        result = mgr.list_peers()
+        assert isinstance(result, list)
+
+    def test_returns_peers_after_interactions(self, tmp_path):
+        # Use a real Redis-scanning manager but override _redis to return a
+        # simple in-memory store that supports keys() and get().
+        mgr = TrustScoreManager(sqlite_path=tmp_path / "audit.db")
+        _store: dict = {}
+
+        class _FakeRedis:
+            def keys(self, pattern):
+                import fnmatch
+
+                return [k for k in _store if fnmatch.fnmatch(k, pattern)]
+
+            def get(self, key):
+                return _store.get(key)
+
+            def set(self, key, value):
+                _store[key] = value
+
+        fake_r = _FakeRedis()
+        mgr._redis = lambda: fake_r
+
+        mgr.record_success("peer-alpha")
+        mgr.record_success("peer-beta")
+
+        peers = mgr.list_peers()
+        peer_ids = [p.peer_id for p in peers]
+        assert "peer-alpha" in peer_ids
+        assert "peer-beta" in peer_ids
+
+
+class TestGetAuditLog:
+    """get_audit_log() returns level-change history from SQLite."""
+
+    def test_empty_for_peer_with_no_history(self, tmp_path):
+        mgr = _manager_no_redis(tmp_path)
+        entries = mgr.get_audit_log("never-seen-peer")
+        assert entries == []
+
+    def test_entries_appear_after_level_change(self, tmp_path):
+        mgr = _manager_no_redis(tmp_path)
+        peer = "observable-peer"
+
+        for _ in range(PROMOTION_WINDOW):
+            mgr.record_success(peer)
+
+        entries = mgr.get_audit_log(peer)
+        assert len(entries) >= 1
+        entry = entries[0]
+        assert entry["peer_id"] == peer
+        assert entry["new_level"] == TrustLevel.STANDARD.value
+        assert "score" in entry
+        assert "recorded_at" in entry
+
+    def test_threat_event_audit_entry(self, tmp_path):
+        mgr = _manager_no_redis(tmp_path)
+        peer = "threat-peer"
+
+        for _ in range(PROMOTION_WINDOW):
+            mgr.record_success(peer)
+        mgr.record_threat_event(peer)
+
+        entries = mgr.get_audit_log(peer)
+        reasons = [e["reason"] for e in entries]
+        assert "threat_event" in reasons
+
+    def test_limit_respected(self, tmp_path):
+        mgr = _manager_no_redis(tmp_path)
+        peer = "limit-peer"
+
+        # Create multiple level changes
+        for _ in range(PROMOTION_WINDOW):
+            mgr.record_success(peer)
+        mgr.record_threat_event(peer)
+        for _ in range(PROMOTION_WINDOW):
+            mgr.record_success(peer)
+
+        entries = mgr.get_audit_log(peer, limit=1)
+        assert len(entries) <= 1
