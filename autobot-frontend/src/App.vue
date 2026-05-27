@@ -141,7 +141,7 @@
                   <!-- Settings & Tools section -->
                   <p class="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-autobot-text-secondary">{{ $t('nav.settingsAndTools') }}</p>
                   <router-link
-                    v-for="item in profileMenuItems"
+                    v-for="item in filteredProfileMenuItems"
                     :key="item.to"
                     :to="item.to"
                     role="menuitem"
@@ -271,7 +271,7 @@
             <div class="border-t border-autobot-border pt-2 mt-1">
               <p class="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-autobot-text-secondary">{{ $t('nav.settingsAndTools') }}</p>
               <router-link
-                v-for="item in profileMenuItems"
+                v-for="item in filteredProfileMenuItems"
                 :key="item.to"
                 :to="item.to"
                 @click="closeMobileNav"
@@ -546,7 +546,7 @@ import { initializeNotificationBridge } from '@/utils/notificationBridge';
 import { smartMonitoringController, getAdaptiveInterval } from '@/config/OptimizedPerformance.js';
 import { clearAllSystemNotifications, resetHealthMonitor } from '@/utils/ClearNotifications.js';
 import { getSLMAdminUrl } from '@/config/ssot-config';
-import { navItems, profileMenuItems, adminMenuItems } from '@/config/navItems';
+import { navItems, profileMenuItems, adminMenuItems, filterByFeatureFlag } from '@/config/navItems';
 import SystemStatusNotification from '@/components/ui/SystemStatusNotification.vue';
 import CaptchaNotification from '@/components/research/CaptchaNotification.vue';
 import ToastContainer from '@/components/ui/ToastContainer.vue';
@@ -964,6 +964,10 @@ export default {
       navItems.filter(item => !item.adminOnly || userStore.isAdmin)
     )
 
+    const filteredProfileMenuItems = computed(() =>
+      filterByFeatureFlag(profileMenuItems)
+    )
+
     const { visibleCount } = useNavOverflow(
       navContainerRef,
       computed(() => filteredNavItems.value.length)
@@ -1006,6 +1010,7 @@ export default {
       hideFooter,
       navItems,
       profileMenuItems,
+      filteredProfileMenuItems,
       adminMenuItems,
       slmAdminUrl,
       displayUsername,

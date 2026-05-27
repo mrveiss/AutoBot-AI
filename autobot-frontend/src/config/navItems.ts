@@ -27,6 +27,21 @@ export interface NavItem {
   iconRule?: SvgFillRule;
   iconStroke?: boolean;
   adminOnly?: boolean;
+  /** VITE_FEATURE_<featureFlag.toUpperCase()> must equal 'true' to show this item. */
+  featureFlag?: string;
+}
+
+/**
+ * Returns items whose featureFlag (if any) is enabled in the given env object.
+ * Pass `import.meta.env` in production; pass a plain object in tests.
+ */
+export function filterByFeatureFlag(
+  items: NavItem[],
+  env: Record<string, string | boolean | undefined> = import.meta.env,
+): NavItem[] {
+  return items.filter(
+    (item) => !item.featureFlag || env[`VITE_FEATURE_${item.featureFlag.toUpperCase()}`] === 'true',
+  );
 }
 
 // ─── Primary nav (≤7 items for non-admin users at 1440 px) ───────────────────
@@ -49,8 +64,8 @@ export const navItems: NavItem[] = [
 // Shown in the profile dropdown — not in the primary nav rail.
 // Routes must carry hideInNav: true in router/index.ts.
 export const profileMenuItems: NavItem[] = [
-  // MVA-360: Live Canvas
-  { to: '/canvas', labelKey: 'nav.canvas', icon: 'M3 3h7v7H3V3zm0 11h7v7H3v-7zm11-11h7v7h-7V3zm0 11h7v7h-7v-7z', iconStroke: true },
+  // MVA-360: Live Canvas — gated by VITE_FEATURE_CANVAS (GH#8758)
+  { to: '/canvas', labelKey: 'nav.canvas', icon: 'M3 3h7v7H3V3zm0 11h7v7H3v-7zm11-11h7v7h-7V3zm0 11h7v7h-7v-7z', iconStroke: true, featureFlag: 'canvas' },
   // Issue #929: Plugin Manager
   { to: '/plugins', labelKey: 'nav.plugins', icon: 'M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z', iconStroke: true },
   { to: '/secrets', labelKey: 'nav.secrets', icon: 'M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z', iconRule: 'evenodd' },
