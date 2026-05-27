@@ -155,6 +155,34 @@ class TestRetryClassBudget:
         built = loop._build_result([])
         assert "fatal_reason" not in built
 
+    @pytest.mark.asyncio
+    async def test_should_continue_respects_low_budget_not_max_consecutive_errors(self):
+        """GH#8649: _should_continue() must not use max_consecutive_errors=3 as a hard
+        cap when LOW-severity errors have a larger per-severity budget (max_retries_low=5).
+
+        Before the fix, _should_continue() would return False after 3 errors regardless
+        of severity, preventing retries 4 and 5 from ever running.
+        RuntimeError is LOW severity (falls through to the default path in classify_error).
+        """
+        loop = _make_loop(max_retries_low=5, max_consecutive_errors=3)
+        for _ in range(3):
+            result = await loop._handle_iteration_error(RuntimeError("transient"))
+            # _handle_iteration_error should still say "retry" (budget=5 not yet hit)
+            assert result is True
+        # The loop guard must also say "continue" — not stop at max_consecutive_errors
+        assert loop._should_continue() is True, (
+            "_should_continue() stopped at max_consecutive_errors=3 instead of "
+            "honoring max_retries_low=5 (GH#8649)"
+        )
+
+    @pytest.mark.asyncio
+    async def test_should_continue_false_after_low_budget_exhausted(self):
+        """After the LOW budget (5) is fully exhausted, _should_continue() returns False."""
+        loop = _make_loop(max_retries_low=5, max_consecutive_errors=3)
+        for _ in range(5):
+            await loop._handle_iteration_error(RuntimeError("transient"))
+        assert loop._should_continue() is False
+
 
 # ---------------------------------------------------------------------------
 # Integration: backward compat — MEDIUM uses legacy default (3)
