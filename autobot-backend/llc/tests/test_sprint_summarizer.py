@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from llc.kb.collections import KbCollectionManager
-from llc.kb.sprint_summarizer import _SUMMARIZE_THRESHOLD, SprintKbSummarizer
+from llc.kb.sprint_summarizer import _MAX_PROMPT_CHARS, _SUMMARIZE_PROMPT, _SUMMARIZE_THRESHOLD, SprintKbSummarizer
 
 
 def _make_docs(n: int) -> list:
@@ -250,3 +250,97 @@ async def test_no_session_skips_load_sprint_context(summarizer, km_mock):
     assert load_mock.call_count == 0
     km_mock.archive_collection.assert_called_once()
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_llm_exception_falls_back_to_direct_merge(summarizer, km_mock):
+    """GH#8656: llm.chat() raising must fall back to direct merge, not propagate."""
+    import sys
+
+    sprint_id = uuid.uuid4()
+    project_id = uuid.uuid4()
+    docs = _make_docs(20)
+    dst_collection = KbCollectionManager.collection_name(KbCollectionManager.PROJECT_PREFIX, project_id)
+
+    llm_instance = MagicMock()
+    llm_instance.chat = AsyncMock(side_effect=TimeoutError("LLM timed out"))
+
+    fake_llm_module = MagicMock()
+    fake_llm_module.get_llm_service = MagicMock(return_value=llm_instance)
+
+    with (
+        patch.dict(sys.modules, {"services.llm_service": fake_llm_module}),
+        patch.object(summarizer, "_direct_merge", new=AsyncMock()) as dm,
+    ):
+        result = await summarizer._llm_summarize_and_index(docs, dst_collection, sprint_id, project_id)
+
+    dm.assert_called_once()
+    assert result == "[direct-merged: LLM summarization raised]"
+
+
+@pytest.mark.asyncio
+async def test_archive_called_even_if_llm_raises(summarizer, km_mock):
+    """GH#8656: archive_collection must be called even when LLM summarization raises."""
+    sprint_id = uuid.uuid4()
+    project_id = uuid.uuid4()
+    docs = _make_docs(_SUMMARIZE_THRESHOLD + 1)
+
+    with (
+        patch.object(summarizer, "_load_sprint_context", new=AsyncMock(return_value=(None, project_id))),
+        patch.object(summarizer, "_fetch_documents", new=AsyncMock(return_value=docs)),
+        patch.object(
+            summarizer,
+            "_llm_summarize_and_index",
+            new=AsyncMock(side_effect=RuntimeError("unexpected")),
+        ),
+    ):
+        with pytest.raises(RuntimeError, match="unexpected"):
+            await summarizer.summarize_and_merge(sprint_id, session=MagicMock())
+
+    km_mock.archive_collection.assert_called_once_with(KbCollectionManager.SPRINT_PREFIX, sprint_id)
+
+
+@pytest.mark.asyncio
+async def test_prompt_truncated_for_oversized_combined_input(summarizer, km_mock):
+    """GH#8656: combined input exceeding _MAX_PROMPT_CHARS must be truncated before LLM call."""
+    import sys
+
+    sprint_id = uuid.uuid4()
+    project_id = uuid.uuid4()
+    dst_collection = KbCollectionManager.collection_name(KbCollectionManager.PROJECT_PREFIX, project_id)
+
+    # Build docs whose combined text exceeds the cap
+    big_text = "x" * (_MAX_PROMPT_CHARS + 1000)
+    docs = [{"id": "doc-0", "document": big_text, "metadata": {}, "embedding": None}]
+
+    captured_prompts: list[str] = []
+
+    llm_response = MagicMock()
+    llm_response.error = None
+    llm_response.content = "summary"
+
+    async def capture_chat(messages, **_kwargs):
+        captured_prompts.append(messages[0]["content"])
+        return llm_response
+
+    llm_instance = MagicMock()
+    llm_instance.chat = capture_chat
+
+    fake_llm_module = MagicMock()
+    fake_llm_module.get_llm_service = MagicMock(return_value=llm_instance)
+
+    fake_kb_module = MagicMock()
+    dst_col = AsyncMock()
+    dst_col.add = AsyncMock()
+    fake_kb_module.get_knowledge_base = AsyncMock(
+        return_value=MagicMock(_async_chroma_client=AsyncMock(get_or_create_collection=AsyncMock(return_value=dst_col)))
+    )
+
+    with patch.dict(sys.modules, {"services.llm_service": fake_llm_module, "knowledge": fake_kb_module}):
+        await summarizer._llm_summarize_and_index(docs, dst_collection, sprint_id, project_id)
+
+    assert captured_prompts, "llm.chat() was never called"
+    # The {documents} section must not exceed the cap
+    prompt_sent = captured_prompts[0]
+    doc_section = prompt_sent.split("{documents}")[-1] if "{documents}" in prompt_sent else prompt_sent
+    assert len(doc_section) <= _MAX_PROMPT_CHARS + len(_SUMMARIZE_PROMPT.replace("{documents}", ""))
