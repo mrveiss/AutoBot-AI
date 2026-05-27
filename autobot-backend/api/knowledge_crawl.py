@@ -159,7 +159,9 @@ async def crawl_url_endpoint(request: CrawlRequest) -> CrawlResponse:
 
             template = await _load_template(request.scrape_template_id)
             if template is None:
-                logger.warning("scrape_template_id %s not found — skipping region extraction", request.scrape_template_id)
+                logger.warning(
+                    "scrape_template_id %s not found — skipping region extraction", request.scrape_template_id
+                )
             else:
                 for page in pages:
                     if page.get("success") and page.get("url"):
