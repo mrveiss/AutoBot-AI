@@ -1200,6 +1200,76 @@ class VNCEndpointsResponse(BaseModel):
 
 
 # =============================================================================
+# RDP Credential Schemas (Issue #1525: xrdp support)
+# =============================================================================
+
+
+class RDPCredentialCreate(BaseModel):
+    """Create RDP credential for a node."""
+
+    name: str | None = Field(None, description="Optional friendly name for the credential")
+    port: int = Field(default=3389, ge=1, le=65535, description="RDP port")
+    auth_method: str = Field(default="pam", description="Authentication method (pam, password)")
+    password: str | None = Field(None, min_length=1, description="RDP password (encrypted at rest)")
+    extra_data: Dict = Field(default_factory=dict, description="Additional configuration")
+
+
+class RDPCredentialUpdate(BaseModel):
+    """Update RDP credential."""
+
+    name: str | None = Field(None, min_length=1)
+    port: int | None = Field(None, ge=1, le=65535)
+    auth_method: str | None = None
+    password: str | None = Field(None, min_length=1)
+    is_active: bool | None = None
+    extra_data: Dict | None = None
+
+
+class RDPCredentialResponse(BaseModel):
+    """RDP credential response (excludes password for security)."""
+
+    id: int
+    credential_id: str
+    node_id: str
+    name: str | None = None
+    port: int = 3389
+    auth_method: str = "pam"
+    is_active: bool = True
+    last_used: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class RDPCredentialListResponse(BaseModel):
+    """List of RDP credentials."""
+
+    credentials: List[RDPCredentialResponse]
+    total: int
+
+
+class RDPEndpointResponse(BaseModel):
+    """RDP endpoint in fleet-wide listing."""
+
+    credential_id: str
+    node_id: str
+    hostname: str
+    ip_address: str
+    name: str | None = None
+    port: int
+    auth_method: str
+    is_active: bool
+
+
+class RDPEndpointsResponse(BaseModel):
+    """List of all RDP endpoints across the fleet."""
+
+    endpoints: List[RDPEndpointResponse]
+    total: int
+
+
+# =============================================================================
 # TLS Certificate Schemas (Issue #725: mTLS support)
 # =============================================================================
 

@@ -39,6 +39,7 @@ from api import (
     mfa_router,
     monitoring_router,
     node_config_router,
+    node_rdp_router,
     node_tls_router,
     node_vnc_router,
     nodes_execution_router,
@@ -54,6 +55,7 @@ from api import (
     sso_auth_router,
     sso_router,
     stateful_router,
+    rdp_router,
     tls_router,
     updates_router,
     vnc_router,
@@ -436,6 +438,8 @@ app.include_router(errors_router, prefix="/api")
 app.include_router(events_router, prefix="/api")
 app.include_router(external_agents_router, prefix="/api")
 app.include_router(websocket_router, prefix="/api")
+app.include_router(node_rdp_router, prefix="/api")
+app.include_router(rdp_router, prefix="/api")
 app.include_router(node_vnc_router, prefix="/api")
 app.include_router(vnc_router, prefix="/api")
 app.include_router(node_tls_router, prefix="/api")

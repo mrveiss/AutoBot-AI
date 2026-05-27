@@ -42,6 +42,7 @@ from .slm_users import router as slm_users_router
 from .sso import router as sso_router
 from .sso_auth import router as sso_auth_router
 from .stateful import router as stateful_router
+from .rdp import node_rdp_router, rdp_router
 from .tls import node_tls_router, tls_router
 from .updates import router as updates_router
 from .vnc import node_vnc_router, vnc_router
@@ -70,6 +71,8 @@ __all__ = [
     "mfa_router",
     "monitoring_router",
     "blue_green_router",
+    "node_rdp_router",
+    "rdp_router",
     "node_vnc_router",
     "vnc_router",
     "node_tls_router",
