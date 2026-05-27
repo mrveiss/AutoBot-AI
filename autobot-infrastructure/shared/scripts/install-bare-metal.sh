@@ -333,6 +333,69 @@ install_slm() {
     setup_venv "slm" "${code_dir}/autobot-slm-backend/requirements.txt"
 }
 
+install_chromadb() {
+    if [[ "$SKIP_CHROMADB" == true ]]; then
+        log_info "Skipping ChromaDB installation (--skip-chromadb)"
+        return
+    fi
+
+    log_step "Installing ChromaDB (port ${CHROMADB_PORT})"
+
+    local chromadb_dir="${INSTALL_DIR}/chromadb"
+    local venv_dir="${chromadb_dir}/venv"
+    local data_dir="${chromadb_dir}/data"
+
+    # Directories
+    mkdir -p "${chromadb_dir}" "${data_dir}"
+    chown -R "${AUTOBOT_USER}:${AUTOBOT_GROUP}" "${chromadb_dir}"
+
+    # Virtual environment + package
+    sudo -u "${AUTOBOT_USER}" "${PYTHON_BIN}" -m venv "${venv_dir}" --clear
+    sudo -u "${AUTOBOT_USER}" "${venv_dir}/bin/pip" install --upgrade pip -q
+    sudo -u "${AUTOBOT_USER}" "${venv_dir}/bin/pip" install "chromadb>=0.5" -q
+    log_info "ChromaDB installed: $(${venv_dir}/bin/chroma --version 2>/dev/null || echo 'unknown')"
+
+    # Systemd unit
+    cat > /etc/systemd/system/autobot-chromadb.service <<EOF
+[Unit]
+Description=AutoBot ChromaDB - Vector Database
+Documentation=https://github.com/mrveiss/AutoBot-AI
+After=network.target
+
+[Service]
+Type=simple
+User=${AUTOBOT_USER}
+Group=${AUTOBOT_GROUP}
+WorkingDirectory=${chromadb_dir}
+Environment="PYTHONUNBUFFERED=1"
+Environment="ANONYMIZED_TELEMETRY=FALSE"
+EnvironmentFile=-${INSTALL_DIR}/.env
+ExecStart=${venv_dir}/bin/chroma run \\
+    --host 127.0.0.1 \\
+    --port ${CHROMADB_PORT} \\
+    --path ${data_dir}
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=30
+TimeoutStopSec=30
+MemoryMax=4G
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=${data_dir}
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=autobot-chromadb
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable autobot-chromadb
+    log_info "Created and enabled systemd service: autobot-chromadb (port ${CHROMADB_PORT})"
+}
+
 # =============================================================================
 # Frontend Build
 # =============================================================================
@@ -599,6 +662,9 @@ tune_resources() {
 start_services() {
     log_step "Starting AutoBot services"
 
+    if [[ "$SKIP_CHROMADB" == false ]]; then
+        systemctl start autobot-chromadb
+    fi
     systemctl start autobot-backend
     systemctl start autobot-slm
 
@@ -607,7 +673,11 @@ start_services() {
 
     # Verify
     local all_ok=true
-    for service in autobot-backend autobot-slm; do
+    local services_to_check=(autobot-backend autobot-slm)
+    if [[ "$SKIP_CHROMADB" == false ]]; then
+        services_to_check=(autobot-chromadb "${services_to_check[@]}")
+    fi
+    for service in "${services_to_check[@]}"; do
         if systemctl is-active --quiet "${service}"; then
             log_info "${service}: running"
         else
@@ -663,6 +733,16 @@ verify_installation() {
         ((errors++)) || true
     fi
 
+    # Check ChromaDB
+    if [[ "$SKIP_CHROMADB" == false ]]; then
+        if curl -sf "http://127.0.0.1:${CHROMADB_PORT}/api/v1/heartbeat" >/dev/null 2>&1; then
+            log_info "ChromaDB: OK"
+        else
+            log_warn "ChromaDB: not responding (may still be starting)"
+            ((errors++)) || true
+        fi
+    fi
+
     # Check Ollama
     if [[ "$INSTALL_OLLAMA" == true ]]; then
         if curl -sf "http://127.0.0.1:${OLLAMA_PORT}/api/tags" >/dev/null 2>&1; then
@@ -691,6 +771,9 @@ print_summary() {
     echo "    SLM:       http://127.0.0.1:${SLM_PORT}"
     echo "    Frontend:  http://127.0.0.1 (via nginx)"
     echo "    Redis:     127.0.0.1:${REDIS_PORT}"
+    if [[ "$SKIP_CHROMADB" == false ]]; then
+        echo "    ChromaDB:  http://127.0.0.1:${CHROMADB_PORT}"
+    fi
     if [[ "$INSTALL_OLLAMA" == true ]]; then
         echo "    Ollama:    http://127.0.0.1:${OLLAMA_PORT}"
     fi
@@ -736,6 +819,7 @@ main() {
     checkout_code
     install_backend
     install_slm
+    install_chromadb
     build_frontend
     generate_env
     configure_nginx
