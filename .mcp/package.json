@@ -13,5 +13,8 @@
   },
   "keywords": ["mcp", "autobot", "development", "workflow"],
   "author": "AutoBot Development Team",
-  "license": "MIT"
+  "license": "MIT",
+  "overrides": {
+    "qs": ">=6.15.2"
+  }
 }
