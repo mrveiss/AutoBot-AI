@@ -44,7 +44,7 @@ const INTENTIONALLY_HIDDEN: Record<string, string> = {
   '/agents/activity': 'Reached as a tab inside /agents shell (#6634); standalone URL kept for bookmarks',
   '/agents/heartbeat': 'Reached as a tab inside /agents shell (#6634); standalone URL kept for bookmarks',
   '/admin/users': 'Admin-only — surfaced via separate admin entrypoint',
-  '/slm/tools/novnc': 'Accessed via Chat tab\'s noVNC sub-tab (#6414/#6415); standalone URL kept for bookmarks',
+  '/slm/tools/novnc': "Accessed via Chat tab's noVNC sub-tab (#6414/#6415); standalone URL kept for bookmarks",
 }
 
 /** True if route is hidden from nav by an explicit meta flag. */
@@ -68,6 +68,28 @@ function isRedirectOrCatchAll(route: RouteRecordRaw): boolean {
 /** Collect top-level routes (children are sub-routes, not main nav targets). */
 function topLevelRoutes(): RouteRecordRaw[] {
   return routes.filter((r) => !isRedirectOrCatchAll(r))
+}
+
+/** Collect all absolute route paths recursively (including children). */
+function allRoutePaths(
+  routeList: RouteRecordRaw[] = routes,
+  parentPath = '',
+): Set<string> {
+  const paths = new Set<string>()
+  for (const route of routeList) {
+    if (typeof route.path !== 'string') continue
+    const fullPath = route.path.startsWith('/')
+      ? route.path
+      : (parentPath ? `${parentPath}/${route.path}` : `/${route.path}`).replace(/\/+/g, '/')
+    if (!route.path.includes(':') && !route.path.includes('*') && route.redirect === undefined) {
+      paths.add(fullPath)
+    }
+    const children = (route as RouteRecordRaw & { children?: RouteRecordRaw[] }).children
+    if (children) {
+      for (const p of allRoutePaths(children, fullPath)) paths.add(p)
+    }
+  }
+  return paths
 }
 
 describe('navItems coverage (#6499)', () => {
@@ -96,16 +118,16 @@ describe('navItems coverage (#6499)', () => {
     expect(missing).toEqual([])
   })
 
-  it('every navItems entry corresponds to a real top-level route', () => {
-    const topLevelPaths = new Set(topLevelRoutes().map((r) => r.path))
-    const orphans = navItems.filter((n) => !topLevelPaths.has(n.to)).map((n) => n.to)
+  it('every navItems entry corresponds to a real route', () => {
+    const allPaths = allRoutePaths()
+    const orphans = navItems.filter((n) => !allPaths.has(n.to)).map((n) => n.to)
 
     expect(orphans).toEqual([])
   })
 
-  it('every allowlisted path corresponds to a real top-level route', () => {
-    const topLevelPaths = new Set(topLevelRoutes().map((r) => r.path))
-    const stale = Object.keys(INTENTIONALLY_HIDDEN).filter((p) => !topLevelPaths.has(p))
+  it('every allowlisted path corresponds to a real route', () => {
+    const allPaths = allRoutePaths()
+    const stale = Object.keys(INTENTIONALLY_HIDDEN).filter((p) => !allPaths.has(p))
 
     expect(stale).toEqual([])
   })
