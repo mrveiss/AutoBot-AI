@@ -154,12 +154,7 @@ async def set_user_bundle(
             detail=f"Invalid bundle_name '{body.bundle_name}'. Valid: {sorted(VALID_BUNDLES)}",
         )
 
-    admin_id = (
-        admin_user.get("user_id")
-        or admin_user.get("sub")
-        or admin_user.get("username")
-        or "unknown"
-    )
+    admin_id = admin_user.get("user_id") or admin_user.get("sub") or admin_user.get("username") or "unknown"
 
     try:
         from database.session import get_async_session  # noqa: PLC0415
@@ -175,16 +170,14 @@ async def set_user_bundle(
             else:
                 # Upsert
                 await session.execute(
-                    text(
-                        """
+                    text("""
                         INSERT INTO user_voice_bundle (user_id, bundle_name, assigned_by, assigned_at)
                         VALUES (:uid, :bundle, :by, NOW())
                         ON CONFLICT (user_id) DO UPDATE
                           SET bundle_name = EXCLUDED.bundle_name,
                               assigned_by = EXCLUDED.assigned_by,
                               assigned_at = EXCLUDED.assigned_at
-                        """
-                    ),
+                        """),
                     {"uid": user_id, "bundle": body.bundle_name, "by": str(admin_id)},
                 )
             await session.commit()

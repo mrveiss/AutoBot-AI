@@ -3,9 +3,9 @@
 # Author: mrveiss
 """Tests for per-user voice bundle assignment (GH#8605)."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # resolve_bundle_for_user
@@ -64,8 +64,9 @@ async def test_resolve_bundle_global_env_fallback():
 
     import os
 
-    with patch("database.session.get_async_session", return_value=mock_session), patch.dict(
-        os.environ, {"AUTOBOT_VOICE_TOOLSETS": "voice_extended"}
+    with (
+        patch("database.session.get_async_session", return_value=mock_session),
+        patch.dict(os.environ, {"AUTOBOT_VOICE_TOOLSETS": "voice_extended"}),
     ):
         bundle, resolution = await resolve_bundle_for_user("user-99", role="unknown_role")
 
@@ -93,8 +94,9 @@ async def test_resolve_bundle_db_failure_falls_through():
 @pytest.mark.asyncio
 async def test_set_user_bundle_invalid_bundle():
     """Reject unknown bundle names."""
-    from fastapi.testclient import TestClient
     from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
     from api.voice_bundle_admin import bundle_admin_router
 
     app = FastAPI()
@@ -116,10 +118,10 @@ async def test_set_user_bundle_invalid_bundle():
 @pytest.mark.asyncio
 async def test_user_cannot_call_admin_bundle_endpoint_unauthenticated():
     """Admin endpoint must reject unauthenticated callers."""
-    from fastapi.testclient import TestClient
     from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
     from api.voice_bundle_admin import bundle_admin_router
-    from utils.catalog_http_exceptions import AuthError
 
     app = FastAPI()
     app.include_router(bundle_admin_router)
