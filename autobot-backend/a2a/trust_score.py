@@ -306,6 +306,54 @@ class TrustScoreManager:
     def get_trust_level(self, peer_id: str) -> TrustLevel:
         return self._load(peer_id).current_level
 
+    def list_peers(self) -> list[TrustRecord]:
+        """Return TrustRecords for all known peers (scanned from Redis)."""
+        try:
+            r = self._redis()
+            keys = r.keys("a2a:trust:*")
+            records = []
+            for key in keys:
+                raw = r.get(key)
+                if raw:
+                    try:
+                        records.append(TrustRecord.from_dict(json.loads(raw)))
+                    except Exception:
+                        pass
+            return sorted(records, key=lambda rec: rec.peer_id)
+        except Exception as exc:
+            logger.warning("trust_score: list_peers Redis scan failed: %s", exc)
+            return []
+
+    def get_audit_log(self, peer_id: str, limit: int = 100) -> list[dict]:
+        """Return recent audit snapshots for a peer from SQLite (newest first)."""
+        try:
+            with sqlite3.connect(self._sqlite_path) as conn:
+                rows = conn.execute(
+                    """
+                    SELECT peer_id, old_level, new_level, score, reason, snapshot_json, recorded_at
+                    FROM trust_audit
+                    WHERE peer_id = ?
+                    ORDER BY recorded_at DESC
+                    LIMIT ?
+                    """,
+                    (peer_id, limit),
+                ).fetchall()
+            return [
+                {
+                    "peer_id": r[0],
+                    "old_level": r[1],
+                    "new_level": r[2],
+                    "score": r[3],
+                    "reason": r[4],
+                    "snapshot": json.loads(r[5]) if r[5] else None,
+                    "recorded_at": r[6],
+                }
+                for r in rows
+            ]
+        except Exception as exc:
+            logger.warning("trust_score: get_audit_log failed peer=%s: %s", peer_id, exc)
+            return []
+
     def get_record(self, peer_id: str) -> TrustRecord:
         return self._load(peer_id)
 
