@@ -37,6 +37,17 @@
 
         <!-- Playwright Automation Controls -->
         <div class="border-l border-autobot-border pl-2 flex items-center gap-1">
+          <!-- Templates sidebar toggle (#5136 Phase 5) -->
+          <button
+            @click="showTemplatePanel = !showTemplatePanel"
+            class="browser-btn"
+            :class="{ 'text-color-primary': showTemplatePanel }"
+            :title="$t('desktop.popoutBrowser.templates')"
+            :aria-label="$t('desktop.popoutBrowser.templates')"
+          >
+            <Icon name="layer-group" />
+          </button>
+
           <button @click="showPlaywrightPanel = !showPlaywrightPanel" class="browser-btn" :title="$t('desktop.popoutBrowser.playwrightAutomation')" :aria-label="$t('desktop.popoutBrowser.playwrightAutomation')">
             <Icon name="robot" />
           </button>
@@ -199,8 +210,16 @@
       </div>
     </div>
 
+    <!-- Browser + Templates layout -->
+    <div class="browser-main-area flex-1 flex min-h-0" :style="browserContentStyle">
+
+    <!-- Templates sidebar (#5136 Phase 5) -->
+    <div v-if="showTemplatePanel" class="templates-sidebar border-r border-autobot-border" style="width: 280px; flex-shrink: 0;">
+      <ScrapeTemplatePanel />
+    </div>
+
     <!-- Browser Content Area -->
-    <div class="browser-content flex-1 relative" :style="browserContentStyle">
+    <div class="browser-content flex-1 relative">
       <!-- VNC Browser with Playwright Integration -->
       <div v-if="browserMode === 'vnc'" class="w-full h-full relative">
         <!-- API Connection Status Overlay -->
@@ -394,6 +413,7 @@
         </div>
       </div>
     </div>
+    </div><!-- end browser-main-area -->
   </div>
 </template>
 
@@ -405,6 +425,7 @@ import appConfig from '@/config/AppConfig.js'
 import { useBrowserSessionData } from '@/composables/desktop/useBrowserSessionData'
 import type { PlaywrightNavigationResponse, PageRegion, SnapshotWithRegionsResult } from '@/composables/desktop/useBrowserSessionData'
 import InteractiveScreenshot from '@/components/browser/InteractiveScreenshot.vue'
+import ScrapeTemplatePanel from '@/components/browser/ScrapeTemplatePanel.vue'
 import LoadingBoundary from '@/components/ui/LoadingBoundary.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
@@ -431,6 +452,7 @@ export default {
     StatusBadge,
     BaseButton,
     InteractiveScreenshot,
+    ScrapeTemplatePanel,
   },
   props: {
     sessionId: {
@@ -466,6 +488,9 @@ export default {
     const showDevTools = ref(false)
     const showInteractionOverlay = ref(false)
     const interactionMessage = ref('')
+
+    // Template sidebar state (#5136 Phase 5)
+    const showTemplatePanel = ref(false)
 
     // Playwright API integration state with proper typing
     const showPlaywrightPanel = ref(false)
@@ -1018,6 +1043,9 @@ export default {
       pageLoadTime,
       consoleLogs,
 
+      // Template sidebar (#5136 Phase 5)
+      showTemplatePanel,
+
       // Playwright state
       showPlaywrightPanel,
       playwrightStatus,
@@ -1102,6 +1130,19 @@ export default {
 
 .address-bar {
   flex-shrink: 0;
+}
+
+.browser-main-area {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.templates-sidebar {
+  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .browser-content {

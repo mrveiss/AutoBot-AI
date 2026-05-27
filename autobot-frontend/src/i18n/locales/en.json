@@ -5894,6 +5894,22 @@
       "createBrowserSession": "Create Browser Session",
       "startingUrl": "Starting URL",
       "cancel": "Cancel"
+    },
+    "scrapeTemplates": {
+      "title": "Scrape Templates",
+      "refresh": "Refresh templates",
+      "emptyTitle": "No Saved Templates",
+      "emptyMessage": "Mark regions on a page and save a template to see it here.",
+      "run": "Re-run template",
+      "duplicate": "Duplicate template",
+      "delete": "Delete template",
+      "deleteConfirm": "Delete \"{name}\"? This cannot be undone.",
+      "targetUrl": "Target URL",
+      "runButton": "Run",
+      "running": "Running...",
+      "extractedResults": "Extracted results",
+      "noValue": "(not found)",
+      "noResults": "No regions extracted."
     }
   },
   "collaboration": {
@@ -7255,7 +7271,8 @@
       "launchDesc": "This will open a live browser that you can control directly",
       "initializingSession": "Initializing browser session...",
       "sessionId": "Session ID: {id}",
-      "notAvailable": "Not available"
+      "notAvailable": "Not available",
+      "templates": "Scrape Templates"
     }
   },
   "serviceMessages": {
