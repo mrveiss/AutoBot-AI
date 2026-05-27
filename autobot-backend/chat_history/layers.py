@@ -42,7 +42,7 @@ logger = get_logger(__name__)
 # Feature flag
 # ---------------------------------------------------------------------------
 
-TIERED_CONTEXT_ENABLED: bool = _ssot_config.tiered_context_enabled.lower() == "true"
+TIERED_CONTEXT_ENABLED: bool = bool(_ssot_config.tiered_context_enabled)
 
 # ---------------------------------------------------------------------------
 # Retrieval-trigger keywords for L3
