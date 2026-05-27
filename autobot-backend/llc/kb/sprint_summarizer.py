@@ -77,7 +77,11 @@ class SprintKbSummarizer:
                 "cannot resolve project_id — merge skipped, archive only",
                 sprint_id,
             )
-            await self._km.archive_collection(KbCollectionManager.SPRINT_PREFIX, sprint_id)
+            try:
+                await self._km.archive_collection(KbCollectionManager.SPRINT_PREFIX, sprint_id)
+            except Exception:
+                logger.error("Failed to archive collection for sprint %s", sprint_id)
+                raise
             return None
 
         sprint, project_id = await self._load_sprint_context(sprint_id, session)
@@ -87,7 +91,11 @@ class SprintKbSummarizer:
                 "Sprint %s has no parent project in DB; skipping KB merge",
                 sprint_id,
             )
-            await self._km.archive_collection(KbCollectionManager.SPRINT_PREFIX, sprint_id)
+            try:
+                await self._km.archive_collection(KbCollectionManager.SPRINT_PREFIX, sprint_id)
+            except Exception:
+                logger.error("Failed to archive collection for sprint %s", sprint_id)
+                raise
             return None
 
         project_collection = KbCollectionManager.collection_name(KbCollectionManager.PROJECT_PREFIX, project_id)
@@ -109,12 +117,12 @@ class SprintKbSummarizer:
                 )
         except Exception:
             logger.error(
-                "Write to project KB failed for sprint %s — archive skipped to prevent data loss",
+                "Write to project KB failed for sprint %s",
                 sprint_id,
             )
             raise
-
-        await self._km.archive_collection(KbCollectionManager.SPRINT_PREFIX, sprint_id)
+        finally:
+            await self._km.archive_collection(KbCollectionManager.SPRINT_PREFIX, sprint_id)
 
         if summary_text and session is not None and sprint is not None:
             sprint.kb_summary = summary_text  # type: ignore[attr-defined]
