@@ -355,7 +355,7 @@ class TestSessionTTL:
 
     @pytest.mark.asyncio
     async def test_save_record_passes_ttl_to_redis(self):
-        from services.voice_realtime_telemetry import VoiceRealtimeTelemetry, _SESSION_TTL
+        from services.voice_realtime_telemetry import _SESSION_TTL, VoiceRealtimeTelemetry
 
         captured: list[int] = []
 

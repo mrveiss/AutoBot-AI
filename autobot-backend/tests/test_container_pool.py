@@ -13,14 +13,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from services.execution.container_pool import (
-    ContainerPoolRegistry,
-    WarmContainerPool,
-)
 from services.execution.base_backend import (
     BackendType,
     ExecutionStatus,
     ExecutionTask,
+)
+from services.execution.container_pool import (
+    ContainerPoolRegistry,
+    WarmContainerPool,
 )
 
 
