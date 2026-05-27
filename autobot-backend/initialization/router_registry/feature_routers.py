@@ -200,6 +200,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["research-browser"],
         "research_browser",
     ),
+    # Issue #5136 Phase 4: scrape template persistence and runner
+    (
+        "api.scrape_templates",
+        "/scrape-templates",
+        ["scrape-templates"],
+        "scrape_templates",
+    ),
     ("api.playwright", "/playwright", ["playwright"], "playwright"),
     ("api.vision", "/vision", ["vision", "gui-automation"], "vision"),
     (
