@@ -257,13 +257,16 @@ class HeartbeatScheduler:
                     workspace_dir = ws_info.worktree_path
                     state.workspace_dir = workspace_dir
                 except Exception as exc:
-                    # Clear stale workspace_dir so the adapter does not run
-                    # in a deleted or invalid worktree (GH#6471 review finding).
-                    state.workspace_dir = None
+                    # Do not overwrite a valid prior workspace path on transient
+                    # allocation failures (GH#8687).  Leave state.workspace_dir
+                    # unchanged so the adapter can still use the last known good
+                    # path.  Only a successful allocation updates the path above.
                     logger.warning(
-                        "Workspace allocation failed for task=%s agent=%s: %s",
+                        "Workspace allocation failed for task=%s agent=%s"
+                        " (preserving existing workspace_dir=%r): %s",
                         state.current_task_id,
                         agent_id,
+                        state.workspace_dir,
                         exc,
                     )
 
