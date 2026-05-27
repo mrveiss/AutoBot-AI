@@ -279,8 +279,8 @@ async def test_llm_exception_falls_back_to_direct_merge(summarizer, km_mock):
 
 
 @pytest.mark.asyncio
-async def test_archive_called_even_if_llm_raises(summarizer, km_mock):
-    """GH#8656: archive_collection must be called even when LLM summarization raises."""
+async def test_archive_skipped_if_write_raises(summarizer, km_mock):
+    """GH#8653: archive must NOT be called when the write to project KB fails."""
     sprint_id = uuid.uuid4()
     project_id = uuid.uuid4()
     docs = _make_docs(_SUMMARIZE_THRESHOLD + 1)
@@ -297,7 +297,29 @@ async def test_archive_called_even_if_llm_raises(summarizer, km_mock):
         with pytest.raises(RuntimeError, match="unexpected"):
             await summarizer.summarize_and_merge(sprint_id, session=MagicMock())
 
-    km_mock.archive_collection.assert_called_once_with(KbCollectionManager.SPRINT_PREFIX, sprint_id)
+    km_mock.archive_collection.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_archive_skipped_if_direct_merge_raises(summarizer, km_mock):
+    """GH#8653: archive must NOT be called when direct-merge write to project KB fails."""
+    sprint_id = uuid.uuid4()
+    project_id = uuid.uuid4()
+    docs = _make_docs(_SUMMARIZE_THRESHOLD)  # <= threshold → takes direct-merge path
+
+    with (
+        patch.object(summarizer, "_load_sprint_context", new=AsyncMock(return_value=(None, project_id))),
+        patch.object(summarizer, "_fetch_documents", new=AsyncMock(return_value=docs)),
+        patch.object(
+            summarizer,
+            "_direct_merge",
+            new=AsyncMock(side_effect=RuntimeError("chroma write failed")),
+        ),
+    ):
+        with pytest.raises(RuntimeError, match="chroma write failed"):
+            await summarizer.summarize_and_merge(sprint_id, session=MagicMock())
+
+    km_mock.archive_collection.assert_not_called()
 
 
 @pytest.mark.asyncio

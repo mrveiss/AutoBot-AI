@@ -107,8 +107,14 @@ class SprintKbSummarizer:
                 summary_text = await self._llm_summarize_and_index(
                     docs, project_collection, sprint_id, project_id, sprint=sprint
                 )
-        finally:
-            await self._km.archive_collection(KbCollectionManager.SPRINT_PREFIX, sprint_id)
+        except Exception:
+            logger.error(
+                "Write to project KB failed for sprint %s — archive skipped to prevent data loss",
+                sprint_id,
+            )
+            raise
+
+        await self._km.archive_collection(KbCollectionManager.SPRINT_PREFIX, sprint_id)
 
         if summary_text and session is not None and sprint is not None:
             sprint.kb_summary = summary_text  # type: ignore[attr-defined]
