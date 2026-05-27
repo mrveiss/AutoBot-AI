@@ -7,8 +7,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import Icon from '@/components/ui/Icon.vue'
-import type { IconName } from '@/components/ui/Icon.vue'
+import Icon, { type IconName } from '@/components/ui/Icon.vue'
 
 /**
  * Reusable Status Badge Component
