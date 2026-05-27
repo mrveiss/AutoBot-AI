@@ -29,7 +29,6 @@ Redis layout:
 
 from __future__ import annotations
 
-import json
 import uuid
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
@@ -37,7 +36,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from auth_middleware import check_admin_permission, get_current_user
+from auth_middleware import check_admin_permission
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
