@@ -84,9 +84,7 @@ async def list_node_rdp_credentials(
             detail="Node not found",
         )
 
-    credentials = await rdp_credential_service.get_node_credentials(
-        db, node_id, active_only=not include_inactive
-    )
+    credentials = await rdp_credential_service.get_node_credentials(db, node_id, active_only=not include_inactive)
 
     return RDPCredentialListResponse(
         credentials=[rdp_credential_service.to_response(c) for c in credentials],
@@ -168,7 +166,5 @@ async def list_rdp_endpoints(
     include_inactive: bool = Query(False),
 ) -> RDPEndpointsResponse:
     """List all RDP endpoints across the fleet."""
-    endpoints = await rdp_credential_service.get_all_rdp_endpoints(
-        db, active_only=not include_inactive
-    )
+    endpoints = await rdp_credential_service.get_all_rdp_endpoints(db, active_only=not include_inactive)
     return RDPEndpointsResponse(endpoints=endpoints, total=len(endpoints))
