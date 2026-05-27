@@ -36,7 +36,7 @@ def _make_patch(
 ) -> MetaPatch:
     return MetaPatch(
         patch_id=patch_id,
-        target_path="/tmp/module.py",
+        target_path="/tmp/module.py",  # nosec B108 - test/controlled code uses tmpdir intentionally
         original_content=original,
         modified_content=modified,
         rationale="test change",
@@ -123,7 +123,7 @@ async def test_evaluate_patch_no_changes_skips() -> None:
     archive = Archive()
     patch = MetaPatch(
         patch_id="same",
-        target_path="/tmp/module.py",
+        target_path="/tmp/module.py",  # nosec B108 - test/controlled code uses tmpdir intentionally
         original_content="x = 1\n",
         modified_content="x = 1",  # stripped equal
     )

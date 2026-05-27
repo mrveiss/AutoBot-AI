@@ -45,7 +45,7 @@ def _get_cache_key(project_root: str) -> str:
     """
     import hashlib
 
-    path_hash = hashlib.md5(project_root.encode()).hexdigest()[:12]
+    path_hash = hashlib.md5(project_root.encode(), usedforsecurity=False).hexdigest()[:12]
     return f"{CALL_GRAPH_CACHE_PREFIX}:{path_hash}"
 
 

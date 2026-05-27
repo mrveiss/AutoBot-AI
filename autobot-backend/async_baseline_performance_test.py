@@ -292,7 +292,7 @@ class AsyncBaselineTest:
         fail_count = 0
 
         # Create temp directory for test files
-        test_dir = Path("/tmp/autobot_baseline_test")
+        test_dir = Path("/tmp/autobot_baseline_test")  # nosec B108 - test/controlled code uses tmpdir intentionally
         test_dir.mkdir(parents=True, exist_ok=True)
 
         async def mixed_io_operation(redis_client, op_id):

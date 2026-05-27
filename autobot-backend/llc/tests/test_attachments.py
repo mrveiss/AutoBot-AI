@@ -29,7 +29,7 @@ _AGENT = str(uuid.uuid4())
 def _make_row(
     filename: str = "notes.txt",
     size_bytes: int = 10,
-    storage_path: str = "/tmp/fake.txt",
+    storage_path: str = "/tmp/fake.txt",  # nosec B108 - test/controlled code uses tmpdir intentionally
     text_extracted: bool = True,
     extracted_text: str = "hello",
 ) -> MagicMock:

@@ -128,7 +128,7 @@ def _chunk_text(content: str, max_chars: int = 1500) -> List[str]:
 def _chunk_id(collection: str, rel_path: str, chunk_index: int) -> str:
     """Stable deterministic ID for a seed chunk."""
     key = f"seed:{collection}:{rel_path}:{chunk_index}"
-    return hashlib.md5(key.encode()).hexdigest()[:16]
+    return hashlib.md5(key.encode(), usedforsecurity=False).hexdigest()[:16]
 
 
 # ---------------------------------------------------------------------------

@@ -99,14 +99,16 @@ class TestDesktopTracking:
         result = await track_screenshot_capture(
             db=mock_db,
             user_id=user_id,
-            screenshot_path="/tmp/screenshot.png",
+            screenshot_path="/tmp/screenshot.png",  # nosec B108 - test/controlled code uses tmpdir intentionally
         )
 
         assert result == activity_id
 
         call_kwargs = mock_track_desktop.call_args.kwargs
         assert call_kwargs["action"] == "screenshot"
-        assert call_kwargs["screenshot_path"] == "/tmp/screenshot.png"
+        assert (
+            call_kwargs["screenshot_path"] == "/tmp/screenshot.png"
+        )  # nosec B108 - test/controlled code uses tmpdir intentionally
 
     @patch("integrations.desktop_tracking.track_desktop_activity")
     async def test_track_window_focus_helper(self, mock_track_desktop):

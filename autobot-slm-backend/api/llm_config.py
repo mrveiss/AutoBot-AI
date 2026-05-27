@@ -50,7 +50,7 @@ class LLMConfig(BaseModel):
     active_provider: str = "ollama"
     providers: List[LLMProviderConfig] = []
     # Ollama server settings (pushed via Ansible)
-    ollama_host: str = "0.0.0.0"
+    ollama_host: str = "0.0.0.0"  # nosec B104 - intentional bind to all interfaces for service/test
     ollama_port: int = 11434
     gpu_models: List[str] = []
     cpu_models: List[str] = []
@@ -144,7 +144,9 @@ async def _load_llm_config(db: AsyncSession) -> LLMConfig:
     return LLMConfig(
         active_provider=rows.get("llm_active_provider", "ollama"),
         providers=providers,
-        ollama_host=rows.get("llm_ollama_host", "0.0.0.0"),
+        ollama_host=rows.get(
+            "llm_ollama_host", "0.0.0.0"
+        ),  # nosec B104 - intentional bind to all interfaces for service/test
         ollama_port=int(rows.get("llm_ollama_port", "11434")),
         gpu_models=gpu_models,
         cpu_models=cpu_models,

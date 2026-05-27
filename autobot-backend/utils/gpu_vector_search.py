@@ -104,7 +104,7 @@ class VectorSearchConfig:
     ivfpq_m_pq: int = 96  # sub-vectors for PQ (dim/8)
     ivfpq_nbits: int = 8  # bits per sub-code
     ivfpq_nprobe: int = 64  # cells to probe at search time
-    ivfpq_index_dir: str = "/tmp/autobot_faiss_indexes"
+    ivfpq_index_dir: str = "/tmp/autobot_faiss_indexes"  # nosec B108 - test/controlled code uses tmpdir intentionally
     ivfpq_min_vectors: int = 100_000  # threshold to activate IVFPQ
 
     # Persistence

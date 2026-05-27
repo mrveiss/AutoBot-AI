@@ -72,7 +72,7 @@ def _config(extra: dict | None = None) -> ConnectorConfig:
         "connector_id": "test-id",
         "connector_type": "file_server",
         "name": "test",
-        "config": {"base_path": "/tmp/test"},
+        "config": {"base_path": "/tmp/test"},  # nosec B108 - test/controlled code uses tmpdir intentionally
     }
     if extra:
         base.update(extra)

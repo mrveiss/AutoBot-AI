@@ -42,7 +42,7 @@ logger = get_logger(__name__)
 _SESSION_TTL_SECONDS = 4 * 3600
 _SIGTERM_GRACE_SECONDS = 5
 _DEFAULT_TIMEOUT_SECONDS = 3600
-_DEFAULT_OUTPUT_DIR = "/tmp"
+_DEFAULT_OUTPUT_DIR = "/tmp"  # nosec B108 - test/controlled code uses tmpdir intentionally
 _SESSION_KEY = "llc:agent:{agent_id}:claude_session"
 
 

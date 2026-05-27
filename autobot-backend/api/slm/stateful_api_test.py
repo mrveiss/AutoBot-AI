@@ -64,7 +64,7 @@ def sample_backup():
         backup_id="bak-123",
         node_id="node-1",
         service_type="redis",
-        backup_path="/tmp/backups/backup.rdb",
+        backup_path="/tmp/backups/backup.rdb",  # nosec B108 - test/controlled code uses tmpdir intentionally
         state=BackupState.COMPLETED,
         size_bytes=1024,
         checksum="abc123",

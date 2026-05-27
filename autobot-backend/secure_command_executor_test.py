@@ -31,7 +31,7 @@ class TestSecurityPolicy:
 
         # Check that allowed paths include common directories
         assert Path.home() in policy.allowed_paths
-        assert Path("/tmp") in policy.allowed_paths
+        assert Path("/tmp") in policy.allowed_paths  # nosec B108 - test/controlled code uses tmpdir intentionally
 
         # #7147: dangerous_patterns moved off SecurityPolicy in #765 — they
         # now live in security.command_patterns.DANGEROUS_PATTERNS (the

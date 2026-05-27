@@ -223,7 +223,7 @@ class CausalErrorRecovery:
         """Hash a causal chain for pattern matching."""
         import hashlib
 
-        return hashlib.md5(causal_chain.encode()).hexdigest()[:16]
+        return hashlib.md5(causal_chain.encode(), usedforsecurity=False).hexdigest()[:16]
 
     def _check_pattern(self, pattern_hash: str) -> tuple[int, bool]:
         """Check if a pattern is known and return frequency."""

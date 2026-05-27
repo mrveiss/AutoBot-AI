@@ -118,8 +118,8 @@ class TestLayerInferenceConfig:
 
     def test_cache_dir_accepted(self):
         """cache_dir string should be stored on the config."""
-        cfg = _make_config(cache_dir="/tmp/models")
-        assert cfg.cache_dir == "/tmp/models"
+        cfg = _make_config(cache_dir="/tmp/models")  # nosec B108 - test/controlled code uses tmpdir intentionally
+        assert cfg.cache_dir == "/tmp/models"  # nosec B108 - test/controlled code uses tmpdir intentionally
 
 
 # ---------------------------------------------------------------------------

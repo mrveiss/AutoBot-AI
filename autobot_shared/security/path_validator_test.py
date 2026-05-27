@@ -54,7 +54,7 @@ class TestValidatePath:
     def test_null_byte_raises(self) -> None:
         """Null byte in path raises ValueError."""
         with pytest.raises(ValueError, match="empty or contains null bytes"):
-            validate_path("/tmp/file\x00.txt")
+            validate_path("/tmp/file\x00.txt")  # nosec B108 - test/controlled code uses tmpdir intentionally
 
     def test_must_exist_with_nonexistent_path(self, tmp_path) -> None:
         """must_exist=True with nonexistent path raises ValueError."""
@@ -109,9 +109,11 @@ class TestValidatePath:
 
     def test_default_allowed_roots_used_when_none(self) -> None:
         """When allowed_roots is None, _DEFAULT_ALLOWED_ROOTS is used."""
-        assert "/tmp" in _DEFAULT_ALLOWED_ROOTS
-        result = validate_path("/tmp/test_path_validator_check")
-        assert str(result).startswith("/tmp")
+        assert "/tmp" in _DEFAULT_ALLOWED_ROOTS  # nosec B108 - test/controlled code uses tmpdir intentionally
+        result = validate_path(
+            "/tmp/test_path_validator_check"
+        )  # nosec B108 - test/controlled code uses tmpdir intentionally
+        assert str(result).startswith("/tmp")  # nosec B108 - test/controlled code uses tmpdir intentionally
 
     def test_symlink_escape(self, tmp_path) -> None:
         """Symlink pointing outside base directory is caught by realpath."""
@@ -154,12 +156,14 @@ class TestValidateRelativePath:
     def test_empty_segment_raises(self) -> None:
         """Empty segment raises ValueError."""
         with pytest.raises(ValueError, match="empty or contains null bytes"):
-            validate_relative_path("", "/tmp/base")
+            validate_relative_path("", "/tmp/base")  # nosec B108 - test/controlled code uses tmpdir intentionally
 
     def test_null_byte_in_segment_raises(self) -> None:
         """Null byte in segment raises ValueError."""
         with pytest.raises(ValueError, match="empty or contains null bytes"):
-            validate_relative_path("file\x00.txt", "/tmp/base")
+            validate_relative_path(
+                "file\x00.txt", "/tmp/base"
+            )  # nosec B108 - test/controlled code uses tmpdir intentionally
 
     def test_absolute_path_as_segment(self, tmp_path) -> None:
         """Absolute path as segment escapes base and raises."""
