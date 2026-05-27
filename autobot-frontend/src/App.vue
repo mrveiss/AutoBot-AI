@@ -68,26 +68,29 @@
                   :items="overflowNavItems"
                 />
 
-                <!-- SLM Admin: external link (Issue #729) -->
-                <a
-                  :href="slmAdminUrl"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="px-3 py-2 rounded text-sm font-medium transition-colors duration-150 text-autobot-text-primary hover:bg-autobot-bg-tertiary shrink-0"
-                  :title="$t('nav.slmAdminTitle')"
-                  :aria-label="$t('nav.slmAdminTitle')"
-                >
-                  <div class="flex items-center gap-1">
-                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                      <path fill-rule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"></path>
-                    </svg>
-                    <span>{{ $t('nav.slmAdmin') }}</span>
-                    <svg class="w-3 h-3 opacity-50" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"></path>
-                      <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"></path>
-                    </svg>
-                  </div>
-                </a>
+                <!-- SLM Admin: external link (Issue #729, #8753) -->
+                <div class="flex items-center shrink-0">
+                  <div class="w-px h-5 bg-autobot-border mx-1" aria-hidden="true"></div>
+                  <a
+                    :href="slmAdminUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="px-3 py-2 rounded text-sm font-medium transition-colors duration-150 text-autobot-text-secondary hover:text-autobot-text-primary hover:bg-autobot-bg-tertiary border border-transparent hover:border-autobot-border"
+                    :title="$t('nav.slmAdminTitle')"
+                    :aria-label="$t('nav.slmAdminTitle')"
+                  >
+                    <div class="flex items-center gap-1">
+                      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                        <path fill-rule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"></path>
+                      </svg>
+                      <span>{{ $t('nav.slmAdmin') }}</span>
+                      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"></path>
+                        <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"></path>
+                      </svg>
+                    </div>
+                  </a>
+                </div>
               </div>
             </div>
           </nav>
@@ -172,26 +175,29 @@
             </router-link>
             </template>
 
-            <!-- SLM Admin: external link (Issue #729) -->
-            <a
-              :href="slmAdminUrl"
-              target="_blank"
-              rel="noopener noreferrer"
-              @click="closeMobileNav"
-              class="w-full text-start px-3 py-2 rounded text-sm font-medium transition-colors duration-150 block text-autobot-text-primary hover:bg-autobot-bg-tertiary"
-              :aria-label="$t('nav.slmAdminTitle')"
-            >
-              <div class="flex items-center gap-2">
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                  <path fill-rule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"></path>
-                </svg>
-                <span>{{ $t('nav.slmAdmin') }}</span>
-                <svg class="w-3 h-3 opacity-50" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"></path>
-                  <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"></path>
-                </svg>
-              </div>
-            </a>
+            <!-- SLM Admin: external link (Issue #729, #8753) -->
+            <div class="border-t border-autobot-border pt-2 mt-1">
+              <a
+                :href="slmAdminUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                @click="closeMobileNav"
+                class="w-full text-start px-3 py-2 rounded text-sm font-medium transition-colors duration-150 block text-autobot-text-secondary hover:text-autobot-text-primary hover:bg-autobot-bg-tertiary border border-transparent hover:border-autobot-border"
+                :aria-label="$t('nav.slmAdminTitle')"
+                :title="$t('nav.slmAdminTitle')"
+              >
+                <div class="flex items-center gap-2">
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <path fill-rule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"></path>
+                  </svg>
+                  <span>{{ $t('nav.slmAdmin') }}</span>
+                  <svg class="w-4 h-4 ml-auto" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"></path>
+                    <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"></path>
+                  </svg>
+                </div>
+              </a>
+            </div>
 
                         <!-- Language Switcher -->
             <LanguageSwitcher :mobile="true" />

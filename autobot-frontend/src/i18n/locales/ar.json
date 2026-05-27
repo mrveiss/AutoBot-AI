@@ -6983,7 +6983,7 @@
     "secrets": "Secrets",
     "plugins": "Plugins",
     "slmAdmin": "SLM Admin",
-    "slmAdminTitle": "Open SLM Admin Panel",
+    "slmAdminTitle": "SLM Admin — opens in new tab",
     "profileSettings": "Profile Settings",
     "vision": "Vision",
     "preferences": "Preferences",

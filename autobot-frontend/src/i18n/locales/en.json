@@ -7291,7 +7291,7 @@
     "experiments": "Experiments",
     "llmApiKeys": "LLM API Keys",
     "slmAdmin": "SLM Admin",
-    "slmAdminTitle": "Open SLM Admin Panel",
+    "slmAdminTitle": "SLM Admin — opens in new tab",
     "profileSettings": "Profile Settings",
     "switchLanguage": "Switch language",
     "openMainMenu": "Open main menu",
