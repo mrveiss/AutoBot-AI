@@ -10,7 +10,7 @@ import importlib.util
 import sys
 import types
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
