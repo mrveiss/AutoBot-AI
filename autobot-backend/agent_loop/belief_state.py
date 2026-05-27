@@ -22,6 +22,7 @@ from agent_loop.types import (
 if TYPE_CHECKING:
     from agent_loop.types import TaskContext
 
+
 class BeliefStateUpdater:
     """Update TaskContext.assertions from raw tool output."""
 
@@ -40,6 +41,7 @@ class BeliefStateUpdater:
         Returns the list of ContradictionRecords produced in this call.
         """
         from agent_loop.extractors import EXTRACTOR_REGISTRY
+
         extractor = EXTRACTOR_REGISTRY.get(tool_name)
         if extractor is None:
             return []

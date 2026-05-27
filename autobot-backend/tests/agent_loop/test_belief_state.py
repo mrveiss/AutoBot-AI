@@ -32,7 +32,6 @@ from agent_loop.types import (
     ToolExecutionRef,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -112,6 +111,7 @@ class _FakeExtractor:
 @contextmanager
 def _registry(mapping: dict):
     import sys
+
     ext_mod = sys.modules.get("agent_loop.extractors")
     original = getattr(ext_mod, "EXTRACTOR_REGISTRY", {}) if ext_mod else {}
     if ext_mod is not None:

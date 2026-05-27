@@ -171,8 +171,7 @@ class TestRetryClassBudget:
             assert result is True
         # The loop guard must also say "continue" — not stop at max_consecutive_errors
         assert loop._should_continue() is True, (
-            "_should_continue() stopped at max_consecutive_errors=3 instead of "
-            "honoring max_retries_low=5 (GH#8649)"
+            "_should_continue() stopped at max_consecutive_errors=3 instead of " "honoring max_retries_low=5 (GH#8649)"
         )
 
     @pytest.mark.asyncio

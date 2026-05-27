@@ -75,7 +75,9 @@ class RunCommandExtractor:
 
         results: list[tuple[str, Any, float]] = []
 
-        exit_code = tool_output.get("exit_code") if tool_output.get("exit_code") is not None else tool_output.get("returncode")
+        exit_code = (
+            tool_output.get("exit_code") if tool_output.get("exit_code") is not None else tool_output.get("returncode")
+        )
         if exit_code is not None:
             results.append((f"run_command:exit_code/{cmd_class}", int(exit_code), 1.0))
 
