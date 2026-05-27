@@ -471,6 +471,17 @@ code_deployment() {
 
     if [[ -d "${CODE_SOURCE}/.git" ]]; then
         info "Updating existing repository..."
+
+        # Remove stale git lock files left by prior crashed processes (exit 128 guard)
+        local _lock _lf
+        for _lock in index config HEAD; do
+            _lf="${CODE_SOURCE}/.git/${_lock}.lock"
+            if [[ -f "${_lf}" ]]; then
+                warn "Removing stale git lock: ${_lf}"
+                rm -f "${_lf}"
+            fi
+        done
+
         run_ok "Fetching latest code" \
             sudo -u autobot git -C "${CODE_SOURCE}" fetch origin
         run_ok "Checking out ${GIT_BRANCH}" \
