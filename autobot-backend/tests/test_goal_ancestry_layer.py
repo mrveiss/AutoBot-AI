@@ -33,12 +33,12 @@ def _load_layers_module():
     # Provide a minimal stub for autobot_shared.ssot_config / config so that
     # ``TIERED_CONTEXT_ENABLED = config.tiered_context_enabled.lower() == "true"``
     # resolves to False at import time.
-    if "autobot_shared.ssot_config" not in sys.modules:
-        cfg_mock = MagicMock()
-        cfg_mock.tiered_context_enabled = "false"
-        cfg_stub = types.ModuleType("autobot_shared.ssot_config")
-        cfg_stub.config = cfg_mock  # type: ignore[attr-defined]
-        sys.modules["autobot_shared.ssot_config"] = cfg_stub
+    # conftest.py imports `from autobot_shared.ssot_config import config` before
+    # test collection, so sys.modules["autobot_shared.ssot_config"] is already
+    # populated with the real module — the if-not-in guard would never fire.
+    # Unconditionally patch the attribute on whatever config object is present.
+    import autobot_shared.ssot_config as _ssot_cfg_mod
+    _ssot_cfg_mod.config.tiered_context_enabled = "false"  # type: ignore[attr-defined]
 
     spec = importlib.util.spec_from_file_location("chat_history.layers", layers_path)
     module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
