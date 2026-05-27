@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from typing import Any, Generic, TypeVar
 
 from pydantic import TypeAdapter
+from redis.exceptions import WatchError
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
@@ -173,10 +174,6 @@ class SharedRuntimeBag(Generic[T]):
                     await self._publish(redis, key, "set", updated)
                     return updated
                 except Exception as exc:
-                    # WatchError is raised by aioredis on concurrent modification.
-                    # Re-raise anything that is not a WatchError on the last attempt.
-                    from redis.exceptions import WatchError
-
                     if not isinstance(exc, WatchError):
                         raise
                     if attempt == retries:
