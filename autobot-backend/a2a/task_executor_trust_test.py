@@ -19,7 +19,6 @@ import pytest
 from a2a.task_executor import execute_a2a_task
 from a2a.types import TaskState
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -72,7 +71,9 @@ class TestExecutorRecordsSuccess:
             patch("a2a.task_executor.get_trust_manager", return_value=trust_mgr),
             patch("a2a.task_executor.scrub_outbound", return_value=scrub_result),
             patch("a2a.task_executor.evaluate_task_output", new=AsyncMock(return_value=_make_eval_pass())),
-            patch("agents.agent_orchestration.get_distributed_agent_coordinator", return_value=orchestrator, create=True),
+            patch(
+                "agents.agent_orchestration.get_distributed_agent_coordinator", return_value=orchestrator, create=True
+            ),
         ):
             await execute_a2a_task("task-1", "do something", peer_id="partner-agent")
 
@@ -96,7 +97,9 @@ class TestExecutorRecordsSuccess:
             patch("a2a.task_executor.get_trust_manager", return_value=trust_mgr),
             patch("a2a.task_executor.scrub_outbound", return_value=scrub_result),
             patch("a2a.task_executor.evaluate_task_output", new=AsyncMock(return_value=_make_eval_pass())),
-            patch("agents.agent_orchestration.get_distributed_agent_coordinator", return_value=orchestrator, create=True),
+            patch(
+                "agents.agent_orchestration.get_distributed_agent_coordinator", return_value=orchestrator, create=True
+            ),
         ):
             await execute_a2a_task("task-2", "do something", peer_id=None)
 
@@ -127,7 +130,9 @@ class TestExecutorRecordsFailure:
             patch("a2a.task_executor.get_trust_manager", return_value=trust_mgr),
             patch("a2a.task_executor.scrub_outbound", return_value=scrub_result),
             patch("a2a.task_executor.evaluate_task_output", new=AsyncMock(return_value=_make_eval_fail())),
-            patch("agents.agent_orchestration.get_distributed_agent_coordinator", return_value=orchestrator, create=True),
+            patch(
+                "agents.agent_orchestration.get_distributed_agent_coordinator", return_value=orchestrator, create=True
+            ),
         ):
             await execute_a2a_task("task-3", "do something", peer_id="partner-agent")
 
@@ -150,7 +155,9 @@ class TestExecutorRecordsFailure:
             patch("a2a.task_executor.get_task_manager", return_value=tm),
             patch("a2a.task_executor.get_trust_manager", return_value=trust_mgr),
             patch("a2a.task_executor.scrub_outbound", return_value=scrub_result),
-            patch("agents.agent_orchestration.get_distributed_agent_coordinator", return_value=orchestrator, create=True),
+            patch(
+                "agents.agent_orchestration.get_distributed_agent_coordinator", return_value=orchestrator, create=True
+            ),
         ):
             await execute_a2a_task("task-4", "do something", peer_id="partner-agent")
 
@@ -210,7 +217,9 @@ class TestExecutorRecordsThreatEvent:
             patch("a2a.task_executor.get_task_manager", return_value=tm),
             patch("a2a.task_executor.get_trust_manager", return_value=trust_mgr),
             patch("a2a.task_executor.scrub_outbound", side_effect=_scrub_side_effect),
-            patch("agents.agent_orchestration.get_distributed_agent_coordinator", return_value=orchestrator, create=True),
+            patch(
+                "agents.agent_orchestration.get_distributed_agent_coordinator", return_value=orchestrator, create=True
+            ),
         ):
             await execute_a2a_task("task-6", "summarise", peer_id="suspect-agent")
 
@@ -235,7 +244,9 @@ class TestExecutorRecordsThreatEvent:
             patch("a2a.task_executor.get_trust_manager", return_value=trust_mgr),
             patch("a2a.task_executor.scrub_outbound", return_value=scrub_result),
             patch("a2a.task_executor.evaluate_task_output", new=AsyncMock(return_value=_make_eval_pass())),
-            patch("agents.agent_orchestration.get_distributed_agent_coordinator", return_value=orchestrator, create=True),
+            patch(
+                "agents.agent_orchestration.get_distributed_agent_coordinator", return_value=orchestrator, create=True
+            ),
         ):
             # Should not raise even though trust recording throws
             await execute_a2a_task("task-7", "do something", peer_id="flaky-peer")

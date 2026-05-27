@@ -438,6 +438,7 @@ class TestListPeers:
         class _FakeRedis:
             def keys(self, pattern):
                 import fnmatch
+
                 return [k for k in _store if fnmatch.fnmatch(k, pattern)]
 
             def get(self, key):
