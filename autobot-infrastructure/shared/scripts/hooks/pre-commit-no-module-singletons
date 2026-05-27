@@ -95,7 +95,7 @@ def _is_test_file(path: str) -> bool:
     return (
         "/tests/" in p
         or p.endswith("_test.py")
-        or p.endswith("_test.py")
+        or p.split("/")[-1].startswith("test_")
         or "/test_" in p
         or "conftest" in p
     )
