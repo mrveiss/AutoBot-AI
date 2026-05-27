@@ -225,10 +225,10 @@ def cleanup_stale(
             continue  # too young
 
         if (entry / _ACTIVE_LOCK_FILENAME).exists():
-            logger.debug("Skipping locked workspace task=%s during stale cleanup", entry.name[len("task-"):])
+            logger.debug("Skipping locked workspace task=%s during stale cleanup", entry.name[len("task-") :])
             continue
 
-        task_id = entry.name[len("task-"):]
+        task_id = entry.name[len("task-") :]
         try:
             release(task_id, root, keep_on_failure=True)
             cleaned.append(task_id)
@@ -350,7 +350,7 @@ def _enforce_limit(agent_id: str, max_per_agent: int, root: Path) -> None:
             if (entry / _ACTIVE_LOCK_FILENAME).exists():
                 continue  # count but do not add to eviction candidates
             ts = datetime.fromisoformat(meta["created_at"]).timestamp()
-            task_id = entry.name[len("task-"):]
+            task_id = entry.name[len("task-") :]
             eviction_candidates.append((ts, task_id))
         except (json.JSONDecodeError, KeyError, ValueError):
             pass
