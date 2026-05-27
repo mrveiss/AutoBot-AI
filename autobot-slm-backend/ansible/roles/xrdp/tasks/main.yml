@@ -1,0 +1,84 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# xrdp Role - Install and configure xrdp RDP server (GH#1525)
+# Replaces TigerVNC+websockify stack with native RDP on port 3389.
+---
+# #6719: bounded shell apt-get update — same pattern as other roles.
+- name: xrdp | Refresh apt cache (best-effort, bounded; #6719)
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
+
+- name: xrdp | Install packages
+  ansible.builtin.apt:
+    name:
+      - xrdp
+      - xorgxrdp
+    state: present
+  become: true
+
+- name: xrdp | Add xrdp user to ssl-cert group (required for TLS key access)
+  ansible.builtin.user:
+    name: xrdp
+    groups: ssl-cert
+    append: true
+  become: true
+  notify: restart xrdp
+
+- name: xrdp | Deploy xrdp.ini config
+  ansible.builtin.template:
+    src: xrdp.ini.j2
+    dest: /etc/xrdp/xrdp.ini
+    mode: "0644"
+    owner: root
+    group: root
+  become: true
+  notify: restart xrdp
+
+- name: xrdp | Enable and start xrdp service
+  ansible.builtin.systemd:
+    name: xrdp
+    state: started
+    enabled: true
+    daemon_reload: true
+  become: true
+
+- name: xrdp | Allow RDP port ({{ xrdp_port }}) through UFW from internal subnet
+  community.general.ufw:
+    rule: allow
+    port: "{{ xrdp_port | string }}"
+    proto: tcp
+    src: "{{ network_subnet | default('0.0.0.0/0', true) }}"
+    comment: "xrdp RDP server - internal only (GH#1525)"
+  become: true
+
+- name: xrdp | Verify xrdp is listening on port {{ xrdp_port }}
+  ansible.builtin.wait_for:
+    port: "{{ xrdp_port | int }}"
+    host: 0.0.0.0
+    timeout: 30
+    state: started
+  become: false
+
+# --- Auto-register RDP credentials in SLM database (mirrors #2926 VNC pattern) ---
+- name: xrdp | Register RDP credentials in SLM (best-effort)
+  when:
+    - xrdp_register_credentials | bool
+    - slm_node_id is defined
+  block:
+    - name: xrdp | Register RDP credentials in SLM
+      ansible.builtin.include_tasks: register-credentials.yml
+  rescue:
+    - name: xrdp | Credential registration skipped (SLM unreachable)
+      ansible.builtin.debug:
+        msg: >-
+          RDP credential auto-registration failed for {{ inventory_hostname }}
+          (SLM at {{ slm_api_url }} unreachable — register manually via
+          SLM UI > Nodes > Credentials, credential_type=rdp, port={{ xrdp_port }})

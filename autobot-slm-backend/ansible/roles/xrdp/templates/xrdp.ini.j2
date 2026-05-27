@@ -1,0 +1,48 @@
+; AutoBot xrdp configuration (GH#1525)
+; Managed by Ansible — do not edit manually.
+
+[globals]
+; PAM-based authentication for system accounts (mbd, nexusmbd)
+ini_version=1
+fork=true
+port={{ xrdp_port }}
+tcp_nodelay={{ xrdp_tcp_nodelay }}
+tcp_keepalive={{ xrdp_tcp_keepalive }}
+security_layer=negotiate
+crypt_level={{ xrdp_crypt_level }}
+certificate=
+key_file=
+ssl_protocols=TLSv1.2, TLSv1.3
+tls_ciphers=HIGH
+; Disconnect idle sessions after 60 minutes
+session_timeout=3600
+; Throttle brute-force attempts
+max_bpp={{ xrdp_max_bpp }}
+bitmap_compression={{ xrdp_bitmap_compression }}
+; Log to syslog
+log_level=INFO
+log_syslog=true
+
+[Logging]
+LogFile=/var/log/xrdp.log
+LogLevel=INFO
+EnableSyslog=true
+SyslogLevel=INFO
+
+[Channels]
+rdpdr=true
+rdpsnd=true
+drdynvc=true
+cliprdr=true
+rail=false
+xrdpvr=false
+tcutils=true
+
+[xrdp1]
+name=Xorg
+lib=libxup.so
+username=ask
+password=ask
+ip=127.0.0.1
+port=-1
+code=20

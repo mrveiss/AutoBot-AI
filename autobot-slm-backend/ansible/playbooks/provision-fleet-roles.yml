@@ -330,6 +330,15 @@
       when: role_vnc_active | bool
       tags: ['vnc', 'provision']
 
+    - name: "App | Deploy xrdp role (GH#1525 — RDP on port 3389)"
+      ansible.builtin.include_role:
+        name: xrdp
+        apply:
+          tags: ['xrdp', 'rdp', 'provision']
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_xrdp_active | bool
+      tags: ['xrdp', 'rdp', 'provision']
+
 # -------------------------------------------------------------------
 # Phase 4b: Frontend
 # -------------------------------------------------------------------

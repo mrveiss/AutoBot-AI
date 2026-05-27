@@ -228,7 +228,7 @@ all:
     llm:
       hosts:
         autobot-llm:
-          ansible_host: "{{ lookup('env', 'AUTOBOT_LLM_HOST') | default('127.0.0.1', true) }}"  # LLM CPU node (#1040) -- also VNC desktop (#1525)
+          ansible_host: "{{ lookup('env', 'AUTOBOT_LLM_HOST') | default('127.0.0.1', true) }}"  # LLM CPU + xrdp RDP desktop (GH#1525 — xrdp replaces VNC)
           vm_id: "autobot-llm-vm"
           vm_role: "llm"
           vm_hostname: "autobot-llm"
@@ -238,18 +238,16 @@ all:
             disk_gb: 100
           node_roles:
             - llm
-            - vnc
+            - xrdp
           services:
             - ollama
-            - vnc-server
-            - vnc-websockify
+            - xrdp
           desktop_features:
-            vnc_enabled: true
-            desktop_environment: "xfce4"
+            rdp_enabled: true
+            rdp_port: 3389
       vars:
         ollama_port: 11434
-        vnc_port: 5900
-        websockify_port: 6080
+        xrdp_port: 3389
 
     reserved:
       hosts:
@@ -350,8 +348,8 @@ llm_nodes:
   children:
     llm:
 
-# VNC desktop nodes (#1525, #2407) -- nodes with VNC remote desktop access
-vnc_nodes:
+# RDP desktop nodes via xrdp (GH#1525 — xrdp on port 3389 replaces VNC)
+rdp_nodes:
   children:
     llm:
 

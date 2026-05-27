@@ -91,19 +91,18 @@ all:
             - autobot-playwright
             - nginx
 
-        # LLM CPU node (#1040) — also VNC desktop (#1525)
+        # LLM CPU node (#1040) + RDP desktop via xrdp (GH#1525 — replaces VNC)
         05-LLM-CPU:
           ansible_host: "{{ lookup('env', 'AUTOBOT_LLM_HOST') | default('127.0.0.1', true) }}"
           slm_node_id: "05-LLM-CPU"
           slm_node_role: "llm"
           node_roles:
             - llm
-            - vnc
+            - xrdp
           slm_services_to_monitor:
             - slm-agent
             - ollama
-            - vnc-server
-            - vnc-websockify
+            - xrdp
 
         # Reserved node - pending role assignment
         06-Node-27:
@@ -145,8 +144,8 @@ all:
       hosts:
         05-LLM-CPU:
 
-    # VNC desktop nodes (#1525, #2407)
-    vnc_nodes:
+    # RDP desktop nodes via xrdp (GH#1525 — xrdp on port 3389 replaces VNC)
+    rdp_nodes:
       hosts:
         05-LLM-CPU:
 
@@ -161,6 +160,7 @@ all:
         ai_stack:
         slm_server:
         llm_nodes:
+        rdp_nodes:
 
     # Cross-inventory aliases (#2515)
     # Ensure group names from production.yml resolve in slm-nodes.yml.
