@@ -100,6 +100,7 @@ class SprintKbSummarizer:
             logger.info("Sprint %s KB collection is empty; nothing to merge", sprint_id)
         elif doc_count <= _SUMMARIZE_THRESHOLD:
             await self._direct_merge(docs, project_collection, sprint_id, project_id)
+            summary_text = f"[direct-merged: {doc_count} docs]"
         else:
             summary_text = await self._llm_summarize_and_index(
                 docs, project_collection, sprint_id, project_id, sprint=sprint
