@@ -25,6 +25,7 @@ from ..models.sprint import LLCSprint
 logger = get_logger(__name__)
 
 _SUMMARIZE_THRESHOLD = 10
+_MAX_PROMPT_CHARS = 32_768  # ≈8192 tokens at 4 chars/token; caps combined input before LLM
 
 _SUMMARIZE_PROMPT = (
     "You are summarizing a software sprint knowledge base for long-term archival.\n"
@@ -96,17 +97,18 @@ class SprintKbSummarizer:
 
         summary_text: Optional[str] = None
 
-        if doc_count == 0:
-            logger.info("Sprint %s KB collection is empty; nothing to merge", sprint_id)
-        elif doc_count <= _SUMMARIZE_THRESHOLD:
-            await self._direct_merge(docs, project_collection, sprint_id, project_id)
-            summary_text = f"[direct-merged: {doc_count} docs]"
-        else:
-            summary_text = await self._llm_summarize_and_index(
-                docs, project_collection, sprint_id, project_id, sprint=sprint
-            )
-
-        await self._km.archive_collection(KbCollectionManager.SPRINT_PREFIX, sprint_id)
+        try:
+            if doc_count == 0:
+                logger.info("Sprint %s KB collection is empty; nothing to merge", sprint_id)
+            elif doc_count <= _SUMMARIZE_THRESHOLD:
+                await self._direct_merge(docs, project_collection, sprint_id, project_id)
+                summary_text = f"[direct-merged: {doc_count} docs]"
+            else:
+                summary_text = await self._llm_summarize_and_index(
+                    docs, project_collection, sprint_id, project_id, sprint=sprint
+                )
+        finally:
+            await self._km.archive_collection(KbCollectionManager.SPRINT_PREFIX, sprint_id)
 
         if summary_text and session is not None and sprint is not None:
             sprint.kb_summary = summary_text  # type: ignore[attr-defined]
@@ -209,20 +211,36 @@ class SprintKbSummarizer:
     ) -> str:
         """LLM-summarize docs and index the result into the destination collection."""
         combined = "\n---\n".join(d["document"] for d in docs if d["document"])
+        if len(combined) > _MAX_PROMPT_CHARS:
+            logger.warning(
+                "Sprint %s combined docs (%d chars) exceed _MAX_PROMPT_CHARS=%d; truncating",
+                sprint_id,
+                len(combined),
+                _MAX_PROMPT_CHARS,
+            )
+            combined = combined[:_MAX_PROMPT_CHARS]
         prompt = _SUMMARIZE_PROMPT.format(documents=combined)
 
         from services.llm_service import get_llm_service  # lazy
 
         llm = get_llm_service()
-        response = await llm.chat(
-            [{"role": "user", "content": prompt}],
-            llm_type="summarization",
-            max_tokens=1024,
-        )
+        try:
+            response = await llm.chat(
+                [{"role": "user", "content": prompt}],
+                llm_type="summarization",
+                max_tokens=1024,
+            )
+        except Exception as exc:
+            logger.error(
+                "LLM summarization raised for sprint %s: %s — falling back to direct merge",
+                sprint_id,
+                exc,
+            )
+            await self._direct_merge(docs, dst_collection, sprint_id, project_id)
+            return "[direct-merged: LLM summarization raised]"
 
         if response.error:
             logger.error("LLM summarization failed for sprint %s: %s", sprint_id, response.error)
-            # Fall back to direct merge on LLM failure
             await self._direct_merge(docs, dst_collection, sprint_id, project_id)
             return "[direct-merged: LLM summarization failed]"
 
