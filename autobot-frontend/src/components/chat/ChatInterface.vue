@@ -56,24 +56,29 @@
         >
           <!-- File Panel Toggle Button (injected into header) -->
           <template #actions>
-            <!-- Voice Output Toggle (#928) -->
-            <button
-              @click="toggleVoiceOutput"
-              class="header-btn"
-              :class="{ 'bg-electric-100 text-electric-600': voiceOutputEnabled }"
-              :title="voiceOutputEnabled ? $t('chat.interface.voiceOutputOn') : $t('chat.interface.voiceOutputOff')"
-            >
-              <Icon :name="isSpeaking || voiceOutputEnabled ? 'volume-up' : 'volume-mute'" :class="isSpeaking ? 'animate-pulse' : ''" />
-            </button>
-            <!-- Voice Conversation (#1029) -->
-            <button
-              @click="openVoiceConversation"
-              class="header-btn"
-              :class="{ 'bg-electric-100 text-electric-600': showVoiceOverlay || showVoicePanel }"
-              :title="$t('chat.interface.voiceChat')"
-            >
-              <Icon name="headset" />
-            </button>
+            <!-- Voice controls group (GH#8755): proximity grouping for audio actions -->
+            <div role="group" aria-label="Voice controls" class="header-btn-group">
+              <!-- Voice Output Toggle (#928) -->
+              <button
+                @click="toggleVoiceOutput"
+                class="header-btn"
+                :class="{ 'bg-electric-100 text-electric-600': voiceOutputEnabled }"
+                :title="voiceOutputEnabled ? $t('chat.interface.voiceOutputOn') : $t('chat.interface.voiceOutputOff')"
+              >
+                <Icon :name="isSpeaking || voiceOutputEnabled ? 'volume-up' : 'volume-mute'" :class="isSpeaking ? 'animate-pulse' : ''" />
+              </button>
+              <!-- Voice Conversation (#1029) -->
+              <button
+                @click="openVoiceConversation"
+                class="header-btn"
+                :class="{ 'bg-electric-100 text-electric-600': showVoiceOverlay || showVoicePanel }"
+                :title="$t('chat.interface.voiceChat')"
+              >
+                <Icon name="headset" />
+              </button>
+            </div>
+            <!-- Divider between voice group and utility actions -->
+            <div class="header-btn-divider" aria-hidden="true"></div>
             <button
               v-if="store.currentSessionId"
               @click="toggleFilePanel"
@@ -1261,6 +1266,19 @@ function _extractCompleteSentences(text: string): string[] {
 /* Header button styling for file panel toggle */
 .header-btn {
   @apply w-8 h-8 flex items-center justify-center rounded-md transition-colors text-autobot-text-secondary hover:bg-autobot-bg-tertiary;
+}
+
+/* GH#8755: voice action group — subtle pill wraps related audio controls */
+.header-btn-group {
+  @apply flex items-center gap-0.5 rounded-md px-0.5;
+  background: var(--bg-tertiary);
+}
+
+/* GH#8755: vertical divider between voice group and utility buttons */
+.header-btn-divider {
+  @apply self-stretch my-1 mx-1;
+  width: 1px;
+  background: var(--border-light);
 }
 
 /* Agent-loop tool approval dialog (#4952) */
