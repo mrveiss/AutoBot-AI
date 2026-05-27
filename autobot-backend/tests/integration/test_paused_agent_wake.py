@@ -80,9 +80,7 @@ def _load_models_and_scheduler():
 
     original_jsonb = pg.JSONB
     with patch.object(pg, "JSONB", JSON):
-        hb_spec = importlib.util.spec_from_file_location(
-            "models.heartbeat", backend_root / "models" / "heartbeat.py"
-        )
+        hb_spec = importlib.util.spec_from_file_location("models.heartbeat", backend_root / "models" / "heartbeat.py")
         assert hb_spec and hb_spec.loader
         hb_mod = importlib.util.module_from_spec(hb_spec)
         models_pkg = types.ModuleType("models")
@@ -167,9 +165,7 @@ async def _seed_agent(factory: async_sessionmaker, agent_id: str, status: str) -
 async def _set_agent_active(factory: async_sessionmaker, agent_id: str) -> None:
     """Simulate the resume_agent endpoint: clear pause fields and set ACTIVE."""
     async with factory() as session:
-        result = await session.execute(
-            select(AgentRuntimeState).where(AgentRuntimeState.agent_id == agent_id)
-        )
+        result = await session.execute(select(AgentRuntimeState).where(AgentRuntimeState.agent_id == agent_id))
         state = result.scalar_one()
         state.status = AgentStatus.ACTIVE.value
         state.paused_reason = None
@@ -202,9 +198,7 @@ async def _queue_wakeup(
 
 async def _run_rows(factory: async_sessionmaker, agent_id: str) -> list[HeartbeatRun]:
     async with factory() as session:
-        result = await session.execute(
-            select(HeartbeatRun).where(HeartbeatRun.agent_id == agent_id)
-        )
+        result = await session.execute(select(HeartbeatRun).where(HeartbeatRun.agent_id == agent_id))
         return result.scalars().all()
 
 

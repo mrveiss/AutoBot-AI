@@ -61,6 +61,18 @@ _load_real("agent_loop.think_tool", "agent_loop/think_tool.py")
 _load_real("agent_loop.slack_hook", "agent_loop/slack_hook.py")
 _load_real("agent_loop.loop", "agent_loop/loop.py")
 
+# MVA-1407: belief state + extractors package
+_ext_pkg = types.ModuleType("agent_loop.extractors")
+_ext_pkg.__path__ = [str(_AL_DIR / "extractors")]  # type: ignore[assignment]
+_ext_pkg.__package__ = "agent_loop.extractors"
+sys.modules["agent_loop.extractors"] = _ext_pkg
+_pkg.extractors = _ext_pkg  # type: ignore[attr-defined]
+_load_real("agent_loop.extractors.read_file", "agent_loop/extractors/read_file.py")
+_load_real("agent_loop.extractors.run_command", "agent_loop/extractors/run_command.py")
+_load_real("agent_loop.extractors.web_search", "agent_loop/extractors/web_search.py")
+_load_real("agent_loop.extractors", "agent_loop/extractors/__init__.py")
+_load_real("agent_loop.belief_state", "agent_loop/belief_state.py")
+
 
 def pytest_unconfigure(config) -> None:  # noqa: ARG001
     """Restore the original stub state so other directories are unaffected."""
