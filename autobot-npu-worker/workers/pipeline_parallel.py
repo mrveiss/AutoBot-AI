@@ -23,7 +23,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -66,15 +66,10 @@ class ShardPlan:
         expected = 0
         for shard in self.shards:
             if shard.layer_start != expected:
-                raise ValueError(
-                    f"Gap or overlap at layer {expected}: "
-                    f"shard starts at {shard.layer_start}."
-                )
+                raise ValueError(f"Gap or overlap at layer {expected}: " f"shard starts at {shard.layer_start}.")
             expected = shard.layer_end + 1
         if expected != self.total_layers:
-            raise ValueError(
-                f"Shards cover {expected} layers but model has {self.total_layers}."
-            )
+            raise ValueError(f"Shards cover {expected} layers but model has {self.total_layers}.")
 
 
 # ---------------------------------------------------------------------------
@@ -105,9 +100,7 @@ async def fetch_worker_capabilities(
         async with session.get(url, timeout=timeout) as resp:
             if resp.status != 200:
                 text = await resp.text()
-                raise RuntimeError(
-                    f"Worker {host} /capabilities returned {resp.status}: {text}"
-                )
+                raise RuntimeError(f"Worker {host} /capabilities returned {resp.status}: {text}")
             data: Dict[str, Any] = await resp.json()
     except asyncio.TimeoutError:
         raise RuntimeError(f"Worker {host} /capabilities timed out after {timeout}s.")
@@ -210,10 +203,7 @@ def build_shard_plan(
         remaining -= assigned
 
     if remaining > 0:
-        raise ValueError(
-            f"Could not assign {remaining} remaining layers; "
-            "worker list exhausted."
-        )
+        raise ValueError(f"Could not assign {remaining} remaining layers; " "worker list exhausted.")
 
     if plan.shards:
         plan.shards[-1].is_last = True
@@ -283,15 +273,13 @@ async def _forward_one_shard(
     if shard.is_last:
         if "token_ids" not in data:
             raise RuntimeError(
-                f"Last worker {shard.worker.host} did not return 'token_ids'. "
-                f"Got keys: {list(data.keys())}"
+                f"Last worker {shard.worker.host} did not return 'token_ids'. " f"Got keys: {list(data.keys())}"
             )
         return data["token_ids"]
 
     if "hidden_state_out" not in data:
         raise RuntimeError(
-            f"Worker {shard.worker.host} did not return 'hidden_state_out'. "
-            f"Got keys: {list(data.keys())}"
+            f"Worker {shard.worker.host} did not return 'hidden_state_out'. " f"Got keys: {list(data.keys())}"
         )
     return data["hidden_state_out"]
 
