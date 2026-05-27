@@ -211,3 +211,60 @@ def test_format_context_includes_source():
     assert "work_item:wi-1" in result
     assert "hello world" in result
     assert "0.87" in result
+
+
+# ---------------------------------------------------------------------------
+# _parse_llm_text_response ValueError regression (GH#8652)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a2h_falls_back_when_parse_raises_value_error():
+    """ValueError from _parse_llm_text_response must not crash handoff generation."""
+    gen = HandoffBriefGenerator.__new__(HandoffBriefGenerator)
+    gen.rag = MagicMock()
+    gen.rag.assemble = AsyncMock(return_value=_make_rag_context())
+
+    bad_resp = MagicMock()
+    bad_resp.error = None
+    bad_resp.content = "totally unparseable prose with no json whatsoever"
+
+    with patch("services.llm_service.get_llm_service", create=True) as mock_llm_fn:
+        mock_llm = MagicMock()
+        mock_llm.chat = AsyncMock(return_value=bad_resp)
+        mock_llm_fn.return_value = mock_llm
+
+        result = await gen.generate_agent_to_human_brief(
+            work_item_id="wi-err-1",
+            agent_id="ag-err-1",
+            company_id="co-err-1",
+        )
+
+    assert result["generator"] == "fallback"
+    assert "completed" in result
+
+
+@pytest.mark.asyncio
+async def test_h2a_falls_back_when_parse_raises_value_error():
+    """ValueError from _parse_llm_text_response must not crash handoff generation."""
+    gen = HandoffBriefGenerator.__new__(HandoffBriefGenerator)
+    gen.rag = MagicMock()
+    gen.rag.assemble = AsyncMock(return_value=_make_rag_context())
+
+    bad_resp = MagicMock()
+    bad_resp.error = None
+    bad_resp.content = "totally unparseable prose with no json whatsoever"
+
+    with patch("services.llm_service.get_llm_service", create=True) as mock_llm_fn:
+        mock_llm = MagicMock()
+        mock_llm.chat = AsyncMock(return_value=bad_resp)
+        mock_llm_fn.return_value = mock_llm
+
+        result = await gen.generate_human_to_agent_brief(
+            work_item_id="wi-err-2",
+            human_notes="context notes",
+            company_id="co-err-2",
+        )
+
+    assert result["generator"] == "fallback"
+    assert result["human_context"] == "context notes"
