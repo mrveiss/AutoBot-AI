@@ -190,13 +190,13 @@
     </div>
 
     <!-- Assign Voice Bundle Modal -->
-    <div v-if="bundleTarget" class="modal-overlay" @click.self="bundleTarget = null">
+    <div v-if="bundleTarget" class="modal-overlay" @click.self="closeBundleModal">
       <div class="modal modal-sm">
         <div class="modal-header">
           <h3>Assign Voice Bundle</h3>
           <button
             class="btn-close"
-            @click="bundleTarget = null"
+            @click="closeBundleModal"
             :aria-label="$t('common.close')"
             type="button"
           ><Icon name="times" /></button>
@@ -217,14 +217,14 @@
           <div v-if="bundleError" class="error-inline">{{ bundleError }}</div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn-action-secondary" @click="bundleTarget = null">Cancel</button>
+          <button type="button" class="btn-action-secondary" @click="closeBundleModal">Cancel</button>
           <button
             type="button"
             class="btn-action-primary"
-            :disabled="bundleSaving"
+            :disabled="bundleSaving || bundleModalLoading"
             @click="doAssignBundle"
           >
-            <Icon v-if="bundleSaving" name="sync-alt" :spin="true" />
+            <Icon v-if="bundleSaving || bundleModalLoading" name="sync-alt" :spin="true" />
             Save
           </button>
         </div>
@@ -302,6 +302,9 @@ const { saving: bundleSaving, saveError: bundleError, assignBundle, getUserBundl
 const userBundles = ref<Record<string, VoiceBundleName | null | undefined>>({})
 const bundleTarget = ref<UserRecord | null>(null)
 const newBundleName = ref<VoiceBundleName | null>(null)
+// Stale-result guard: tracks which user's bundle fetch was initiated for the open modal
+const bundleModalUserId = ref<string | null>(null)
+const bundleModalLoading = ref(false)
 
 const totalPages = computed(() => Math.ceil(total.value / pageSize))
 
@@ -353,7 +356,39 @@ function loadUserBundles(userList: UserRecord[]): void {
 
 function openBundleModal(user: UserRecord): void {
   bundleTarget.value = user
-  newBundleName.value = (userBundles.value[user.id] as VoiceBundleName | null) ?? null
+  bundleModalUserId.value = user.id
+  const cached = userBundles.value[user.id]
+  if (cached !== undefined) {
+    newBundleName.value = cached
+    return
+  }
+  // loadUserBundles fetch for this user is still in flight — fetch it directly now
+  // so the modal shows the real current value rather than null.
+  // The bundleModalUserId guard discards the result if the modal is closed or
+  // switched to a different user before this resolves.
+  newBundleName.value = null
+  bundleModalLoading.value = true
+  getUserBundle(user.id)
+    .then(assignment => {
+      if (bundleModalUserId.value !== user.id) return
+      const bundleName = assignment?.bundle_name ?? null
+      userBundles.value[user.id] = bundleName
+      newBundleName.value = bundleName
+    })
+    .catch(() => {
+      if (bundleModalUserId.value !== user.id) return
+      userBundles.value[user.id] = null
+      newBundleName.value = null
+    })
+    .finally(() => {
+      if (bundleModalUserId.value === user.id) bundleModalLoading.value = false
+    })
+}
+
+function closeBundleModal(): void {
+  bundleModalUserId.value = null
+  bundleModalLoading.value = false
+  bundleTarget.value = null
 }
 
 async function doAssignBundle(): Promise<void> {
@@ -362,7 +397,7 @@ async function doAssignBundle(): Promise<void> {
   const ok = await assignBundle(userId, newBundleName.value)
   if (ok) {
     userBundles.value[userId] = newBundleName.value
-    bundleTarget.value = null
+    closeBundleModal()
   }
 }
 
