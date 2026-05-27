@@ -263,8 +263,7 @@ import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useToast } from '@/composables/useToast'
-import type { IconName } from '@/components/ui/Icon.vue'
-import Icon from '@/components/ui/Icon.vue'
+import Icon, { type IconName } from '@/components/ui/Icon.vue'
 
 // Import visualization components
 import ResourceHeatmap from '@/components/visualizations/ResourceHeatmap.vue'

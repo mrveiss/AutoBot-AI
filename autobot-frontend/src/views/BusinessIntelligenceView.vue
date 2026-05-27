@@ -312,12 +312,11 @@
 
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { IconName } from '@/components/ui/Icon.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import AdvancedAnalytics from '@/components/analytics/AdvancedAnalytics.vue'
 import AgentCostPanel from '@/components/analytics/AgentCostPanel.vue'
-import Icon from '@/components/ui/Icon.vue'
+import Icon, { type IconName } from '@/components/ui/Icon.vue'
 import api from '@/services/api'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
