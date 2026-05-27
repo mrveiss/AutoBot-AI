@@ -200,6 +200,7 @@ class TrustRecord:
 
 _KEY_TRUST = "a2a:trust:{}"
 
+
 def _default_trust_audit_db() -> Path:
     env_override = os.environ.get("AUTOBOT_TRUST_AUDIT_DB")
     if env_override:
