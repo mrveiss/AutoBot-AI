@@ -10,7 +10,7 @@
  * @copyright 2025 mrveiss
  */
 
-import { ref, computed, onScopeDispose, getCurrentScope, type Ref } from 'vue'
+import { ref, computed, onScopeDispose, getCurrentScope } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { getBackendUrl, getApiBase } from '@/config/ssot-config'
 import { useWebSocket } from '@/composables/useWebSocket'

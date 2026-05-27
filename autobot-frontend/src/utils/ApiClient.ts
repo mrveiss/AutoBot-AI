@@ -109,7 +109,7 @@ export class ApiClient {
   invalidateCache(): void {
     try {
       appConfig.invalidateCache();
-    } catch (_error) {
+    } catch {
       Object.keys(localStorage).forEach(key => {
         if (key.startsWith('autobot_api_') || key.startsWith('autobot_config_')) {
           localStorage.removeItem(key);
@@ -162,7 +162,7 @@ export class ApiClient {
   private async initializeBaseUrl(): Promise<void> {
     try {
       this.baseUrl = await appConfig.getApiUrl('');
-    } catch (_error) {
+    } catch {
       logger.warn('AppConfig initialization failed, using proxy mode fallback');
       this.baseUrl = this._detectBaseUrl();
     }
@@ -659,7 +659,7 @@ export class ApiClient {
   async validateConnection(): Promise<boolean> {
     try {
       return await appConfig.validateConnection();
-    } catch (_error) {
+    } catch {
       return await this.checkHealth();
     }
   }
@@ -771,7 +771,7 @@ export default new Proxy({} as ApiClient, {
   get(target, prop) {
     return getApiClient()[prop as keyof ApiClient];
   },
-  apply(target, thisArg, args) {
+  apply(_target, _thisArg, _args) {
     return getApiClient();
   }
 });

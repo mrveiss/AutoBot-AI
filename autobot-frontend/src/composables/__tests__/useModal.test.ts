@@ -5,8 +5,7 @@
  * Target: 100% code coverage
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { nextTick } from 'vue'
+import { describe, it, expect, vi } from 'vitest'
 import { useModal, useModals, useModalGroup } from '../useModal'
 import type { ModalOptions } from '../useModal'
 
@@ -76,7 +75,7 @@ describe('useModal composable', () => {
 
     it('should not change state when setState called with same value', async () => {
       const modal = useModal()
-      const onOpen = vi.fn()
+      const _onOpen = vi.fn()
       modal.open = vi.fn(modal.open)
 
       await modal.setState(false) // Already false
@@ -672,7 +671,7 @@ describe('useModal composable', () => {
 
     it('should handle modal group operations efficiently', async () => {
       const names = Array.from({ length: 20 }, (_, i) => `modal${i}`)
-      const { modals, closeAll, openAll } = useModalGroup(names)
+      const { _modals, closeAll, openAll } = useModalGroup(names)
 
       const startTime = performance.now()
 

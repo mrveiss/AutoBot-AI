@@ -198,7 +198,7 @@ test.describe('System Integration and Stability Tests', () => {
 
   test('should maintain session state across page interactions', async ({ page }) => {
     // Test session persistence
-    const initialUrl = page.url();
+    const _initialUrl = page.url();
 
     // Navigate around the application
     const dashboardButton = page.locator('text=Dashboard').first();

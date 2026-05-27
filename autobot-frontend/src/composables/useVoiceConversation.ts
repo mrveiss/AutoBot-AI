@@ -479,7 +479,7 @@ function _resumeAutoListening(): void {
 function _dispatchTranscript(text: string): void {
   const store = useChatStore()
   const controller = useChatController()
-  const { speakStreaming, flushStreaming, isSpeaking } = useVoiceOutput()
+  const { speakStreaming, flushStreaming, _isSpeaking } = useVoiceOutput()
 
   state.value = 'processing'
   _sendWs({ type: 'transcript', text, final: true })

@@ -10,7 +10,7 @@
  * - useArrowKeys: Arrow key navigation
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { defineComponent, effectScope, ref, nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
 import {

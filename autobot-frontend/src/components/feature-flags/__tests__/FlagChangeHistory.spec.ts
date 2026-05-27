@@ -1,5 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
-import { screen } from '@testing-library/vue'
+import { describe, it, expect } from 'vitest'
 import FlagChangeHistory from '../FlagChangeHistory.vue'
 import { renderComponent } from '@/test/utils/test-utils'
 import type { EnforcementMode } from '@/utils/FeatureFlagsApiClient'

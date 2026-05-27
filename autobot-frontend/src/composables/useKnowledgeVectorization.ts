@@ -14,7 +14,6 @@ import apiClient from '@/utils/ApiClient'
 import appConfig from '@/config/AppConfig.js'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
-import { useDebounce } from './useTimeout'
 
 // Create scoped logger for useKnowledgeVectorization
 
@@ -49,7 +48,6 @@ interface CachedRequest {
 
 // Constants for request deduplication (Issue #4006)
 const BATCH_STATUS_CACHE_TTL = 30000 // 30 seconds
-const DEBOUNCE_DELAY = 500 // 500ms debounce for refresh calls
 
 export type VectorizationStatus = 'vectorized' | 'pending' | 'failed' | 'unknown'
 

@@ -27,7 +27,7 @@ const mountModal = (slots?: Record<string, string>) =>
     slots: {
       default: '<button class="body-btn">Body</button>',
       actions: '<button class="cancel">Cancel</button><button class="confirm">OK</button>',
-      ...(slots ?? {}),
+      ...slots,
     },
     global: {
       plugins: [i18n],

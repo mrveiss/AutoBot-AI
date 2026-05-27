@@ -12,7 +12,7 @@
  * - /api/workflow-automation/* - Workflow automation management
  */
 
-import { ref, computed, reactive } from 'vue';
+import { ref, computed } from 'vue';
 import { getBackendUrl, getBackendWsUrl, getApiBase } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
 import httpClient from '@/utils/ApiClient';

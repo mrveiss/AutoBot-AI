@@ -39,7 +39,7 @@ const NO_CACHE_PATTERNS = [
 ]
 
 // API endpoints to cache with network-first strategy
-const CACHEABLE_API_PATTERNS = [
+const _CACHEABLE_API_PATTERNS = [
   /\/api\/knowledge\//,
   /\/api\/templates\//,
   /\/api\/config\//
@@ -77,7 +77,7 @@ function isStaticAsset(url: string): boolean {
 /**
  * Get appropriate cache name for a URL
  */
-function getCacheName(url: string): string {
+function _getCacheName(url: string): string {
   if (isApiUrl(url)) {
     return API_CACHE
   }

@@ -177,9 +177,9 @@ const renderChart = async () => {
     // Apply reduced-motion preference by disabling animations
     if (prefersReducedMotion.value) {
       spec.config = {
-        ...((spec.config as Record<string, unknown>) || {}),
-        mark: { ...((spec.config as Record<string, unknown>)?.mark || {}), animationDuration: 0 },
-        axis: { ...((spec.config as Record<string, unknown>)?.axis || {}), minExtent: 30 }
+        ...(spec.config as Record<string, unknown>),
+        mark: { ...(spec.config as Record<string, unknown>)?.mark, animationDuration: 0 },
+        axis: { ...(spec.config as Record<string, unknown>)?.axis, minExtent: 30 }
       }
     }
 

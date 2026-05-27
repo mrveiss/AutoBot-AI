@@ -50,7 +50,7 @@ test.describe('Terminal Workflow E2E Tests', () => {
     await clearButton.click()
 
     // Terminal output should be empty or show cleared state
-    const terminalOutput = page.locator('[data-testid="terminal-output"]')
+    const _terminalOutput = page.locator('[data-testid="terminal-output"]')
 
     // Test reconnect button
     const reconnectButton = page.locator('[data-testid="reconnect-button"]')

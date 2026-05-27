@@ -144,10 +144,11 @@ export function useApiResource<T>(
       error.value = e instanceof Error ? e : new Error(String(e))
     } finally {
       // Only clear the loading state for the call that is still current.
-      if (disposed || callId !== latestCallId) return
-      isLoading.value = false
-      if (currentController === controller) {
-        currentController = null
+      if (!disposed && callId === latestCallId) {
+        isLoading.value = false
+        if (currentController === controller) {
+          currentController = null
+        }
       }
     }
   }

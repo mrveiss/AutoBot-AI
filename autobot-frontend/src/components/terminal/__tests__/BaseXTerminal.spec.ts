@@ -23,6 +23,7 @@ function createTerminalMock(this: Record<string, any>) {
   this.cols = 80
   this.rows = 24
   this.options = {}
+   
   lastTerminalInstance = this
 }
 

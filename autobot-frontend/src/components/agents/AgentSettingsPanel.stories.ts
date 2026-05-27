@@ -20,7 +20,7 @@ const meta = {
 
 export default meta;
 // #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 type Story = { render?: () => unknown; decorators?: unknown[]; parameters?: unknown };
 
 /** Default view — panel loads with built-in defaults (API call fails gracefully in Storybook). */

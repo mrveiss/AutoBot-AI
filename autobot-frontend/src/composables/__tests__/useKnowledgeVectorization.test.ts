@@ -14,7 +14,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { ref } from 'vue'
 import { useKnowledgeVectorization } from '../useKnowledgeVectorization'
 
 // Mock useKnowledgeJobs composable (migrated from useKnowledgeBase BC shim in #5193)

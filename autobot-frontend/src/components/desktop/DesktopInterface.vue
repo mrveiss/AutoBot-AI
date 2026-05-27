@@ -409,7 +409,7 @@ const handleDesktopError = (err: Error | unknown) => {
   logger.error('Desktop connection error:', err)
   loading.value = false
   connectionStatus.value = 'Error'
-  error.value = t('desktop.interface.errorVncConnection', { error: error.message || error })
+  error.value = t('desktop.interface.errorVncConnection', { error: error.value.message || error })
 }
 
 const handleDesktopTimeout = () => {

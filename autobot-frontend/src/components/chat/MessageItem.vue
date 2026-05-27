@@ -311,13 +311,13 @@ const formattedContent = computed(() => {
 
   // Strip ANSI escape codes
   content = content
-    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
-    .replace(/\x1b\][0-9;]*[^\x07]*\x07/g, '')
-    .replace(/\x1b\][0-9;]*[^\x07\x1b]*(?:\x1b\\)?/g, '')
-    .replace(/\x1b[=>]/g, '')
-    .replace(/\x1b[()][AB012]/g, '')
+    .replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '')
+    .replace(/\u001b\][0-9;]*[^\u0007]*\u0007/g, '')
+    .replace(/\u001b\][0-9;]*[^\u0007\u001b]*(?:\u001b\\)?/g, '')
+    .replace(/\u001b[=>]/g, '')
+    .replace(/\u001b[()][AB012]/g, '')
     .replace(/\[[?\d;]*[hlHJ]/g, '')
-    .replace(/\]0;[^\x07\n]*\x07?/g, '')
+    .replace(/\]0;[^\u0007\n]*\u0007?/g, '')
     .trim()
 
   // Strip TOOL_CALL tags

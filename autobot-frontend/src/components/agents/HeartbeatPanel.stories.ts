@@ -21,7 +21,7 @@ const meta = {
 
 export default meta;
 // #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 type Story = { render?: () => unknown; decorators?: unknown[]; parameters?: unknown };
 
 /** Default idle state — panel is empty, waiting for an agent ID to be entered. */
