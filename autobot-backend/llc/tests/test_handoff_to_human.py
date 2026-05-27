@@ -436,10 +436,12 @@ class TestHandoffServiceShutdown:
 
         async def slow_task():
             import asyncio
+
             await asyncio.sleep(0.01)
             completed.append(1)
 
         import asyncio
+
         task = asyncio.create_task(slow_task())
         svc._background_tasks.add(task)
         task.add_done_callback(svc._background_tasks.discard)
@@ -455,9 +457,11 @@ class TestHandoffServiceShutdown:
 
         async def slow_task():
             import asyncio
+
             await asyncio.sleep(60)
 
         import asyncio
+
         task = asyncio.create_task(slow_task())
         svc._background_tasks.add(task)
 
