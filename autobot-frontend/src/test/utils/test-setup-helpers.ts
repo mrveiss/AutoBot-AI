@@ -184,7 +184,7 @@ export const setupTimerMocks = () => {
 
 // Mock IntersectionObserver for components that use it
 export const setupIntersectionObserverMock = () => {
-  global.IntersectionObserver = vi.fn().mockImplementation((callback) => ({
+  global.IntersectionObserver = vi.fn().mockImplementation((_callback) => ({
     observe: vi.fn(),
     unobserve: vi.fn(),
     disconnect: vi.fn(),
@@ -196,7 +196,7 @@ export const setupIntersectionObserverMock = () => {
 
 // Mock ResizeObserver for responsive components
 export const setupResizeObserverMock = () => {
-  global.ResizeObserver = vi.fn().mockImplementation((callback) => ({
+  global.ResizeObserver = vi.fn().mockImplementation((_callback) => ({
     observe: vi.fn(),
     unobserve: vi.fn(),
     disconnect: vi.fn(),

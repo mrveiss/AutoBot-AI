@@ -5,7 +5,6 @@ import { ref, reactive } from 'vue'
 import TerminalWindow from '../terminal/TerminalWindow.vue'
 import {
   renderComponent,
-  waitForUpdate,
 } from '../../test/utils/test-utils'
 import { webSocketTestUtil } from '../../test/mocks/websocket-mock'
 
@@ -77,7 +76,7 @@ vi.mock('@/utils/debugUtils', () => ({
 }))
 
 // i18n messages that match the actual en.json terminal.window namespace
-const terminalI18nMessages = {
+const _terminalI18nMessages = {
   en: {
     terminal: {
       window: {

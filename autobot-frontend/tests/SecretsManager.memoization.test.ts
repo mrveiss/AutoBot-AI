@@ -3,7 +3,7 @@
  * Verifies that filtering cache works correctly and improves performance
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 
 describe('SecretsManager - filteredSecrets Memoization', () => {
   // Mock cache behavior
@@ -172,7 +172,7 @@ describe('SecretsManager - filteredSecrets Memoization', () => {
     expect(result2[0].name).toBe('password-1');
 
     // Same search - should be cached
-    const result3 = filterSecretsWithCache(secrets, 'all', '', false, 'prod');
+    const _result3 = filterSecretsWithCache(secrets, 'all', '', false, 'prod');
     expect(cacheHits).toBe(1);
   });
 
@@ -201,11 +201,11 @@ describe('SecretsManager - filteredSecrets Memoization', () => {
     expect(result1[0].scope).toBe('general');
 
     // Same filters - cache hit
-    const result2 = filterSecretsWithCache(secrets, 'all', 'general', false, '');
+    const _result2 = filterSecretsWithCache(secrets, 'all', 'general', false, '');
     expect(cacheHits).toBe(1);
 
     // Different scope - cache miss
-    const result3 = filterSecretsWithCache(secrets, 'all', 'chat', false, '');
+    const _result3 = filterSecretsWithCache(secrets, 'all', 'chat', false, '');
     expect(cacheMisses).toBe(2);
   });
 

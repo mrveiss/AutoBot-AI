@@ -23,7 +23,7 @@ const TRANSITION_MAP: Record<CellAction, CellState> = {
 }
 
 // States that allow accept/edit/discard (agent cells must be complete first)
-const TRANSITIONABLE_STATES: CellState[] = ['complete', 'committed']
+const _TRANSITIONABLE_STATES: CellState[] = ['complete', 'committed']
 
 export const canvasHandlers = [
   // GET /api/canvas/{id}

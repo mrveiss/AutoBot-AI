@@ -11,7 +11,7 @@
  * Issue #6087
  */
 
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 

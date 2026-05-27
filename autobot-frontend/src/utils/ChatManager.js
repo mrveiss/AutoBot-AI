@@ -26,7 +26,7 @@ class ChatManager {
     try {
       this.apiEndpoint = await appConfig.getApiUrl('');
       this.settings.backend.api_endpoint = this.apiEndpoint;
-    } catch (error) {
+    } catch {
       logger.warn('Using fallback API endpoint');
       this.apiEndpoint = `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`;
       this.settings.backend.api_endpoint = this.apiEndpoint;
@@ -345,7 +345,7 @@ class ChatManager {
       // If it's an ISO string, format it
       try {
         return new Date(timestamp).toLocaleTimeString();
-      } catch (_error) {
+      } catch {
         return timestamp;
       }
     }

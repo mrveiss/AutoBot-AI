@@ -18,7 +18,7 @@
  *   )
  */
 
-import { computed, isRef, type ComputedRef, type Ref } from 'vue'
+import { computed, isRef, type ComputedRef } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useComputedMemo')

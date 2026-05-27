@@ -75,8 +75,8 @@ describe('useSlashCommands (GH#4449)', () => {
     const input = ref('/g')
     const sc = useSlashCommands(input)
     // Inject a preset to produce suggestions
-    sc['presetsLoading'] // access to ensure store is wired
-    const presetsStore = (sc as any)
+    void sc['presetsLoading'] // access to ensure store is wired
+    const _presetsStore = (sc as any)
     // Manually set suggestions via store
     const { selectedIndex, moveDown, open } = sc
     // Without presets, moveDown is a no-op
@@ -113,7 +113,7 @@ describe('useSlashCommands (GH#4449)', () => {
 
   it('onInput opens dropdown when slash query present', () => {
     const input = ref('/gr')
-    const { isOpen, onInput } = useSlashCommands(input) as any
+    const { isOpen: _isOpen, onInput } = useSlashCommands(input) as any
     onInput()
     // isOpen is internal; showDropdown depends on suggestions too
     // We verify indirectly through slashQuery being active

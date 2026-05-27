@@ -5,8 +5,8 @@
  * Target: 100% code coverage
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { useFormValidation, quickValidate, validators } from '../useFormValidation'
+import { describe, it, expect, vi } from 'vitest'
+import { useFormValidation, quickValidate } from '../useFormValidation'
 
 describe('useFormValidation composable', () => {
   // ========================================
@@ -66,7 +66,7 @@ describe('useFormValidation composable', () => {
 
   describe('required validator', () => {
     it('should fail for empty string', async () => {
-      const { fields, errors, validateField } = useFormValidation({
+      const { fields: _fields, errors, validateField } = useFormValidation({
         username: {
           value: '',
           rules: [{ rule: 'required' }]
@@ -78,7 +78,7 @@ describe('useFormValidation composable', () => {
     })
 
     it('should fail for null', async () => {
-      const { fields, errors, validateField } = useFormValidation({
+      const { fields: _fields, errors, validateField } = useFormValidation({
         username: {
           value: null,
           rules: [{ rule: 'required' }]
@@ -90,7 +90,7 @@ describe('useFormValidation composable', () => {
     })
 
     it('should fail for empty array', async () => {
-      const { fields, errors, validateField } = useFormValidation({
+      const { fields: _fields, errors, validateField } = useFormValidation({
         items: {
           value: [],
           rules: [{ rule: 'required' }]
@@ -102,7 +102,7 @@ describe('useFormValidation composable', () => {
     })
 
     it('should pass for non-empty value', async () => {
-      const { fields, errors, validateField } = useFormValidation({
+      const { fields: _fields, errors, validateField } = useFormValidation({
         username: {
           value: 'test',
           rules: [{ rule: 'required' }]
@@ -597,7 +597,7 @@ describe('useFormValidation composable', () => {
 
   describe('form-level validation', () => {
     it('should validate all fields', async () => {
-      const { fields, validate } = useFormValidation({
+      const { fields: _fields, validate } = useFormValidation({
         username: {
           value: '',
           rules: [{ rule: 'required' }]

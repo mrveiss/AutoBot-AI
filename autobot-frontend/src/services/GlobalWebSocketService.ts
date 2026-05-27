@@ -129,8 +129,8 @@ class GlobalWebSocketService {
    */
   getWebSocketUrl(): string {
     try {
-      const backendHost: string = DEFAULT_CONFIG.network.backend.host
-      const backendPort: string = DEFAULT_CONFIG.network.backend.port
+      const _backendHost: string = DEFAULT_CONFIG.network.backend.host
+      const _backendPort: string = DEFAULT_CONFIG.network.backend.port
       const wsProtocol =
         window.location.protocol === 'https:' ? 'wss:' : 'ws:'
 
@@ -720,7 +720,7 @@ class GlobalWebSocketService {
     try {
       await this.connect()
       return this.isConnected.value
-    } catch (_error: unknown) {
+    } catch {
       return false
     }
   }

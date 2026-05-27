@@ -5,7 +5,7 @@
  * Verifies cache-first, network-first strategies, expiration, and offline fallback
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 
 describe('Service Worker - Caching Strategies', () => {
   describe('Cache Constants', () => {
@@ -225,7 +225,7 @@ describe('Service Worker - Registration', () => {
   })
 
   it('should use production cache-busting in production', () => {
-    const isDev = false
+    const _isDev = false
     const timestamp = Date.now()
     const swPath = `/service-worker.ts?v=${timestamp}`
 

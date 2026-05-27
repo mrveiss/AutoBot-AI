@@ -79,7 +79,7 @@ watch(() => props.outputLines.length, (newLength) => {
       // Strip ANSI codes first (not HTML — must happen before DOMPurify), then use
       // DOMPurify-backed sanitizeHtml to remove scripts/event-handlers, then strip
       // remaining tags to get plain text for the aria-live announcement.
-      const cleanContent = sanitizeHtml(latestLine.content.replace(/\x1b\[[0-9;]*m/g, ''))
+      const cleanContent = sanitizeHtml(latestLine.content.replace(/\u001b\[[0-9;]*m/g, ''))
         .replace(/<[^>]*>/g, '')  // strip remaining HTML tags → plain text
         .substring(0, 150)  // Limit to 150 chars
 
@@ -101,21 +101,21 @@ const formatTerminalLine = (line: OutputLine): string => {
   // Comprehensive ANSI escape sequence handling
   content = content
     // Remove cursor positioning sequences
-    .replace(/\x1b\[([0-9]+;[0-9]+)?[Hf]/g, '')
+    .replace(/\u001b\[([0-9]+;[0-9]+)?[Hf]/g, '')
     // Remove cursor movement sequences
-    .replace(/\x1b\[([0-9]+)?[ABCD]/g, '')
+    .replace(/\u001b\[([0-9]+)?[ABCD]/g, '')
     // Remove cursor save/restore
-    .replace(/\x1b\[(s|u)/g, '')
+    .replace(/\u001b\[(s|u)/g, '')
     // Remove erase sequences
-    .replace(/\x1b\[([0-9]+)?[JK]/g, '')
+    .replace(/\u001b\[([0-9]+)?[JK]/g, '')
     // Remove color/formatting sequences (SGR)
-    .replace(/\x1b\[([0-9]{1,3}(;[0-9]{1,3})*)?m/g, '')
+    .replace(/\u001b\[([0-9]{1,3}(;[0-9]{1,3})*)?m/g, '')
     // Remove private mode sequences (like bracketed paste)
-    .replace(/\x1b\[\?[0-9]+[hl]/g, '')
+    .replace(/\u001b\[\?[0-9]+[hl]/g, '')
     // Remove title/window sequences
-    .replace(/\x1b\][0-9]+;.*?\x07/g, '')
+    .replace(/\u001b\][0-9]+;.*?\u0007/g, '')
     // Remove other CSI sequences
-    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+    .replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '')
     // Clean up carriage returns and newlines
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '')

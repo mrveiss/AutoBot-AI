@@ -826,13 +826,13 @@ const FORMAT_CACHE_MAX = 500
 const formatMessageContentRaw = (content: string): string => {
   // Strip ANSI escape codes FIRST (terminal color codes, cursor movements, etc.)
   let formatted = content
-    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '') // CSI sequences
-    .replace(/\x1b\][0-9;]*[^\x07]*\x07/g, '') // OSC sequences: BEL
-    .replace(/\x1b\][0-9;]*[^\x07\x1b]*(?:\x1b\\)?/g, '') // OSC sequences: ST
-    .replace(/\x1b[=>]/g, '') // Set numeric keypad mode
-    .replace(/\x1b[()][AB012]/g, '') // Character set selection
-    .replace(/\x1b\[[?\d;]*[hlHJ]/g, '') // Bracket sequences
-    .replace(/\x1b\]0;[^\x07\n]*\x07?/g, '') // Set title
+    .replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '') // CSI sequences
+    .replace(/\u001b\][0-9;]*[^\u0007]*\u0007/g, '') // OSC sequences: BEL
+    .replace(/\u001b\][0-9;]*[^\u0007\u001b]*(?:\u001b\\)?/g, '') // OSC sequences: ST
+    .replace(/\u001b[=>]/g, '') // Set numeric keypad mode
+    .replace(/\u001b[()][AB012]/g, '') // Character set selection
+    .replace(/\u001b\[[?\d;]*[hlHJ]/g, '') // Bracket sequences
+    .replace(/\u001b\]0;[^\u0007\n]*\u0007?/g, '') // Set title
     .trim()
 
   // Strip message type tags (Issue #680)

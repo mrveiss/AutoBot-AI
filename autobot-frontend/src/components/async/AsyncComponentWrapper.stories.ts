@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/vue3';
-import { defineAsyncComponent, defineComponent, h } from 'vue';
+import {  defineComponent, h } from 'vue';
 import AsyncComponentWrapper from './AsyncComponentWrapper.vue';
 
 // Simple inline component used as the loaded result in success stories

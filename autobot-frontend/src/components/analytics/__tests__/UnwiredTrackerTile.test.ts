@@ -16,7 +16,6 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { defineComponent } from 'vue'
 
 // ---- Stub vue-router -------------------------------------------------------
 const pushMock = vi.fn()

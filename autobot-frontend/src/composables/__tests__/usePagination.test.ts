@@ -12,13 +12,12 @@
  * - Helper functions (useSimplePagination, useShowAllToggle)
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { ref, computed, nextTick } from 'vue'
 import {
   usePagination,
   useSimplePagination,
-  useShowAllToggle,
-  type PaginationOptions
+  useShowAllToggle
 } from '../usePagination'
 
 // ========================================

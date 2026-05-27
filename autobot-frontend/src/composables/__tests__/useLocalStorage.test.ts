@@ -101,7 +101,7 @@ describe('useLocalStorage Composable', () => {
         has(target, prop) {
           return prop in target || prop in localStorageMock
         },
-        ownKeys(target) {
+        ownKeys(_target) {
           // Return only data keys, not method names
           return Object.keys(localStorageMock)
         },
@@ -426,7 +426,7 @@ describe('useLocalStorage Composable', () => {
 
       localStorageMock['invalid-json'] = 'invalid {'
 
-      const data = useLocalStorage('invalid-json', { default: true })
+      const _data = useLocalStorage('invalid-json', { default: true })
 
       expect(consoleErrorSpy).toHaveBeenCalled()
       // createLogger formats as "[timestamp] [ERROR] [useLocalStorage] ..."
@@ -604,7 +604,7 @@ describe('useLocalStorage Composable', () => {
 
     it('should handle storage event parse errors', async () => {
       const onError = vi.fn()
-      const data = useLocalStorage('parse-error-key', 'initial', { onError })
+      const _data = useLocalStorage('parse-error-key', 'initial', { onError })
 
       const storageHandler = (window.addEventListener as any).mock.calls.find(
         (call: any) => call[0] === 'storage'
@@ -991,7 +991,7 @@ describe('useLocalStorage Composable', () => {
 
     it('should handle multiple instances of same key', async () => {
       const data1 = useLocalStorage('shared-key', 'initial')
-      const data2 = useLocalStorage('shared-key', 'initial')
+      const _data2 = useLocalStorage('shared-key', 'initial')
 
       data1.value = 'updated'
       await nextTick()
