@@ -68,6 +68,8 @@ def _build_model_entry(
     name: str, provider: str, available: bool, extra: Dict[str, Any] | None = None
 ) -> Dict[str, Any]:
     """Return a standardised model metadata dict."""
+    from llm_shared.model_param_registry import get_architecture_family
+
     hints = _hints_for_model(name)
     entry: Dict[str, Any] = {
         "name": name,
@@ -75,6 +77,7 @@ def _build_model_entry(
         "available": available,
         "context_window": hints["context_window"],
         "capabilities": hints["capabilities"],
+        "architecture_family": get_architecture_family(name),
     }
     if extra:
         entry.update(extra)

@@ -2,10 +2,13 @@
 # Models are auto-discovered from Ollama; this file provides overrides.
 #
 # Schema:
-#   display_name   — canonical identifier used internally
-#   api_name       — provider-specific identifiers (provider: api_model_id)
-#   aliases        — alternative names resolved to this entry
-#   prompt_prefix  — optional string prepended to the first user turn (#3263)
+#   display_name        — canonical identifier used internally
+#   api_name            — provider-specific identifiers (provider: api_model_id)
+#   aliases             — alternative names resolved to this entry
+#   prompt_prefix       — optional string prepended to the first user turn (#3263)
+#   architecture_family — model architecture: transformer | ssm | linear_attention | hybrid | moe
+#                         (GH#7347) used by NPU dispatch and routing. Falls back to pattern-match
+#                         on model_id when absent; new models should set this explicitly.
 #   api_kwargs:
 #     default      — applied to every provider unless overridden
 #     <provider>   — merged on top of default for that provider only
@@ -43,6 +46,7 @@ anthropic_default_thinking_budget: 16000
 # =============================================================================
 models:
   - display_name: claude-sonnet-4-6
+    architecture_family: transformer
     api_name:
       anthropic: claude-sonnet-4-6
     aliases:
@@ -53,6 +57,7 @@ models:
         max_tokens: 8192
 
   - display_name: claude-opus-4-6
+    architecture_family: transformer
     api_name:
       anthropic: claude-opus-4-6
     aliases:
@@ -63,6 +68,7 @@ models:
         max_tokens: 4096
 
   - display_name: claude-sonnet-4-20250514
+    architecture_family: transformer
     api_name:
       anthropic: claude-sonnet-4-20250514
     aliases:
@@ -73,6 +79,7 @@ models:
         max_tokens: 8192
 
   - display_name: claude-opus-4-20250514
+    architecture_family: transformer
     api_name:
       anthropic: claude-opus-4-20250514
     aliases:
@@ -83,6 +90,7 @@ models:
         max_tokens: 4096
 
   - display_name: claude-3-5-sonnet-20241022
+    architecture_family: transformer
     api_name:
       anthropic: claude-3-5-sonnet-20241022
     aliases:
@@ -94,6 +102,7 @@ models:
         max_tokens: 8192
 
   - display_name: claude-3-5-haiku-20241022
+    architecture_family: transformer
     api_name:
       anthropic: claude-3-5-haiku-20241022
     aliases:
@@ -105,6 +114,7 @@ models:
         max_tokens: 4096
 
   - display_name: claude-haiku-4-5-20251001
+    architecture_family: transformer
     api_name:
       anthropic: claude-haiku-4-5-20251001
     aliases:
@@ -115,6 +125,7 @@ models:
         max_tokens: 4096
 
   - display_name: claude-3-opus-20240229
+    architecture_family: transformer
     api_name:
       anthropic: claude-3-opus-20240229
     aliases:
@@ -125,6 +136,7 @@ models:
         max_tokens: 4096
 
   - display_name: gpt-4o
+    architecture_family: transformer
     api_name:
       openai: gpt-4o
     aliases:
@@ -135,6 +147,7 @@ models:
         max_tokens: 4096
 
   - display_name: gpt-4o-mini
+    architecture_family: transformer
     api_name:
       openai: gpt-4o-mini
     aliases:
@@ -145,6 +158,7 @@ models:
         max_tokens: 4096
 
   - display_name: gpt-4.1
+    architecture_family: transformer
     api_name:
       openai: gpt-4.1
     aliases: []
@@ -154,6 +168,7 @@ models:
         max_tokens: 8192
 
   - display_name: gpt-4.1-mini
+    architecture_family: transformer
     api_name:
       openai: gpt-4.1-mini
     aliases: []
@@ -163,6 +178,7 @@ models:
         max_tokens: 4096
 
   - display_name: gpt-4.1-nano
+    architecture_family: transformer
     api_name:
       openai: gpt-4.1-nano
     aliases: []
@@ -172,6 +188,7 @@ models:
         max_tokens: 2048
 
   - display_name: gpt-4-turbo
+    architecture_family: transformer
     api_name:
       openai: gpt-4-turbo
     aliases: []
@@ -181,6 +198,7 @@ models:
         max_tokens: 4096
 
   - display_name: gpt-4
+    architecture_family: transformer
     api_name:
       openai: gpt-4
     aliases: []
@@ -190,6 +208,7 @@ models:
         max_tokens: 4096
 
   - display_name: gpt-3.5-turbo
+    architecture_family: transformer
     api_name:
       openai: gpt-3.5-turbo
     aliases:
@@ -200,6 +219,7 @@ models:
         max_tokens: 4096
 
   - display_name: o1
+    architecture_family: transformer
     api_name:
       openai: o1
     aliases: []
@@ -208,6 +228,7 @@ models:
         max_tokens: 32768
 
   - display_name: o1-mini
+    architecture_family: transformer
     api_name:
       openai: o1-mini
     aliases: []
@@ -216,6 +237,7 @@ models:
         max_tokens: 16384
 
   - display_name: o3
+    architecture_family: transformer
     api_name:
       openai: o3
     aliases: []
@@ -224,6 +246,7 @@ models:
         max_tokens: 32768
 
   - display_name: o3-mini
+    architecture_family: transformer
     api_name:
       openai: o3-mini
     aliases: []
@@ -232,6 +255,7 @@ models:
         max_tokens: 16384
 
   - display_name: o4-mini
+    architecture_family: transformer
     api_name:
       openai: o4-mini
     aliases: []
@@ -240,6 +264,7 @@ models:
         max_tokens: 16384
 
   - display_name: gemini-2.5-pro
+    architecture_family: transformer
     api_name:
       google: gemini-2.5-pro
     aliases: []
@@ -249,6 +274,7 @@ models:
         max_tokens: 8192
 
   - display_name: gemini-2.5-flash
+    architecture_family: transformer
     api_name:
       google: gemini-2.5-flash
     aliases: []
@@ -258,6 +284,7 @@ models:
         max_tokens: 8192
 
   - display_name: gemini-2.0-flash
+    architecture_family: transformer
     api_name:
       google: gemini-2.0-flash
     aliases: []
@@ -267,6 +294,7 @@ models:
         max_tokens: 8192
 
   - display_name: gemini-1.5-pro
+    architecture_family: transformer
     api_name:
       google: gemini-1.5-pro
     aliases: []
@@ -276,6 +304,7 @@ models:
         max_tokens: 8192
 
   - display_name: gemini-1.5-flash
+    architecture_family: transformer
     api_name:
       google: gemini-1.5-flash
     aliases: []
@@ -285,6 +314,7 @@ models:
         max_tokens: 8192
 
   - display_name: deepseek-v3
+    architecture_family: transformer
     api_name:
       openai: deepseek-v3
     aliases: []
@@ -294,6 +324,7 @@ models:
         max_tokens: 4096
 
   - display_name: deepseek-r1-api
+    architecture_family: transformer
     api_name:
       openai: deepseek-r1-api
     aliases: []
@@ -303,6 +334,7 @@ models:
         max_tokens: 8192
 
   - display_name: llama3.3
+    architecture_family: transformer
     api_name:
       ollama: llama3.3
     aliases:
@@ -313,6 +345,7 @@ models:
         max_tokens: 4096
 
   - display_name: llama3.2
+    architecture_family: transformer
     api_name:
       ollama: llama3.2
     aliases:
@@ -323,6 +356,7 @@ models:
         max_tokens: 4096
 
   - display_name: llama3.1
+    architecture_family: transformer
     api_name:
       ollama: llama3.1
     aliases:
@@ -333,6 +367,7 @@ models:
         max_tokens: 4096
 
   - display_name: llama3
+    architecture_family: transformer
     api_name:
       ollama: llama3
     aliases:
@@ -343,6 +378,7 @@ models:
         max_tokens: 4096
 
   - display_name: mistral
+    architecture_family: transformer
     api_name:
       ollama: mistral
     aliases:
@@ -353,6 +389,7 @@ models:
         max_tokens: 4096
 
   - display_name: mixtral
+    architecture_family: transformer
     api_name:
       ollama: mixtral
     aliases:
@@ -363,6 +400,7 @@ models:
         max_tokens: 4096
 
   - display_name: codellama
+    architecture_family: transformer
     api_name:
       ollama: codellama
     aliases:
@@ -373,6 +411,7 @@ models:
         max_tokens: 4096
 
   - display_name: qwen2.5
+    architecture_family: transformer
     api_name:
       ollama: qwen2.5
     aliases:
@@ -383,6 +422,7 @@ models:
         max_tokens: 4096
 
   - display_name: qwen3
+    architecture_family: transformer
     api_name:
       ollama: qwen3
     aliases:
@@ -393,6 +433,7 @@ models:
         max_tokens: 4096
 
   - display_name: deepseek-coder
+    architecture_family: transformer
     api_name:
       ollama: deepseek-coder
     aliases:
@@ -403,6 +444,7 @@ models:
         max_tokens: 4096
 
   - display_name: deepseek-r1
+    architecture_family: transformer
     api_name:
       ollama: deepseek-r1
     aliases:
@@ -414,6 +456,7 @@ models:
         max_tokens: 8192
 
   - display_name: phi3
+    architecture_family: transformer
     api_name:
       ollama: phi3
     aliases:
@@ -424,6 +467,7 @@ models:
         max_tokens: 2048
 
   - display_name: phi4
+    architecture_family: transformer
     api_name:
       ollama: phi4
     aliases:
@@ -434,6 +478,7 @@ models:
         max_tokens: 4096
 
   - display_name: gemma2
+    architecture_family: transformer
     api_name:
       ollama: gemma2
     aliases:
@@ -444,6 +489,7 @@ models:
         max_tokens: 4096
 
   - display_name: gemma3
+    architecture_family: transformer
     api_name:
       ollama: gemma3
     aliases:

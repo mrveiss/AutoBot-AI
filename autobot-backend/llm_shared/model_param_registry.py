@@ -26,9 +26,10 @@ Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 
 from __future__ import annotations
 
+from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -51,6 +52,67 @@ _FALLBACK_KWARGS: Dict[str, Any] = {
     "temperature": 0.7,
     "max_tokens": 2048,
 }
+
+# ---------------------------------------------------------------------------
+# Architecture family
+# ---------------------------------------------------------------------------
+
+
+class ArchitectureFamily(str, Enum):
+    """Model architecture families (GH#7347).
+
+    Used by NPU dispatch and tiered routing to select the correct inference
+    backend.  New families can be added here without any code change — just
+    add the value to the YAML entry for the model.
+    """
+
+    TRANSFORMER = "transformer"
+    SSM = "ssm"
+    LINEAR_ATTENTION = "linear_attention"
+    HYBRID = "hybrid"
+    MOE = "moe"
+
+
+# model_type strings found in HuggingFace config.json → ArchitectureFamily
+_MODEL_TYPE_MAP: Dict[str, str] = {
+    # Transformer variants
+    "llama": ArchitectureFamily.TRANSFORMER,
+    "mistral": ArchitectureFamily.TRANSFORMER,
+    "mixtral": ArchitectureFamily.MOE,
+    "falcon": ArchitectureFamily.TRANSFORMER,
+    "gpt2": ArchitectureFamily.TRANSFORMER,
+    "gpt_neo": ArchitectureFamily.TRANSFORMER,
+    "gpt_neox": ArchitectureFamily.TRANSFORMER,
+    "bloom": ArchitectureFamily.TRANSFORMER,
+    "opt": ArchitectureFamily.TRANSFORMER,
+    "t5": ArchitectureFamily.TRANSFORMER,
+    "bert": ArchitectureFamily.TRANSFORMER,
+    "roberta": ArchitectureFamily.TRANSFORMER,
+    "phi": ArchitectureFamily.TRANSFORMER,
+    "gemma": ArchitectureFamily.TRANSFORMER,
+    "qwen2": ArchitectureFamily.TRANSFORMER,
+    "deepseek": ArchitectureFamily.TRANSFORMER,
+    # SSM / state-space variants
+    "mamba": ArchitectureFamily.SSM,
+    "mamba2": ArchitectureFamily.SSM,
+    "jamba": ArchitectureFamily.HYBRID,
+    "rwkv": ArchitectureFamily.SSM,
+    # Linear attention
+    "retnet": ArchitectureFamily.LINEAR_ATTENTION,
+    "gla": ArchitectureFamily.LINEAR_ATTENTION,
+    "hgrn": ArchitectureFamily.LINEAR_ATTENTION,
+}
+
+# Pattern-match heuristics keyed on substrings of the model_id.
+# Used as last resort when neither YAML nor config.json provides the family.
+_PATTERN_MAP: list[tuple[str, str]] = [
+    ("mamba", ArchitectureFamily.SSM),
+    ("rwkv", ArchitectureFamily.SSM),
+    ("jamba", ArchitectureFamily.HYBRID),
+    ("retnet", ArchitectureFamily.LINEAR_ATTENTION),
+    ("mixtral", ArchitectureFamily.MOE),
+    ("moe", ArchitectureFamily.MOE),
+]
 
 # OpenAI reasoning models reject the ``temperature`` parameter with HTTP 400.
 # These canonical display_names must never receive the temperature fallback.
@@ -257,11 +319,78 @@ def apply_prompt_prefix(
     return messages
 
 
+def get_architecture_family(
+    model: str,
+    model_card_config: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Return the ``architecture_family`` for *model*.
+
+    Resolution order (first match wins):
+
+    1. ``architecture_family`` field in ``llm_models.yaml`` for the model.
+    2. ``model_type`` key in *model_card_config* (HuggingFace ``config.json``),
+       mapped through ``_MODEL_TYPE_MAP``.
+    3. Pattern-match on the canonical model name via ``_PATTERN_MAP``.
+       A ``WARNING`` is emitted so operators know to add an explicit entry.
+    4. Default: ``"transformer"``.
+
+    Args:
+        model:             Model name or alias.
+        model_card_config: Optional parsed ``config.json`` dict from the model
+                           card (e.g. fetched from HuggingFace Hub or a local
+                           Ollama model directory).
+
+    Returns:
+        One of the ``ArchitectureFamily`` string values.
+    """
+    canonical = resolve_model_name(model)
+    reg = _load_registry()
+    entry = reg.get(canonical)
+
+    # 1. Explicit YAML field
+    if entry is not None:
+        family = entry.get("architecture_family")
+        if family:
+            return str(family)
+
+    # 2. model_type from HuggingFace config.json
+    if model_card_config:
+        model_type = str(model_card_config.get("model_type", "")).lower()
+        if model_type:
+            mapped = _MODEL_TYPE_MAP.get(model_type)
+            if mapped:
+                return mapped
+            logger.warning(
+                "Unknown model_type %r for model %r — falling back to pattern match. "
+                "Add an entry to _MODEL_TYPE_MAP or set architecture_family in llm_models.yaml.",
+                model_type,
+                model,
+            )
+
+    # 3. Pattern-match fallback
+    name_lower = canonical.lower()
+    for pattern, family in _PATTERN_MAP:
+        if pattern in name_lower:
+            logger.warning(
+                "architecture_family for model %r inferred from pattern %r → %r. "
+                "Set architecture_family explicitly in llm_models.yaml to suppress this warning.",
+                model,
+                pattern,
+                family,
+            )
+            return family
+
+    # 4. Default
+    return ArchitectureFamily.TRANSFORMER
+
+
 __all__ = [
+    "ArchitectureFamily",
     "resolve_model_name",
     "get_model_kwargs",
     "get_provider_model_id",
     "apply_model_defaults",
     "get_prompt_prefix",
     "apply_prompt_prefix",
+    "get_architecture_family",
 ]
