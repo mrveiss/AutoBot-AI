@@ -63,9 +63,11 @@ async def voice_realtime_list_tools(
     array for the Realtime session. Tools are filtered by voice bundle and
     the caller's RBAC role.
     """
-    is_admin = current_user.get("role") == "admin"
+    role = current_user.get("role", "user")
+    is_admin = role == "admin"
+    user_id = current_user.get("user_id") or current_user.get("sub") or current_user.get("username")
     bridge = await get_realtime_bridge(is_admin=is_admin)
-    tools = await bridge.list_realtime_tools()
+    tools = await bridge.list_realtime_tools(user_id=str(user_id) if user_id else None, role=role)
     return {
         "tools": [
             {
