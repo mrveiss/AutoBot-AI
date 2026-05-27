@@ -7323,7 +7323,8 @@
     "llcCompanies": "Companies",
     "llcPortability": "Portability",
     "settingsAndTools": "Settings & Tools",
-    "adminPanel": "Admin Panel"
+    "adminPanel": "Admin Panel",
+    "documents": "AI Documents"
   },
   "reasoningTrace": {
     "title": "Reasoning trace",
