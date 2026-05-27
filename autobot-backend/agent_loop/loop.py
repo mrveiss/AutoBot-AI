@@ -23,6 +23,7 @@ import time
 import uuid
 from typing import Any
 
+from agent_loop.belief_state import BeliefStateUpdater
 from agent_loop.slack_hook import get_slack_hook
 from agent_loop.think_tool import ThinkTool
 from agent_loop.types import (
@@ -150,6 +151,7 @@ class AgentLoop:
         self.tool_executor = tool_executor
         self.think_tool = think_tool or ThinkTool()
         self.config = config or AgentLoopConfig()
+        self._belief_updater = BeliefStateUpdater()
 
         # State
         self._state = LoopState.IDLE
@@ -477,6 +479,21 @@ class AgentLoop:
         for tool_name in result.tools_executed:
             self._current_context.add_tool(tool_name)
 
+        # MVA-1407: update belief state from tool results when enabled.
+        if self.config.belief_state_enabled and self._current_context:
+            for tool_info in tools_to_execute:
+                tool_name = tool_info.get("tool_name", "")
+                call_hash = self._compute_tool_call_hash(tool_info)
+                raw_result = tool_results.get(tool_name) or tool_results.get(tool_info.get("id", ""))
+                if raw_result is not None:
+                    self._belief_updater.update(
+                        self._current_context,
+                        tool_name,
+                        raw_result,
+                        call_hash,
+                        self._iteration_count,
+                    )
+
         # Issue #6627: fingerprint observations and check for stagnation.
         self._record_observation_fingerprints(tool_results)
         if self._check_observation_stagnation():
@@ -800,12 +817,19 @@ class AgentLoop:
         if not self._current_context:
             return
 
+        belief_summary = ""
+        if self.config.belief_state_enabled and self._current_context.assertions:
+            active = [a for a in self._current_context.assertions.values() if a.is_active]
+            top = sorted(active, key=lambda a: a.confidence, reverse=True)[:20]
+            lines = [f"  {a.key} = {a.value!r} @ {a.confidence:.2f}" for a in top]
+            belief_summary = "\nBelief state (top assertions):\n" + "\n".join(lines) + "\n"
+
         context = f"""
 Task: {self._current_context.description}
 Iterations: {self._iteration_count}
 Tools executed: {len(self._current_context.tools_executed)}
 Errors: {len(self._current_context.errors)}
-Duration: {self._current_context.get_duration_ms():.0f}ms
+Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
 """
         result = await self.think_tool.think(
             ThinkCategory.COMPLETION,

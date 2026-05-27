@@ -225,6 +225,9 @@ class AgentLoopConfig:
     min_confidence_floor: float = 0.3  # Confidence threshold below which a think step is "low"
     confidence_window: int = 3  # Consecutive low-confidence steps before abstention fires
 
+    # Belief state prototype (MVA-1407) — off by default to avoid prod changes
+    belief_state_enabled: bool = False
+
     # Logging
     log_iterations: bool = True  # Log each iteration
     log_tool_results: bool = True  # Log tool execution results
@@ -294,6 +297,51 @@ class ObservationFingerprint:
 
 
 # =============================================================================
+# Belief State Types (MVA-1407)
+# =============================================================================
+
+
+@dataclass
+class ToolExecutionRef:
+    """Reference to a specific tool execution that produced an assertion."""
+
+    tool_name: str
+    iteration: int
+    call_hash: str
+
+
+@dataclass
+class Assertion:
+    """A belief about the world derived from tool output."""
+
+    key: str
+    value: Any
+    confidence: float
+    sources: list[ToolExecutionRef]
+    confirmed_at: datetime
+    refuted_at: datetime | None = None
+    refutation_source: ToolExecutionRef | None = None
+
+    @property
+    def is_active(self) -> bool:
+        return self.refuted_at is None
+
+
+@dataclass
+class ContradictionRecord:
+    """Records when a new assertion contradicts an existing one."""
+
+    key: str
+    prior_value: Any
+    prior_confidence: float
+    new_value: Any
+    new_confidence: float
+    iteration: int
+    resolution: str  # "updated" | "suppressed" | "surfaced_to_think"
+    timestamp: datetime = field(default_factory=now_utc)
+
+
+# =============================================================================
 # Task Context
 # =============================================================================
 
@@ -317,6 +365,9 @@ class TaskContext:
     tool_call_hashes: dict[str, int] = field(default_factory=dict)
     # Semantic stagnation detection: ordered fingerprints (#6627)
     observation_fingerprints: list[ObservationFingerprint] = field(default_factory=list)
+    # Belief state (MVA-1407)
+    assertions: dict[str, "Assertion"] = field(default_factory=dict)
+    contradictions: list["ContradictionRecord"] = field(default_factory=list)
     # Rolling token-vocabulary window (last 50 observations) for novelty scoring.
     # Bounded to prevent common tokens from saturating the vocabulary on long tasks
     # and causing false stagnation detections (#6627 P1).
