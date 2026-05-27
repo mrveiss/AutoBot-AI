@@ -26,7 +26,6 @@ export interface NavItem {
   iconPaths?: string[];
   iconRule?: SvgFillRule;
   iconStroke?: boolean;
-  adminOnly?: boolean;
   /** VITE_FEATURE_<featureFlag.toUpperCase()> must equal 'true' to show this item. */
   featureFlag?: string;
 }
