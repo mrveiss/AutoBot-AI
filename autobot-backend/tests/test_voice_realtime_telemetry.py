@@ -14,9 +14,10 @@ Issue #7421 — covers:
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -331,3 +332,43 @@ class TestCapBreachDisconnect:
 
         # Should not raise
         await t.check_caps("cap3")
+
+
+class TestSessionTTL:
+    """Verify _SESSION_TTL is read from env var with correct default."""
+
+    def test_default_ttl_is_90_days(self):
+        import services.voice_realtime_telemetry as mod
+
+        assert mod._SESSION_TTL == 90 * 24 * 3600
+
+    def test_env_var_overrides_ttl(self):
+        import importlib
+
+        import services.voice_realtime_telemetry as mod
+
+        custom_ttl = 7 * 24 * 3600  # 7 days
+        with patch.dict(os.environ, {"AUTOBOT_VOICE_REALTIME_SESSION_TTL": str(custom_ttl)}):
+            importlib.reload(mod)
+            assert mod._SESSION_TTL == custom_ttl
+        importlib.reload(mod)  # restore default for subsequent tests
+
+    @pytest.mark.asyncio
+    async def test_save_record_passes_ttl_to_redis(self):
+        from services.voice_realtime_telemetry import VoiceRealtimeTelemetry, _SESSION_TTL
+
+        captured: list[int] = []
+
+        async def fake_set(key, value, ex=None):
+            captured.append(ex)
+
+        fake_redis = AsyncMock()
+        fake_redis.set = fake_set
+
+        t = VoiceRealtimeTelemetry.__new__(VoiceRealtimeTelemetry)
+        t._redis = fake_redis
+
+        rec = _make_record(session_id="ttl-test")
+        await t._save_record(rec)
+
+        assert captured == [_SESSION_TTL]

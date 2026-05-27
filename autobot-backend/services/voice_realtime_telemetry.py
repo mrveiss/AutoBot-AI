@@ -18,6 +18,7 @@ Issue #7421 — Implements:
 """
 
 import json
+import os
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any
@@ -47,7 +48,7 @@ _TOKEN_COST_PER_1M: dict[str, float] = {
 
 # Redis key prefix + TTL
 _KEY_PREFIX = "voice_realtime_session"
-_SESSION_TTL = 90 * 24 * 3600  # 90 days
+_SESSION_TTL = int(os.getenv("AUTOBOT_VOICE_REALTIME_SESSION_TTL", str(90 * 24 * 3600)))  # default 90 days
 
 
 class DisconnectReason(str, Enum):
