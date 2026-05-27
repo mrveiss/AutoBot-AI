@@ -6,7 +6,7 @@
 import pytest
 
 from extensions.base import HookContext
-from extensions.builtin.permission_enforcement import (
+from extensions.builtin.permission_enforcement import (  # nosemgrep: extension-no-sibling-import
     PermissionEnforcementExtension,
     _role_satisfies,
 )
