@@ -208,17 +208,23 @@ async def submit_task(
     caller_id = extract_caller_id(x_a2a_agent_id, jwt_sub, addr)
     trace_id = new_trace_id()
 
-    # Issue #7358: gate task submission by behavioural trust level.
-    # Peers that have not yet earned LIMITED trust (≥ 0.30 score) are
-    # restricted to discovery endpoints only.
-    if x_a2a_agent_id:
-        try:
-            get_trust_manager().require_capability(x_a2a_agent_id, Capability.SUBMIT_TASKS)
-        except TrustAccessDenied as exc:
-            raise HTTPException(
-                status_code=403,
-                detail=f"Peer trust level insufficient for task submission: {exc.level.value}",
-            ) from exc
+    # Issue #7358 + GH#8743: gate task submission by behavioural trust level.
+    # X-A2A-Agent-Id is required — callers without it are anonymous and
+    # cannot earn/have a trust record, so they are default-denied (no implicit
+    # trust for unauthenticated callers).  Identified peers must hold at least
+    # LIMITED trust (score > 0.30) to submit tasks.
+    if not x_a2a_agent_id:
+        raise HTTPException(
+            status_code=401,
+            detail="X-A2A-Agent-Id header is required for task submission",
+        )
+    try:
+        get_trust_manager().require_capability(x_a2a_agent_id, Capability.SUBMIT_TASKS)
+    except TrustAccessDenied as exc:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Peer trust level insufficient for task submission: {exc.level.value}",
+        ) from exc
 
     manager = get_task_manager()
     task = manager.create_task(
