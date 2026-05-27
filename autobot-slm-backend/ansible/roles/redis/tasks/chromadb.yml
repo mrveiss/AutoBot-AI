@@ -1,0 +1,82 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# ChromaDB tasks for the database role (MVA-1319 / GH#8786)
+# Deploys ChromaDB vector store alongside Redis Stack on database nodes.
+---
+
+- name: "ChromaDB | Create install and data directories"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+    owner: "{{ redis_owner }}"
+    group: "{{ redis_group }}"
+  loop:
+    - "{{ chromadb_install_dir }}"
+    - "{{ chromadb_data_dir }}"
+  become: true
+  tags: ['redis', 'chromadb']
+
+- name: "ChromaDB | Create Python venv"
+  ansible.builtin.command:
+    cmd: "python3.12 -m venv {{ chromadb_install_dir }}/venv --clear"
+    creates: "{{ chromadb_install_dir }}/venv/bin/python"
+  become: true
+  become_user: "{{ redis_owner }}"
+  tags: ['redis', 'chromadb']
+
+- name: "ChromaDB | Upgrade pip in venv"
+  ansible.builtin.pip:
+    name: pip
+    state: latest
+    virtualenv: "{{ chromadb_install_dir }}/venv"
+  become: true
+  become_user: "{{ redis_owner }}"
+  environment:
+    HOME: "{{ chromadb_install_dir }}"
+  tags: ['redis', 'chromadb']
+
+- name: "ChromaDB | Install chromadb package"
+  ansible.builtin.pip:
+    name: "chromadb>=0.5"
+    state: present
+    virtualenv: "{{ chromadb_install_dir }}/venv"
+    extra_args: "--timeout 300"
+  become: true
+  become_user: "{{ redis_owner }}"
+  environment:
+    HOME: "{{ chromadb_install_dir }}"
+  timeout: 600
+  tags: ['redis', 'chromadb']
+
+- name: "ChromaDB | Fix venv ownership"
+  ansible.builtin.file:
+    path: "{{ chromadb_install_dir }}/venv"
+    state: directory
+    owner: "{{ redis_owner }}"
+    group: "{{ redis_group }}"
+    recurse: true
+  become: true
+  tags: ['redis', 'chromadb']
+
+- name: "ChromaDB | Deploy systemd service unit"
+  ansible.builtin.template:
+    src: autobot-chromadb.service.j2
+    dest: /etc/systemd/system/autobot-chromadb.service
+    mode: "0644"
+  become: true
+  notify:
+    - reload systemd
+    - restart chromadb
+  tags: ['redis', 'chromadb']
+
+- name: "ChromaDB | Enable and start service"
+  ansible.builtin.systemd:
+    name: autobot-chromadb
+    state: started
+    enabled: true
+    daemon_reload: true
+  become: true
+  tags: ['redis', 'chromadb']

@@ -274,6 +274,11 @@
   ansible.builtin.import_tasks: redis_exporter.yml
   tags: ['redis', 'redis_exporter']
 
+# ChromaDB vector database — co-located on database nodes (MVA-1319 / GH#8786)
+- name: "Redis | Deploy ChromaDB vector database"
+  ansible.builtin.import_tasks: chromadb.yml
+  tags: ['redis', 'chromadb']
+
 - name: "Redis | Display configuration summary"
   debug:
     msg:
