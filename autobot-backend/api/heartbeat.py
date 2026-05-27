@@ -292,6 +292,27 @@ async def pause_agent(
     return _state_to_response(state)
 
 
+async def _request_skill_approval_for_resume(
+    agent_id: str, paused_by: str, requested_by: str
+) -> str:
+    """Queue a SkillApproval for a non-admin resume of a system-paused agent (GH#8734).
+
+    Delegates to GovernanceEngine so the request appears in the SLM Approvals
+    dashboard and is persisted to the skills DB for audit.  Returns the
+    approval_id that the caller should surface in the 202 response.
+    """
+    from skills.governance import GovernanceEngine
+
+    engine = GovernanceEngine()
+    result = await engine.request_activation(
+        skill_name="agent.resume",
+        skill_id=f"agent:resume:{agent_id}",
+        requested_by=requested_by,
+        reason=f"resume agent {agent_id} (auto-paused by {paused_by})",
+    )
+    return result.approval_id or ""
+
+
 @router.post("/{agent_id}/resume", response_model=HeartbeatConfigResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -305,26 +326,41 @@ async def resume_agent(
     scheduler: HeartbeatScheduler = Depends(_get_scheduler),
     _user=Depends(get_current_user),
 ) -> HeartbeatConfigResponse:
-    """Resume a paused agent's heartbeat (GH#6476).
+    """Resume a paused agent's heartbeat (GH#6476, GH#8734).
 
     Transitions PAUSED → ACTIVE.  System-paused agents (paused_by starts with
-    "system:") require admin role; user-paused agents can be resumed freely.
+    "system:") go through the SkillApproval governance workflow (GH#8734 AC-6):
+    admins resume immediately; non-admins receive HTTP 202 with an approval_id
+    that an admin must approve via the SLM dashboard before the agent resumes.
+    User-paused agents can be resumed by any authenticated user.
     DISABLED and TERMINATED agents are not affected — use PUT /config instead.
     """
+    from fastapi.responses import JSONResponse
+
     state = await _get_or_create_state(session, agent_id)
     if state.status == AgentStatus.TERMINATED.value:
         raise HTTPException(status_code=409, detail="Agent is terminated; cannot resume")
     if state.status != AgentStatus.PAUSED.value:
         raise HTTPException(status_code=409, detail=f"Agent is not paused (status={state.status})")
-    # System-enforced pauses require admin approval (GH#6476)
-    # _user is always a Dict with keys "role" (str) and "username" (str)
+    # System-enforced pauses use the SkillApproval governance workflow (GH#8734).
+    # _user is always a Dict with keys "role" (str) and "username" (str).
     paused_by = state.paused_by or ""
     if paused_by.startswith("system:"):
+        username = (
+            _user.get("username", "") if isinstance(_user, dict) else getattr(_user, "username", "")
+        )
         user_role = _user.get("role", "") if isinstance(_user, dict) else getattr(_user, "role", "")
         if user_role != "admin":
-            raise HTTPException(
-                status_code=403,
-                detail=f"Agent was paused by {paused_by}; admin approval required to resume",
+            approval_id = await _request_skill_approval_for_resume(agent_id, paused_by, username)
+            return JSONResponse(
+                status_code=202,
+                content={
+                    "approval_id": approval_id,
+                    "status": "pending",
+                    "message": (
+                        f"Agent was paused by {paused_by}; resume request queued for admin approval"
+                    ),
+                },
             )
     state.status = AgentStatus.ACTIVE.value
     state.paused_reason = None
