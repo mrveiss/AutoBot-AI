@@ -328,6 +328,10 @@ export const routes: RouteRecordRaw[] = [
     // Child routes render inside WorkflowBuilderView's <router-view /> (#2368)
     children: [
       {
+        path: '',
+        redirect: '/automation/overview'
+      },
+      {
         path: 'browser-automation',
         name: 'browser-automation',
         component: () => import('@/views/BrowserAutomationView.vue'),
@@ -335,6 +339,16 @@ export const routes: RouteRecordRaw[] = [
           title: 'Browser Automation',
           icon: 'fas fa-globe',
           description: 'Control browser workers and automate web tasks',
+          requiresAuth: true
+        }
+      },
+      // GH#8750: URL-routed sections — rendered inline in WorkflowBuilderView via route.params.section
+      {
+        path: ':section',
+        name: 'automation-section',
+        component: { render: () => null },
+        meta: {
+          sectionRoute: true,
           requiresAuth: true
         }
       }

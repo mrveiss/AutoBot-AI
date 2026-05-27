@@ -1,7 +1,18 @@
 <template>
   <div class="knowledge-view">
+    <!-- Mobile overlay backdrop -->
+    <div
+      v-if="showMobileSidebar"
+      class="mobile-overlay"
+      aria-hidden="true"
+      @click="showMobileSidebar = false"
+    />
+
     <!-- Sidebar Navigation - Issue #901: Technical Precision Design -->
-    <aside class="knowledge-sidebar">
+    <aside
+      class="knowledge-sidebar"
+      :class="{ 'mobile-open': showMobileSidebar }"
+    >
       <div class="sidebar-header">
         <h3>
           <svg class="header-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -9,10 +20,23 @@
           </svg>
           {{ $t('knowledge.views.title') }}
         </h3>
+        <button
+          class="mobile-toggle"
+          :aria-label="showMobileSidebar ? $t('knowledge.views.closeSidebar') : $t('knowledge.views.openSidebar')"
+          :aria-expanded="showMobileSidebar"
+          @click="toggleMobileSidebar"
+        >
+          <svg v-if="showMobileSidebar" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+          <svg v-else fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
       </div>
 
       <!-- Category Navigation -->
-      <nav class="category-nav" :aria-label="$t('knowledge.views.navAriaLabel')">
+      <nav class="category-nav" :aria-label="$t('knowledge.views.navAriaLabel')" @click="onNavClick">
         <div class="category-divider">
           <span>{{ $t('knowledge.views.browse') }}</span>
         </div>
@@ -193,8 +217,31 @@
 </template>
 
 <script setup lang="ts">
-// View-level component for knowledge base layout
-// Issue #901: Technical Precision sidebar design with electric blue accents
+import { ref, onMounted } from 'vue'
+
+const STORAGE_KEY = 'knowledge-sidebar-mobile-open'
+
+const showMobileSidebar = ref(false)
+
+onMounted(() => {
+  const saved = localStorage.getItem(STORAGE_KEY)
+  showMobileSidebar.value = saved === 'true'
+})
+
+function toggleMobileSidebar() {
+  showMobileSidebar.value = !showMobileSidebar.value
+  localStorage.setItem(STORAGE_KEY, String(showMobileSidebar.value))
+}
+
+function onNavClick(e: Event) {
+  if (window.innerWidth <= 768 && showMobileSidebar.value) {
+    const target = e.target as HTMLElement
+    if (target.closest('a')) {
+      showMobileSidebar.value = false
+      localStorage.setItem(STORAGE_KEY, 'false')
+    }
+  }
+}
 </script>
 
 <style scoped>
@@ -323,20 +370,102 @@
 }
 
 /* ============================================
+ * MOBILE TOGGLE BUTTON (hidden on desktop)
+ * ============================================ */
+
+.mobile-toggle {
+  display: none;
+}
+
+/* ============================================
+ * MOBILE OVERLAY
+ * ============================================ */
+
+.mobile-overlay {
+  display: none;
+}
+
+/* ============================================
  * RESPONSIVE - Mobile
  * ============================================ */
 
 @media (max-width: 768px) {
   .knowledge-view {
     flex-direction: column;
+    position: relative;
   }
 
+  /* Collapsed header strip — no 50vh content, just the header bar */
   .knowledge-sidebar {
     width: 100%;
     min-width: 100%;
-    max-height: 50vh;
+    max-height: none;
+    height: auto;
     border-right: none;
     border-bottom: 1px solid var(--border-default);
+    overflow: hidden;
+    position: relative;
+    z-index: 200;
+  }
+
+  /* Hide nav in collapsed state */
+  .knowledge-sidebar:not(.mobile-open) .category-nav {
+    display: none;
+  }
+
+  /* Expanded drawer — overlays content, full-height */
+  .knowledge-sidebar.mobile-open {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 80vw;
+    max-width: 320px;
+    height: 100dvh;
+    z-index: 300;
+    border-right: 1px solid var(--border-default);
+    border-bottom: none;
+    overflow-y: auto;
+  }
+
+  /* Overlay backdrop */
+  .mobile-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 299;
+  }
+
+  /* Toggle button visible on mobile */
+  .mobile-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: transparent;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md, 6px);
+    color: var(--text-secondary);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background var(--duration-150) var(--ease-in-out);
+  }
+
+  .mobile-toggle:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+
+  .mobile-toggle svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
 
   .sidebar-header h3 {
