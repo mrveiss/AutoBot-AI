@@ -6,9 +6,15 @@ Docker Execution Backend (Issue #4343)
 
 Executes tasks in isolated Docker containers with resource limits.
 Provides CPU, memory, and timeout constraints.
+
+GH#4452: Optional pre-warmed container pool for near-zero cold-start latency.
+Enable it by passing ``use_pool=True`` (and optionally ``pool_size``) to the
+constructor. The pool runs ``sleep infinity`` containers per image and uses
+``exec_run`` instead of ``containers.run`` so callers skip image-layer spin-up.
 """
 
-from typing import Dict, Tuple
+import asyncio
+from typing import Any, Dict, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
@@ -27,18 +33,34 @@ from services.execution.base_backend import (
     ExecutionStatus,
     ExecutionTask,
 )
+from services.execution.container_pool import ContainerPoolRegistry
 
 logger = get_logger(__name__)
 
+_DEFAULT_POOL_SIZE = 2
+
 
 class DockerBackend(ExecutionBackend):
-    """Execute tasks in Docker containers (Issue #4343)."""
+    """Execute tasks in Docker containers (Issue #4343).
 
-    def __init__(self, docker_host: str | None = None) -> None:
+    When *use_pool* is ``True`` a :class:`ContainerPoolRegistry` keeps
+    pre-started containers warm per image (GH#4452).  Each acquired container
+    receives commands via ``exec_run``; after execution the container is
+    destroyed and the pool is refilled asynchronously.
+    """
+
+    def __init__(
+        self,
+        docker_host: str | None = None,
+        use_pool: bool = False,
+        pool_size: int = _DEFAULT_POOL_SIZE,
+    ) -> None:
         """Initialize Docker backend.
 
         Args:
             docker_host: Docker daemon URL (default: unix socket)
+            use_pool: Enable pre-warmed container pool (GH#4452).
+            pool_size: Number of warm containers to maintain per image.
 
         Raises:
             RuntimeError: If Docker is not available or not configured
@@ -57,8 +79,47 @@ class DockerBackend(ExecutionBackend):
         self._container_map: Dict[str, str] = {}  # task_id -> container_id
         self._default_image = "python:3.10-slim"
 
+        # Pre-warmed pool (GH#4452)
+        self._use_pool = use_pool
+        self._pool_size = pool_size
+        self._pool_registry: ContainerPoolRegistry | None = None
+        if use_pool:
+            self._pool_registry = ContainerPoolRegistry(
+                docker_client=self.client,
+                pool_size=pool_size,
+            )
+
+    # ------------------------------------------------------------------
+    # Pool lifecycle helpers
+    # ------------------------------------------------------------------
+
+    async def warm_pool(self, images: list[str] | None = None) -> None:
+        """Pre-warm the container pool for the given images.
+
+        Args:
+            images: Docker images to pre-warm. Defaults to all supported images.
+        """
+        if self._pool_registry is None:
+            return
+        if images is None:
+            images = list(self._get_image_map().values())
+        await self._pool_registry.start(images)
+
+    def get_pool_stats(self) -> Dict[str, Any]:
+        """Return pool statistics for monitoring."""
+        if self._pool_registry is None:
+            return {}
+        return self._pool_registry.get_stats()
+
+    # ------------------------------------------------------------------
+    # Execution
+    # ------------------------------------------------------------------
+
     async def execute(self, task: ExecutionTask) -> ExecutionResult:
         """Execute task in Docker container.
+
+        Uses a warm container from the pool when *use_pool* is ``True``
+        (GH#4452); otherwise falls back to the original cold-start path.
 
         Args:
             task: ExecutionTask with code and parameters
@@ -72,6 +133,86 @@ class DockerBackend(ExecutionBackend):
         if not await self.is_healthy():
             raise RuntimeError("Docker backend is not healthy")
 
+        image = self._get_image_for_language(task.language)
+
+        if self._use_pool and self._pool_registry is not None:
+            pool = self._pool_registry.get_pool(image)
+            if pool is not None:
+                return await self._execute_pooled(task, image, pool)
+
+        return await self._execute_cold(task, image)
+
+    async def _execute_pooled(self, task: ExecutionTask, image: str, pool: Any) -> ExecutionResult:
+        """Execute *task* using a pre-warmed container from *pool* (GH#4452).
+
+        Acquires a warm container, runs the command with ``exec_run`` inside
+        it, then releases (destroys) the container so the pool can refill.
+
+        Args:
+            task: ExecutionTask with code and parameters.
+            image: Docker image name (used for logging).
+            pool: WarmContainerPool to acquire from.
+
+        Returns:
+            ExecutionResult with captured output.
+        """
+        result = ExecutionResult(
+            task_id=task.task_id,
+            status=ExecutionStatus.PENDING,
+            backend_type=self.backend_type.value,
+        )
+
+        container = None
+        try:
+            result.started_at = now_utc()
+            result.status = ExecutionStatus.RUNNING
+
+            container = await pool.acquire()
+            self._container_map[task.task_id] = container.id
+
+            cmd = self._prepare_command(task)
+            env = {k: str(v) for k, v in (task.env_vars or {}).items()}
+
+            exec_result = await asyncio.to_thread(
+                container.exec_run,
+                cmd,
+                environment=env,
+                demux=False,
+            )
+
+            output = (exec_result.output or b"").decode("utf-8", errors="replace")
+            result.stdout = output
+            result.stderr = ""
+            result.return_code = exec_result.exit_code if exec_result.exit_code is not None else -1
+            result.status = ExecutionStatus.SUCCESS if result.return_code == 0 else ExecutionStatus.FAILED
+
+        except Exception as exc:
+            logger.exception("Pooled execution error for task %s: %s", task.task_id, exc)
+            result.status = ExecutionStatus.FAILED
+            result.stderr = str(exc)
+            result.return_code = -1
+
+        finally:
+            if container is not None:
+                self._container_map.pop(task.task_id, None)
+                await pool.release(container)
+
+            result.completed_at = now_utc()
+            if result.started_at:
+                result.execution_time_ms = (result.completed_at - result.started_at).total_seconds() * 1000
+
+        return result
+
+    async def _execute_cold(self, task: ExecutionTask, image: str) -> ExecutionResult:
+        """Original cold-start execution path: create a new container per task.
+
+        Args:
+            task: ExecutionTask with code and parameters.
+            image: Docker image to use.
+
+        Returns:
+            ExecutionResult with captured output.
+        """
         result = ExecutionResult(
             task_id=task.task_id,
             status=ExecutionStatus.PENDING,
@@ -84,11 +225,8 @@ class DockerBackend(ExecutionBackend):
             result.started_at = now_utc()
             result.status = ExecutionStatus.RUNNING
 
-            # Prepare image and command
-            image = self._get_image_for_language(task.language)
             cmd = self._prepare_command(task)
 
-            # Create container with resource limits
             try:
                 container = self.client.containers.run(
                     image,
@@ -104,53 +242,52 @@ class DockerBackend(ExecutionBackend):
 
                 self._container_map[task.task_id] = container.id
 
-                # Wait for container with timeout
                 try:
                     exit_code = container.wait(timeout=task.timeout_seconds)
                     result.return_code = exit_code["StatusCode"]
 
                 except Exception as timeout_error:
-                    logger.warning(f"Container {container.id} timed out: {timeout_error}")
+                    logger.warning("Container %s timed out: %s", container.id, timeout_error)
                     container.kill()
                     result.status = ExecutionStatus.TIMEOUT
-                    result.stderr = f"Container execution exceeded timeout of " f"{task.timeout_seconds}s"
+                    result.stderr = f"Container execution exceeded timeout of {task.timeout_seconds}s"
                     result.return_code = -1
                     return result
 
-                # Capture output
                 try:
                     logs = container.logs(stdout=True, stderr=True)
                     output = logs.decode(encoding="utf-8", errors="replace")
-                    # Simple heuristic: if container has stderr, assume it's there
                     result.stdout = output
                     result.stderr = ""
                 except Exception as e:
-                    logger.warning(f"Failed to capture container logs: {e}")
+                    logger.warning("Failed to capture container logs: %s", e)
                     result.stderr = f"Failed to capture logs: {str(e)}"
 
-                # Determine status
                 result.status = ExecutionStatus.SUCCESS if result.return_code == 0 else ExecutionStatus.FAILED
 
             except Exception as e:
                 result.status = ExecutionStatus.FAILED
                 result.stderr = f"Container execution failed: {str(e)}"
                 result.return_code = -1
-                logger.exception(f"Error executing task {task.task_id}: {e}")
+                logger.exception("Error executing task %s: %s", task.task_id, e)
 
         finally:
-            # Clean up container
             if container:
                 try:
                     container.remove(force=True)
                     self._container_map.pop(task.task_id, None)
                 except Exception as e:
-                    logger.warning(f"Error removing container {container.id}: {e}")
+                    logger.warning("Error removing container %s: %s", container.id, e)
 
             result.completed_at = now_utc()
             if result.started_at:
                 result.execution_time_ms = (result.completed_at - result.started_at).total_seconds() * 1000
 
         return result
+
+    # ------------------------------------------------------------------
+    # Health / cleanup
+    # ------------------------------------------------------------------
 
     async def health_check(self) -> bool:
         """Check if Docker daemon is accessible.
@@ -162,11 +299,11 @@ class DockerBackend(ExecutionBackend):
             self.client.ping()
             return True
         except Exception as e:
-            logger.warning(f"Docker health check failed: {e}")
+            logger.warning("Docker health check failed: %s", e)
             return False
 
     async def cleanup(self) -> None:
-        """Clean up active containers."""
+        """Clean up active containers and stop the pool if running."""
         for task_id, container_id in list(self._container_map.items()):
             try:
                 container = self.client.containers.get(container_id)
@@ -174,7 +311,10 @@ class DockerBackend(ExecutionBackend):
                     container.kill()
                 container.remove(force=True)
             except Exception as e:
-                logger.warning(f"Error cleaning up container {container_id}: {e}")
+                logger.warning("Error cleaning up container %s: %s", container_id, e)
+
+        if self._pool_registry is not None:
+            await self._pool_registry.stop()
 
     async def verify_task_compatibility(self, task: ExecutionTask) -> Tuple[bool, str]:
         """Verify task can run in Docker.
@@ -192,15 +332,26 @@ class DockerBackend(ExecutionBackend):
                 f"Language '{task.language}' not supported in Docker. " f"Supported: {', '.join(supported_languages)}",
             )
 
-        # Check if image is available
         try:
             image = self._get_image_for_language(task.language)
             self.client.images.get(image)
         except Exception:
-            # Image not available locally, but can be pulled
             pass
 
         return True, ""
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _get_image_map(self) -> Dict[str, str]:
+        """Return the language-to-image mapping."""
+        return {
+            "python": "python:3.10-slim",
+            "javascript": "node:18-slim",
+            "bash": "bash:5.1",
+            "shell": "bash:5.1",
+        }
 
     def _get_image_for_language(self, language: str) -> str:
         """Get Docker image for language.
@@ -211,14 +362,7 @@ class DockerBackend(ExecutionBackend):
         Returns:
             Docker image name
         """
-        language = language.lower()
-        images = {
-            "python": "python:3.10-slim",
-            "javascript": "node:18-slim",
-            "bash": "bash:5.1",
-            "shell": "bash:5.1",
-        }
-        return images.get(language, self._default_image)
+        return self._get_image_map().get(language.lower(), self._default_image)
 
     def _prepare_command(self, task: ExecutionTask) -> list:
         """Prepare command for container execution.
@@ -227,7 +371,7 @@ class DockerBackend(ExecutionBackend):
             task: ExecutionTask with code
 
         Returns:
-            Command list for container.run()
+            Command list for container.run() or exec_run()
         """
         language = task.language.lower()
 
