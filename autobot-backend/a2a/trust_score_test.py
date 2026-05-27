@@ -429,9 +429,6 @@ class TestListPeers:
     def test_returns_peers_after_interactions(self, tmp_path):
         # Use a real Redis-scanning manager but override _redis to return a
         # simple in-memory store that supports keys() and get().
-        import json as _json
-        import time as _time
-
         mgr = TrustScoreManager(sqlite_path=tmp_path / "audit.db")
         _store: dict = {}
 

@@ -12,7 +12,7 @@ Test strategy: mock out Redis (TaskManager) and the TrustScoreManager to
 avoid network dependencies.  Only the executor's decision logic is exercised.
 """
 
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
