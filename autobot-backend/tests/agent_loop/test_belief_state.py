@@ -16,9 +16,7 @@ Covers:
 import hashlib
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from unittest.mock import patch
 
-import pytest
 
 from agent_loop.belief_state import BeliefStateUpdater
 from agent_loop.extractors.read_file import ReadFileExtractor
