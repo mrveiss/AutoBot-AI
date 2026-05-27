@@ -27,10 +27,11 @@ for _p in (_npu_root, _core_path, _workers_path):
 
 from openvino_dispatch import (  # noqa: E402
     ArchitectureFamily,
+    InferenceEngine,
     UnsupportedArchitectureError,
     get_inference_config,
+    get_inference_engine,
 )
-
 
 # ---------------------------------------------------------------------------
 # Unit tests: openvino_dispatch.get_inference_config
@@ -185,3 +186,58 @@ class TestNPUWorkerClientLoadModel:
         assert result["success"] is False
         assert "state_space" in result["error"]
         assert result.get("error_code") == "unsupported_architecture"
+
+
+# ---------------------------------------------------------------------------
+# Unit tests: openvino_dispatch.get_inference_engine (GH#8690)
+# ---------------------------------------------------------------------------
+
+
+class TestGetInferenceEngine:
+    """Tests for get_inference_engine — the InferenceEngine factory (GH#8690)."""
+
+    def test_returns_inference_engine_instance(self):
+        engine = get_inference_engine("m", "transformer")
+        assert isinstance(engine, InferenceEngine)
+
+    def test_fields_match_get_inference_config(self):
+        cfg = get_inference_config("bert", "transformer", device="NPU")
+        engine = get_inference_engine("bert", "transformer", device="NPU")
+        assert engine.model_id == cfg["model_id"]
+        assert engine.device == cfg["device"]
+        assert engine.architecture_family == cfg["architecture_family"]
+        assert engine.inference_backend == cfg["inference_backend"]
+
+    def test_none_family_defaults_to_transformer(self):
+        engine = get_inference_engine("m", None)
+        assert engine.architecture_family == "transformer"
+        assert engine.inference_backend == "openvino_transformer"
+
+    def test_unsupported_family_raises(self):
+        with pytest.raises(UnsupportedArchitectureError):
+            get_inference_engine("m", "state_space")
+
+    def test_custom_run_layer_is_used(self):
+        calls = []
+
+        def spy_layer(layer, hidden):
+            calls.append((layer, hidden))
+            return hidden + 10
+
+        engine = get_inference_engine("m", "transformer", run_layer=spy_layer)
+        layers = [object(), object()]
+        result = engine.forward(layers, 0)
+        assert result == 20
+        assert len(calls) == 2
+
+    def test_default_run_layer_calls_layer_directly(self):
+        engine = get_inference_engine("m", "transformer")
+        layer = lambda x: x * 3  # noqa: E731
+        result = engine.run_layer(layer, 4)
+        assert result == 12
+
+    def test_forward_chains_layers(self):
+        engine = get_inference_engine("m", "transformer")
+        layers = [lambda x: x + 1, lambda x: x * 2, lambda x: x - 5]  # noqa: E731
+        result = engine.forward(layers, 3)
+        assert result == (3 + 1) * 2 - 5  # 3
