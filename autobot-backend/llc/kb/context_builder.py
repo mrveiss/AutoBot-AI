@@ -192,10 +192,7 @@ class HeartbeatContextBuilder:
         # Build goal ancestry
         goal_ancestry = []
         if work_item.goal_id:
-            goal = await self.goal_service.get(session, work_item.goal_id)
-            if goal:
-                ancestors = await self.goal_service.get_ancestors(session, work_item.goal_id)
-                goal_ancestry = [{"id": str(g.id), "title": g.title, "level": g.level} for g in ancestors + [goal]]
+            goal_ancestry = await self.goal_service.get_goal_ancestry_for_work_item(session, work_item.goal_id)
 
         return {
             "work_item_id": str(work_item_id),

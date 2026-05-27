@@ -122,8 +122,7 @@ def builder() -> HeartbeatContextBuilder:
         metadata={"total_results": 1},
     )
     goal_svc = AsyncMock()
-    goal_svc.get.return_value = None
-    goal_svc.get_ancestors.return_value = []
+    goal_svc.get_goal_ancestry_for_work_item.return_value = []
 
     work_svc = AsyncMock()
     work_svc.get.return_value = _make_work_item(company_id="co1", project_id=None)
@@ -203,12 +202,10 @@ async def test_build_fat_with_goal_ancestry(builder: HeartbeatContextBuilder) ->
     goal_id = uuid.uuid4()
     wi = _make_work_item(company_id="co1", goal_id=goal_id)
     builder.work_item_service.get.return_value = wi
-
-    parent_goal = _make_goal(title="Top Level", level=0)
-    child_goal = _make_goal(title="Project Goal", level=1)
-    child_goal.id = goal_id
-    builder.goal_service.get.return_value = child_goal
-    builder.goal_service.get_ancestors.return_value = [parent_goal]
+    builder.goal_service.get_goal_ancestry_for_work_item.return_value = [
+        {"id": str(uuid.uuid4()), "title": "Top Level", "level": 0, "status": "active"},
+        {"id": str(goal_id), "title": "Project Goal", "level": 1, "status": "active"},
+    ]
 
     session = AsyncMock()
     result = await builder.build(
@@ -218,6 +215,7 @@ async def test_build_fat_with_goal_ancestry(builder: HeartbeatContextBuilder) ->
         context_mode="fat",
     )
 
+    builder.goal_service.get_goal_ancestry_for_work_item.assert_called_once_with(session, goal_id)
     assert len(result["goal_ancestry"]) == 2
     assert result["goal_ancestry"][0]["title"] == "Top Level"
     assert result["goal_ancestry"][1]["title"] == "Project Goal"

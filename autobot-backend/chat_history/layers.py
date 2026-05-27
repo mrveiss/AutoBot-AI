@@ -236,7 +236,7 @@ class Layer4GoalAncestry:
 
     Loaded when ``goal_ancestry`` is present in the build context — a list of
     dicts with at minimum ``title`` and ``level`` keys (mirrors LLCGoal fields).
-    Callers are responsible for fetching the chain via GoalService.get_ancestors().
+    Callers are responsible for fetching the chain via GoalService.get_goal_ancestry_for_work_item().
     """
 
     async def should_load(self, goal_ancestry: list | None) -> bool:
