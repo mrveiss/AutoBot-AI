@@ -144,6 +144,7 @@ class HeartbeatRun(Base):
     )
     trigger = Column(String(30), nullable=False, default=WakeupTrigger.INTERVAL.value)
     wakeup_context = Column(JSONB, nullable=True)
+    created_at = Column(DateTime, nullable=True)
     started_at = Column(DateTime, nullable=True)
     finished_at = Column(DateTime, nullable=True)
     tokens_used = Column(Integer, nullable=True)
