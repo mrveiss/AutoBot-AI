@@ -662,6 +662,19 @@ async def add_text_to_knowledge(
         board_id,
     ) = _extract_add_text_fields(request)
 
+    # GH#8598: block sub-company agents from writing to parent-company KB
+    if organization_id:
+        from llc.kb.write_guard import assert_not_writing_to_ancestor_kb
+        from user_management.database import get_async_session_factory
+
+        _requester = get_auth_middleware().get_user_from_request(req)
+        _requester_role = (_requester or {}).get("role", "")
+        if _requester_role not in ("platform_admin", "superadmin"):
+            _requester_org_id = (_requester or {}).get("org_id")
+            _session_factory = get_async_session_factory()
+            async with _session_factory() as _session:
+                await assert_not_writing_to_ancestor_kb(_requester_org_id, organization_id, _session)
+
     metadata = _build_ownership_metadata(
         title,
         source,
