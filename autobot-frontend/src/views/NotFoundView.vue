@@ -15,9 +15,9 @@
 
         <!-- Navigation Options -->
         <div class="action-buttons">
-          <router-link to="/chat" class="btn-action-primary">
+          <router-link to="/home" class="btn-action-primary">
             <Icon name="home" />
-            <span>{{ $t('views.notFound.goToChat') }}</span>
+            <span>{{ $t('views.notFound.goHome') }}</span>
           </router-link>
           <button @click="$router.go(-1)" class="btn-action-secondary">
             <Icon name="arrow-left" />

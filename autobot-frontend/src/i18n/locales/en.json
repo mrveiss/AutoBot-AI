@@ -5458,6 +5458,7 @@
     "notFound": {
       "title": "404",
       "description": "The page you're looking for doesn't exist or has been moved.",
+      "goHome": "Go Home",
       "goToChat": "Go to Chat",
       "goBack": "Go Back",
       "quickLinks": "Quick Links",
