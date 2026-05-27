@@ -17,7 +17,6 @@ import hashlib
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
-
 from agent_loop.belief_state import BeliefStateUpdater
 from agent_loop.extractors.read_file import ReadFileExtractor
 from agent_loop.extractors.run_command import RunCommandExtractor
