@@ -11,8 +11,10 @@ automatically promoted to BUILTIN or TRUSTED.
 
 import asyncio
 import os
+import re
 import uuid
 from typing import Any
+from urllib.parse import urlparse
 
 import aiohttp
 
@@ -25,6 +27,76 @@ logger = get_logger(__name__)
 _SKILL_CACHE_DIR = "/var/lib/autobot/skill_cache"
 _GIT_TIMEOUT = 120
 _SOURCE_META_KEY = "external_import"
+
+# Allowlist of git URL schemes.  file://, http://, git:// and any other scheme
+# are rejected outright to prevent SSRF via the git binary.
+_ALLOWED_GIT_SCHEMES = frozenset({"https", "ssh", "git+ssh"})
+
+# Valid git ref characters — rejects flag-injection strings like --upload-pack=x
+# and path-traversal sequences.
+_GIT_REF_RE = re.compile(r"^[A-Za-z0-9._/\-]+$")
+
+
+def _parse_git_remote(url: str) -> tuple[str, str]:
+    """Return (scheme, host) for a git remote URL.
+
+    Supports https://, ssh://, git+ssh://, and SCP-style git@host:path remotes.
+    Raises ValueError for disallowed or unrecognisable formats.
+    """
+    if "://" not in url:
+        # SCP-style: [user@]host:path  — treated as SSH
+        host_part = url.split(":", 1)[0]
+        host = host_part.split("@", 1)[-1]
+        if not host:
+            raise ValueError(f"Cannot parse host from SCP-style git URL: {url!r}")
+        return "ssh", host
+
+    parsed = urlparse(url)
+    scheme = (parsed.scheme or "").lower()
+    if scheme not in _ALLOWED_GIT_SCHEMES:
+        raise ValueError(
+            f"Disallowed git URL scheme {scheme!r} in {url!r}: "
+            f"only https and ssh are permitted (got scheme from allowlist {_ALLOWED_GIT_SCHEMES})"
+        )
+    host = parsed.hostname or ""
+    if not host:
+        raise ValueError(f"Git URL has no hostname: {url!r}")
+    return scheme, host
+
+
+async def _validate_git_url(url: str) -> None:
+    """SSRF guard for git remote URLs.
+
+    Rejects file://, http://, git://, and any private/internal host.
+    For https:// delegates to is_public_url_async; for ssh/git+ssh resolves
+    the host via resolve_safe_ip_async to block private RFC-range IPs.
+
+    Raises RuntimeError with a descriptive message on any rejection.
+    """
+    from autobot_shared.url_safety import is_public_url_async, resolve_safe_ip_async
+
+    try:
+        scheme, host = _parse_git_remote(url)
+    except ValueError as exc:
+        raise RuntimeError(f"Git URL rejected: {exc}") from exc
+
+    if scheme == "https":
+        if not await is_public_url_async(url):
+            raise RuntimeError(f"Git HTTPS URL blocked by SSRF guard: {url}")
+    else:
+        # SSH variants: validate the resolved IP is publicly routable.
+        try:
+            await resolve_safe_ip_async(host)
+        except ValueError as exc:
+            raise RuntimeError(f"Git SSH URL blocked by SSRF guard ({host}): {exc}") from exc
+
+
+def _validate_git_ref(ref: str) -> None:
+    """Reject ref strings that look like flag injection or path traversal."""
+    if not ref or ref.startswith("-") or ".." in ref or not _GIT_REF_RE.match(ref):
+        raise RuntimeError(
+            f"Invalid git ref {ref!r}: refs must match [A-Za-z0-9._/-]+ " "and cannot start with '-' or contain '..'"
+        )
 
 
 def _ensure_cache_dir() -> str:
@@ -143,8 +215,12 @@ class ExternalSkillImporter:
             List of SANDBOXED SkillPackage instances (not yet DB-committed).
 
         Raises:
-            RuntimeError: If git is not available or cloning fails.
+            RuntimeError: If git is not available, the URL is blocked by the
+                SSRF guard, or cloning fails.
         """
+        await _validate_git_url(url)
+        _validate_git_ref(ref)
+
         if not await _git_available():
             raise RuntimeError("git binary not found on PATH -- cannot import git repo")
 
