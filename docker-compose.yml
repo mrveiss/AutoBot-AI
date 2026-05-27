@@ -268,6 +268,56 @@ services:
       - autobot-data
       - autobot-app
 
+  autobot-celery-beat:
+    image: autobot/backend:latest
+    container_name: autobot-celery-beat
+    restart: unless-stopped
+    command: >
+      python3.12 -m celery -A celery_app beat
+      --loglevel=info
+      --scheduler celery.beat.PersistentScheduler
+      --schedule /var/lib/autobot/celerybeat-schedule
+    working_dir: /app/autobot-backend
+    env_file:
+      - docker/.env.docker
+    volumes:
+      - backend_data:/app/data
+      - backend_logs:/app/logs
+      - celerybeat_schedule:/var/lib/autobot
+    environment:
+      - AUTOBOT_ENVIRONMENT=production
+      - AUTOBOT_DEPLOYMENT_MODE=local
+      - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
+      - AUTOBOT_REDIS_HOST=autobot-redis
+      - AUTOBOT_REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://autobot-redis:6379/${AUTOBOT_REDIS_DB_CELERY_BROKER:-14}
+      - CELERY_RESULT_BACKEND=redis://autobot-redis:6379/${AUTOBOT_REDIS_DB_CELERY_RESULTS:-15}
+      - AUTOBOT_CHROMADB_HOST=autobot-chromadb
+      - AUTOBOT_CHROMADB_PORT=8000
+    depends_on:
+      autobot-redis:
+        condition: service_healthy
+      autobot-chromadb:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+    logging: *default-logging
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - autobot-data
+
   autobot-slm:
     build:
       context: .
@@ -499,6 +549,7 @@ volumes:
   chroma_data:
   backend_data:
   backend_logs:
+  celerybeat_schedule:
   slm_data:
   slm_logs:
   ollama_data:
