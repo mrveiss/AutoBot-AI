@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session
 
 from ..models.goal import GoalLevel, GoalStatus
@@ -30,7 +31,11 @@ from ..services.goal import GoalService
 
 router = APIRouter(prefix="/goals", tags=["llc-goals"])
 
-_svc = GoalService()
+_get_svc = lazy_singleton(GoalService)
+
+
+def _svc() -> GoalService:
+    return _get_svc()
 
 
 # ------------------------------------------------------------------ Schemas
@@ -101,7 +106,7 @@ async def list_goals(
     parent_goal_id: Optional[uuid.UUID] = Query(None),
     session: AsyncSession = Depends(get_async_session),
 ) -> List[GoalResponse]:
-    goals = await _svc.list_by_company(session, company_id, parent_goal_id)
+    goals = await _svc().list_by_company(session, company_id, parent_goal_id)
     return [GoalResponse.model_validate(g) for g in goals]
 
 
@@ -110,7 +115,7 @@ async def create_goal(
     body: GoalCreate,
     session: AsyncSession = Depends(get_async_session),
 ) -> GoalResponse:
-    goal = await _svc.create(
+    goal = await _svc().create(
         session,
         company_id=body.company_id,
         title=body.title,
@@ -129,7 +134,7 @@ async def get_goal(
     goal_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
 ) -> GoalResponse:
-    goal = await _svc.get(session, goal_id)
+    goal = await _svc().get(session, goal_id)
     if goal is None:
         raise HTTPException(status_code=404, detail="Goal not found")
     return GoalResponse.model_validate(goal)
@@ -142,7 +147,7 @@ async def update_goal(
     session: AsyncSession = Depends(get_async_session),
 ) -> GoalResponse:
     updates = {k: v for k, v in body.model_dump(exclude_unset=True).items()}
-    goal = await _svc.update(session, goal_id, **updates)
+    goal = await _svc().update(session, goal_id, **updates)
     if goal is None:
         raise HTTPException(status_code=404, detail="Goal not found")
     return GoalResponse.model_validate(goal)
@@ -153,7 +158,7 @@ async def delete_goal(
     goal_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
 ) -> None:
-    deleted = await _svc.delete(session, goal_id)
+    deleted = await _svc().delete(session, goal_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Goal not found")
 
@@ -163,10 +168,10 @@ async def get_ancestors(
     goal_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
 ) -> List[GoalResponse]:
-    goal = await _svc.get(session, goal_id)
+    goal = await _svc().get(session, goal_id)
     if goal is None:
         raise HTTPException(status_code=404, detail="Goal not found")
-    ancestors = await _svc.get_ancestors(session, goal_id)
+    ancestors = await _svc().get_ancestors(session, goal_id)
     return [GoalResponse.model_validate(a) for a in ancestors]
 
 
@@ -176,7 +181,7 @@ async def list_tasks_for_goal(
     session: AsyncSession = Depends(get_async_session),
 ) -> List[WorkItemSummaryResponse]:
     """Return all work items linked to a goal (GH#6469)."""
-    goal = await _svc.get(session, goal_id)
+    goal = await _svc().get(session, goal_id)
     if goal is None:
         raise HTTPException(status_code=404, detail="Goal not found")
     result = await session.execute(select(LLCWorkItem).where(LLCWorkItem.goal_id == goal_id))
