@@ -78,6 +78,12 @@ const selectedPresetData = computed<Preset | null>(
   () => presets.value.find(p => p.name === selectedPreset.value) ?? null
 )
 
+const STEPS = [
+  { n: 1, label: 'System Check' },
+  { n: 2, label: 'Choose Preset' },
+  { n: 3, label: 'Review & Apply' },
+]
+
 const stepTitle = computed(() => {
   switch (step.value) {
     case 1: return 'System Health Check'
@@ -202,16 +208,21 @@ onMounted(async () => {
         <Icon name="robot" class="text-autobot-accent" />
         <span class="ml-2 text-lg font-semibold text-autobot-text">AutoBot Setup</span>
       </div>
-      <div class="wizard-steps" aria-label="Setup progress">
-        <div
-          v-for="n in 3"
-          :key="n"
-          :class="['step-dot', { active: step === n, done: step > n }]"
-          :aria-current="step === n ? 'step' : undefined"
-        >
-          <span class="sr-only">Step {{ n }}</span>
-        </div>
-      </div>
+      <nav class="wizard-steps" aria-label="Setup progress">
+        <template v-for="(s, idx) in STEPS" :key="s.n">
+          <div
+            :class="['step-item', { active: step === s.n, done: step > s.n }]"
+            :aria-current="step === s.n ? 'step' : undefined"
+          >
+            <div class="step-circle" aria-hidden="true">
+              <i v-if="step > s.n" class="fas fa-check"></i>
+              <span v-else>{{ s.n }}</span>
+            </div>
+            <span class="step-label">{{ s.label }}</span>
+          </div>
+          <div v-if="idx < STEPS.length - 1" class="step-connector" aria-hidden="true"></div>
+        </template>
+      </nav>
     </div>
 
     <!-- Success state -->
@@ -443,23 +454,75 @@ onMounted(async () => {
 
 .wizard-steps {
   display: flex;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 0;
 }
 
-.step-dot {
-  width: 10px;
-  height: 10px;
+.step-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.step-circle {
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: var(--color-bg-elevated, #2a2d3a);
-  transition: background 0.2s;
+  border: 2px solid var(--color-border, #2a2d3a);
+  background: transparent;
+  color: var(--color-text-muted, #94a3b8);
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
 }
 
-.step-dot.active {
+.step-label {
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: var(--color-text-muted, #94a3b8);
+  white-space: nowrap;
+  transition: color 0.2s;
+}
+
+.step-item.active .step-circle {
+  border-color: var(--color-accent, #6366f1);
   background: var(--color-accent, #6366f1);
+  color: #fff;
 }
 
-.step-dot.done {
+.step-item.active .step-label {
+  color: var(--color-text, #e2e8f0);
+}
+
+.step-item.done .step-circle {
+  border-color: var(--color-success, #22c55e);
   background: var(--color-success, #22c55e);
+  color: #fff;
+}
+
+.step-item.done .step-label {
+  color: var(--color-success, #22c55e);
+}
+
+.step-connector {
+  width: 2rem;
+  height: 2px;
+  background: var(--color-border, #2a2d3a);
+  margin-bottom: 1.1rem;
+  flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+  .step-label {
+    display: none;
+  }
+  .step-connector {
+    width: 1rem;
+  }
 }
 
 .wizard-card {
