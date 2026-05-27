@@ -99,7 +99,29 @@ async def test_small_collection_direct_merge(summarizer, km_mock):
 
     dm.assert_called_once()
     lsi.assert_not_called()
-    assert result is None  # direct merge returns None
+    assert result == f"[direct-merged: {_SUMMARIZE_THRESHOLD} docs]"
+
+
+@pytest.mark.asyncio
+async def test_small_collection_writes_kb_summary(summarizer, km_mock):
+    """Bug fix: small sprints (<=10 docs) must write kb_summary on the sprint row."""
+    sprint_id = uuid.uuid4()
+    project_id = uuid.uuid4()
+    docs = _make_docs(5)
+    sprint_mock = MagicMock()
+    session_mock = MagicMock()
+    session_mock.flush = AsyncMock()
+
+    with (
+        patch.object(summarizer, "_load_sprint_context", new=AsyncMock(return_value=(sprint_mock, project_id))),
+        patch.object(summarizer, "_fetch_documents", new=AsyncMock(return_value=docs)),
+        patch.object(summarizer, "_direct_merge", new=AsyncMock()),
+    ):
+        result = await summarizer.summarize_and_merge(sprint_id, session=session_mock)
+
+    assert result == "[direct-merged: 5 docs]"
+    assert sprint_mock.kb_summary == "[direct-merged: 5 docs]"
+    session_mock.flush.assert_called_once()
 
 
 @pytest.mark.asyncio
