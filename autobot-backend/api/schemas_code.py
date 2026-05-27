@@ -863,12 +863,6 @@ class SnapshotWithRegionsResponse(BaseModel):
     accessibility_text: str = ""  # ARIA tree rendered as indented text (#5136 Phase 1)
 
 
-class AiProposeRegionsResponse(BaseModel):
-    """Response for POST /playwright/ai-propose-regions (MVA-1380)."""
-
-    proposed_regions: List[PageRegion]
-
-
 # ---------------------------------------------------------------------------
 # research_browser.py schemas  (Issue #5912)
 # ---------------------------------------------------------------------------
