@@ -167,6 +167,10 @@ class AgentLoop:
         # GH#6628: set when a CRITICAL error causes an immediate halt
         self._fatal_error: Exception | None = None
         self._fatal_reason: str | None = None
+        # GH#8649: set when per-severity retry budget is exhausted in
+        # _handle_iteration_error(); checked by _should_continue() so the guard
+        # uses the correct severity-aware limit rather than max_consecutive_errors.
+        self._error_budget_exhausted: bool = False
         # Issue #6627: semantic stagnation halt state
         self._halted_on_stagnation: bool = False
         self._halt_outcome: "LoopOutcome | None" = None
@@ -232,6 +236,7 @@ class AgentLoop:
         self._halted_on_stagnation = False
         self._halt_outcome = None
         self._halt_reason = ""
+        self._error_budget_exhausted = False
 
     async def _execute_main_loop(self) -> list[IterationResult]:
         """Execute the main iteration loop.
@@ -498,6 +503,7 @@ class AgentLoop:
 
         result.phase_completed = LoopPhase.ITERATE
         self._consecutive_errors = 0
+        self._error_budget_exhausted = False
         return result
 
     def _log_iteration_completion(self, start_time: float, result: IterationResult) -> None:
@@ -1067,7 +1073,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
             return False
         if self._iteration_count >= self.config.max_iterations:
             return False
-        if self._consecutive_errors >= self.config.max_consecutive_errors:
+        if self._error_budget_exhausted:
             return False
         if self.config.abstain_on_low_confidence and self._current_context is not None:
             window = self.config.confidence_window
@@ -1146,6 +1152,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
                 self._consecutive_errors,
                 max_for_severity,
             )
+            self._error_budget_exhausted = True
             return False
 
         # Think about error recovery
