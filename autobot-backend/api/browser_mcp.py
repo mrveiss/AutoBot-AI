@@ -47,9 +47,13 @@ from api.schemas_system import (
     BrowserGetTextResponse,
     BrowserHoverRequest,
     BrowserHoverResponse,
+    BrowserInterceptApiRequest,
+    BrowserInterceptApiResponse,
     BrowserMcpStatusResponse,
     BrowserNavigateRequest,
     BrowserNavigateResponse,
+    BrowserPageSnapshotRequest,
+    BrowserPageSnapshotResponse,
     BrowserScreenshotRequest,
     BrowserScreenshotResponse,
     BrowserSelectRequest,
@@ -63,7 +67,10 @@ from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from constants.network_constants import NetworkConstants
+from research_browser_manager import get_research_browser_manager
 from services.mcp_bridge_manifest import MCPBridgeManifest
+from services.web_pipeline.interceptor import XHRInterceptor
+from services.web_pipeline.snapshot import AccessibilitySnapshot
 from type_defs.common import Metadata
 
 MANIFEST = MCPBridgeManifest(
@@ -469,6 +476,49 @@ def _get_browser_extraction_tools() -> List[MCPTool]:
     ]
 
 
+def _get_web_pipeline_tools() -> List[MCPTool]:
+    """MCP tools that expose web-pipeline services (#5136 Phase 1, closes #5138)."""
+    return [
+        MCPTool(
+            name="page_snapshot",
+            description=(
+                "Capture the ARIA accessibility tree of a research browser session. "
+                "Returns an indented plain-text representation suitable for LLM consumption. "
+                "Requires an active session_id from the research browser manager."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "Research browser session ID",
+                    }
+                },
+                "required": ["session_id"],
+            },
+        ),
+        MCPTool(
+            name="intercept_api",
+            description=(
+                "Collect XHR / fetch() requests captured since the last page navigation "
+                "in a research browser session. The interception script is injected "
+                "automatically on the first call per session. Returns a list of "
+                "{url, method, response_status, response_body} dicts."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "Research browser session ID",
+                    }
+                },
+                "required": ["session_id"],
+            },
+        ),
+    ]
+
+
 @router.get("/mcp/tools", response_model=List[MCPTool])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -482,6 +532,7 @@ async def get_browser_mcp_tools() -> List[MCPTool]:
     tools.extend(_get_browser_navigation_tools())
     tools.extend(_get_browser_interaction_tools())
     tools.extend(_get_browser_extraction_tools())
+    tools.extend(_get_web_pipeline_tools())  # #5136 Phase 1
     return tools
 
 
@@ -867,6 +918,82 @@ async def get_browser_mcp_status() -> Metadata:
             "max_per_minute": MAX_REQUESTS_PER_MINUTE,
             "reset_time": reset_time_iso,
         },
-        "tools_available": 10,
+        "tools_available": 12,  # updated for page_snapshot + intercept_api (#5136)
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+    }
+
+
+@router.post("/mcp/page_snapshot", response_model=BrowserPageSnapshotResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="page_snapshot_mcp",
+    error_code_prefix="BROWSER_MCP",
+)
+async def page_snapshot_mcp(request: BrowserPageSnapshotRequest) -> Metadata:
+    """Return the ARIA accessibility tree for a research browser session as plain text.
+
+    Wires in AccessibilitySnapshot from services/web_pipeline/snapshot.py (#5136 Phase 1,
+    closes #5138).
+    """
+    if not await check_rate_limit():
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    manager = get_research_browser_manager()
+    session = manager.get_session(request.session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.page is None:
+        raise HTTPException(status_code=400, detail="Browser page not initialized")
+
+    logger.info("page_snapshot_mcp: session=%s", request.session_id)
+
+    snap = AccessibilitySnapshot()
+    tree = await snap.capture(session.page)
+    accessibility_text = snap.to_text(tree) if tree is not None else ""
+
+    return {
+        "success": True,
+        "action": "page_snapshot",
+        "session_id": request.session_id,
+        "accessibility_text": accessibility_text,
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+    }
+
+
+@router.post("/mcp/intercept_api", response_model=BrowserInterceptApiResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="intercept_api_mcp",
+    error_code_prefix="BROWSER_MCP",
+)
+async def intercept_api_mcp(request: BrowserInterceptApiRequest) -> Metadata:
+    """Collect XHR/fetch requests captured in a research browser session.
+
+    Wires in XHRInterceptor from services/web_pipeline/interceptor.py (#5136 Phase 1,
+    closes #5138).  Injects the interception script if not already present, then
+    collects whatever the page has captured so far.
+    """
+    if not await check_rate_limit():
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    manager = get_research_browser_manager()
+    session = manager.get_session(request.session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.page is None:
+        raise HTTPException(status_code=400, detail="Browser page not initialized")
+
+    logger.info("intercept_api_mcp: session=%s", request.session_id)
+
+    interceptor = XHRInterceptor()
+    # Inject the shim (idempotent — safe to call if already injected)
+    await session.page.add_init_script(interceptor.generate_intercept_script())
+    captured = await interceptor.collect_results(session.page)
+
+    return {
+        "success": True,
+        "action": "intercept_api",
+        "session_id": request.session_id,
+        "requests": [r.to_dict() for r in captured],
         "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }

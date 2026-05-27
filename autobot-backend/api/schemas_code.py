@@ -860,6 +860,7 @@ class SnapshotWithRegionsResponse(BaseModel):
     screenshot: str  # base64 PNG
     regions: List[PageRegion]
     viewport: Dict[str, Any]  # width, height, devicePixelRatio
+    accessibility_text: str = ""  # ARIA tree rendered as indented text (#5136 Phase 1)
 
 
 # ---------------------------------------------------------------------------

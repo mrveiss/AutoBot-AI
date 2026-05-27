@@ -1875,6 +1875,38 @@ class BrowserMcpStatusResponse(BaseModel):
     timestamp: str
 
 
+class BrowserPageSnapshotRequest(BaseModel):
+    """Request for POST /browser/mcp/page_snapshot (#5136 Phase 1)."""
+
+    session_id: str
+
+
+class BrowserPageSnapshotResponse(BaseModel):
+    """Response for POST /browser/mcp/page_snapshot (#5136 Phase 1)."""
+
+    success: bool
+    action: str
+    session_id: str
+    accessibility_text: str
+    timestamp: str
+
+
+class BrowserInterceptApiRequest(BaseModel):
+    """Request for POST /browser/mcp/intercept_api (#5136 Phase 1)."""
+
+    session_id: str
+
+
+class BrowserInterceptApiResponse(BaseModel):
+    """Response for POST /browser/mcp/intercept_api (#5136 Phase 1)."""
+
+    success: bool
+    action: str
+    session_id: str
+    requests: List[Dict[str, Any]]
+    timestamp: str
+
+
 # ---------------------------------------------------------------------------
 # settings.py schemas (#6042)
 # ---------------------------------------------------------------------------
