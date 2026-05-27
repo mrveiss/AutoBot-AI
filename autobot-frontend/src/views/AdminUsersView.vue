@@ -207,7 +207,7 @@
           </p>
           <div class="form-group">
             <label>Voice Bundle</label>
-            <select v-model="newBundleName" class="form-input">
+            <select v-model="newBundleName" class="form-input" :disabled="bundleModalLoading">
               <option :value="null">— Use role default —</option>
               <option v-for="name in VOICE_BUNDLE_NAMES" :key="name" :value="name">
                 {{ VOICE_BUNDLE_LABELS[name] }}
@@ -302,8 +302,11 @@ const { saving: bundleSaving, saveError: bundleError, assignBundle, getUserBundl
 const userBundles = ref<Record<string, VoiceBundleName | null | undefined>>({})
 const bundleTarget = ref<UserRecord | null>(null)
 const newBundleName = ref<VoiceBundleName | null>(null)
-// Stale-result guard: tracks which user's bundle fetch was initiated for the open modal
-const bundleModalUserId = ref<string | null>(null)
+// Stale-result guard: unique symbol per openBundleModal call — survives same-user reopen.
+// A string userId guard fails when the modal is closed and reopened for the same user:
+// both opens share the same id, so the stale first fetch passes the guard and overwrites
+// newBundleName with its result (coercing null to string or vice versa).
+const bundleModalFetchToken = ref<symbol | null>(null)
 const bundleModalLoading = ref(false)
 
 const totalPages = computed(() => Math.ceil(total.value / pageSize))
@@ -356,37 +359,40 @@ function loadUserBundles(userList: UserRecord[]): void {
 
 function openBundleModal(user: UserRecord): void {
   bundleTarget.value = user
-  bundleModalUserId.value = user.id
   const cached = userBundles.value[user.id]
   if (cached !== undefined) {
     newBundleName.value = cached
+    bundleModalFetchToken.value = null
     return
   }
-  // loadUserBundles fetch for this user is still in flight — fetch it directly now
-  // so the modal shows the real current value rather than null.
-  // The bundleModalUserId guard discards the result if the modal is closed or
-  // switched to a different user before this resolves.
+  // Cache miss: loadUserBundles fetch is still in flight. Issue a targeted fetch so
+  // the modal shows the real current value rather than defaulting to null.
+  // Use a Symbol token (not user.id) as the stale-result guard: a string id fails
+  // when the modal is closed and reopened for the same user — both calls share the
+  // same id so the first fetch's result passes the guard and overwrites newBundleName.
   newBundleName.value = null
   bundleModalLoading.value = true
+  const token = Symbol()
+  bundleModalFetchToken.value = token
   getUserBundle(user.id)
     .then(assignment => {
-      if (bundleModalUserId.value !== user.id) return
+      if (bundleModalFetchToken.value !== token) return
       const bundleName = assignment?.bundle_name ?? null
       userBundles.value[user.id] = bundleName
       newBundleName.value = bundleName
     })
     .catch(() => {
-      if (bundleModalUserId.value !== user.id) return
+      if (bundleModalFetchToken.value !== token) return
       userBundles.value[user.id] = null
       newBundleName.value = null
     })
     .finally(() => {
-      if (bundleModalUserId.value === user.id) bundleModalLoading.value = false
+      if (bundleModalFetchToken.value === token) bundleModalLoading.value = false
     })
 }
 
 function closeBundleModal(): void {
-  bundleModalUserId.value = null
+  bundleModalFetchToken.value = null
   bundleModalLoading.value = false
   bundleTarget.value = null
 }
