@@ -29,7 +29,6 @@ import sqlalchemy.dialects.postgresql as pg
 from sqlalchemy import JSON, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-
 # ---------------------------------------------------------------------------
 # Stub helpers (mirrors test_agent_status.py / test_heartbeat_coalescing.py)
 # ---------------------------------------------------------------------------
@@ -80,9 +79,7 @@ def _load_models_and_scheduler():
     original_jsonb = pg.JSONB
 
     with patch.object(pg, "JSONB", JSON):
-        hb_spec = importlib.util.spec_from_file_location(
-            "models.heartbeat", backend_root / "models" / "heartbeat.py"
-        )
+        hb_spec = importlib.util.spec_from_file_location("models.heartbeat", backend_root / "models" / "heartbeat.py")
         assert hb_spec and hb_spec.loader
         hb_mod = importlib.util.module_from_spec(hb_spec)
         models_pkg = types.ModuleType("models")
@@ -170,9 +167,7 @@ async def _seed_active_agent(factory: async_sessionmaker, agent_id: str) -> Agen
         return state
 
 
-async def _seed_wakeup_requests(
-    factory: async_sessionmaker, agent_id: str, state_id: uuid.UUID, count: int
-) -> None:
+async def _seed_wakeup_requests(factory: async_sessionmaker, agent_id: str, state_id: uuid.UUID, count: int) -> None:
     async with factory() as session:
         for i in range(count):
             req = AgentWakeupRequest(

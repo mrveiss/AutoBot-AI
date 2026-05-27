@@ -181,7 +181,13 @@ class TestResolveSafeIP:
         with patch("asyncio.get_event_loop") as mock_loop:
             mock_getaddrinfo = AsyncMock()
             mock_getaddrinfo.return_value = [
-                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("0.0.0.0", 0))  # nosec B104 - intentional bind to all interfaces for service/test
+                (
+                    socket.AF_INET,
+                    socket.SOCK_STREAM,
+                    6,
+                    "",
+                    ("0.0.0.0", 0),
+                )  # nosec B104 - intentional bind to all interfaces for service/test
             ]
             mock_loop.return_value.getaddrinfo = mock_getaddrinfo
 

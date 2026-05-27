@@ -191,7 +191,8 @@ if "api.schemas_workflows" not in sys.modules:
 # Imported by long_running_operations at module level.
 _pkg_stub("constants")
 _leaf_stub(
-    "constants.path_constants", PATH=types.SimpleNamespace(PROJECT_ROOT="/tmp")  # nosec B108 - test/controlled code uses tmpdir intentionally
+    "constants.path_constants",
+    PATH=types.SimpleNamespace(PROJECT_ROOT="/tmp"),  # nosec B108 - test/controlled code uses tmpdir intentionally
 )
 _leaf_stub("constants.threshold_constants", TimingConstants=MagicMock())
 

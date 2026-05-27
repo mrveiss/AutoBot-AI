@@ -231,7 +231,8 @@ async def test_ingest_all_pending_counts_only_successful(ingestor, mock_session)
     products = [
         _make_product(work_item_id=item_id, content_text="ok"),
         _make_product(
-            work_item_id=item_id, storage_path="/tmp/img.png"  # nosec B108 - test/controlled code uses tmpdir intentionally
+            work_item_id=item_id,
+            storage_path="/tmp/img.png",  # nosec B108 - test/controlled code uses tmpdir intentionally
         ),
     ]
     mock_scalars = MagicMock()

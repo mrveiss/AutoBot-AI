@@ -87,7 +87,8 @@ async def test_simple_terminal():
                                 print("✅ ls command worked!")  # noqa: print
                                 output_received = True
                             elif (
-                                cmd.startswith("cd /tmp") and "/tmp" in content  # nosec B108 - test/controlled code uses tmpdir intentionally
+                                cmd.startswith("cd /tmp")
+                                and "/tmp" in content  # nosec B108 - test/controlled code uses tmpdir intentionally
                             ):
                                 print("✅ cd command worked!")  # noqa: print
                                 output_received = True

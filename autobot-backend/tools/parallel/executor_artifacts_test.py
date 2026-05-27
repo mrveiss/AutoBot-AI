@@ -29,7 +29,8 @@ class TestArtifactCapture:
         """File-modifying tools capture filepath from file_path arg"""
         executor = ParallelToolExecutor(tool_dispatcher=AsyncMock(), config=MagicMock())
         call = ToolCall(
-            tool_name="edit_file", arguments={"file_path": "/tmp/test.py"}  # nosec B108 - test/controlled code uses tmpdir intentionally
+            tool_name="edit_file",
+            arguments={"file_path": "/tmp/test.py"},  # nosec B108 - test/controlled code uses tmpdir intentionally
         )
         capture = executor._capture_pre_state(call)
         assert capture.filepath == "/tmp/test.py"  # nosec B108 - test/controlled code uses tmpdir intentionally
@@ -38,7 +39,8 @@ class TestArtifactCapture:
         """File-modifying tools also check 'path' argument key"""
         executor = ParallelToolExecutor(tool_dispatcher=AsyncMock(), config=MagicMock())
         call = ToolCall(
-            tool_name="create_file", arguments={"path": "/tmp/new.txt"}  # nosec B108 - test/controlled code uses tmpdir intentionally
+            tool_name="create_file",
+            arguments={"path": "/tmp/new.txt"},  # nosec B108 - test/controlled code uses tmpdir intentionally
         )
         capture = executor._capture_pre_state(call)
         assert capture.filepath == "/tmp/new.txt"  # nosec B108 - test/controlled code uses tmpdir intentionally
@@ -51,7 +53,8 @@ class TestBuildArtifacts:
         """File change artifacts are created for file-modifying tools"""
         executor = ParallelToolExecutor(tool_dispatcher=AsyncMock(), config=MagicMock())
         call = ToolCall(
-            tool_name="edit_file", arguments={"file_path": "/tmp/test.py"}  # nosec B108 - test/controlled code uses tmpdir intentionally
+            tool_name="edit_file",
+            arguments={"file_path": "/tmp/test.py"},  # nosec B108 - test/controlled code uses tmpdir intentionally
         )
         capture = _ArtifactCapture(
             filepath="/tmp/test.py"  # nosec B108 - test/controlled code uses tmpdir intentionally
@@ -64,7 +67,8 @@ class TestBuildArtifacts:
         """Code diff artifact generated when result has before/after content"""
         executor = ParallelToolExecutor(tool_dispatcher=AsyncMock(), config=MagicMock())
         call = ToolCall(
-            tool_name="edit_file", arguments={"file_path": "/tmp/test.py"}  # nosec B108 - test/controlled code uses tmpdir intentionally
+            tool_name="edit_file",
+            arguments={"file_path": "/tmp/test.py"},  # nosec B108 - test/controlled code uses tmpdir intentionally
         )
         capture = _ArtifactCapture(
             filepath="/tmp/test.py"  # nosec B108 - test/controlled code uses tmpdir intentionally
@@ -99,7 +103,8 @@ class TestBuildArtifacts:
         """If DiffGenerator.generate_diff raises, artifact capture continues and FILE_CHANGE is still produced"""
         executor = ParallelToolExecutor(tool_dispatcher=AsyncMock(), config=MagicMock())
         call = ToolCall(
-            tool_name="edit_file", arguments={"file_path": "/tmp/test.py"}  # nosec B108 - test/controlled code uses tmpdir intentionally
+            tool_name="edit_file",
+            arguments={"file_path": "/tmp/test.py"},  # nosec B108 - test/controlled code uses tmpdir intentionally
         )
         capture = _ArtifactCapture(
             filepath="/tmp/test.py"  # nosec B108 - test/controlled code uses tmpdir intentionally
@@ -132,7 +137,8 @@ class TestPublishObservationWithArtifacts:
 
         action_event = MagicMock(event_id="action-123")
         call = ToolCall(
-            tool_name="edit_file", arguments={"file_path": "/tmp/test.py"}  # nosec B108 - test/controlled code uses tmpdir intentionally
+            tool_name="edit_file",
+            arguments={"file_path": "/tmp/test.py"},  # nosec B108 - test/controlled code uses tmpdir intentionally
         )
         # Create a valid artifact using build_artifact to ensure JSON serializability
         artifacts = [

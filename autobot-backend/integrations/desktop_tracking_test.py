@@ -107,7 +107,8 @@ class TestDesktopTracking:
         call_kwargs = mock_track_desktop.call_args.kwargs
         assert call_kwargs["action"] == "screenshot"
         assert (
-            call_kwargs["screenshot_path"] == "/tmp/screenshot.png"  # nosec B108 - test/controlled code uses tmpdir intentionally
+            call_kwargs["screenshot_path"]
+            == "/tmp/screenshot.png"  # nosec B108 - test/controlled code uses tmpdir intentionally
         )
 
     @patch("integrations.desktop_tracking.track_desktop_activity")
