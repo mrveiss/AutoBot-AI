@@ -29,6 +29,12 @@ const api = useApiClient()
 const step = ref(1)
 const loading = ref(false)
 const error = ref<string | null>(null)
+const errorSoft = ref(false)
+
+function dismissError() {
+  error.value = null
+  errorSoft.value = false
+}
 
 interface HardwareInfo {
   ram_gb: number
@@ -131,6 +137,7 @@ async function loadDoctor() {
   } catch (err) {
     logger.error('Doctor report failed', err)
     error.value = 'Could not load system health report. You can still continue.'
+    errorSoft.value = true
   } finally {
     loading.value = false
   }
@@ -173,10 +180,14 @@ async function applyPreset() {
 // ---------------------------------------------------------------------------
 
 function nextStep() {
+  error.value = null
+  errorSoft.value = false
   if (step.value < 3) step.value++
 }
 
 function prevStep() {
+  error.value = null
+  errorSoft.value = false
   if (step.value > 1) step.value--
 }
 
@@ -243,8 +254,10 @@ onMounted(async () => {
         <h2 class="wizard-step-title">{{ stepTitle }}</h2>
 
         <!-- Error banner -->
-        <div v-if="error" class="error-banner" role="alert">
-          <Icon name="exclamation-triangle" class="mr-2" />{{ error }}
+        <div v-if="error" :class="['error-banner', { 'error-banner--soft': errorSoft }]" role="alert">
+          <Icon name="exclamation-triangle" class="mr-2" />
+          <span class="error-banner__message">{{ error }}</span>
+          <button class="error-banner__dismiss" @click="dismissError" aria-label="Dismiss error">×</button>
         </div>
 
         <!-- ----------------------------------------------------------------
@@ -550,6 +563,8 @@ onMounted(async () => {
 }
 
 .error-banner {
+  display: flex;
+  align-items: center;
   background: rgba(239, 68, 68, 0.15);
   border: 1px solid rgba(239, 68, 68, 0.4);
   color: #fca5a5;
@@ -557,6 +572,33 @@ onMounted(async () => {
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
   font-size: 0.875rem;
+}
+
+.error-banner--soft {
+  background: rgba(234, 179, 8, 0.12);
+  border-color: rgba(234, 179, 8, 0.35);
+  color: #fde68a;
+}
+
+.error-banner__message {
+  flex: 1;
+}
+
+.error-banner__dismiss {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0 0 0.75rem;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.error-banner__dismiss:hover {
+  opacity: 1;
 }
 
 .step-content {
