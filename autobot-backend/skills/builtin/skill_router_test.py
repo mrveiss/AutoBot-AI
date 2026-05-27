@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from skills.base_skill import SkillManifest
-from skills.builtin.skill_router import SkillRouterSkill, _score_skill, _tokenize
+from skills.builtin.skill_router import SkillRouterSkill, _score_skill, _tokenize  # nosemgrep: skill-no-sibling-import — test file imports its own unit under test
 
 
 def _make_manifest(name, description, tags, tools):

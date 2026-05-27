@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from skills.builtin.skill_researcher import (
+from skills.builtin.skill_researcher import (  # nosemgrep: skill-no-sibling-import — test file imports its own unit under test
     SkillResearcherSkill,
     _build_queries,
     _empty_findings,

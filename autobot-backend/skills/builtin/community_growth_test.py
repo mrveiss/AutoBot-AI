@@ -13,7 +13,7 @@ from urllib.parse import urlparse
 
 import pytest
 
-from skills.builtin.community_growth import CommunityGrowthSkill
+from skills.builtin.community_growth import CommunityGrowthSkill  # nosemgrep: skill-no-sibling-import — test file imports its own unit under test
 
 
 @pytest.fixture()
