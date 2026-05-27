@@ -50,8 +50,8 @@ _path_constants = _make_stub("constants.path_constants")
 
 
 class _FakePATH:
-    DATA_DIR = Path("/tmp/test_autobot_data")
-    PROJECT_ROOT = Path("/tmp/test_autobot_root")
+    DATA_DIR = Path("/tmp/test_autobot_data")  # nosec B108 - test/controlled code uses tmpdir intentionally
+    PROJECT_ROOT = Path("/tmp/test_autobot_root")  # nosec B108 - test/controlled code uses tmpdir intentionally
 
 
 _path_constants.PATH = _FakePATH()  # type: ignore[attr-defined]
@@ -93,7 +93,7 @@ _MODULE = "services.knowledge.doc_indexer"
 def _make_service(
     initialized: bool = True,
     collection_count: int = 0,
-    root_dir: Path = Path("/tmp/test_autobot_root"),
+    root_dir: Path = Path("/tmp/test_autobot_root"),  # nosec B108 - test/controlled code uses tmpdir intentionally
 ) -> DocIndexerService:
     """Build a DocIndexerService with pre-wired mocks."""
     svc = DocIndexerService.__new__(DocIndexerService)

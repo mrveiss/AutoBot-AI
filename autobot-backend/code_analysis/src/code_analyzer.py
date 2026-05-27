@@ -187,7 +187,7 @@ class CodeAnalyzer:
 
             # Generate AST hash for exact duplicate detection
             ast_dump = ast.dump(node, annotate_fields=False)
-            ast_hash = hashlib.md5(ast_dump.encode()).hexdigest()
+            ast_hash = hashlib.md5(ast_dump.encode(), usedforsecurity=False).hexdigest()
 
             # Extract signature
             args = []

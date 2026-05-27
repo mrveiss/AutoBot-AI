@@ -43,7 +43,7 @@ def client(app):
 def temp_allowed_dir(tmp_path):
     """Create temporary directory within allowed paths for testing"""
     # Use /tmp/autobot/ which is in ALLOWED_DIRECTORIES
-    test_dir = Path("/tmp/autobot/test_security")
+    test_dir = Path("/tmp/autobot/test_security")  # nosec B108 - test/controlled code uses tmpdir intentionally
     test_dir.mkdir(parents=True, exist_ok=True)
     yield test_dir
     # Cleanup
@@ -75,7 +75,7 @@ class TestFilesystemMCPPathTraversal:
         traversal_attempts = [
             "../../../etc/passwd",
             "../../../../../../etc/passwd",
-            "/tmp/autobot/../../../etc/passwd",
+            "/tmp/autobot/../../../etc/passwd",  # nosec B108 - test/controlled code uses tmpdir intentionally
             "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/../../../../../../etc/passwd",
         ]
 
@@ -107,7 +107,7 @@ class TestFilesystemMCPPathTraversal:
         """Test Windows-style path traversal attempts"""
         traversal_attempts = [
             "..\\..\\..\\etc\\passwd",
-            "/tmp/autobot/..\\..\\..\\etc\\passwd",
+            "/tmp/autobot/..\\..\\..\\etc\\passwd",  # nosec B108 - test/controlled code uses tmpdir intentionally
             "..\\..\\windows\\system32\\config\\sam",
         ]
 
@@ -118,9 +118,9 @@ class TestFilesystemMCPPathTraversal:
     def test_path_traversal_null_byte(self):
         """Test null byte injection in paths"""
         traversal_attempts = [
-            "/tmp/autobot/file.txt\x00../../etc/passwd",
+            "/tmp/autobot/file.txt\x00../../etc/passwd",  # nosec B108 - test/controlled code uses tmpdir intentionally
             "../../../etc/passwd\x00.txt",
-            "/tmp/autobot\x00/../../../etc/passwd",
+            "/tmp/autobot\x00/../../../etc/passwd",  # nosec B108 - test/controlled code uses tmpdir intentionally
         ]
 
         for attack_path in traversal_attempts:
@@ -144,7 +144,7 @@ class TestFilesystemMCPPathTraversal:
         """Test that legitimate paths within allowed directories are permitted"""
         allowed_paths = [
             "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/backend/api/test.py",
-            "/tmp/autobot/temp_file.txt",
+            "/tmp/autobot/temp_file.txt",  # nosec B108 - test/controlled code uses tmpdir intentionally
             "/home/${USER:-autobot}/Desktop/test_file.json",
         ]
 
@@ -156,7 +156,7 @@ class TestFilesystemMCPPathTraversal:
         """Test path traversal protection via filesystem MCP API"""
         attack_payloads = [
             {"path": "../../../etc/passwd"},
-            {"path": "/tmp/autobot/../../../etc/passwd"},
+            {"path": "/tmp/autobot/../../../etc/passwd"},  # nosec B108 - test/controlled code uses tmpdir intentionally
             {"path": "%2e%2e%2f%2e%2e%2fetc%2fpasswd"},
         ]
 
@@ -266,7 +266,7 @@ class TestFilesystemMCPAccessControl:
         # Verify expected directories are in whitelist
         expected_dirs = [
             "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/",
-            "/tmp/autobot/",
+            "/tmp/autobot/",  # nosec B108 - test/controlled code uses tmpdir intentionally
             "/home/${USER:-autobot}/Desktop/",
         ]
 
@@ -328,7 +328,7 @@ class TestMCPInputValidation:
         for payload in sql_injection_payloads:
             response = client.post(
                 "/api/filesystem/mcp/search_files",
-                json={"path": "/tmp/autobot", "pattern": payload},
+                json={"path": "/tmp/autobot", "pattern": payload},  # nosec B108 - test/controlled code uses tmpdir intentionally
             )
             # Should handle safely (not crash)
             assert response.status_code in [
@@ -375,7 +375,7 @@ class TestMCPInputValidation:
         for payload in command_injection_payloads:
             response = client.post(
                 "/api/filesystem/mcp/create_directory",
-                json={"path": f"/tmp/autobot/{payload}"},
+                json={"path": f"/tmp/autobot/{payload}"},  # nosec B108 - test/controlled code uses tmpdir intentionally
             )
             # Should either sanitize or reject
             assert response.status_code in [200, 400, 403, 422]
@@ -391,7 +391,7 @@ class TestMCPInputValidation:
         for payload in null_byte_payloads:
             response = client.post(
                 "/api/filesystem/mcp/read_text_file",
-                json={"path": f"/tmp/autobot/{payload}"},
+                json={"path": f"/tmp/autobot/{payload}"},  # nosec B108 - test/controlled code uses tmpdir intentionally
             )
             assert response.status_code in [
                 400,
@@ -435,7 +435,7 @@ class TestMCPInputValidation:
         for payload in unicode_payloads:
             response = client.post(
                 "/api/filesystem/mcp/read_text_file",
-                json={"path": f"/tmp/autobot/{payload}"},
+                json={"path": f"/tmp/autobot/{payload}"},  # nosec B108 - test/controlled code uses tmpdir intentionally
             )
             # Should handle Unicode safely
             assert response.status_code in [200, 400, 404, 422]
@@ -452,7 +452,7 @@ class TestMCPInputValidation:
         for payload in ldap_payloads:
             response = client.post(
                 "/api/filesystem/mcp/search_files",
-                json={"path": "/tmp/autobot", "pattern": payload},
+                json={"path": "/tmp/autobot", "pattern": payload},  # nosec B108 - test/controlled code uses tmpdir intentionally
             )
             assert response.status_code in [200, 400, 422]
 
@@ -498,7 +498,7 @@ class TestMCPSizeLimiting:
     def test_excessive_file_list(self, client):
         """Test protection against reading excessive number of files"""
         # Try to read 1000 files at once
-        file_paths = [f"/tmp/autobot/file{i}.txt" for i in range(1000)]
+        file_paths = [f"/tmp/autobot/file{i}.txt" for i in range(1000)]  # nosec B108 - test/controlled code uses tmpdir intentionally
 
         response = client.post("/api/filesystem/mcp/read_multiple_files", json={"paths": file_paths})
 

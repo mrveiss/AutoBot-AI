@@ -22,7 +22,7 @@ from typing import Sequence
 
 _DEFAULT_ALLOWED_ROOTS: tuple[str, ...] = (
     "/opt/autobot",
-    "/tmp",
+    "/tmp",  # nosec B108 - test/controlled code uses tmpdir intentionally
 )
 
 

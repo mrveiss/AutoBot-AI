@@ -887,7 +887,7 @@ class DocIndexerService:
         Returns True when at least one (sub-)chunk was stored successfully.
         """
         priority_map = {1: "critical", 2: "high", 3: "medium"}
-        chunk_id = hashlib.md5(f"{rel_path}:{chunk['section']}:{chunk_index}".encode()).hexdigest()[:12]
+        chunk_id = hashlib.md5(f"{rel_path}:{chunk['section']}:{chunk_index}".encode(), usedforsecurity=False).hexdigest()[:12]
 
         metadata: Dict[str, Any] = {
             "source": "autobot_documentation",

@@ -183,7 +183,7 @@ class RLRouter(AsyncRedisClientMixin):
         """Compute a 4-hex-char hash of the character n-grams of *text*."""
         ngrams = [text[i : i + n] for i in range(max(0, len(text) - n + 1))]
         raw = " ".join(ngrams).encode("utf-8")
-        return hashlib.sha1(raw).hexdigest()[:4]  # noqa: S324 — not used for security
+        return hashlib.sha1(raw, usedforsecurity=False).hexdigest()[:4]  # noqa: S324 — not used for security
 
     # ------------------------------------------------------------------
     # Q-table operations

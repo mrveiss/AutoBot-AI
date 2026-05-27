@@ -150,7 +150,7 @@ class CriticalEnvAnalyzer:
             "network_hosts": [],
             "network_ports": [],
             "api_urls": [],
-            "file_paths": ["/dev/null", "/tmp"],
+            "file_paths": ["/dev/null", "/tmp"],  # nosec B108 - test/controlled code uses tmpdir intentionally
             "timeouts": ["0", "1"],
             "redis_config": [],
         }

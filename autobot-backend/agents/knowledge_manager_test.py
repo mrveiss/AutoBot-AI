@@ -197,7 +197,7 @@ async def test_2_temporal_manager_features():
     manager = UnifiedKnowledgeManager(knowledge_base=kb, enable_temporal=True, enable_machine_aware=False)
 
     # Register content with temporal tracking
-    content_hash = hashlib.md5(b"test content").hexdigest()
+    content_hash = hashlib.md5(b"test content", usedforsecurity=False).hexdigest()
     metadata = manager.register_content("tool:steghide", {"category": "tools"}, content_hash)
 
     assert metadata is not None, "Failed to register content"
@@ -212,7 +212,7 @@ async def test_2_temporal_manager_features():
     assert status["access_count"] == 1
 
     # Update modification tracking
-    new_hash = hashlib.md5(b"updated content").hexdigest()
+    new_hash = hashlib.md5(b"updated content", usedforsecurity=False).hexdigest()
     manager.update_content_modification("tool:steghide", new_hash)
 
     print("✅ PASSED: Temporal manager features work correctly")  # noqa: print
@@ -370,7 +370,7 @@ async def test_7_backward_compatibility():
     assert temporal_mgr is not None
 
     # Register content directly with temporal manager
-    content_hash = hashlib.md5(b"test").hexdigest()
+    content_hash = hashlib.md5(b"test", usedforsecurity=False).hexdigest()
     meta = temporal_mgr.register_content("test-001", {}, content_hash)
     assert meta is not None
     assert meta.content_id == "test-001"
@@ -511,7 +511,7 @@ async def test_11_integration():
     await manager.initialize(force_reinstall=False)
 
     # Register content with temporal tracking
-    content_hash = hashlib.md5(b"integrated content").hexdigest()
+    content_hash = hashlib.md5(b"integrated content", usedforsecurity=False).hexdigest()
     meta = manager.register_content("tool:integrated", {"category": "tools"}, content_hash)
     assert meta is not None
 
@@ -542,7 +542,7 @@ async def test_12_analytics():
 
     # Register multiple content items
     for i in range(5):
-        content_hash = hashlib.md5(f"content-{i}".encode()).hexdigest()
+        content_hash = hashlib.md5(f"content-{i}".encode(), usedforsecurity=False).hexdigest()
         manager.register_content(f"item-{i}", {"category": "test"}, content_hash)
 
     # Get temporal analytics

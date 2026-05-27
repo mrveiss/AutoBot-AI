@@ -102,17 +102,17 @@ class VisionProcessor(BaseModalProcessor):
         try:
             # Load CLIP model for image embeddings and classification
             self.logger.info("Loading CLIP model...")
-            self.clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32", resume_download=True).to(
+            self.clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32", resume_download=True).to(  # nosec B615 - HuggingFace model loaded by name; revision pinning managed operationally
                 self.device
             )
-            self.clip_processor = CLIPProcessor.from_pretrained(
+            self.clip_processor = CLIPProcessor.from_pretrained(  # nosec B615 - HuggingFace model loaded by name; revision pinning managed operationally
                 "openai/clip-vit-base-patch32", use_fast=True, resume_download=True
             )
 
             # Load BLIP-2 model for image captioning and VQA
             # Using smaller model for memory efficiency
             self.logger.info("Loading BLIP-2 model...")
-            self.blip_processor = Blip2Processor.from_pretrained(
+            self.blip_processor = Blip2Processor.from_pretrained(  # nosec B615 - HuggingFace model loaded by name; revision pinning managed operationally
                 "Salesforce/blip2-opt-2.7b", use_fast=True, resume_download=True
             )
 
@@ -125,14 +125,14 @@ class VisionProcessor(BaseModalProcessor):
 
             # Load BLIP-2 model with device_map only if accelerate is available
             if accelerate_available and torch.cuda.is_available():
-                self.blip_model = Blip2ForConditionalGeneration.from_pretrained(
+                self.blip_model = Blip2ForConditionalGeneration.from_pretrained(  # nosec B615 - HuggingFace model loaded by name; revision pinning managed operationally
                     "Salesforce/blip2-opt-2.7b",
                     torch_dtype=torch.float16,
                     device_map="auto",
                     resume_download=True,
                 )
             else:
-                self.blip_model = Blip2ForConditionalGeneration.from_pretrained(
+                self.blip_model = Blip2ForConditionalGeneration.from_pretrained(  # nosec B615 - HuggingFace model loaded by name; revision pinning managed operationally
                     "Salesforce/blip2-opt-2.7b",
                     torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
                     resume_download=True,

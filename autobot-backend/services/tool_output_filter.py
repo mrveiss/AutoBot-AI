@@ -259,7 +259,7 @@ def tee_and_hint(raw: str, slug: str, exit_code: int, mode: str = "failures") ->
     if len(raw) <= 500:
         return None
     safe_slug = re.sub(r"[^\w-]", "_", slug)[:60]
-    checksum = hashlib.md5(raw.encode("utf-8")).hexdigest()[:8]  # noqa: S324
+    checksum = hashlib.md5(raw.encode("utf-8"), usedforsecurity=False).hexdigest()[:8]  # nosec B324 - noqa: S324
     filename = f"{safe_slug}.{checksum}.txt"
     try:
         _TEE_DIR.mkdir(parents=True, exist_ok=True)

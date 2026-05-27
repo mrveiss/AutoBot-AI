@@ -95,7 +95,7 @@ class FailurePatternDetector:
 
     def hash_causal_chain(self, causal_chain: str) -> str:
         """Hash a causal chain for pattern matching."""
-        return hashlib.md5(causal_chain.encode()).hexdigest()[:16]
+        return hashlib.md5(causal_chain.encode(), usedforsecurity=False).hexdigest()[:16]
 
     async def detect_pattern(self, causal_chain: str, error_type: str) -> FailurePattern | None:
         """

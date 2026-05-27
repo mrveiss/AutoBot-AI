@@ -70,7 +70,7 @@ def _get_bug_prediction_cache_key(path: str, include_pattern: str, limit: int) -
     to prevent stale data across different query parameters.
     """
     raw = f"{path}:{include_pattern}:{limit}"
-    param_hash = hashlib.md5(raw.encode()).hexdigest()[:12]
+    param_hash = hashlib.md5(raw.encode(), usedforsecurity=False).hexdigest()[:12]
     return f"{BUG_PREDICTION_CACHE_PREFIX}:{param_hash}"
 
 

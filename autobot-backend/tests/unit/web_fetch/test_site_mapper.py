@@ -79,7 +79,7 @@ class TestParseUrlset:
     def test_extracts_all_locs(self) -> None:
         import xml.etree.ElementTree as ET
 
-        root = ET.fromstring(_URLSET_XML)
+        root = ET.fromstring(_URLSET_XML)  # nosec B314 - test code uses controlled/trusted XML data
         urls = _parse_urlset(root)
         assert urls == ["https://example.com/", "https://example.com/about", "https://example.com/contact"]
 
@@ -87,7 +87,7 @@ class TestParseUrlset:
         import xml.etree.ElementTree as ET
 
         xml = '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>'
-        root = ET.fromstring(xml)
+        root = ET.fromstring(xml)  # nosec B314 - test code uses controlled/trusted XML data
         assert _parse_urlset(root) == []
 
 
@@ -95,7 +95,7 @@ class TestParseSitemapindex:
     def test_extracts_child_locs(self) -> None:
         import xml.etree.ElementTree as ET
 
-        root = ET.fromstring(_SITEMAPINDEX_XML)
+        root = ET.fromstring(_SITEMAPINDEX_XML)  # nosec B314 - test code uses controlled/trusted XML data
         locs = _parse_sitemapindex(root)
         assert locs == [
             "https://example.com/sitemap-posts.xml",

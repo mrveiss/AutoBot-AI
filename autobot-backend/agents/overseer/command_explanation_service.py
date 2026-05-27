@@ -75,13 +75,13 @@ class CommandExplanationService:
         """Generate cache key for a command."""
         # Normalize command by removing extra whitespace
         normalized = " ".join(command.split())
-        return hashlib.md5(normalized.encode()).hexdigest()
+        return hashlib.md5(normalized.encode(), usedforsecurity=False).hexdigest()
 
     def _get_output_cache_key(self, command: str, output: str) -> str:
         """Generate cache key for command+output combination."""
         filtered_output = get_tool_output_filter().filter(command, output)
         combined = f"{command}::{filtered_output}"
-        return hashlib.md5(combined.encode()).hexdigest()
+        return hashlib.md5(combined.encode(), usedforsecurity=False).hexdigest()
 
     async def explain_command(self, command: str) -> CommandExplanation:
         """

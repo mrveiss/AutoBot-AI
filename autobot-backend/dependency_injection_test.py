@@ -111,7 +111,7 @@ class TestDependencyInjection:
         mock_config = Mock(spec=ConfigManager)
         # Mock the reliability stats file path to a non-existent file
         mock_config.get_nested.side_effect = lambda key, default=None: {
-            "data.reliability_stats_file": "/tmp/test_reliability_stats.json",
+            "data.reliability_stats_file": "/tmp/test_reliability_stats.json",  # nosec B108 - test/controlled code uses tmpdir intentionally
             "diagnostics.enabled": True,
             "diagnostics.use_llm_for_analysis": True,
             "diagnostics.use_web_search_for_analysis": False,
