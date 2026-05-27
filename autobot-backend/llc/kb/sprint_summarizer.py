@@ -201,9 +201,9 @@ class SprintKbSummarizer:
         embeddings = [d["embedding"] for d in docs]
 
         if any(e is not None for e in embeddings):
-            await dst.add(ids=ids, documents=texts, metadatas=metadatas, embeddings=embeddings)
+            await dst.upsert(ids=ids, documents=texts, metadatas=metadatas, embeddings=embeddings)
         else:
-            await dst.add(ids=ids, documents=texts, metadatas=metadatas)
+            await dst.upsert(ids=ids, documents=texts, metadatas=metadatas)
 
         logger.info("Direct-merged %d docs from sprint:%s into %s", len(docs), sprint_id, dst_collection)
 
@@ -269,7 +269,7 @@ class SprintKbSummarizer:
             metadata={"entity_type": "project", "entity_id": str(project_id)},
         )
         doc_id = f"sprint_summary:{sprint_id}"
-        await dst.add(
+        await dst.upsert(
             ids=[doc_id],
             documents=[summary_text],
             metadatas=[

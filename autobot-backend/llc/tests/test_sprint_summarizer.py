@@ -353,7 +353,7 @@ async def test_prompt_truncated_for_oversized_combined_input(summarizer, km_mock
 
     fake_kb_module = MagicMock()
     dst_col = AsyncMock()
-    dst_col.add = AsyncMock()
+    dst_col.upsert = AsyncMock()
     fake_kb_module.get_knowledge_base = AsyncMock(
         return_value=MagicMock(_async_chroma_client=AsyncMock(get_or_create_collection=AsyncMock(return_value=dst_col)))
     )
@@ -366,3 +366,62 @@ async def test_prompt_truncated_for_oversized_combined_input(summarizer, km_mock
     prompt_sent = captured_prompts[0]
     doc_section = prompt_sent.split("{documents}")[-1] if "{documents}" in prompt_sent else prompt_sent
     assert len(doc_section) <= _MAX_PROMPT_CHARS + len(_SUMMARIZE_PROMPT.replace("{documents}", ""))
+
+
+@pytest.mark.asyncio
+async def test_direct_merge_uses_upsert_for_idempotency(summarizer, km_mock):
+    """GH#8655: _direct_merge must use upsert (not add) so duplicate IDs don't raise."""
+    import sys
+
+    sprint_id = uuid.uuid4()
+    project_id = uuid.uuid4()
+    docs = _make_docs(3)
+    dst_collection = KbCollectionManager.collection_name(KbCollectionManager.PROJECT_PREFIX, project_id)
+
+    dst_col = AsyncMock()
+    dst_col.upsert = AsyncMock()
+    fake_kb_module = MagicMock()
+    fake_kb_module.get_knowledge_base = AsyncMock(
+        return_value=MagicMock(_async_chroma_client=AsyncMock(get_or_create_collection=AsyncMock(return_value=dst_col)))
+    )
+
+    with patch.dict(sys.modules, {"knowledge": fake_kb_module}):
+        await summarizer._direct_merge(docs, dst_collection, sprint_id, project_id)
+
+    dst_col.upsert.assert_called_once()
+    assert "add" not in {m for m in dir(dst_col) if dst_col.__dict__.get(m) is not None}
+
+
+@pytest.mark.asyncio
+async def test_llm_index_uses_upsert_for_idempotency(summarizer, km_mock):
+    """GH#8655: _llm_summarize_and_index must use upsert so re-runs don't raise on duplicate sprint_summary ID."""
+    import sys
+
+    sprint_id = uuid.uuid4()
+    project_id = uuid.uuid4()
+    docs = _make_docs(20)
+    dst_collection = KbCollectionManager.collection_name(KbCollectionManager.PROJECT_PREFIX, project_id)
+
+    llm_response = MagicMock()
+    llm_response.error = None
+    llm_response.content = "the summary"
+
+    llm_instance = MagicMock()
+    llm_instance.chat = AsyncMock(return_value=llm_response)
+    fake_llm_module = MagicMock()
+    fake_llm_module.get_llm_service = MagicMock(return_value=llm_instance)
+
+    dst_col = AsyncMock()
+    dst_col.upsert = AsyncMock()
+    fake_kb_module = MagicMock()
+    fake_kb_module.get_knowledge_base = AsyncMock(
+        return_value=MagicMock(_async_chroma_client=AsyncMock(get_or_create_collection=AsyncMock(return_value=dst_col)))
+    )
+
+    with patch.dict(sys.modules, {"services.llm_service": fake_llm_module, "knowledge": fake_kb_module}):
+        result = await summarizer._llm_summarize_and_index(docs, dst_collection, sprint_id, project_id)
+
+    assert result == "the summary"
+    dst_col.upsert.assert_called_once()
+    call_kwargs = dst_col.upsert.call_args.kwargs
+    assert call_kwargs["ids"] == [f"sprint_summary:{sprint_id}"]
