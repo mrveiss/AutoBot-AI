@@ -11,6 +11,8 @@
  * @see src/__tests__/nav-items-coverage.test.ts
  */
 
+import { CANVAS_FEATURE_FLAG } from '@/constants/canvas'
+
 // iconRule is typed as a literal union to satisfy SVG fill-rule / clip-rule prop types (#4699)
 export type SvgFillRule = 'evenodd' | 'nonzero' | 'inherit';
 
@@ -28,8 +30,8 @@ export interface NavItem {
 export const navItems: NavItem[] = [
   { to: '/home', labelKey: 'nav.home', icon: 'M10.707 2.293a1 1 0 00-1.414 0l-7 7v11a1 1 0 001 1h2a1 1 0 001-1v-5a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 001 1h2a1 1 0 001-1v-7l7-7a1 1 0 000-1.414z', iconRule: 'evenodd' },
   { to: '/chat', labelKey: 'nav.chat', icon: 'M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z', iconRule: 'evenodd' },
-  // MVA-360: Live Canvas (behind VITE_FEATURE_CANVAS flag)
-  { to: '/canvas', labelKey: 'nav.canvas', icon: 'M3 3h7v7H3V3zm0 11h7v7H3v-7zm11-11h7v7h-7V3zm0 11h7v7h-7v-7z', iconStroke: true },
+  // MVA-360: Live Canvas — shown only when VITE_FEATURE_CANVAS=true (GH#8758)
+  ...(CANVAS_FEATURE_FLAG ? [{ to: '/canvas', labelKey: 'nav.canvas', icon: 'M3 3h7v7H3V3zm0 11h7v7H3v-7zm11-11h7v7h-7V3zm0 11h7v7h-7v-7z', iconStroke: true } as NavItem] : []),
   { to: '/knowledge', labelKey: 'nav.knowledge', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
   { to: '/automation', labelKey: 'nav.automation', icon: 'M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z', iconRule: 'evenodd' },
   { to: '/analytics', labelKey: 'nav.analytics', iconPaths: ['M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z', 'M12 2.252A8.014 8.014 0 0117.748 8H12V2.252z'] },

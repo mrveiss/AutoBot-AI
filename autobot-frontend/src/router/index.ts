@@ -684,7 +684,8 @@ export const routes: RouteRecordRaw[] = [
       },
     ],
   },
-  // MVA-360: Live Canvas — isolated component tree behind VITE_FEATURE_CANVAS flag
+  // MVA-360: Live Canvas — route always registered (preserves bookmarks/direct nav);
+  // nav item gated by VITE_FEATURE_CANVAS via navItems.ts (GH#8758)
   {
     path: '/canvas',
     name: 'canvas',
@@ -692,6 +693,7 @@ export const routes: RouteRecordRaw[] = [
     meta: {
       title: 'Canvas',
       requiresAuth: true,
+      hideInNav: true,
     },
   },
   // Issue #3201: AutoResearch Experiment Dashboard
