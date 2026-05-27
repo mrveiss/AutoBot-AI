@@ -17,6 +17,11 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
+try:
+    from workers.openvino_dispatch import get_inference_engine
+except ImportError:
+    from openvino_dispatch import get_inference_engine  # type: ignore[no-redef]
+
 logger = logging.getLogger(__name__)
 
 # Sentinel value returned by detect_capabilities when NPU is unavailable
@@ -29,7 +34,9 @@ _MAX_LAYERS_FALLBACK = 32
 # ---------------------------------------------------------------------------
 
 
-def detect_capabilities(model_registry: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def detect_capabilities(
+    model_registry: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """Return this worker's hardware capabilities for shard planning.
 
     Returns a dict with:
@@ -101,6 +108,8 @@ def handle_partial_forward(
     model_loader: Any,
     *,
     is_last_worker: bool = False,
+    architecture_family: Optional[str] = None,
+    device: str = "CPU",
 ) -> Dict[str, Any]:
     """Run a partial forward pass over a sub-range of model layers.
 
@@ -113,6 +122,10 @@ def handle_partial_forward(
             returns the ordered list of callable layer objects.
         is_last_worker: When True the output is treated as token logits and
             argmax is applied to produce token IDs.
+        architecture_family: Architecture family for OpenVINO dispatch
+            (GH#8690).  One of "transformer", "state_space",
+            "linear_attention", "hybrid", or None (defaults to transformer).
+        device: Target OpenVINO device string (e.g. "CPU", "NPU", "GPU").
 
     Returns:
         Dict with key ``hidden_state_out`` (activations) or ``token_ids``
@@ -126,9 +139,19 @@ def handle_partial_forward(
     if layer_end >= len(layers):
         raise ValueError(f"layer_end={layer_end} exceeds model depth {len(layers) - 1}.")
 
+    engine = get_inference_engine(model_id, architecture_family, device)
+    logger.debug(
+        "worker_node: using backend=%s for model=%s layers=%d-%d",
+        engine.inference_backend,
+        model_id,
+        layer_start,
+        layer_end,
+    )
+
     hidden = hidden_state_in
-    for idx in range(layer_start, layer_end + 1):
-        hidden = layers[idx](hidden)
+    shard_layers = layers[layer_start : layer_end + 1]
+    for idx, layer in enumerate(shard_layers, start=layer_start):
+        hidden = engine.run_layer(layer, hidden)
         logger.debug("worker_node: ran layer %d for model %s", idx, model_id)
 
     if is_last_worker:

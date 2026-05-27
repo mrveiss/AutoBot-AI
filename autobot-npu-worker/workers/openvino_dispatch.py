@@ -15,15 +15,18 @@ Supported families track the enum defined in llm_interface_pkg/types.py
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
     "ArchitectureFamily",
+    "InferenceEngine",
     "UnsupportedArchitectureError",
     "get_inference_config",
+    "get_inference_engine",
     "SUPPORTED_FAMILIES",
 ]
 
@@ -54,6 +57,91 @@ class UnsupportedArchitectureError(ValueError):
             "Support for state_space / linear_attention / hybrid requires an OpenVINO "
             "SSM kernel upgrade — see GH#7352 for the planned follow-up."
         )
+
+
+@dataclass(frozen=True)
+class InferenceEngine:
+    """Resolved inference engine for a model/device/family combination.
+
+    Produced by get_inference_engine(); carry this into handle_partial_forward
+    so each forward pass uses the architecture-correct OpenVINO backend.
+
+    Attributes:
+        model_id: Opaque model identifier.
+        device: Target OpenVINO device (e.g. "CPU", "NPU", "GPU").
+        architecture_family: Resolved family string (always lowercase).
+        inference_backend: Backend identifier selected by the dispatcher
+            (e.g. "openvino_transformer").
+        run_layer: Callable that executes one model layer.  Injected at
+            construction time; defaults to a direct call so the engine is
+            usable without OpenVINO installed (tests, CPU-only workers).
+    """
+
+    model_id: str
+    device: str
+    architecture_family: str
+    inference_backend: str
+    run_layer: Callable[[Any, Any], Any]
+
+    def forward(self, layers: List[Any], hidden: Any) -> Any:
+        """Run *layers* sequentially, forwarding hidden state through each."""
+        for layer in layers:
+            hidden = self.run_layer(layer, hidden)
+        return hidden
+
+
+def _default_run_layer(layer: Any, hidden: Any) -> Any:
+    """Call *layer* directly — works for any callable layer object."""
+    return layer(hidden)
+
+
+def get_inference_engine(
+    model_id: str,
+    architecture_family: Optional[str],
+    device: str = "CPU",
+    *,
+    run_layer: Optional[Callable[[Any, Any], Any]] = None,
+) -> InferenceEngine:
+    """Return a ready-to-use InferenceEngine for the given model and family.
+
+    Validates *architecture_family* via get_inference_config and packages the
+    result into an InferenceEngine.  Callers should call engine.forward() (or
+    engine.run_layer()) instead of dispatching manually so the backend
+    selection stays in one place (GH#8690).
+
+    Args:
+        model_id: Opaque model identifier.
+        architecture_family: One of ArchitectureFamily values, or None
+            (defaults to transformer for backward compatibility).
+        device: Target OpenVINO device string (e.g. "CPU", "NPU", "GPU").
+        run_layer: Optional callable ``(layer, hidden) -> hidden`` that
+            executes a single model layer.  Defaults to a direct call, which
+            is correct for both real OpenVINO layer objects and mock layers
+            used in tests.
+
+    Returns:
+        InferenceEngine with all fields populated.
+
+    Raises:
+        UnsupportedArchitectureError: When no inference path exists for the
+            requested family.
+    """
+    cfg = get_inference_config(model_id, architecture_family, device)
+    engine = InferenceEngine(
+        model_id=cfg["model_id"],
+        device=cfg["device"],
+        architecture_family=cfg["architecture_family"],
+        inference_backend=cfg["inference_backend"],
+        run_layer=run_layer if run_layer is not None else _default_run_layer,
+    )
+    logger.debug(
+        "get_inference_engine: model=%s device=%s family=%s backend=%s",
+        engine.model_id,
+        engine.device,
+        engine.architecture_family,
+        engine.inference_backend,
+    )
+    return engine
 
 
 def get_inference_config(

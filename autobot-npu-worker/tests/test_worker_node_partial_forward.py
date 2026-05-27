@@ -6,10 +6,8 @@
 from __future__ import annotations
 
 import sys
-import types
 from pathlib import Path
 from typing import Any, List
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -229,3 +227,47 @@ class TestDetectCapabilities:
 
         caps = detect_capabilities(model_registry={})
         assert caps["vram_bytes_per_layer"] == _VRAM_BYTES_PER_LAYER_FALLBACK
+
+
+# ---------------------------------------------------------------------------
+# Integration: handle_partial_forward uses get_inference_engine (GH#8690)
+# ---------------------------------------------------------------------------
+
+
+class TestHandlePartialForwardUsesEngine:
+    """Verify architecture_family is dispatched through get_inference_engine."""
+
+    def test_architecture_family_accepted(self):
+        """handle_partial_forward must pass architecture_family without error."""
+        result = handle_partial_forward(
+            "model",
+            (0, 1),
+            {"layers_run": []},
+            _MockModelLoader(4),
+            architecture_family="transformer",
+            device="CPU",
+        )
+        assert "hidden_state_out" in result
+
+    def test_default_architecture_family_is_transformer(self):
+        """Omitting architecture_family must not raise (defaults to transformer)."""
+        result = handle_partial_forward(
+            "model",
+            (0, 2),
+            {"layers_run": []},
+            _MockModelLoader(4),
+        )
+        assert "hidden_state_out" in result
+
+    def test_unsupported_family_raises_from_partial_forward(self):
+        """UnsupportedArchitectureError propagates through handle_partial_forward."""
+        from workers.openvino_dispatch import UnsupportedArchitectureError
+
+        with pytest.raises(UnsupportedArchitectureError):
+            handle_partial_forward(
+                "model",
+                (0, 1),
+                {"layers_run": []},
+                _MockModelLoader(4),
+                architecture_family="state_space",
+            )
