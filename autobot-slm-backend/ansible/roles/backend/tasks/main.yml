@@ -61,9 +61,13 @@
     - backend_chromadb_host == '127.0.0.1'
   tags: ['backend', 'config']
 
-- name: "Backend | Set backend_host=10.255.255.254 on WSL2 hosts (#5608)"
+- name: "Backend | Set backend_host=0.0.0.0 on WSL2 hosts (#5608, #MVA-1423)"
   ansible.builtin.set_fact:
-    backend_host: "10.255.255.254"
+    # 10.255.255.254 is the Windows host IP seen FROM WSL2 — not a local
+    # interface; uvicorn cannot bind to it (EADDRNOTAVAIL). Use 0.0.0.0 so
+    # uvicorn binds all interfaces (loopback + WSL2 virtual adapter) while
+    # remaining reachable from nginx and the health check on 127.0.0.1.
+    backend_host: "0.0.0.0"
   when:
     - _proc_version.content is defined
     - (_proc_version.content | b64decode | lower) is search('microsoft')
@@ -755,7 +759,9 @@
 
 - name: "Backend | Wait for backend to be healthy (#3687)"
   ansible.builtin.uri:
-    url: "http://{{ backend_host }}:{{ backend_health_check_port }}/api/health"
+    # Always probe via loopback — backend_host may be 0.0.0.0 on WSL2
+    # (#MVA-1423) which is not a valid URL target.
+    url: "http://127.0.0.1:{{ backend_health_check_port }}/api/health"
     status_code: 200
   retries: "{{ backend_health_check_retries | default(60) }}"
   delay: "{{ backend_health_check_delay | default(5) }}"
