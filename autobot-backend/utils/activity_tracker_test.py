@@ -221,5 +221,6 @@ class TestDesktopActivityTracking:
         assert isinstance(activity_id, uuid.UUID)
         activity_model = mock_db.add.call_args[0][0]
         assert (
-            "/tmp/screenshot_123.png" in activity_model.screenshot_path
-        )  # nosec B108 - test/controlled code uses tmpdir intentionally
+            "/tmp/screenshot_123.png"
+            in activity_model.screenshot_path  # nosec B108 - test/controlled code uses tmpdir intentionally
+        )

@@ -60,9 +60,7 @@ class TestTrustCapabilityGateMissingHeader:
         request.client.host = "10.0.0.1"
         background_tasks = MagicMock()
 
-        with patch("api.a2a._a2a_limiter") as mock_limiter, patch(
-            "api.a2a.get_trust_manager"
-        ) as mock_trust:
+        with patch("api.a2a._a2a_limiter") as mock_limiter, patch("api.a2a.get_trust_manager") as mock_trust:
             mock_limiter.check_or_429 = AsyncMock()
             with pytest.raises(HTTPException) as exc_info:
                 await submit_task(
@@ -101,9 +99,7 @@ class TestTrustCapabilityGateMissingHeader:
             "untrusted-peer", Capability.SUBMIT_TASKS, TrustLevel.UNTRUSTED
         )
 
-        with patch("api.a2a._a2a_limiter") as mock_limiter, patch(
-            "api.a2a.get_trust_manager", return_value=mock_mgr
-        ):
+        with patch("api.a2a._a2a_limiter") as mock_limiter, patch("api.a2a.get_trust_manager", return_value=mock_mgr):
             mock_limiter.check_or_429 = AsyncMock()
             with pytest.raises(HTTPException) as exc_info:
                 await submit_task(
@@ -115,6 +111,4 @@ class TestTrustCapabilityGateMissingHeader:
                 )
 
         assert exc_info.value.status_code == 403
-        mock_mgr.require_capability.assert_called_once_with(
-            "untrusted-peer", Capability.SUBMIT_TASKS
-        )
+        mock_mgr.require_capability.assert_called_once_with("untrusted-peer", Capability.SUBMIT_TASKS)

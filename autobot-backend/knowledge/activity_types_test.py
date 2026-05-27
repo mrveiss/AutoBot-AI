@@ -246,8 +246,9 @@ class TestDesktopActivity:
 
         assert activity.action == "screenshot"
         assert (
-            activity.screenshot_path == "/tmp/screenshot_123.png"
-        )  # nosec B108 - test/controlled code uses tmpdir intentionally
+            activity.screenshot_path
+            == "/tmp/screenshot_123.png"  # nosec B108 - test/controlled code uses tmpdir intentionally
+        )
         assert activity.metadata["width"] == 1920
 
     def test_desktop_activity_required_fields(self):

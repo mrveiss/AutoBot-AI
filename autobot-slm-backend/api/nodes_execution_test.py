@@ -333,8 +333,8 @@ class TestValidateCommandFindArgs:
         """_validate_find_args raises HTTP 400 for blocked flags when called directly."""
         with pytest.raises(HTTPException) as exc_info:
             _validate_find_args(
-                ["find", "/tmp", "-delete"]
-            )  # nosec B108 - test/controlled code uses tmpdir intentionally
+                ["find", "/tmp", "-delete"]  # nosec B108 - test/controlled code uses tmpdir intentionally
+            )
         assert exc_info.value.status_code == 400
 
     def test_validate_find_args_directly_allowed(self):

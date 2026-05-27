@@ -505,8 +505,9 @@ class TestMCPSizeLimiting:
         """Test protection against reading excessive number of files"""
         # Try to read 1000 files at once
         file_paths = [
-            f"/tmp/autobot/file{i}.txt" for i in range(1000)
-        ]  # nosec B108 - test/controlled code uses tmpdir intentionally
+            f"/tmp/autobot/file{i}.txt"
+            for i in range(1000)  # nosec B108 - test/controlled code uses tmpdir intentionally
+        ]
 
         response = client.post("/api/filesystem/mcp/read_multiple_files", json={"paths": file_paths})
 

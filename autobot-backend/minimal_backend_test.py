@@ -66,5 +66,8 @@ if __name__ == "__main__":
 
     logger.info("Starting minimal backend...")
     uvicorn.run(
-        app, host="0.0.0.0", port=8001, log_level="info"
-    )  # nosec B104 - intentional bind to all interfaces for service/test
+        app,
+        host="0.0.0.0",
+        port=8001,
+        log_level="info",  # nosec B104 - intentional bind to all interfaces for service/test
+    )

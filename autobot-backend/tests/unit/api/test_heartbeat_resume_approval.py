@@ -181,10 +181,7 @@ class TestResumeApprovalBranching:
     def test_admin_role_bypasses_approval(self):
         """Admin users are identified by role=='admin' and bypass the 202 path."""
         admin_user = {"role": "admin", "username": "superadmin"}
-        user_role = (
-            admin_user.get("role", "") if isinstance(admin_user, dict)
-            else getattr(admin_user, "role", "")
-        )
+        user_role = admin_user.get("role", "") if isinstance(admin_user, dict) else getattr(admin_user, "role", "")
         assert user_role == "admin"
 
     def test_non_admin_role_enters_approval(self):
@@ -195,14 +192,12 @@ class TestResumeApprovalBranching:
             {"role": "", "username": "carol"},
             {"username": "dave"},  # no 'role' key
         ):
-            user_role = (
-                user.get("role", "") if isinstance(user, dict)
-                else getattr(user, "role", "")
-            )
+            user_role = user.get("role", "") if isinstance(user, dict) else getattr(user, "role", "")
             assert user_role != "admin", f"{user} should enter the approval gate"
 
     def test_getattr_fallback_for_non_dict_user(self):
         """_user can also be an object with a .role attribute."""
+
         class _User:
             role = "user"
             username = "eve"
