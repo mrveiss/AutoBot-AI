@@ -29,7 +29,7 @@ EnvironmentFile=-/opt/autobot/autobot-db-stack/.env
 # Start ChromaDB server
 ExecStart=/opt/autobot/autobot-db-stack/chromadb/venv/bin/chroma run \
     --host 0.0.0.0 \
-    --port 8000 \
+    --port 8100 \
     --path /opt/autobot/autobot-db-stack/chromadb/data
 
 # Restart policy

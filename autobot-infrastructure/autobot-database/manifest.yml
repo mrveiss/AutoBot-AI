@@ -1,5 +1,5 @@
 role: autobot-database
-description: "Redis Stack + PostgreSQL — session storage, caching, vector search, and relational data"
+description: "Redis Stack + PostgreSQL + ChromaDB — session storage, caching, vector search, and relational data"
 version: "1.0.0"
 target_node: database
 
@@ -26,6 +26,11 @@ services:
     system_service: postgresql
     start_order: 2
     user: postgres
+  - name: autobot-chromadb
+    type: systemd
+    unit_file: autobot-chromadb.service
+    start_order: 3
+    user: autobot
 
 ports:
   - port: 6379
@@ -43,6 +48,11 @@ ports:
     public: false
     loopback_only: true
     description: "PostgreSQL (user management DB for autobot-backend)"
+  - port: 8100
+    protocol: http
+    public: false
+    loopback_only: false
+    description: "ChromaDB HTTP API (vector store for embeddings)"
 
 health:
   endpoint: "http://localhost:6379"
@@ -78,4 +88,5 @@ notes: |
   Redis Stack binds :6379 (all interfaces — fleet-wide access).
   Redis databases: main (0), knowledge (1), prompts (2), analytics (3).
   PostgreSQL on localhost:5432 — user management DB for autobot-backend.
+  ChromaDB on :8100 — vector store for embeddings, accessed by autobot-backend and autobot-ai-stack.
   system_updates policy = manual: database nodes require planned maintenance window.

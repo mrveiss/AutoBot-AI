@@ -61,8 +61,8 @@ else
 fi
 
 # ChromaDB
-echo -n "  ChromaDB (8000): "
-if curl -s "http://127.0.0.1:8000/api/v1/heartbeat" 2>/dev/null | grep -q "nanosecond"; then
+echo -n "  ChromaDB (8100): "
+if curl -s "http://127.0.0.1:8100/api/v1/heartbeat" 2>/dev/null | grep -q "nanosecond"; then
     echo "OK"
 else
     echo "FAILED"
