@@ -49,10 +49,12 @@ from llm_shared.model_param_registry import (  # noqa: E402
     _load_registry,
     apply_model_defaults,
     apply_prompt_prefix,
+    get_architecture_family,
     get_model_kwargs,
     get_prompt_prefix,
     get_provider_model_id,
     resolve_model_name,
+    ArchitectureFamily,
 )
 
 # ---------------------------------------------------------------------------
@@ -438,3 +440,77 @@ class TestApplyPromptPrefix:
             _clear_cache()
             result = apply_prompt_prefix("system-only-model", messages)
         assert result[0]["content"] == "Only a system message"
+
+
+# ---------------------------------------------------------------------------
+# Tests: get_architecture_family (GH#7347)
+# ---------------------------------------------------------------------------
+
+
+class TestGetArchitectureFamily:
+    def test_known_yaml_model_returns_transformer(self):
+        assert get_architecture_family("claude-sonnet-4-6") == ArchitectureFamily.TRANSFORMER
+
+    def test_gpt4o_returns_transformer(self):
+        assert get_architecture_family("gpt-4o") == ArchitectureFamily.TRANSFORMER
+
+    def test_ollama_model_returns_transformer(self):
+        assert get_architecture_family("llama3.3") == ArchitectureFamily.TRANSFORMER
+
+    def test_model_card_mamba_returns_ssm(self):
+        fam = get_architecture_family("unknown-local", model_card_config={"model_type": "mamba"})
+        assert fam == ArchitectureFamily.SSM
+
+    def test_model_card_mamba2_returns_ssm(self):
+        fam = get_architecture_family("some-model", model_card_config={"model_type": "mamba2"})
+        assert fam == ArchitectureFamily.SSM
+
+    def test_model_card_mixtral_returns_moe(self):
+        fam = get_architecture_family("some-model", model_card_config={"model_type": "mixtral"})
+        assert fam == ArchitectureFamily.MOE
+
+    def test_pattern_match_mamba_name_returns_ssm(self):
+        fam = get_architecture_family("mamba-3b-local")
+        assert fam == ArchitectureFamily.SSM
+
+    def test_pattern_match_emits_warning(self, caplog):
+        import logging
+        with caplog.at_level(logging.WARNING):
+            get_architecture_family("mamba-unknown-7b")
+        assert "architecture_family" in caplog.text
+        assert "pattern" in caplog.text
+
+    def test_unknown_model_no_config_defaults_transformer(self):
+        fam = get_architecture_family("totally-unknown-xyz-model")
+        assert fam == ArchitectureFamily.TRANSFORMER
+
+    def test_alias_resolved_before_lookup(self):
+        fam = get_architecture_family("gpt4o")
+        assert fam == ArchitectureFamily.TRANSFORMER
+
+    def test_explicit_yaml_field_wins_over_config(self, tmp_path):
+        import textwrap
+        from unittest.mock import patch
+
+        yaml_content = textwrap.dedent("""\
+            models:
+              - display_name: my-ssm-model
+                architecture_family: ssm
+                api_name:
+                  ollama: my-ssm-model
+                aliases: []
+                api_kwargs:
+                  default:
+                    temperature: 0.7
+                    max_tokens: 2048
+        """)
+        yaml_file = tmp_path / "llm_models.yaml"
+        yaml_file.write_text(yaml_content, encoding="utf-8")
+        with patch.dict("os.environ", {"AUTOBOT_LLM_MODELS_YAML": str(yaml_file)}):
+            _clear_cache()
+            # config.json says transformer but YAML says ssm — YAML wins
+            fam = get_architecture_family(
+                "my-ssm-model",
+                model_card_config={"model_type": "llama"},
+            )
+        assert fam == ArchitectureFamily.SSM

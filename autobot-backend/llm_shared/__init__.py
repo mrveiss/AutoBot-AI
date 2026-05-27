@@ -47,8 +47,10 @@ from .hardware import TORCH_AVAILABLE, HardwareDetector
 # Mock providers
 from .mock_providers import LocalLLM, MockPalm, local_llm, palm
 from .model_param_registry import (
+    ArchitectureFamily,
     apply_model_defaults,
     apply_prompt_prefix,
+    get_architecture_family,
     get_model_kwargs,
     get_prompt_prefix,
     get_provider_model_id,
