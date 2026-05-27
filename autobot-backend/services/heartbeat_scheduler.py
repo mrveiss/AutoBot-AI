@@ -261,6 +261,9 @@ class HeartbeatScheduler:
                     # allocation failures (GH#8687).  Leave state.workspace_dir
                     # unchanged so the adapter can still use the last known good
                     # path.  Only a successful allocation updates the path above.
+                    # Propagate the preserved path into the local variable so
+                    # _execute_agent receives it instead of None (GH#8687).
+                    workspace_dir = state.workspace_dir
                     logger.warning(
                         "Workspace allocation failed for task=%s agent=%s"
                         " (preserving existing workspace_dir=%r): %s",
