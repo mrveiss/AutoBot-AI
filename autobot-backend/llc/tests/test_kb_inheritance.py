@@ -180,11 +180,7 @@ class TestSearchWithInheritance:
         resolver.rag_assembler.assemble = AsyncMock(return_value=empty_context)
 
         work_item_id = str(uuid.uuid4())
-        await resolver.search_with_inheritance(
-            session, str(CHILD_ID), "query", work_item_id=work_item_id
-        )
+        await resolver.search_with_inheritance(session, str(CHILD_ID), "query", work_item_id=work_item_id)
 
         for call in resolver.rag_assembler.assemble.call_args_list:
-            assert call.kwargs.get("work_item_id") == work_item_id, (
-                f"work_item_id not propagated in call: {call}"
-            )
+            assert call.kwargs.get("work_item_id") == work_item_id, f"work_item_id not propagated in call: {call}"
