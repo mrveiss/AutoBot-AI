@@ -14,6 +14,7 @@ WorkingDirectory={{ chromadb_install_dir }}
 
 Environment="PYTHONUNBUFFERED=1"
 Environment="ANONYMIZED_TELEMETRY=FALSE"
+Environment="PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python"
 EnvironmentFile=-/opt/autobot/autobot-db-stack/.env
 
 ExecStart={{ chromadb_install_dir }}/venv/bin/chroma run \
