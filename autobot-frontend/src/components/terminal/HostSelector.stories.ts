@@ -1,7 +1,8 @@
 import type { Meta } from '@storybook/vue3';
 import type { StoryObj } from '@storybook/vue3';
 import HostSelector from './HostSelector.vue';
-import { config } from '@/config/ssot-config';
+import { getConfig } from '@/config/ssot-config';
+const config = getConfig();
 
 const sampleHosts = [
   { id: 'main', name: 'Main Server', ip: config.vm.main, description: 'Primary AutoBot backend server' },

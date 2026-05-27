@@ -401,9 +401,8 @@ onBeforeUnmount(() => {
                 v-for="variable in detectedVariables"
                 :key="variable"
                 class="variable-tag"
-              >
-                {{ '{{' + variable + '}}' }}
-              </span>
+                v-text="`{{${variable}}}`"
+              />
             </div>
           </div>
         </template>

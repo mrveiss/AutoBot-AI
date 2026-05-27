@@ -4,7 +4,8 @@
 
 import type { Meta, StoryObj } from '@storybook/vue3';
 import BrowserSessionManager from './BrowserSessionManager.vue';
-import { config } from '@/config/ssot-config';
+import { getConfig } from '@/config/ssot-config';
+const config = getConfig();
 
 const meta = {
   title: 'Components/Browser/BrowserSessionManager',
