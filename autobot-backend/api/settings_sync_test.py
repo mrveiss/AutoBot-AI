@@ -112,8 +112,8 @@ class TestAtomicWriteJson:
         with tempfile.TemporaryDirectory() as tmpdir:
             target = Path(tmpdir) / "settings.json"
             data = {
-                "backend": {"server_host": "0.0.0.0"}
-            }  # nosec B104 - intentional bind to all interfaces for service/test
+                "backend": {"server_host": "0.0.0.0"}  # nosec B104 - intentional bind to all interfaces for service/test
+            }
             await _atomic_write_json(target, data)
             assert target.exists()
             written = json.loads(target.read_text(encoding="utf-8"))

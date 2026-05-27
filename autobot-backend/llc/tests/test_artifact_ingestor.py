@@ -167,8 +167,8 @@ async def test_ingest_returns_false_for_missing_product(ingestor, mock_session):
 @pytest.mark.asyncio
 async def test_ingest_skips_binary_storage_path(ingestor, mock_session):
     product = _make_product(
-        storage_path="/tmp/binary.png"
-    )  # nosec B108 - test/controlled code uses tmpdir intentionally
+        storage_path="/tmp/binary.png"  # nosec B108 - test/controlled code uses tmpdir intentionally
+    )
     mock_scalar = MagicMock()
     mock_scalar.scalar_one_or_none = MagicMock(return_value=product)
     mock_session.execute.return_value = mock_scalar
@@ -231,8 +231,8 @@ async def test_ingest_all_pending_counts_only_successful(ingestor, mock_session)
     products = [
         _make_product(work_item_id=item_id, content_text="ok"),
         _make_product(
-            work_item_id=item_id, storage_path="/tmp/img.png"
-        ),  # nosec B108 - test/controlled code uses tmpdir intentionally
+            work_item_id=item_id, storage_path="/tmp/img.png"  # nosec B108 - test/controlled code uses tmpdir intentionally
+        ),
     ]
     mock_scalars = MagicMock()
     mock_scalars.scalars.return_value.all.return_value = products

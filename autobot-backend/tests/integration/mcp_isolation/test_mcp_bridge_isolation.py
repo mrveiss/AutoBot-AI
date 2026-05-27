@@ -284,8 +284,8 @@ class TestWorkerRestartOnCrash:
 
         with patch("asyncio.create_subprocess_exec", new=spawn):
             result = await client.call_tool(
-                "read_file", {"path": "/tmp/x"}
-            )  # nosec B108 - test/controlled code uses tmpdir intentionally
+                "read_file", {"path": "/tmp/x"}  # nosec B108 - test/controlled code uses tmpdir intentionally
+            )
 
         assert spawn.await_count == 1, "Should have spawned exactly one new worker"
         assert result["success"] is True
@@ -393,8 +393,8 @@ class TestCircuitBreakerOnPersistentFailures:
         client = IsolatedBridgeClient("filesystem_mcp", _make_policy())
         with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=eof_proc)):
             result = await client.call_tool(
-                "read_file", {"path": "/tmp/z"}
-            )  # nosec B108 - test/controlled code uses tmpdir intentionally
+                "read_file", {"path": "/tmp/z"}  # nosec B108 - test/controlled code uses tmpdir intentionally
+            )
 
         assert result["success"] is False
 

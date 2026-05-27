@@ -70,9 +70,9 @@ def test_source_id_stable():
 
 
 def test_source_id_differs_for_different_sources():
-    assert _source_id_for("/tmp/a.mp3") != _source_id_for(
-        "/tmp/b.mp3"
-    )  # nosec B108 B108 - test/controlled code uses tmpdir intentionally
+    assert _source_id_for("/tmp/a.mp3") != _source_id_for(  # nosec B108 - test/controlled code uses tmpdir intentionally
+        "/tmp/b.mp3"  # nosec B108 - test/controlled code uses tmpdir intentionally
+    )
 
 
 # ---------------------------------------------------------------------------

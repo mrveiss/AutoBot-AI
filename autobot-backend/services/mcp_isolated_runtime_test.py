@@ -67,8 +67,8 @@ class TestIsolatedBridgeClient:
             new=AsyncMock(return_value=fake_proc),
         ):
             result = await client.call_tool(
-                "read_file", {"path": "/tmp/x"}
-            )  # nosec B108 - test/controlled code uses tmpdir intentionally
+                "read_file", {"path": "/tmp/x"}  # nosec B108 - test/controlled code uses tmpdir intentionally
+            )
         assert result["success"] is True
         assert result["result"] == {"ok": 1}
         assert result["bridge"] == "filesystem_mcp"
@@ -244,8 +244,8 @@ class TestConcurrentRequestIds:
             new=AsyncMock(return_value=fake_proc),
         ):
             await asyncio.gather(
-                *[client.call_tool("read_file", {"path": f"/tmp/f{i}"}) for i in range(self._N)]
-            )  # nosec B108 - test/controlled code uses tmpdir intentionally
+                *[client.call_tool("read_file", {"path": f"/tmp/f{i}"}) for i in range(self._N)]  # nosec B108 - test/controlled code uses tmpdir intentionally
+            )
 
         # Filter out the "shutdown" or "ping" requests emitted by _ensure_alive
         # (those also get ids but belong to internal housekeeping, not tool calls).
@@ -280,8 +280,8 @@ class TestConcurrentRequestIds:
             new=AsyncMock(return_value=fake_proc),
         ):
             tool_coros = [
-                client.call_tool("list_dir", {"path": f"/tmp/{i}"}) for i in range(half)
-            ]  # nosec B108 - test/controlled code uses tmpdir intentionally
+                client.call_tool("list_dir", {"path": f"/tmp/{i}"}) for i in range(half)  # nosec B108 - test/controlled code uses tmpdir intentionally
+            ]
             health_coros = [client.health_check() for _ in range(half)]
             await asyncio.gather(*tool_coros, *health_coros)
 

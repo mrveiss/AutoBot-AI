@@ -189,8 +189,8 @@ class TestDiskWriteBeforeRedis:
         mgr._update_redis_cache_on_save = _fake_cache
 
         with patch(
-            "autobot_shared.security.path_validator.validate_relative_path", return_value="/tmp/s.json"
-        ):  # nosec B108 - test/controlled code uses tmpdir intentionally
+            "autobot_shared.security.path_validator.validate_relative_path", return_value="/tmp/s.json"  # nosec B108 - test/controlled code uses tmpdir intentionally
+        ):
             await mgr.save_session("sess-xyz")
 
         assert call_order == ["disk", "redis"], f"Expected disk before redis, got {call_order}"
