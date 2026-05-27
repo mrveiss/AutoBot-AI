@@ -25,11 +25,12 @@ Read path:
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
 from decimal import Decimal
 
 from pydantic import BaseModel
 
-from autobot_shared.coordination.shared_runtime_bag import SharedRuntimeBag
+from autobot_shared.coordination.shared_runtime_bag import ChangeEvent, SharedRuntimeBag
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +126,7 @@ class AgentBudgetTracker:
                 agent_id,
             )
 
-    async def subscribe_changes(self):  # type: ignore[override]
+    async def subscribe_changes(self) -> AsyncIterator[ChangeEvent]:
         """Yield AgentBudgetState change events for all agents.
 
         Useful for the BudgetWatchdog to react to cross-worker budget updates
