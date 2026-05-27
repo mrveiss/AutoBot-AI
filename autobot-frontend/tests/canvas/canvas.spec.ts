@@ -116,11 +116,11 @@ test.describe('Canvas (MVA-360 Phase 1)', () => {
       }
     })
 
-    let cell = page.locator('[data-testid="canvas-cell-stream-cell-1"]')
+    const cell = page.locator('[data-testid="canvas-cell-stream-cell-1"]')
     await expect(cell).toBeVisible()
 
     // Verify skeleton state: shimmer or static blocks visible
-    let skeleton = cell.locator('[data-testid="cell-skeleton"]')
+    const skeleton = cell.locator('[data-testid="cell-skeleton"]')
     await expect(skeleton).toBeVisible()
 
     // Transition to partial (streaming)
@@ -137,8 +137,8 @@ test.describe('Canvas (MVA-360 Phase 1)', () => {
     })
 
     // Verify partial state: cursor + "Writing..." label
-    let cursor = cell.locator('[data-testid="cell-cursor"]')
-    let writingLabel = cell.locator('text=Writing…')
+    const cursor = cell.locator('[data-testid="cell-cursor"]')
+    const writingLabel = cell.locator('text=Writing…')
     await expect(cursor).toBeVisible({ timeout: 5000 })
     await expect(writingLabel).toBeVisible()
 
@@ -156,7 +156,7 @@ test.describe('Canvas (MVA-360 Phase 1)', () => {
     })
 
     // Verify complete state: controls appear, skeleton/cursor hidden
-    let controls = cell.locator('[data-testid="cell-controls"]')
+    const controls = cell.locator('[data-testid="cell-controls"]')
     await expect(controls).toBeVisible({ timeout: 5000 })
     await expect(skeleton).not.toBeVisible()
     await expect(cursor).not.toBeVisible()

@@ -177,7 +177,7 @@ describe('OperationsPanel - OperationDetail Integration', () => {
 
   it('should maintain selection when operations list updates', () => {
     const originalId = mockOperations[0].operation_id
-    let selectedId = originalId
+    const selectedId = originalId
 
     // Simulate list update
     mockOperations[0].progress = 50

@@ -55,7 +55,7 @@ describe('runTimed', () => {
     const onFail = vi.fn()
     await runTimed(
       async () => {
-        throw 'plain string failure' // eslint-disable-line @typescript-eslint/only-throw-error
+        throw 'plain string failure'  
       },
       vi.fn(),
       onFail,
