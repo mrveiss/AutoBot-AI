@@ -7,7 +7,7 @@ all:
   hosts:
     localhost:
       ansible_connection: local
-      ansible_user: "{{ ansible_user_id }}"
+      ansible_user: "{{ lookup('env', 'USER') }}"
       ansible_become: true
       ansible_become_method: sudo
 

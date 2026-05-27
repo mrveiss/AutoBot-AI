@@ -54,8 +54,8 @@
       ansible.builtin.file:
         path: "{{ git_repo_root }}"
         state: directory
-        owner: "{{ ansible_user_id | default('autobot') }}"
-        group: "{{ ansible_user_id | default('autobot') }}"
+        owner: "{{ lookup('env', 'USER') | default('autobot') }}"
+        group: "{{ lookup('env', 'USER') | default('autobot') }}"
         recurse: true
       become: true
       failed_when: false
