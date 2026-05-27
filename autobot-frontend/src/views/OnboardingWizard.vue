@@ -93,6 +93,14 @@ const canGoNext = computed(() => {
   return false
 })
 
+function navigatePreset(currentIndex: number, direction: number) {
+  const next = currentIndex + direction
+  if (next < 0 || next >= presets.value.length) return
+  selectedPreset.value = presets.value[next].name
+  const cards = document.querySelectorAll<HTMLElement>('[role="listbox"] [role="option"]')
+  cards[next]?.focus()
+}
+
 const tierBadgeClass = (tier: string) => {
   switch (tier) {
     case 'powerful': return 'badge-tier-powerful'
@@ -303,17 +311,24 @@ onMounted(async () => {
             Choose a starter configuration that best matches your primary use-case.
             You can adjust everything later in Settings.
           </p>
-          <div class="presets-grid">
+          <div
+            class="presets-grid"
+            role="listbox"
+            aria-label="Choose a starter preset"
+            aria-required="true"
+          >
             <div
-              v-for="preset in presets"
+              v-for="(preset, index) in presets"
               :key="preset.name"
               :class="['preset-card', { selected: selectedPreset === preset.name }]"
               @click="selectedPreset = preset.name"
               :aria-selected="selectedPreset === preset.name"
               role="option"
-              tabindex="0"
+              :tabindex="selectedPreset === preset.name || (!selectedPreset && index === 0) ? 0 : -1"
               @keydown.enter="selectedPreset = preset.name"
               @keydown.space.prevent="selectedPreset = preset.name"
+              @keydown.up.prevent="navigatePreset(index, -1)"
+              @keydown.down.prevent="navigatePreset(index, 1)"
             >
               <div class="preset-card-header">
                 <span class="preset-title">{{ preset.title }}</span>
