@@ -9,12 +9,11 @@ and DockerBackend integration with pool enabled.
 """
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from services.execution.base_backend import (
-    BackendType,
     ExecutionStatus,
     ExecutionTask,
 )
