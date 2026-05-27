@@ -94,8 +94,11 @@ class HandoffBriefGenerator:
             try:
                 brief_content = json.loads(response.content)
             except json.JSONDecodeError:
-                logger.warning("Failed to parse LLM response as JSON, falling back")
-                brief_content = self._parse_llm_text_response(response.content)
+                try:
+                    brief_content = self._parse_llm_text_response(response.content)
+                except (ValueError, json.JSONDecodeError):
+                    logger.warning("Failed to parse LLM response as JSON, using fallback")
+                    return self._fallback_agent_to_human_brief()
 
             return {
                 "completed": brief_content.get("completed", []),
@@ -180,8 +183,11 @@ class HandoffBriefGenerator:
             try:
                 brief_content = json.loads(response.content)
             except json.JSONDecodeError:
-                logger.warning("Failed to parse LLM response as JSON, falling back")
-                brief_content = self._parse_llm_text_response(response.content)
+                try:
+                    brief_content = self._parse_llm_text_response(response.content)
+                except (ValueError, json.JSONDecodeError):
+                    logger.warning("Failed to parse LLM response as JSON, using fallback")
+                    return self._fallback_human_to_agent_brief(human_notes)
 
             return {
                 "human_context": human_notes,
