@@ -328,7 +328,10 @@ class TestMCPInputValidation:
         for payload in sql_injection_payloads:
             response = client.post(
                 "/api/filesystem/mcp/search_files",
-                json={"path": "/tmp/autobot", "pattern": payload},  # nosec B108 - test/controlled code uses tmpdir intentionally
+                json={
+                    "path": "/tmp/autobot",
+                    "pattern": payload,
+                },  # nosec B108 - test/controlled code uses tmpdir intentionally
             )
             # Should handle safely (not crash)
             assert response.status_code in [
@@ -452,7 +455,10 @@ class TestMCPInputValidation:
         for payload in ldap_payloads:
             response = client.post(
                 "/api/filesystem/mcp/search_files",
-                json={"path": "/tmp/autobot", "pattern": payload},  # nosec B108 - test/controlled code uses tmpdir intentionally
+                json={
+                    "path": "/tmp/autobot",
+                    "pattern": payload,
+                },  # nosec B108 - test/controlled code uses tmpdir intentionally
             )
             assert response.status_code in [200, 400, 422]
 
@@ -498,7 +504,9 @@ class TestMCPSizeLimiting:
     def test_excessive_file_list(self, client):
         """Test protection against reading excessive number of files"""
         # Try to read 1000 files at once
-        file_paths = [f"/tmp/autobot/file{i}.txt" for i in range(1000)]  # nosec B108 - test/controlled code uses tmpdir intentionally
+        file_paths = [
+            f"/tmp/autobot/file{i}.txt" for i in range(1000)
+        ]  # nosec B108 - test/controlled code uses tmpdir intentionally
 
         response = client.post("/api/filesystem/mcp/read_multiple_files", json={"paths": file_paths})
 

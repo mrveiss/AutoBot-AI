@@ -97,12 +97,16 @@ class VoiceProcessor(BaseModalProcessor):
         try:
             # Load Whisper model for speech recognition
             self.logger.info("Loading Whisper model...")
-            self.whisper_processor = WhisperProcessor.from_pretrained("openai/whisper-base", resume_download=True)  # nosec B615 - HuggingFace model loaded by name; revision pinning managed operationally
+            self.whisper_processor = WhisperProcessor.from_pretrained(
+                "openai/whisper-base", resume_download=True
+            )  # nosec B615 - HuggingFace model loaded by name; revision pinning managed operationally
             self.whisper_model = WhisperForConditionalGeneration.from_pretrained(  # nosec B615 - HuggingFace model loaded by name; revision pinning managed operationally
                 "openai/whisper-base",
                 torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
                 resume_download=True,
-            ).to(self.device)
+            ).to(
+                self.device
+            )
 
             # Load Wav2Vec2 model for audio embeddings and feature extraction
             self.logger.info("Loading Wav2Vec2 model...")
@@ -113,7 +117,9 @@ class VoiceProcessor(BaseModalProcessor):
                 "facebook/wav2vec2-base-960h",
                 torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
                 resume_download=True,
-            ).to(self.device)
+            ).to(
+                self.device
+            )
 
             # Set models to evaluation mode
             self.whisper_model.eval()

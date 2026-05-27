@@ -49,7 +49,9 @@ def test_metapatch_has_changes_false_whitespace() -> None:
 
 
 def test_metapatch_to_dict_keys() -> None:
-    patch = MetaPatch(patch_id="abc", target_path="/tmp/foo.py", generation=3)  # nosec B108 - test/controlled code uses tmpdir intentionally
+    patch = MetaPatch(
+        patch_id="abc", target_path="/tmp/foo.py", generation=3
+    )  # nosec B108 - test/controlled code uses tmpdir intentionally
     d = patch.to_dict()
     assert d["patch_id"] == "abc"
     assert d["target_path"] == "/tmp/foo.py"  # nosec B108 - test/controlled code uses tmpdir intentionally

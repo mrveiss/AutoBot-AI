@@ -223,7 +223,9 @@ class TestArtifactSerializationValidation:
         arts = [
             build_artifact(ArtifactType.CODE_DIFF, "diff text"),
             build_artifact(ArtifactType.TEST_OUTPUT, "3 passed"),
-            build_artifact(ArtifactType.DEPLOYMENT_LOG, "deployed ok", file_path="/tmp/log"),  # nosec B108 - test/controlled code uses tmpdir intentionally
+            build_artifact(
+                ArtifactType.DEPLOYMENT_LOG, "deployed ok", file_path="/tmp/log"
+            ),  # nosec B108 - test/controlled code uses tmpdir intentionally
         ]
         _validate_artifact_serialization(arts)
 

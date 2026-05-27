@@ -102,7 +102,9 @@ class VisionProcessor(BaseModalProcessor):
         try:
             # Load CLIP model for image embeddings and classification
             self.logger.info("Loading CLIP model...")
-            self.clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32", resume_download=True).to(  # nosec B615 - HuggingFace model loaded by name; revision pinning managed operationally
+            self.clip_model = CLIPModel.from_pretrained(
+                "openai/clip-vit-base-patch32", resume_download=True
+            ).to(  # nosec B615 - HuggingFace model loaded by name; revision pinning managed operationally
                 self.device
             )
             self.clip_processor = CLIPProcessor.from_pretrained(  # nosec B615 - HuggingFace model loaded by name; revision pinning managed operationally
@@ -136,7 +138,9 @@ class VisionProcessor(BaseModalProcessor):
                     "Salesforce/blip2-opt-2.7b",
                     torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
                     resume_download=True,
-                ).to(self.device)
+                ).to(
+                    self.device
+                )
 
             # Set models to evaluation mode
             self.clip_model.eval()

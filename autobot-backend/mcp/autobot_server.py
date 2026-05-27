@@ -680,7 +680,9 @@ class AutoBotMCPServer:
     # HTTP transport
     # ------------------------------------------------------------------
 
-    async def serve_http(self, host: str = "0.0.0.0", port: int = 8200) -> None:  # nosec B104 - intentional bind to all interfaces for service/test
+    async def serve_http(
+        self, host: str = "0.0.0.0", port: int = 8200
+    ) -> None:  # nosec B104 - intentional bind to all interfaces for service/test
         """Run an aiohttp server accepting ``POST /mcp/tool`` requests."""
         from aiohttp import web
 
