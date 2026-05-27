@@ -219,7 +219,6 @@
           <div class="px-4 py-3 space-y-2">
             <template v-for="item in navItems" :key="item.to">
             <router-link
-              v-if="!item.adminOnly || userStore.isAdmin"
               :to="item.to"
               @click="closeMobileNav"
               :class="{
@@ -960,9 +959,7 @@ export default {
     // Nav overflow: ref for container, filtered/visible/overflow computed slices
     const navContainerRef = ref<HTMLElement | null>(null)
 
-    const filteredNavItems = computed(() =>
-      navItems.filter(item => !item.adminOnly || userStore.isAdmin)
-    )
+    const filteredNavItems = computed(() => navItems)
 
     const filteredProfileMenuItems = computed(() =>
       filterByFeatureFlag(profileMenuItems)

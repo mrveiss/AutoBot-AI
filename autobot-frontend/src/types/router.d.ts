@@ -63,10 +63,6 @@ declare module 'vue-router' {
      */
     minRole?: 'admin' | 'user' | 'readonly' | 'guest'
 
-    /**
-     * Whether this route is admin-only (shorthand for minRole: 'admin')
-     */
-    adminOnly?: boolean
   }
 }
 
