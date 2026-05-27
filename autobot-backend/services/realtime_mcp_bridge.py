@@ -244,26 +244,43 @@ class RealtimeMCPBridge:
     # Public interface
     # ------------------------------------------------------------------
 
-    async def list_realtime_tools(self) -> list[RealtimeTool]:
+    async def list_realtime_tools(
+        self,
+        user_id: str | None = None,
+        role: str = "user",
+    ) -> list[RealtimeTool]:
         """Return Realtime-shaped tool schemas filtered by the active bundle.
+
+        When user_id is provided, the per-user bundle override is resolved first
+        (GH#8605: user override → role default → global env).
 
         The frontend uses this list to populate the ``session.update`` tools
         array before opening a Realtime session.
         """
+        bundle = self._bundle
+        if user_id is not None:
+            try:
+                from api.redis_mcp.rbac import resolve_bundle_for_user  # noqa: PLC0415
+
+                bundle, _ = await resolve_bundle_for_user(user_id, role=role)
+            except Exception:
+                logger.debug("list_realtime_tools: bundle resolution failed, using default")
+
         all_tools = await self._discover_tools()
         filter_tools_for_bundle = _get_filter_tools_for_bundle()
         allowed_names = filter_tools_for_bundle(
             [t.name for t in all_tools],
-            bundle=self._bundle,
+            bundle=bundle,
             is_admin=self._is_admin,
             disabled_tools=self._disabled,
         )
         allowed_set = set(allowed_names)
         filtered = [t for t in all_tools if t.name in allowed_set]
         logger.info(
-            "realtime_mcp_bridge list bundle=%s is_admin=%s discovered=%d filtered=%d",
-            self._bundle,
+            "realtime_mcp_bridge list bundle=%s is_admin=%s user_id=%s discovered=%d filtered=%d",
+            bundle,
             self._is_admin,
+            user_id,
             len(all_tools),
             len(filtered),
         )

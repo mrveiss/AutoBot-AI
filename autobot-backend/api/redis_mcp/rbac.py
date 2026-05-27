@@ -164,3 +164,52 @@ def filter_tools_for_bundle(
         len(result),
     )
     return result
+
+
+# ---------------------------------------------------------------------------
+# Per-user bundle resolution (GH#8605)
+# Resolution order: user DB override → role default → global env default
+# ---------------------------------------------------------------------------
+
+# Role-based default bundles
+_ROLE_DEFAULT_BUNDLE: dict[str, str] = {
+    "admin": "voice_admin",
+    "user": "voice_safe",
+}
+
+_VALID_BUNDLES = frozenset(_BUNDLE_TAG_MAP.keys())
+
+
+async def resolve_bundle_for_user(user_id: str, role: str = "user") -> tuple[str, str]:
+    """Return (bundle_name, resolution) for a user.
+
+    Resolution values: 'user_override' | 'role_default' | 'global_env'
+    """
+    # 1. Check per-user DB override
+    try:
+        from database.session import get_async_session  # noqa: PLC0415
+        from sqlalchemy import text  # noqa: PLC0415
+
+        async with get_async_session() as session:
+            row = await session.execute(
+                text("SELECT bundle_name FROM user_voice_bundle WHERE user_id = :uid"),
+                {"uid": str(user_id)},
+            )
+            result = row.fetchone()
+            if result is not None:
+                return result[0], "user_override"
+    except Exception:
+        logger.debug("resolve_bundle_for_user: DB lookup failed, falling through")
+
+    # 2. Role default
+    role_bundle = _ROLE_DEFAULT_BUNDLE.get(role)
+    if role_bundle:
+        return role_bundle, "role_default"
+
+    # 3. Global env default
+    import os  # noqa: PLC0415
+
+    env_bundle = os.getenv("AUTOBOT_VOICE_TOOLSETS", "voice_safe")
+    if env_bundle not in _VALID_BUNDLES:
+        env_bundle = "voice_safe"
+    return env_bundle, "global_env"
