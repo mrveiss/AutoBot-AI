@@ -73,6 +73,11 @@ role_vnc_active: >-
      (inventory_hostname in (groups.get('backend', []) | default([]))) or
      (inventory_hostname in (groups.get('vnc_nodes', []) | default([]))) }}
 
+role_xrdp_active: >-
+  {{ ('xrdp' in (node_roles | default([]))) or
+     ('autobot-xrdp' in (node_roles | default([]))) or
+     (inventory_hostname in (groups.get('rdp_nodes', []) | default([]))) }}
+
 role_llm_active: >-
   {{ ('llm' in (node_roles | default([]))) or
      (inventory_hostname in (groups.get('ai_stack', []) | default([]))) or
