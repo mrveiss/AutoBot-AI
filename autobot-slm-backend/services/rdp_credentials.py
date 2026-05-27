@@ -23,7 +23,7 @@ from models.schemas import (
     RDPCredentialUpdate,
     RDPEndpointResponse,
 )
-from services.encryption import decrypt_data, encrypt_data
+from services.encryption import encrypt_data
 
 logger = logging.getLogger(__name__)
 
