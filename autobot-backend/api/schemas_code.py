@@ -862,6 +862,12 @@ class SnapshotWithRegionsResponse(BaseModel):
     viewport: Dict[str, Any]  # width, height, devicePixelRatio
 
 
+class AiProposeRegionsResponse(BaseModel):
+    """Response for POST /playwright/ai-propose-regions (MVA-1380)."""
+
+    proposed_regions: List[PageRegion]
+
+
 # ---------------------------------------------------------------------------
 # research_browser.py schemas  (Issue #5912)
 # ---------------------------------------------------------------------------
