@@ -96,6 +96,36 @@
       >
         <Icon :name="isSnapshotLoading ? 'spinner' : 'th'" :class="isSnapshotLoading ? 'animate-spin' : ''" />
       </button>
+      <!-- AI Propose button (MVA-1380) — only shown in region-marking mode -->
+      <button
+        v-if="markRegionsMode"
+        @click="showAiGoalInput = !showAiGoalInput"
+        :disabled="isAiProposing"
+        class="nav-btn"
+        :class="{ 'text-color-primary': showAiGoalInput }"
+        title="AI Propose regions"
+        aria-label="AI Propose regions"
+      >
+        <Icon :name="isAiProposing ? 'spinner' : 'magic'" :class="isAiProposing ? 'animate-spin' : ''" />
+      </button>
+    </div>
+    <!-- AI goal input strip (MVA-1380) -->
+    <div v-if="markRegionsMode && showAiGoalInput" class="flex items-center gap-2 px-3 py-2 border-b" style="border-color: var(--color-border); background: var(--color-bg-secondary)">
+      <input
+        v-model="aiGoalText"
+        type="text"
+        placeholder="Describe what you want to extract (e.g. product prices, article titles)…"
+        class="flex-1 text-sm rounded px-2 py-1 bg-autobot-bg-primary text-autobot-text-primary border border-autobot-border"
+        @keydown.enter="runAiPropose"
+      />
+      <button
+        @click="runAiPropose"
+        :disabled="isAiProposing || !aiGoalText.trim()"
+        class="px-3 py-1 text-sm rounded font-medium"
+        style="background: var(--color-primary); color: #fff"
+      >
+        {{ isAiProposing ? 'Proposing…' : 'Propose' }}
+      </button>
     </div>
 
     <!-- Playwright Automation Panel -->
@@ -477,6 +507,11 @@ export default {
     const regionSnapshot = ref<string | null>(null)
     const isSnapshotLoading = ref(false)
 
+    // AI propose state (MVA-1380)
+    const showAiGoalInput = ref(false)
+    const aiGoalText = ref('')
+    const isAiProposing = ref(false)
+
     // Computed styles with responsive sizing
     const browserContentStyle = computed(() => ({
       height: isPopout.value ? '80vh' : '60vh',
@@ -852,6 +887,27 @@ export default {
       markRegionsMode.value = false
     }
 
+    // AI-propose regions (MVA-1380)
+    const runAiPropose = async (): Promise<void> => {
+      if (!aiGoalText.value.trim() || isAiProposing.value) return
+      isAiProposing.value = true
+      try {
+        const proposed = await browserApi.aiProposeRegions(props.sessionId, aiGoalText.value.trim())
+        if (proposed.length > 0) {
+          pageRegions.value = proposed
+          logger.info(`AI proposed ${proposed.length} regions`)
+        } else {
+          addConsoleLog('warn', 'AI propose returned no matching regions')
+        }
+        showAiGoalInput.value = false
+      } catch (e) {
+        logger.warn('AI propose failed:', e)
+        addConsoleLog('warn', `AI propose failed: ${e instanceof Error ? e.message : String(e)}`)
+      } finally {
+        isAiProposing.value = false
+      }
+    }
+
     // Utility functions
     const getLogColor = (level: string): string => {
       switch (level) {
@@ -1009,6 +1065,12 @@ export default {
       isSnapshotLoading,
       toggleRegionMarking,
       handleRegionsSelected,
+
+      // AI propose (MVA-1380)
+      showAiGoalInput,
+      aiGoalText,
+      isAiProposing,
+      runAiPropose,
 
       // LoadingBoundary event handlers
       handlePlaywrightConnected,

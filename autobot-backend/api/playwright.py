@@ -12,7 +12,9 @@ import aiohttp
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 
 from api.schemas_code import (
+    AiProposeRegionsResponse,
     FrontendTestRequest,
+    PageRegion,
     PlaywrightBrowserActionResponse,
     PlaywrightCapabilitiesResponse,
     PlaywrightInteractRequest,
@@ -766,3 +768,123 @@ async def snapshot_with_regions(request: SnapshotWithRegionsRequest):
             accessibility_text=accessibility_text,
         )
     )
+
+
+_AI_PROPOSE_SYSTEM_PROMPT = """You are a web scraping assistant. Given a screenshot and a list of page regions, identify which regions are most relevant to the user's data extraction goal. Return a JSON array of objects with "selector" and "label" fields. Only include regions that are clearly relevant. Return valid JSON only — no markdown fences, no commentary."""
+
+_AI_PROPOSE_USER_TEMPLATE = """Goal: {goal}
+
+Page regions (selector → text preview):
+{regions_text}
+
+Return a JSON array like: [{{"selector": "...", "label": "..."}}]"""
+
+
+@router.post(
+    "/ai-propose-regions",
+    response_model=DataResponse[AiProposeRegionsResponse],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="ai_propose_regions",
+    error_code_prefix="PLAYWRIGHT",
+)
+async def ai_propose_regions(request: SnapshotWithRegionsRequest):
+    """
+    Use an AI vision model to propose relevant page regions for a given extraction goal.
+
+    Takes a snapshot of the current browser session, then asks the LLM to identify
+    which regions match the user's goal. Returns matched PageRegion objects with
+    AI-generated labels. (MVA-1380 / GH#5136 Phase 3)
+    """
+    import json as _json
+
+    from modern_ai_integration import get_modern_ai_integration
+
+    manager = get_research_browser_manager()
+    session = manager.get_session(request.session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.page is None:
+        raise HTTPException(status_code=400, detail="Browser page not initialized")
+
+    logger.info("ai-propose-regions: session=%s goal=%r", request.session_id, request.goal)
+
+    # 1. Take snapshot + regions (reuse snapshot logic inline)
+    screenshot_bytes: bytes = await session.page.screenshot(type="png")
+    screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
+
+    raw_regions: list = await session.page.evaluate(_JS_COLLECT_REGIONS)
+    regions = [
+        {
+            "selector": r.get("selector", ""),
+            "xpath": r.get("xpath", ""),
+            "rect": r.get("rect", {"x": 0, "y": 0, "w": 0, "h": 0}),
+            "text_preview": r.get("textPreview", ""),
+            "role": r.get("role", ""),
+        }
+        for r in raw_regions
+    ]
+
+    # 2. Build DOM text summary for LLM
+    regions_text = "\n".join(
+        f"  {r['selector']}: {r['text_preview'][:80]}" for r in regions[:80] if r["text_preview"]
+    )
+
+    goal = request.goal or "extract useful data from this page"
+    prompt = _AI_PROPOSE_USER_TEMPLATE.format(goal=goal, regions_text=regions_text)
+
+    # 3. Call LLM with screenshot as vision attachment
+    ai = get_modern_ai_integration()
+    response = await ai.process_with_ai(
+        provider=ai._select_vision_provider(None),
+        prompt=prompt,
+        images=[screenshot_b64],
+        system_message=_AI_PROPOSE_SYSTEM_PROMPT,
+        task_type="region_proposal",
+    )
+
+    # 4. Parse LLM output — expect [{selector, label}]
+    proposed_pairs: list = []
+    try:
+        content = response.content.strip()
+        # Strip markdown fences if present
+        if content.startswith("```"):
+            content = content.split("```")[1]
+            if content.startswith("json"):
+                content = content[4:]
+        proposed_pairs = _json.loads(content)
+        if not isinstance(proposed_pairs, list):
+            proposed_pairs = []
+    except Exception as exc:
+        logger.warning("ai-propose-regions: LLM JSON parse failed: %s", exc)
+
+    # 5. Match proposed selectors back to full region objects
+    selector_to_region = {r["selector"]: r for r in regions}
+    proposed_regions: list[PageRegion] = []
+    seen_selectors: set[str] = set()
+    for pair in proposed_pairs:
+        sel = pair.get("selector", "")
+        label = pair.get("label", "")
+        if not sel or sel in seen_selectors:
+            continue
+        seen_selectors.add(sel)
+        region = selector_to_region.get(sel)
+        if region:
+            proposed_regions.append(
+                PageRegion(
+                    selector=region["selector"],
+                    xpath=region["xpath"],
+                    rect=region["rect"],
+                    text_preview=label or region["text_preview"],
+                    role=region["role"],
+                )
+            )
+
+    logger.info(
+        "ai-propose-regions: proposed %d regions for session %s",
+        len(proposed_regions),
+        request.session_id,
+    )
+
+    return DataResponse(data=AiProposeRegionsResponse(proposed_regions=proposed_regions))

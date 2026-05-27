@@ -200,6 +200,25 @@ export function useBrowserSessionData() {
     }
   }
 
+  async function aiProposeRegions(
+    sessionId: string,
+    goal: string
+  ): Promise<PageRegion[]> {
+    const envelope = await apiClient.post<any>(
+      `${getApiBase()}/playwright/ai-propose-regions`,
+      { session_id: sessionId, goal }
+    ) as { data: Record<string, unknown> }
+    const payload = envelope?.data ?? (envelope as unknown as Record<string, unknown>)
+    const rawRegions = (payload.proposed_regions as Array<Record<string, unknown>>) ?? []
+    return rawRegions.map(r => ({
+      selector: (r.selector as string) ?? '',
+      xpath: (r.xpath as string) ?? '',
+      rect: (r.rect as RegionRect) ?? { x: 0, y: 0, w: 0, h: 0 },
+      textPreview: (r.text_preview as string) ?? '',
+      role: (r.role as string) ?? '',
+    }))
+  }
+
   return {
     fetchSession,
     fetchPlaywrightHealth,
@@ -211,5 +230,6 @@ export function useBrowserSessionData() {
     runFrontendTests,
     sendTestMessage,
     snapshotWithRegions,
+    aiProposeRegions,
   }
 }
