@@ -55,9 +55,29 @@ class HandoffResult:
 class HandoffService(LLCServiceBase):
     """Bi-directional work item handoff (human↔agent)."""
 
+    _DRAIN_TIMEOUT_SECONDS = 10
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._background_tasks: Set[asyncio.Task[Any]] = set()
+
+    async def shutdown(self) -> None:
+        """Drain pending background brief-generation tasks on server shutdown (GH#8651)."""
+        pending = {t for t in self._background_tasks if not t.done()}
+        if not pending:
+            return
+        logger.info("HandoffService.shutdown: draining %d background task(s)", len(pending))
+        done, still_pending = await asyncio.wait(pending, timeout=self._DRAIN_TIMEOUT_SECONDS)
+        if still_pending:
+            logger.warning(
+                "HandoffService.shutdown: %d task(s) did not finish within %ds — cancelling",
+                len(still_pending),
+                self._DRAIN_TIMEOUT_SECONDS,
+            )
+            for task in still_pending:
+                task.cancel()
+            await asyncio.gather(*still_pending, return_exceptions=True)
+        logger.info("HandoffService.shutdown: drained %d task(s)", len(done))
 
     async def human_to_agent(
         self,

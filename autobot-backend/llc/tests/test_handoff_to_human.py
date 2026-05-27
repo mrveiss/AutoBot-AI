@@ -420,3 +420,52 @@ class TestGenerateBrief:
         brief = service._generate_brief(item, None)
         assert len(brief["recent_comments"]) == 5
         assert brief["comment_count"] == 8
+
+
+# ---------------------------------------------------------------------------
+# GH#8651 — shutdown() drains background tasks
+# ---------------------------------------------------------------------------
+
+
+class TestHandoffServiceShutdown:
+    @pytest.mark.asyncio
+    async def test_shutdown_awaits_pending_tasks(self):
+        """shutdown() waits for in-flight background tasks to complete (GH#8651)."""
+        svc = HandoffService()
+        completed = []
+
+        async def slow_task():
+            import asyncio
+            await asyncio.sleep(0.01)
+            completed.append(1)
+
+        import asyncio
+        task = asyncio.create_task(slow_task())
+        svc._background_tasks.add(task)
+        task.add_done_callback(svc._background_tasks.discard)
+
+        await svc.shutdown()
+        assert completed == [1], "shutdown() must drain background tasks before returning"
+
+    @pytest.mark.asyncio
+    async def test_shutdown_cancels_tasks_exceeding_timeout(self):
+        """shutdown() cancels tasks that exceed _DRAIN_TIMEOUT_SECONDS (GH#8651)."""
+        svc = HandoffService()
+        svc._DRAIN_TIMEOUT_SECONDS = 0  # force immediate timeout
+
+        async def slow_task():
+            import asyncio
+            await asyncio.sleep(60)
+
+        import asyncio
+        task = asyncio.create_task(slow_task())
+        svc._background_tasks.add(task)
+
+        await svc.shutdown()
+        assert task.cancelled() or task.done()
+
+    @pytest.mark.asyncio
+    async def test_shutdown_is_noop_when_no_tasks(self):
+        """shutdown() returns immediately with no background tasks (GH#8651)."""
+        svc = HandoffService()
+        await svc.shutdown()  # must not raise

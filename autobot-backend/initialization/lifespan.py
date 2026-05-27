@@ -1643,6 +1643,16 @@ async def cleanup_services(app: FastAPI):
             await app.state.llc_notification_router.stop()
             logger.info("✅ LLC notification router stopped")
 
+        # GH#8651: Drain HandoffService background brief-generation tasks
+        try:
+            from llc.api.work_items import _get_handoff_service
+
+            handoff_svc = _get_handoff_service()
+            await handoff_svc.shutdown()
+            logger.info("✅ LLC HandoffService background tasks drained")
+        except Exception as _hs_err:
+            logger.warning("HandoffService drain failed: %s", _hs_err)
+
         # GH#8229: Stop LLC routine scheduler
         if hasattr(app.state, "llc_routine_scheduler") and app.state.llc_routine_scheduler:
             await app.state.llc_routine_scheduler.shutdown()
