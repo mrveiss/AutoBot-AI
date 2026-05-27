@@ -17,7 +17,7 @@
  *   setTheme('dark')  // or 'light', 'system'
  */
 
-import { ref, computed, watch, onMounted, getCurrentInstance } from 'vue'
+import { ref, computed, onMounted, getCurrentInstance } from 'vue'
 
 /** Available theme options */
 export type Theme = 'dark' | 'light' | 'system'

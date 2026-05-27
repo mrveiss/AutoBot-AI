@@ -30,7 +30,7 @@ test.describe('Chat Workflow E2E Tests', () => {
     // Wait for response (with timeout for backend connectivity issues)
     try {
       await expect(page.locator('[data-testid="assistant-message"]').last()).toBeVisible({ timeout: 30000 })
-    } catch (error) {
+    } catch {
       console.warn('Backend response timeout - continuing with client-side tests')
     }
 

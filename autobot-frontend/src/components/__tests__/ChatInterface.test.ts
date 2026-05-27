@@ -8,7 +8,7 @@ import {
   createMockChatMessage,
   waitForUpdate,
 } from '../../test/utils/test-utils'
-import { webSocketTestUtil, WebSocketMessageType } from '../../test/mocks/websocket-mock'
+import { webSocketTestUtil } from '../../test/mocks/websocket-mock'
 import { ServiceURLs } from '@/constants/network'
 
 // ---- Module mocks ----

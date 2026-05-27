@@ -229,7 +229,7 @@ describe('useErrorHandler Composable', () => {
       expect(wrapper.vm.data).toBe('preserved-data')
 
       // Execute again with error
-      const { execute: execute2, data: data2 } = useAsyncHandler(async () => {
+      const { execute: _execute2, data: _data2 } = useAsyncHandler(async () => {
         throw new Error('Error')
       })
 
@@ -840,7 +840,7 @@ describe('useErrorHandler Composable', () => {
       const wrapper = mount(TestComponent)
       await wrapper.vm.execute()
 
-      const [message, type] = notify.mock.calls[0]
+      const [_message, type] = notify.mock.calls[0]
       expect(type).toBe('success')
       expect(['success', 'error', 'info']).toContain(type)
     })
@@ -1000,7 +1000,7 @@ describe('useErrorHandler Composable', () => {
 
     it('should log retry attempts', async () => {
       const consoleWarn = vi.spyOn(console, 'warn')
-      let attempts = 0
+      const _attempts = 0
 
       const TestComponent = defineComponent({
         setup() {

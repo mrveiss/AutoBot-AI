@@ -90,7 +90,7 @@ class FeatureFlagsApiClient {
   private async initializeBaseUrl(): Promise<void> {
     try {
       this.baseUrl = await appConfig.getApiUrl('');
-    } catch (_error) {
+    } catch {
       logger.warn('AppConfig initialization failed, using NetworkConstants fallback');
       this.baseUrl = `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`;
     }

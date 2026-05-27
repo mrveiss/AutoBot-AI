@@ -396,7 +396,7 @@ describe('useConnectionTester composable', () => {
 
       const tester = useConnectionTester({
         endpoint: 'http://example.com/health',
-        onSuccess: async (responseTime) => {
+        onSuccess: async (_responseTime) => {
           await new Promise(resolve => setTimeout(resolve, 100))
           callbackExecuted = true
         }
@@ -618,7 +618,7 @@ describe('useConnectionTester composable', () => {
     })
 
     it('should cancel ongoing test', async () => {
-      let resolveFetch: any
+      let _resolveFetch: any
       const fetchPromise = new Promise((resolve) => {
         resolveFetch = () => resolve(new Response(null, { status: 200 }))
       })
@@ -628,7 +628,7 @@ describe('useConnectionTester composable', () => {
         endpoint: 'http://example.com/health'
       })
 
-      const testPromise = tester.test()
+      const _testPromise = tester.test()
       await nextTick()
 
       expect(tester.isTesting.value).toBe(true)
@@ -741,7 +741,7 @@ describe('useConnectionTester composable', () => {
     })
 
     it('should cancel all ongoing tests', async () => {
-      let resolveFetch: any
+      let _resolveFetch: any
       const fetchPromise = new Promise((resolve) => {
         resolveFetch = () => resolve(new Response(null, { status: 200 }))
       })
@@ -752,7 +752,7 @@ describe('useConnectionTester composable', () => {
         redis: { endpoint: 'http://redis.com/ping' }
       })
 
-      const testPromise = testAll()
+      const _testPromise = testAll()
       await nextTick()
 
       expect(testers.backend.isTesting.value).toBe(true)

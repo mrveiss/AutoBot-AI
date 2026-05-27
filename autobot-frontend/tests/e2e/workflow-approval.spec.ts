@@ -94,7 +94,7 @@ test.describe('WorkflowApproval Component Tests', () => {
       // If no active workflows, that's okay - just ensure no errors
       if (!hasApproveControls) {
         // Check for "No active workflows" or similar message
-        const noWorkflowsMessage = page.locator('text=No active').or(page.locator('text=no workflows'));
+        const _noWorkflowsMessage = page.locator('text=No active').or(page.locator('text=no workflows'));
         // This is acceptable - either controls exist or "no workflows" message
         expect(true).toBe(true); // Test passes if we get here without errors
       }

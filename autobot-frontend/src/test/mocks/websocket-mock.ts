@@ -21,7 +21,7 @@ export class MockWebSocket {
   // Track all instances for testing
   static instances: MockWebSocket[] = []
 
-  constructor(url: string, protocols?: string | string[]) {
+  constructor(url: string, _protocols?: string | string[]) {
     this.url = url
     this.readyState = MockWebSocket.CONNECTING
 

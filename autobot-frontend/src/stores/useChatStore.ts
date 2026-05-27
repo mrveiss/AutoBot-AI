@@ -108,7 +108,7 @@ export const useChatStore = defineStore('chat', () => {
 
   const hasActiveSessions = computed(() => sessionCount.value > 0)
 
-  const sessionTitles = computed(() =>
+  const _sessionTitles = computed(() =>
     sessions.value.map(s => ({
       id: s.id,
       title: s.title,

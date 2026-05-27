@@ -109,7 +109,7 @@ describe('useThumbnailWorker', () => {
   })
 
   it('should cancel pending requests', () => {
-    const { cancelThumbnail, pendingCount } = useThumbnailWorker()
+    const { cancelThumbnail, _pendingCount } = useThumbnailWorker()
 
     // Note: In actual usage, pendingCount would increment after postMessage
     // For this test, we just verify the cancel function exists and doesn't throw
@@ -121,7 +121,7 @@ describe('useThumbnailWorker', () => {
   it('should handle Worker not supported', () => {
     // This test verifies behavior when Worker is not available
     // The composable should gracefully handle this case
-    const { isSupported, generateThumbnail } = useThumbnailWorker()
+    const { isSupported, _generateThumbnail } = useThumbnailWorker()
 
     if (!isSupported.value) {
       // If Worker is not supported, generateThumbnail should return null

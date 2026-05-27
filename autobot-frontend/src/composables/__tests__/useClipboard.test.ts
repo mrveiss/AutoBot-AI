@@ -17,12 +17,10 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { nextTick } from 'vue'
 import {
   useClipboard,
   useClipboardWithMessage,
-  useClipboardElement,
-  type ClipboardOptions
+  useClipboardElement
 } from '../useClipboard'
 
 // ========================================

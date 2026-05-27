@@ -104,7 +104,7 @@ describe('OperationsPanel - OperationDetail Integration', () => {
 
   it('should show empty state when no operation selected', () => {
     const selectedId: string | null = null
-    const selectedOperation = mockOperations.find(op => op.operation_id === selectedId ?? '')
+    const selectedOperation = mockOperations.find(op => op.operation_id === (selectedId ?? ''))
 
     expect(selectedOperation).toBeUndefined()
     expect(selectedId).toBeNull()
@@ -158,7 +158,7 @@ describe('OperationsPanel - OperationDetail Integration', () => {
   })
 
   it('should support clear filter action', () => {
-    const filter: OperationsFilter = {
+    const _filter: OperationsFilter = {
       status: 'running',
       operation_type: undefined,
       limit: 50

@@ -73,7 +73,7 @@ test.describe('Terminal Functionality Tests', () => {
     expect(complexTerminalExists.status()).not.toBe(404);
 
     // Test new simple terminal endpoint exists (after backend restart)
-    const simpleTerminalExists = await page.request.get(TEST_CONFIG.getApiUrl('/api/terminal/simple/sessions'));
+    const _simpleTerminalExists = await page.request.get(TEST_CONFIG.getApiUrl('/api/terminal/simple/sessions'));
     // This might be 404 if backend hasn't been restarted yet - that's expected
     // We just want to ensure the endpoint structure is ready
   });

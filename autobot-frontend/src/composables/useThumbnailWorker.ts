@@ -83,7 +83,7 @@ function getWorker(): Worker {
 
     // Handle messages from worker
     workerInstance.onmessage = (event: MessageEvent<ThumbnailResult>) => {
-      const { id, success, data, error, processingTime } = event.data
+      const { id, success, data, _error, processingTime } = event.data
 
       logger.debug(`Thumbnail generated [${id}]`, {
         success,

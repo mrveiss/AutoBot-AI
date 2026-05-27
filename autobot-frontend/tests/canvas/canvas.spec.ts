@@ -63,7 +63,7 @@ test.describe('Canvas (MVA-360 Phase 1)', () => {
     await expect(agentCell).toBeVisible()
 
     // Verify color tokens applied (check computed style)
-    const computedStyle = await agentCell.evaluate(el => window.getComputedStyle(el))
+    const _computedStyle = await agentCell.evaluate(el => window.getComputedStyle(el))
 
     // Verify border-left styling (color-agent-draft-border)
     await expect(agentCell).toHaveCSS('border-left-color', /(3B82F6|60A5FA)/) // blue or light blue

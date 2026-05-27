@@ -1,11 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { screen, fireEvent, waitFor } from '@testing-library/vue'
+import { screen, waitFor } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 // @ts-expect-error - Template file: Replace '../ComponentName.vue' with actual component path
 import ComponentName from '../ComponentName.vue'
 import {
   renderComponent,
-  waitForUpdate,
 } from '../../test/utils/test-utils'
 import { createMockApiService } from '../../test/mocks/api-client-mock'
 import { webSocketTestUtil } from '../../test/mocks/websocket-mock'
@@ -128,7 +127,7 @@ describe('ComponentName', () => {
     it('handles incoming WebSocket messages', async () => {
       renderComponent(ComponentName)
 
-      const ws = webSocketTestUtil.connect(ServiceURLs.WEBSOCKET_LOCAL)
+      const _ws = webSocketTestUtil.connect(ServiceURLs.WEBSOCKET_LOCAL)
       webSocketTestUtil.simulateMessage('data_update', { value: 'Updated!' })
 
       await waitFor(() => {
@@ -139,7 +138,7 @@ describe('ComponentName', () => {
     it('handles WebSocket connection errors', async () => {
       renderComponent(ComponentName)
 
-      const ws = webSocketTestUtil.connect(ServiceURLs.WEBSOCKET_LOCAL)
+      const _ws = webSocketTestUtil.connect(ServiceURLs.WEBSOCKET_LOCAL)
       webSocketTestUtil.simulateError('Connection failed')
 
       // Should handle error gracefully
@@ -182,7 +181,7 @@ describe('ComponentName', () => {
     it('displays error messages when validation fails', async () => {
       renderComponent(ComponentName)
 
-      const input = screen.getByLabelText('Required field')
+      const _input = screen.getByLabelText('Required field')
       const submitButton = screen.getByRole('button', { name: 'Submit' })
 
       await user.click(submitButton) // Submit without input
@@ -232,7 +231,7 @@ describe('ComponentName', () => {
       const openButton = screen.getByRole('button', { name: 'Open Dialog' })
       await user.click(openButton)
 
-      const dialog = screen.getByRole('dialog')
+      const _dialog = screen.getByRole('dialog')
       const firstInput = screen.getByLabelText('First field')
 
       expect(firstInput).toHaveFocus()

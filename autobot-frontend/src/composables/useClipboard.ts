@@ -222,7 +222,7 @@ export function useClipboard(options: ClipboardOptions = {}): UseClipboardReturn
       if (appended) {
         try {
           document.body.removeChild(textarea)
-        } catch (_cleanupErr) {
+        } catch {
           // Ignore cleanup errors
         }
       }

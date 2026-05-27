@@ -77,7 +77,7 @@ let mockReturn;
 
 // Mock composables
 vi.mock('@/composables/useServiceManagement', () => ({
-  useServiceManagement: vi.fn((...args) => mockReturn),
+  useServiceManagement: vi.fn((..._args) => mockReturn),
 }));
 
 // Mock debugUtils logger to suppress output
@@ -99,7 +99,7 @@ const mountWithPlugins = (options = {}) => {
         // Stub Teleport so BaseModal content renders inline
         teleport: true,
       },
-      ...(options.global || {}),
+      ...options.global,
     },
     ...options,
   });

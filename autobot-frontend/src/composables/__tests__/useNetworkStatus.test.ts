@@ -33,7 +33,7 @@ describe('isFeatureAvailable', () => {
 })
 
 describe('useNetworkStatus - browser events', () => {
-  let originalNavigator: Navigator
+  let _originalNavigator: Navigator
   const onlineHandlers: EventListener[] = []
   const offlineHandlers: EventListener[] = []
 

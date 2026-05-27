@@ -99,7 +99,7 @@ test.describe('Feature Name E2E Tests', () => {
         try {
           const data = JSON.parse(event.payload.toString())
           wsMessages.push(data)
-        } catch (e) {
+        } catch {
           // Ignore non-JSON messages
         }
       })

@@ -79,7 +79,7 @@ export function useHostInventory() {
 
   async function _slmFetch<T>(path: string, init?: RequestInit): Promise<T> {
     const res = await fetch(path, {
-      headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+      headers: { 'Content-Type': 'application/json', ...init?.headers },
       ...init,
     })
     if (!res.ok) {

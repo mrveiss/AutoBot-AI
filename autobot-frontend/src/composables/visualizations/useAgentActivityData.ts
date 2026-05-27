@@ -175,7 +175,7 @@ export function useAgentActivityData() {
         agents.value = data.agents
         return
       }
-    } catch (err) {
+    } catch {
       logger.warn('Failed to fetch agents, using sample data')
     }
 
@@ -207,7 +207,7 @@ export function useAgentActivityData() {
         }))
         return
       }
-    } catch (err) {
+    } catch {
       logger.warn('Failed to fetch events, using sample data')
     }
 

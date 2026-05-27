@@ -4,7 +4,7 @@ import { chatRepository } from '@/models/repositories'
 import apiClient from '@/utils/ApiClient'
 import type { ChatSession } from '@/stores/useChatStore'
 import { createLogger } from '@/utils/debugUtils'
-import { extractErrorMessage, extractApiErrorMessage } from '@/utils/errorExtract'
+import { extractErrorMessage } from '@/utils/errorExtract'
 import type { ChatMessage, ChatMessageDisplayType } from '@/types/api'
 import { requestQueue } from '@/composables/useRequestQueue'
 
@@ -75,7 +75,7 @@ export class ChatController {
     if (!this._appStore) {
       try {
         this._appStore = useAppStore()
-      } catch (error) {
+      } catch {
         logger.warn('AppStore not available, running without store integration')
         return null
       }
@@ -609,33 +609,29 @@ export class ChatController {
 
   // Enhanced session operations with error handling
   async createNewSession(title?: string): Promise<string> {
+    // MVA-164: Client-mint UUID before any API call (server-round-trip-first pattern)
+    // Generate UUID upfront
+    const sessionId = crypto.randomUUID()
+
+    // Call backend immediately with the client-minted UUID
     try {
-      // MVA-164: Client-mint UUID before any API call (server-round-trip-first pattern)
-      // Generate UUID upfront
-      const sessionId = crypto.randomUUID()
-
-      // Call backend immediately with the client-minted UUID
-      try {
-        await chatRepository.createNewChat(title, undefined, sessionId)
-        logger.debug('New chat session created on backend:', sessionId)
-      } catch (error) {
-        // Backend create failed - don't create local session if backend fails
-        logger.error('Failed to create chat session on backend:', error)
-        this.getAppStore()?.setGlobalError(`Failed to create chat: ${extractErrorMessage(error, 'Unknown error')}`)
-        throw error
-      }
-
-      // Backend succeeded - now create the local session with the same UUID
-      const localSessionId = this.chatStore.createNewSession(title, sessionId)
-      if (localSessionId !== sessionId) {
-        // This shouldn't happen since we're passing the sessionId to createNewSession
-        logger.warn(`Session ID mismatch: generated ${sessionId}, store created ${localSessionId}`)
-      }
-
-      return sessionId
-    } catch (error: unknown) {
+      await chatRepository.createNewChat(title, undefined, sessionId)
+      logger.debug('New chat session created on backend:', sessionId)
+    } catch (error) {
+      // Backend create failed - don't create local session if backend fails
+      logger.error('Failed to create chat session on backend:', error)
+      this.getAppStore()?.setGlobalError(`Failed to create chat: ${extractErrorMessage(error, 'Unknown error')}`)
       throw error
     }
+
+    // Backend succeeded - now create the local session with the same UUID
+    const localSessionId = this.chatStore.createNewSession(title, sessionId)
+    if (localSessionId !== sessionId) {
+      // This shouldn't happen since we're passing the sessionId to createNewSession
+      logger.warn(`Session ID mismatch: generated ${sessionId}, store created ${localSessionId}`)
+    }
+
+    return sessionId
   }
 
   async loadChatSessions(): Promise<void> {

@@ -12,7 +12,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 // Test environment configuration with fallbacks
 const FRONTEND_URL = process.env.VITE_BASE_URL || 'http://localhost:5173';
-const BACKEND_URL = process.env.VITE_API_BASE_URL || 'http://localhost:8001';
+const _BACKEND_URL = process.env.VITE_API_BASE_URL || 'http://localhost:8001';
 
 export default defineConfig({
   testDir: './tests/e2e',

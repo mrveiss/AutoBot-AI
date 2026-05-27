@@ -1196,7 +1196,7 @@ export default {
 
       // Remove ANSI escape sequences
       content = content
-        .replace(/\x1b\[([0-9]{1,2}(;[0-9]{1,2})?)?[mGK]/g, '')
+        .replace(/\u001b\[([0-9]{1,2}(;[0-9]{1,2})?)?[mGK]/g, '')
         .replace(/\r\n/g, '\n')
         .replace(/\r/g, '\n');
 

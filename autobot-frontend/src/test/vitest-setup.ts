@@ -91,7 +91,7 @@ class MockWebSocket {
   }
 
   // Simulate error
-  simulateError(error: string) {
+  simulateError(_error: string) {
     if (this.onerror) {
       this.onerror(new Event('error'))
     }
