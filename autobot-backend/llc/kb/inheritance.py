@@ -117,6 +117,7 @@ class KbInheritanceResolver:
         collections: List[Tuple[str, float]],
         query_text: str,
         top_k: int = 10,
+        work_item_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Search KB across pre-fetched collection chain and re-rank by weight.
 
@@ -147,6 +148,7 @@ class KbInheritanceResolver:
                     company_id=collection_name.split(":")[0],
                     profile=AssemblerProfile.HEARTBEAT,
                     query_text=query_text,
+                    work_item_id=work_item_id,
                 ),
                 collection_name.split(":")[0],
                 weight,
@@ -212,6 +214,7 @@ class KbInheritanceResolver:
         company_id: str,
         query_text: str,
         top_k: int = 10,
+        work_item_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Search KB across company hierarchy and re-rank by weight.
 
@@ -236,7 +239,7 @@ class KbInheritanceResolver:
                 logger.warning("No KB collections found for company %s", company_id)
                 return []
 
-            return await self.search_with_collections(collections, query_text, top_k)
+            return await self.search_with_collections(collections, query_text, top_k, work_item_id=work_item_id)
 
         except Exception as e:
             logger.error("Failed to search KB with inheritance for company %s: %s", company_id, e)
