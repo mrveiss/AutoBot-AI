@@ -770,7 +770,13 @@ async def snapshot_with_regions(request: SnapshotWithRegionsRequest):
     )
 
 
-_AI_PROPOSE_SYSTEM_PROMPT = """You are a web scraping assistant. Given a screenshot and a list of page regions, identify which regions are most relevant to the user's data extraction goal. Return a JSON array of objects with "selector" and "label" fields. Only include regions that are clearly relevant. Return valid JSON only — no markdown fences, no commentary."""
+_AI_PROPOSE_SYSTEM_PROMPT = (
+    "You are a web scraping assistant. Given a screenshot and a list of page regions,"
+    " identify which regions are most relevant to the user's data extraction goal."
+    ' Return a JSON array of objects with "selector" and "label" fields.'
+    " Only include regions that are clearly relevant."
+    " Return valid JSON only — no markdown fences, no commentary."
+)
 
 _AI_PROPOSE_USER_TEMPLATE = """Goal: {goal}
 
@@ -827,9 +833,7 @@ async def ai_propose_regions(request: SnapshotWithRegionsRequest):
     ]
 
     # 2. Build DOM text summary for LLM
-    regions_text = "\n".join(
-        f"  {r['selector']}: {r['text_preview'][:80]}" for r in regions[:80] if r["text_preview"]
-    )
+    regions_text = "\n".join(f"  {r['selector']}: {r['text_preview'][:80]}" for r in regions[:80] if r["text_preview"])
 
     goal = request.goal or "extract useful data from this page"
     prompt = _AI_PROPOSE_USER_TEMPLATE.format(goal=goal, regions_text=regions_text)
