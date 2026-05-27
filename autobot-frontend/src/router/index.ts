@@ -554,7 +554,8 @@ export const routes: RouteRecordRaw[] = [
       title: 'Preferences',
       icon: 'fas fa-sliders-h',
       description: 'Customize your AutoBot experience',
-      requiresAuth: true
+      requiresAuth: true,
+      hideInNav: true,
     }
   },
   // Issue #4492: Home serves custom dashboard — renamed from /custom-dashboard
@@ -692,6 +693,7 @@ export const routes: RouteRecordRaw[] = [
     meta: {
       title: 'Canvas',
       requiresAuth: true,
+      hideInNav: true,
     },
   },
   // Issue #3201: AutoResearch Experiment Dashboard
@@ -704,6 +706,7 @@ export const routes: RouteRecordRaw[] = [
       icon: 'BeakerIcon',
       description: 'AutoResearch experiment dashboard',
       requiresAuth: true,
+      hideInNav: true,
     },
   },
   // Issue #6590: Virtual LLM API Keys admin view
@@ -716,6 +719,7 @@ export const routes: RouteRecordRaw[] = [
       description: 'Manage virtual LLM API keys with per-key budgets',
       requiresAuth: true,
       admin: true,
+      hideInNav: true,
     },
   },
   // Issue #1801: Admin User Management
@@ -741,6 +745,7 @@ export const routes: RouteRecordRaw[] = [
       description: 'Browse code-execution sandbox files',
       requiresAuth: true,
       admin: true,
+      hideInNav: true,
     },
   },
   // Issue #7513: Host inventory admin view
@@ -753,6 +758,7 @@ export const routes: RouteRecordRaw[] = [
       description: 'Manage multi-host role deployment',
       requiresAuth: true,
       admin: true,
+      hideInNav: true,
     },
   },
   // GH#6470: Budget policy management (admin-only)
@@ -765,6 +771,7 @@ export const routes: RouteRecordRaw[] = [
       description: 'Manage agent spend thresholds and auto-pause rules',
       requiresAuth: true,
       admin: true,
+      hideInNav: true,
     },
   },
   // /desktop removed from nav — noVNC is accessible via the Chat tab's noVNC tab.
@@ -851,7 +858,8 @@ export const routes: RouteRecordRaw[] = [
       title: 'Plugin Manager',
       icon: 'fas fa-puzzle-piece',
       description: 'Browse, install, and manage AutoBot plugins',
-      requiresAuth: true
+      requiresAuth: true,
+      hideInNav: true,
     },
     children: [
       // Issue #1803: Marketplace as sub-route of plugins
@@ -877,7 +885,7 @@ export const routes: RouteRecordRaw[] = [
     path: '/llc/portability',
     name: 'llc-portability',
     component: () => import('@/views/llc/CompanyPortabilityView.vue'),
-    meta: { title: 'Company Portability', requiresAuth: true },
+    meta: { title: 'Company Portability', requiresAuth: true, hideInNav: true },
   },
   // Issue #729: Secrets stays in autobot-vue - user functionality for chat/agent credentials
   {
@@ -888,7 +896,8 @@ export const routes: RouteRecordRaw[] = [
       title: 'Secrets Manager',
       icon: 'fas fa-key',
       description: 'Manage API keys and secrets for chat and agent access',
-      requiresAuth: true
+      requiresAuth: true,
+      hideInNav: true,
     },
     children: [
       {
@@ -913,19 +922,19 @@ export const routes: RouteRecordRaw[] = [
     path: '/llc/org-chart',
     name: 'llc-org-chart',
     component: () => import('@/views/llc/OrgChart.vue'),
-    meta: { title: 'Org Chart', requiresAuth: true, llcScope: true },
+    meta: { title: 'Org Chart', requiresAuth: true, llcScope: true, hideInNav: true },
   },
   {
     path: '/llc/goals',
     name: 'llc-goals',
     component: () => import('@/views/llc/GoalTree.vue'),
-    meta: { title: 'Goal Tree', requiresAuth: true, llcScope: true },
+    meta: { title: 'Goal Tree', requiresAuth: true, llcScope: true, hideInNav: true },
   },
   {
     path: '/llc/companies',
     name: 'llc-companies',
     component: () => import('@/views/llc/SubCompanyTree.vue'),
-    meta: { title: 'Company Hierarchy', requiresAuth: true, llcScope: true },
+    meta: { title: 'Company Hierarchy', requiresAuth: true, llcScope: true, hideInNav: true },
   },
   // Issue #4465: Usage moved under /analytics/usage
   { path: '/usage', redirect: '/analytics/usage' },

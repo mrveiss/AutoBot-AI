@@ -7312,7 +7312,15 @@
     "moreItems": "More navigation items",
     "adminHosts": "Host Inventory",
     "adminSandbox": "Sandbox",
-    "budgetPolicies": "Budget Policies"
+    "budgetPolicies": "Budget Policies",
+    "companyOs": "Company OS",
+    "llcDashboard": "Dashboard",
+    "llcOrgChart": "Org Chart",
+    "llcGoals": "Goals",
+    "llcCompanies": "Companies",
+    "llcPortability": "Portability",
+    "settingsAndTools": "Settings & Tools",
+    "adminPanel": "Admin Panel"
   },
   "reasoningTrace": {
     "title": "Reasoning trace",

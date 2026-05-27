@@ -94,19 +94,84 @@
 
           <!-- Right side - Status and controls -->
           <div class="flex items-center gap-4">
-            <!-- User Profile Button -->
-            <button
-              v-if="userStore.isAuthenticated"
-              @click="showProfileModal = true"
-              class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-autobot-text-primary hover:bg-autobot-bg-tertiary transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-autobot-primary"
-              :title="$t('nav.profileSettings')"
-              :aria-label="$t('nav.profileSettings')"
-            >
-              <div class="w-6 h-6 rounded-full bg-autobot-primary flex items-center justify-center text-white text-xs font-bold shrink-0">
-                {{ displayUsername?.charAt(0)?.toUpperCase() || 'U' }}
-              </div>
-              <span class="max-w-[120px] truncate">{{ displayUsername || $t('nav.profile') }}</span>
-            </button>
+            <!-- User Profile Dropdown (GH#8748: surfaces settings/admin items moved from primary nav) -->
+            <div v-if="userStore.isAuthenticated" class="relative hidden sm:block" ref="profileDropdownRef">
+              <button
+                @click="showProfileDropdown = !showProfileDropdown"
+                class="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-autobot-text-primary hover:bg-autobot-bg-tertiary transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-autobot-primary"
+                :title="$t('nav.profileSettings')"
+                :aria-label="$t('nav.profileSettings')"
+                :aria-expanded="showProfileDropdown"
+                aria-haspopup="menu"
+              >
+                <div class="w-6 h-6 rounded-full bg-autobot-primary flex items-center justify-center text-white text-xs font-bold shrink-0">
+                  {{ displayUsername?.charAt(0)?.toUpperCase() || 'U' }}
+                </div>
+                <span class="max-w-[120px] truncate">{{ displayUsername || $t('nav.profile') }}</span>
+                <svg class="w-3 h-3" :class="showProfileDropdown ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8l5 5 5-5" />
+                </svg>
+              </button>
+
+              <Teleport to="body">
+                <div
+                  v-if="showProfileDropdown"
+                  ref="profileDropdownMenuRef"
+                  :style="profileDropdownStyle"
+                  class="fixed z-50 bg-autobot-bg-secondary border border-autobot-border rounded-md shadow-lg py-1 min-w-48"
+                  role="menu"
+                >
+                  <!-- Open full profile modal -->
+                  <button
+                    role="menuitem"
+                    class="flex items-center gap-2 w-full text-start px-3 py-2 text-sm transition-colors duration-150 hover:bg-autobot-bg-tertiary text-autobot-text-primary"
+                    @click="showProfileModal = true; showProfileDropdown = false"
+                  >
+                    <div class="w-4 h-4 rounded-full bg-autobot-primary flex items-center justify-center text-white text-[10px] font-bold shrink-0">
+                      {{ displayUsername?.charAt(0)?.toUpperCase() || 'U' }}
+                    </div>
+                    <span>{{ $t('nav.profileSettings') }}</span>
+                  </button>
+
+                  <hr class="my-1 border-autobot-border" />
+
+                  <!-- Settings & Tools section -->
+                  <p class="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-autobot-text-secondary">{{ $t('nav.settingsAndTools') }}</p>
+                  <router-link
+                    v-for="item in profileMenuItems"
+                    :key="item.to"
+                    :to="item.to"
+                    role="menuitem"
+                    class="flex items-center gap-2 px-3 py-2 text-sm transition-colors duration-150 hover:bg-autobot-bg-tertiary text-autobot-text-primary"
+                    @click="showProfileDropdown = false"
+                  >
+                    <svg class="w-4 h-4 shrink-0" :fill="item.iconStroke ? 'none' : 'currentColor'" :stroke="item.iconStroke ? 'currentColor' : undefined" viewBox="0 0 20 20" aria-hidden="true">
+                      <path :d="item.icon" :fill-rule="item.iconRule" :clip-rule="item.iconRule" :stroke-linecap="item.iconStroke ? 'round' : undefined" :stroke-linejoin="item.iconStroke ? 'round' : undefined" :stroke-width="item.iconStroke ? '2' : undefined" />
+                    </svg>
+                    <span>{{ $t(item.labelKey) }}</span>
+                  </router-link>
+
+                  <!-- Admin section (admin-only) -->
+                  <template v-if="userStore.isAdmin">
+                    <hr class="my-1 border-autobot-border" />
+                    <p class="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-autobot-text-secondary">{{ $t('nav.adminPanel') }}</p>
+                    <router-link
+                      v-for="item in adminMenuItems"
+                      :key="item.to"
+                      :to="item.to"
+                      role="menuitem"
+                      class="flex items-center gap-2 px-3 py-2 text-sm transition-colors duration-150 hover:bg-autobot-bg-tertiary text-autobot-text-primary"
+                      @click="showProfileDropdown = false"
+                    >
+                      <svg class="w-4 h-4 shrink-0" :fill="item.iconStroke ? 'none' : 'currentColor'" :stroke="item.iconStroke ? 'currentColor' : undefined" viewBox="0 0 20 20" aria-hidden="true">
+                        <path :d="item.icon" :fill-rule="item.iconRule" :clip-rule="item.iconRule" :stroke-linecap="item.iconStroke ? 'round' : undefined" :stroke-linejoin="item.iconStroke ? 'round' : undefined" :stroke-width="item.iconStroke ? '2' : undefined" />
+                      </svg>
+                      <span>{{ $t(item.labelKey) }}</span>
+                    </router-link>
+                  </template>
+                </div>
+              </Teleport>
+            </div>
 
             <!-- Dark Mode Toggle -->
             <DarkModeToggle />
@@ -195,6 +260,50 @@
 
                         <!-- Language Switcher -->
             <LanguageSwitcher :mobile="true" />
+
+            <!-- GH#8748: Settings & Tools (moved from primary nav) -->
+            <div class="border-t border-autobot-border pt-2 mt-1">
+              <p class="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-autobot-text-secondary">{{ $t('nav.settingsAndTools') }}</p>
+              <router-link
+                v-for="item in profileMenuItems"
+                :key="item.to"
+                :to="item.to"
+                @click="closeMobileNav"
+                :class="{
+                  'bg-autobot-primary text-white': $route.path.startsWith(item.to),
+                  'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith(item.to)
+                }"
+                class="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+              >
+                <svg class="w-4 h-4 shrink-0" :fill="item.iconStroke ? 'none' : 'currentColor'" :stroke="item.iconStroke ? 'currentColor' : undefined" viewBox="0 0 20 20" aria-hidden="true">
+                  <path :d="item.icon" :fill-rule="item.iconRule" :clip-rule="item.iconRule" :stroke-linecap="item.iconStroke ? 'round' : undefined" :stroke-linejoin="item.iconStroke ? 'round' : undefined" :stroke-width="item.iconStroke ? '2' : undefined" />
+                </svg>
+                <span>{{ $t(item.labelKey) }}</span>
+              </router-link>
+            </div>
+
+            <!-- GH#8748: Admin tools (moved from primary nav, admin-only) -->
+            <template v-if="userStore.isAdmin">
+              <div class="border-t border-autobot-border pt-2 mt-1">
+                <p class="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-autobot-text-secondary">{{ $t('nav.adminPanel') }}</p>
+                <router-link
+                  v-for="item in adminMenuItems"
+                  :key="item.to"
+                  :to="item.to"
+                  @click="closeMobileNav"
+                  :class="{
+                    'bg-autobot-primary text-white': $route.path.startsWith(item.to),
+                    'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith(item.to)
+                  }"
+                  class="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                >
+                  <svg class="w-4 h-4 shrink-0" :fill="item.iconStroke ? 'none' : 'currentColor'" :stroke="item.iconStroke ? 'currentColor' : undefined" viewBox="0 0 20 20" aria-hidden="true">
+                    <path :d="item.icon" :fill-rule="item.iconRule" :clip-rule="item.iconRule" :stroke-linecap="item.iconStroke ? 'round' : undefined" :stroke-linejoin="item.iconStroke ? 'round' : undefined" :stroke-width="item.iconStroke ? '2' : undefined" />
+                  </svg>
+                  <span>{{ $t(item.labelKey) }}</span>
+                </router-link>
+              </div>
+            </template>
 
             <!-- Profile Settings (Issue #950) -->
             <button
@@ -413,7 +522,7 @@
 </template>
 
 <script lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
+import { ref, computed, watch, nextTick, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useAppStore } from '@/stores/useAppStore'
@@ -431,7 +540,7 @@ import { initializeNotificationBridge } from '@/utils/notificationBridge';
 import { smartMonitoringController, getAdaptiveInterval } from '@/config/OptimizedPerformance.js';
 import { clearAllSystemNotifications, resetHealthMonitor } from '@/utils/ClearNotifications.js';
 import { getSLMAdminUrl } from '@/config/ssot-config';
-import { navItems } from '@/config/navItems';
+import { navItems, profileMenuItems, adminMenuItems } from '@/config/navItems';
 import SystemStatusNotification from '@/components/ui/SystemStatusNotification.vue';
 import CaptchaNotification from '@/components/research/CaptchaNotification.vue';
 import ToastContainer from '@/components/ui/ToastContainer.vue';
@@ -535,6 +644,46 @@ export default {
     // Reactive data (non-status related)
     const showMobileNav = ref(false);
     const showProfileModal = ref(false);
+
+    // GH#8748: profile dropdown (settings/admin items moved from primary nav)
+    const showProfileDropdown = ref(false);
+    const profileDropdownRef = ref<HTMLElement | null>(null);
+    const profileDropdownMenuRef = ref<HTMLElement | null>(null);
+    const profileDropdownStyle = ref<Record<string, string>>({});
+
+    function positionProfileDropdown() {
+      if (!profileDropdownRef.value) return;
+      const rect = profileDropdownRef.value.getBoundingClientRect();
+      const menuWidth = profileDropdownMenuRef.value?.getBoundingClientRect().width || 192;
+      const spaceRight = window.innerWidth - rect.left;
+      const left = spaceRight < menuWidth ? rect.right - menuWidth : rect.left;
+      profileDropdownStyle.value = {
+        top: `${rect.bottom + 4}px`,
+        left: `${Math.max(0, left)}px`,
+      };
+    }
+
+    function onProfileDropdownClickOutside(event: MouseEvent) {
+      const target = event.target as Node;
+      if (
+        !profileDropdownRef.value?.contains(target) &&
+        !profileDropdownMenuRef.value?.contains(target)
+      ) {
+        showProfileDropdown.value = false;
+      }
+    }
+
+    watch(showProfileDropdown, async (open) => {
+      if (open) {
+        positionProfileDropdown();
+        await nextTick();
+        positionProfileDropdown();
+        document.addEventListener('click', onProfileDropdownClickOutside, true);
+      } else {
+        document.removeEventListener('click', onProfileDropdownClickOutside, true);
+      }
+    });
+
     let notificationCleanup: number | null = null;
 
     // Computed properties
@@ -833,6 +982,10 @@ export default {
       // Reactive data
       showMobileNav,
       showProfileModal,
+      showProfileDropdown,
+      profileDropdownRef,
+      profileDropdownMenuRef,
+      profileDropdownStyle,
 
       // System status (from composable)
       showSystemStatus,
@@ -846,6 +999,8 @@ export default {
       showAuthChrome,
       hideFooter,
       navItems,
+      profileMenuItems,
+      adminMenuItems,
       slmAdminUrl,
       displayUsername,
 
