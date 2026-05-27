@@ -22,11 +22,25 @@
         <div class="card-title">Configuration</div>
         <div class="config-grid">
           <div class="config-row">
-            <span class="label">Enabled</span>
-            <span :class="['badge', config.heartbeat_enabled ? 'badge-green' : 'badge-gray']">
-              {{ config.heartbeat_enabled ? 'Active' : 'Disabled' }}
+            <span class="label">Status</span>
+            <span :class="['badge', agentStatusClass(config.status)]">
+              {{ config.status }}
             </span>
           </div>
+          <template v-if="config.status === 'paused'">
+            <div class="config-row">
+              <span class="label">Paused By</span>
+              <span class="value mono">{{ config.paused_by || '—' }}</span>
+            </div>
+            <div class="config-row">
+              <span class="label">Paused At</span>
+              <span class="value">{{ formatTime(config.paused_at) }}</span>
+            </div>
+            <div class="config-row">
+              <span class="label">Reason</span>
+              <span class="value">{{ config.paused_reason || '—' }}</span>
+            </div>
+          </template>
           <div class="config-row">
             <span class="label">Interval</span>
             <span class="value">{{ config.heartbeat_interval_seconds }}s</span>
@@ -45,8 +59,15 @@
           </div>
         </div>
         <div class="config-actions">
-          <label class="toggle-label">
-            <input v-model="editEnabled" type="checkbox" />
+          <label
+            class="toggle-label"
+            :title="config.status === 'paused' ? 'Use Resume to re-enable a paused agent' : config.status === 'terminated' ? 'Terminated agents cannot be re-enabled' : ''"
+          >
+            <input
+              v-model="editEnabled"
+              type="checkbox"
+              :disabled="config.status === 'paused' || config.status === 'terminated'"
+            />
             Enable heartbeat
           </label>
           <div class="interval-input">
@@ -62,6 +83,22 @@
           </button>
           <button class="btn-trigger" :disabled="triggering" @click="triggerManual">
             {{ triggering ? 'Triggering…' : 'Run Now' }}
+          </button>
+          <button
+            v-if="config.status === 'active'"
+            class="btn-pause"
+            :disabled="pausing"
+            @click="pauseAgent"
+          >
+            {{ pausing ? 'Pausing…' : 'Pause' }}
+          </button>
+          <button
+            v-if="config.status === 'paused'"
+            class="btn-resume"
+            :disabled="resuming"
+            @click="resumeAgent"
+          >
+            {{ resuming ? 'Resuming…' : 'Resume' }}
           </button>
         </div>
       </div>
@@ -165,6 +202,10 @@ const { subscribe, unsubscribe } = useEventBus()
 interface HeartbeatConfig {
   agent_id: string
   heartbeat_enabled: boolean
+  status: string
+  paused_reason: string | null
+  paused_at: string | null
+  paused_by: string | null
   heartbeat_interval_seconds: number
   max_run_duration_seconds: number
   current_task_id: string | null
@@ -216,6 +257,8 @@ const loading = ref(false)
 const saving = ref(false)
 const triggering = ref(false)
 const queueing = ref(false)
+const pausing = ref(false)
+const resuming = ref(false)
 const error = ref<string | null>(null)
 const config = ref<HeartbeatConfig | null>(null)
 const runs = ref<HeartbeatRun[]>([])
@@ -362,6 +405,47 @@ async function queueWakeup(): Promise<void> {
   } finally {
     queueing.value = false
   }
+}
+
+async function pauseAgent(): Promise<void> {
+  if (!agentId.value) return
+  pausing.value = true
+  error.value = null
+  try {
+    const updated = await apiFetch(`/${agentId.value}/pause`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: 'Manual pause from UI', paused_by: 'user' }),
+    })
+    config.value = updated as HeartbeatConfig
+  } catch (err) {
+    error.value = String(err)
+  } finally {
+    pausing.value = false
+  }
+}
+
+async function resumeAgent(): Promise<void> {
+  if (!agentId.value) return
+  resuming.value = true
+  error.value = null
+  try {
+    const updated = await apiFetch(`/${agentId.value}/resume`, { method: 'POST' })
+    config.value = updated as HeartbeatConfig
+  } catch (err) {
+    error.value = String(err)
+  } finally {
+    resuming.value = false
+  }
+}
+
+function agentStatusClass(status: string): string {
+  const map: Record<string, string> = {
+    active: 'badge-green',
+    disabled: 'badge-gray',
+    paused: 'badge-orange',
+    terminated: 'badge-red',
+  }
+  return map[status] ?? 'badge-gray'
 }
 
 function toggleEvents(runId: string): void {
@@ -602,6 +686,22 @@ button:not(:disabled):hover {
 .btn-queue {
   background: var(--color-info);
   border-color: var(--color-info);
+}
+.btn-pause {
+  background: rgba(249, 115, 22, 0.25);
+  border-color: rgba(249, 115, 22, 0.6);
+  color: #fb923c;
+}
+.btn-pause:not(:disabled):hover {
+  background: rgba(249, 115, 22, 0.4);
+}
+.btn-resume {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.5);
+  color: #34d399;
+}
+.btn-resume:not(:disabled):hover {
+  background: rgba(16, 185, 129, 0.35);
 }
 .btn-sm {
   font-size: var(--text-xs);
