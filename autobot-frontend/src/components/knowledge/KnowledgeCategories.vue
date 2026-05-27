@@ -159,7 +159,6 @@
       @updated="handleCategoryUpdated"
       @deleted="handleCategoryDeleted"
     />
-    </div>
 
   </div>
 </template>
