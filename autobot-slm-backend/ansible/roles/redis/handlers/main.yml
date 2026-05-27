@@ -27,3 +27,9 @@
     name: redis_exporter
     state: restarted
   become: true
+
+- name: restart chromadb
+  ansible.builtin.systemd:
+    name: autobot-chromadb
+    state: restarted
+  become: true
