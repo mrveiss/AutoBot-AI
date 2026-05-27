@@ -286,7 +286,7 @@ function _onLiveEvent(event: LiveEvent): void {
   }
 }
 
-watch(agentId, (newId: string, oldId: string) => {
+watch(agentId, (newId: string, oldId: string | undefined) => {
   if (oldId) {
     const oldChannel = `heartbeat:${oldId}`
     if (_liveUnsub) {
