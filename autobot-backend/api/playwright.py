@@ -43,6 +43,7 @@ from services.playwright_service import (
     send_test_message_embedded,
     test_frontend_embedded,
 )
+from services.web_pipeline.snapshot import AccessibilitySnapshot
 
 router = APIRouter(dependencies=[Depends(check_admin_permission)])
 logger = get_logger(__name__)
@@ -740,10 +741,21 @@ async def snapshot_with_regions(request: SnapshotWithRegionsRequest):
         for r in raw_regions
     ]
 
+    # Capture ARIA accessibility tree for LLM consumption (#5136 Phase 1, closes #5138)
+    accessibility_text = ""
+    try:
+        snap = AccessibilitySnapshot()
+        tree = await snap.capture(session.page)
+        if tree is not None:
+            accessibility_text = snap.to_text(tree)
+    except Exception as exc:
+        logger.warning("snapshot-with-regions: accessibility capture failed: %s", exc)
+
     logger.info(
-        "snapshot-with-regions: captured %d regions for session %s",
+        "snapshot-with-regions: captured %d regions for session %s (accessibility_text=%d chars)",
         len(regions),
         request.session_id,
+        len(accessibility_text),
     )
 
     return DataResponse(
@@ -751,5 +763,6 @@ async def snapshot_with_regions(request: SnapshotWithRegionsRequest):
             screenshot=screenshot_b64,
             regions=regions,
             viewport=dict(viewport_size),
+            accessibility_text=accessibility_text,
         )
     )
