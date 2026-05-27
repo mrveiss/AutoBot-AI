@@ -162,3 +162,25 @@ class TestSearchWithInheritance:
         assert len(results) == 1
         assert results[0]["source_company_id"] == str(CHILD_ID)
         assert results[0]["weighted_score"] == pytest.approx(0.8 * 1.0)
+
+    async def test_work_item_id_propagated_to_assemble(self, resolver):
+        """work_item_id context filter must reach every rag_assembler.assemble() call (GH#8599)."""
+        parent_org = _make_org(PARENT_ID, parent_id=None, weight=0.6)
+        child_org = _make_org(CHILD_ID, parent_id=PARENT_ID, weight=0.6)
+
+        execute_results = [
+            MagicMock(scalar_one_or_none=MagicMock(return_value=child_org)),
+            MagicMock(scalar_one_or_none=MagicMock(return_value=parent_org)),
+        ]
+        session = AsyncMock()
+        session.execute.side_effect = execute_results
+
+        empty_context = MagicMock()
+        empty_context.chunks = []
+        resolver.rag_assembler.assemble = AsyncMock(return_value=empty_context)
+
+        work_item_id = str(uuid.uuid4())
+        await resolver.search_with_inheritance(session, str(CHILD_ID), "query", work_item_id=work_item_id)
+
+        for call in resolver.rag_assembler.assemble.call_args_list:
+            assert call.kwargs.get("work_item_id") == work_item_id, f"work_item_id not propagated in call: {call}"
