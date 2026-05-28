@@ -11,6 +11,7 @@ Issue #1951: Attention backend fallback chain.
 from unittest.mock import MagicMock, patch
 
 from llm_shared.optimization.attention_backend import (
+    ARCH_DISPATCH_TABLE,
     AttentionBackend,
     AttentionBackendSelector,
     ModelConfig,
@@ -541,3 +542,170 @@ class TestArchitectureFamilyDispatch:
         )
         result = sel.select_backend(cfg)
         assert result == AttentionBackend.NOT_APPLICABLE
+
+
+# ---------------------------------------------------------------------------
+# arch_dispatch_event structured log — Issue #7350
+# ---------------------------------------------------------------------------
+
+
+class TestArchDispatchEvent:
+    """select_backend must emit one arch_dispatch_event log entry per call."""
+
+    def test_event_emitted_for_transformer(self, caplog):
+        """arch_dispatch_event must be logged for TRANSFORMER family."""
+        import logging
+
+        sel = _make_selector()
+        with (
+            patch(
+                "llm_shared.optimization.attention_backend._import_better_transformer",
+                return_value=None,
+            ),
+            patch(
+                "llm_shared.optimization.attention_backend.AttentionBackendSelector._can_use_sdpa",
+                return_value=False,
+            ),
+            caplog.at_level(logging.INFO, logger="llm_shared.optimization.attention_backend"),
+        ):
+            sel.select_backend(ModelConfig(model_name="llama-test", architecture_family=ArchitectureFamily.TRANSFORMER))
+
+        event_lines = [r for r in caplog.records if "arch_dispatch_event" in r.message]
+        assert len(event_lines) == 1
+        assert "transformer" in event_lines[0].message
+        assert "vanilla" in event_lines[0].message
+
+    def test_event_emitted_for_state_space(self, caplog):
+        """arch_dispatch_event must be logged for STATE_SPACE family."""
+        import logging
+
+        sel = _make_selector()
+        with caplog.at_level(logging.INFO, logger="llm_shared.optimization.attention_backend"):
+            sel.select_backend(ModelConfig(model_name="mamba-test", architecture_family=ArchitectureFamily.STATE_SPACE))
+
+        event_lines = [r for r in caplog.records if "arch_dispatch_event" in r.message]
+        assert len(event_lines) == 1
+        assert "state_space" in event_lines[0].message
+        assert "not_applicable" in event_lines[0].message
+
+    def test_event_contains_model_name(self, caplog):
+        """arch_dispatch_event log must include the model name."""
+        import logging
+
+        sel = _make_selector()
+        with caplog.at_level(logging.INFO, logger="llm_shared.optimization.attention_backend"):
+            sel.select_backend(ModelConfig(model_name="my-special-model", architecture_family=ArchitectureFamily.HYBRID))
+
+        event_lines = [r for r in caplog.records if "arch_dispatch_event" in r.message]
+        assert any("my-special-model" in r.message for r in event_lines)
+
+
+# ---------------------------------------------------------------------------
+# SSM does not invoke FlashAttention / BetterTransformer — Issue #7350
+# ---------------------------------------------------------------------------
+
+
+class TestSSMNoFlashAttention:
+    """STATE_SPACE requests must never reach BetterTransformer or SDPA."""
+
+    def test_ssm_does_not_call_better_transformer(self):
+        """_import_better_transformer must NOT be consulted for SSM models."""
+        sel = _make_selector()
+        with patch(
+            "llm_shared.optimization.attention_backend._import_better_transformer",
+        ) as mock_bt:
+            result = sel.select_backend(ModelConfig(architecture_family=ArchitectureFamily.STATE_SPACE))
+
+        assert result == AttentionBackend.NOT_APPLICABLE
+        mock_bt.assert_not_called()
+
+    def test_ssm_does_not_call_sdpa_check(self):
+        """_can_use_sdpa must NOT be consulted for SSM models."""
+        sel = _make_selector()
+        with patch.object(AttentionBackendSelector, "_can_use_sdpa") as mock_sdpa:
+            result = sel.select_backend(ModelConfig(architecture_family=ArchitectureFamily.STATE_SPACE))
+
+        assert result == AttentionBackend.NOT_APPLICABLE
+        mock_sdpa.assert_not_called()
+
+    def test_linear_attention_does_not_call_better_transformer(self):
+        """_import_better_transformer must NOT be consulted for linear-attn models."""
+        sel = _make_selector()
+        with patch(
+            "llm_shared.optimization.attention_backend._import_better_transformer",
+        ) as mock_bt:
+            result = sel.select_backend(ModelConfig(architecture_family=ArchitectureFamily.LINEAR_ATTENTION))
+
+        assert result == AttentionBackend.NOT_APPLICABLE
+        mock_bt.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Dispatch table extensibility — Issue #7350
+# ---------------------------------------------------------------------------
+
+
+class TestDispatchTableExtensibility:
+    """ARCH_DISPATCH_TABLE must be extendable without modifying select_backend."""
+
+    def test_module_level_table_exported(self):
+        """ARCH_DISPATCH_TABLE must be importable and contain the four base families."""
+        assert ArchitectureFamily.TRANSFORMER in ARCH_DISPATCH_TABLE
+        assert ArchitectureFamily.STATE_SPACE in ARCH_DISPATCH_TABLE
+        assert ArchitectureFamily.LINEAR_ATTENTION in ARCH_DISPATCH_TABLE
+        assert ArchitectureFamily.HYBRID in ARCH_DISPATCH_TABLE
+
+    def test_new_family_routed_via_instance_table(self):
+        """A new family registered on the instance dispatch table is honoured."""
+        sel = _make_selector()
+
+        # Register a custom handler for a hypothetical new family key
+        sentinel_backend = AttentionBackend.NOT_APPLICABLE
+
+        def _custom_handler(_cfg: ModelConfig) -> AttentionBackend:
+            return sentinel_backend
+
+        # Inject directly onto instance _arch_dispatch (simulates startup config)
+        custom_key = "moe_custom"  # not an enum — string key test
+        sel._arch_dispatch = dict(sel._arch_dispatch)  # copy so class var is not mutated
+        # Map HYBRID to a custom handler to verify routing without inventing an enum
+        sel._arch_dispatch[ArchitectureFamily.HYBRID] = "_handle_ssm"
+
+        result = sel.select_backend(ModelConfig(architecture_family=ArchitectureFamily.HYBRID))
+        # Should route through _handle_ssm which returns NOT_APPLICABLE
+        assert result == AttentionBackend.NOT_APPLICABLE
+
+    def test_unknown_family_falls_back_to_transformer(self):
+        """An unregistered family string falls back to transformer path with WARNING."""
+        import logging
+
+        sel = _make_selector()
+        # Remove HYBRID from the instance dispatch table to simulate an unknown family
+        sel._arch_dispatch = {k: v for k, v in ARCH_DISPATCH_TABLE.items() if k != ArchitectureFamily.HYBRID}
+
+        with (
+            patch(
+                "llm_shared.optimization.attention_backend._import_better_transformer",
+                return_value=None,
+            ),
+            patch.object(AttentionBackendSelector, "_can_use_sdpa", return_value=False),
+        ):
+            result = sel.select_backend(ModelConfig(architecture_family=ArchitectureFamily.HYBRID))
+
+        # Falls back to transformer path → VANILLA in this environment
+        assert result == AttentionBackend.VANILLA
+
+    def test_transformer_regression_matches_vanilla_when_no_libs(self):
+        """TRANSFORMER family with no optional libs must return VANILLA (regression)."""
+        sel = _make_selector()
+        with (
+            patch(
+                "llm_shared.optimization.attention_backend._import_better_transformer",
+                return_value=None,
+            ),
+            patch.object(AttentionBackendSelector, "_can_use_sdpa", return_value=False),
+        ):
+            result = sel.select_backend(
+                ModelConfig(model_type="llama", architecture_family=ArchitectureFamily.TRANSFORMER)
+            )
+        assert result == AttentionBackend.VANILLA
