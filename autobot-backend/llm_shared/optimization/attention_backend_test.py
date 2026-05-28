@@ -594,7 +594,9 @@ class TestArchDispatchEvent:
 
         sel = _make_selector()
         with caplog.at_level(logging.INFO, logger="llm_shared.optimization.attention_backend"):
-            sel.select_backend(ModelConfig(model_name="my-special-model", architecture_family=ArchitectureFamily.HYBRID))
+            sel.select_backend(
+                ModelConfig(model_name="my-special-model", architecture_family=ArchitectureFamily.HYBRID)
+            )
 
         event_lines = [r for r in caplog.records if "arch_dispatch_event" in r.message]
         assert any("my-special-model" in r.message for r in event_lines)
@@ -677,7 +679,6 @@ class TestDispatchTableExtensibility:
 
     def test_unknown_family_falls_back_to_transformer(self):
         """An unregistered family string falls back to transformer path with WARNING."""
-        import logging
 
         sel = _make_selector()
         # Remove HYBRID from the instance dispatch table to simulate an unknown family
