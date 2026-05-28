@@ -313,22 +313,24 @@ jobs:
     - name: Generate deployment artifact
       run: |
         echo "📦 Generating deployment summary..."
-        echo "# AutoBot Deployment Summary" > DEPLOYMENT_SUMMARY.md
-        echo "Generated at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> DEPLOYMENT_SUMMARY.md
-        echo "Commit: $GITHUB_SHA" >> DEPLOYMENT_SUMMARY.md
-        echo "Branch: $GITHUB_REF_NAME" >> DEPLOYMENT_SUMMARY.md
-        echo "" >> DEPLOYMENT_SUMMARY.md
-        echo "## Test Results" >> DEPLOYMENT_SUMMARY.md
-        echo "- ✅ Security tests passed" >> DEPLOYMENT_SUMMARY.md
-        echo "- ✅ Integration tests passed" >> DEPLOYMENT_SUMMARY.md
-        echo "- ✅ Frontend build successful" >> DEPLOYMENT_SUMMARY.md
-        echo "" >> DEPLOYMENT_SUMMARY.md
-        echo "## Security Features" >> DEPLOYMENT_SUMMARY.md
-        echo "- Command execution sandboxing ✅" >> DEPLOYMENT_SUMMARY.md
-        echo "- Risk assessment system ✅" >> DEPLOYMENT_SUMMARY.md
-        echo "- Audit logging ✅" >> DEPLOYMENT_SUMMARY.md
-        echo "- Role-based access control ✅" >> DEPLOYMENT_SUMMARY.md
-        echo "- API security endpoints ✅" >> DEPLOYMENT_SUMMARY.md
+        {
+          echo "# AutoBot Deployment Summary"
+          echo "Generated at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "Commit: $GITHUB_SHA"
+          echo "Branch: $GITHUB_REF_NAME"
+          echo ""
+          echo "## Test Results"
+          echo "- ✅ Security tests passed"
+          echo "- ✅ Integration tests passed"
+          echo "- ✅ Frontend build successful"
+          echo ""
+          echo "## Security Features"
+          echo "- Command execution sandboxing ✅"
+          echo "- Risk assessment system ✅"
+          echo "- Audit logging ✅"
+          echo "- Role-based access control ✅"
+          echo "- API security endpoints ✅"
+        } > DEPLOYMENT_SUMMARY.md
 
         cat DEPLOYMENT_SUMMARY.md
 
