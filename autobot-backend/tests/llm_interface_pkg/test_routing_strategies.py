@@ -17,7 +17,6 @@ from llm_shared.tiered_routing.complexity_router import ComplexityRouter
 from llm_shared.tiered_routing.cost_router import CostRouter
 from llm_shared.tiered_routing.latency_router import LatencyRouter
 from llm_shared.tiered_routing.long_context_router import (
-    LONG_CONTEXT_MIN_WINDOW,
     LONG_CONTEXT_PROMPT_THRESHOLD,
     LongContextRouter,
 )
