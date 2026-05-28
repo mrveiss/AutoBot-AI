@@ -42,7 +42,7 @@ class BudgetWatchdog:
     def __init__(self, poll_interval: int = _POLL_INTERVAL_SECONDS) -> None:
         self._poll_interval = poll_interval
         self._running = False
-        self._task: Optional[asyncio.Task] = None  # type: ignore[type-arg]
+        self._task: Optional[asyncio.Task[None]] = None
         self._budget_svc = BudgetService()
 
     def start(self) -> None:
