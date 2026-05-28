@@ -53,7 +53,7 @@ from typing import Dict, Optional, Set
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
-from utils.paths_manager import PathsManager
+from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 
@@ -206,7 +206,7 @@ def _default_trust_audit_db() -> Path:
     env_override = os.environ.get("AUTOBOT_TRUST_AUDIT_DB")
     if env_override:
         return Path(env_override)
-    return PathsManager.get_data_path("a2a_trust_audit.db")
+    return config.data_path / "a2a_trust_audit.db"
 
 
 _SQLITE_DB_DEFAULT = _default_trust_audit_db()
