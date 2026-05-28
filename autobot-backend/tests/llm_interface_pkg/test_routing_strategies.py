@@ -16,6 +16,10 @@ from llm_shared.tiered_routing.base_strategy import RoutingStrategy
 from llm_shared.tiered_routing.complexity_router import ComplexityRouter
 from llm_shared.tiered_routing.cost_router import CostRouter
 from llm_shared.tiered_routing.latency_router import LatencyRouter
+from llm_shared.tiered_routing.long_context_router import (
+    LONG_CONTEXT_PROMPT_THRESHOLD,
+    LongContextRouter,
+)
 from llm_shared.tiered_routing.registry import get_active_router
 from llm_shared.tiered_routing.tier_config import TierConfig, TierModels
 from llm_shared.tiered_routing.tier_router import TieredModelRouter, get_tiered_router
@@ -192,3 +196,100 @@ class TestStrategyRegistry:
         with patch.dict("os.environ", {"AUTOBOT_LLM_ROUTING_STRATEGY": "bogus_strategy"}):
             router = get_active_router(config, force_new=True)
         assert isinstance(router, ComplexityRouter)
+
+    def test_env_override_selects_long_context(self, config):
+        with patch.dict("os.environ", {"AUTOBOT_LLM_ROUTING_STRATEGY": "long_context"}):
+            router = get_active_router(config, force_new=True)
+        assert isinstance(router, LongContextRouter)
+
+
+# ─── LongContextRouter ───────────────────────────────────────────────────────
+
+# Synthetic prompt that exceeds LONG_CONTEXT_PROMPT_THRESHOLD when measured
+# by the char/4 estimator (8 192 * 4 = 32 768 chars).
+_LONG_PROMPT = "a" * (LONG_CONTEXT_PROMPT_THRESHOLD * 4 + 4)
+LONG_MSG = [{"role": "user", "content": _LONG_PROMPT}]
+
+_MAMBA_MODEL = "mamba-large"
+_CANDIDATE_REGISTRY = {
+    _MAMBA_MODEL: {
+        "display_name": _MAMBA_MODEL,
+        "architecture_family": "ssm",
+        "context_window_tokens": 131_072,
+    },
+    "_aliases": {},
+}
+
+
+def _router_with_eligible(config, eligible: list) -> LongContextRouter:
+    """Create a LongContextRouter with a pre-populated eligible-model cache."""
+    router = LongContextRouter(config)
+    router._eligible_cache = eligible
+    return router
+
+
+class TestLongContextRouter:
+    def test_protocol_compliance(self, config):
+        router = LongContextRouter(config)
+        assert isinstance(router, RoutingStrategy)
+
+    def test_long_prompt_routes_to_mamba_model(self, config):
+        """A >8K-token prompt must reach a registered Mamba model — AC1."""
+        router = _router_with_eligible(config, [_MAMBA_MODEL])
+        model, result = router.route(LONG_MSG)
+        assert model == _MAMBA_MODEL
+        assert result.tier == "long_context"
+
+    def test_long_prompt_no_compression_tier(self, config):
+        """The tier for a long SSM-routed request must be 'long_context', not compressed."""
+        router = _router_with_eligible(config, [_MAMBA_MODEL])
+        _, result = router.route(LONG_MSG)
+        assert result.tier == "long_context"
+        assert result.input_tokens > LONG_CONTEXT_PROMPT_THRESHOLD
+
+    def test_fallback_graceful_when_no_eligible_model(self, config):
+        """Must fall back gracefully to simple/complex when no SSM model registered — AC2."""
+        router = _router_with_eligible(config, [])
+        model, result = router.route(LONG_MSG)
+        assert model in (config.models.simple, config.models.complex)
+        assert result.tier != "long_context"
+
+    def test_short_prompt_bypasses_long_context_tier(self, config):
+        """Prompts under the threshold are not routed to long_context."""
+        router = _router_with_eligible(config, [_MAMBA_MODEL])
+        model, result = router.route(SIMPLE_MSG)
+        assert result.tier != "long_context"
+        assert model != _MAMBA_MODEL
+
+    def test_disabled_always_returns_complex(self, config):
+        config.enabled = False
+        router = LongContextRouter(config)
+        model, result = router.route(LONG_MSG)
+        assert model == config.models.complex
+        assert result.tier == "complex"
+
+    def test_metrics_record_long_context_tier(self, config):
+        router = _router_with_eligible(config, [_MAMBA_MODEL])
+        router.route(LONG_MSG)
+        metrics = router.get_metrics()
+        assert metrics["long_context_tier_requests"] == 1
+        assert metrics["total_requests"] == 1
+
+    def test_eligible_model_cache_is_populated(self, config):
+        """Cache is populated after first route; list_long_context_candidates not re-called."""
+        router = _router_with_eligible(config, [_MAMBA_MODEL])
+        router.route(LONG_MSG)
+        # Cache already set; _get_eligible_models should not call the discovery fn again.
+        assert router._eligible_cache == [_MAMBA_MODEL]
+
+    def test_invalidate_cache_clears_eligible_models(self, config):
+        router = _router_with_eligible(config, [_MAMBA_MODEL])
+        router.route(LONG_MSG)
+        router.invalidate_cache()
+        assert router._eligible_cache is None
+
+    def test_picks_largest_context_window_model(self, config):
+        """First entry in the eligible list is selected (already sorted descending)."""
+        router = _router_with_eligible(config, ["mamba-256k", "mamba-64k"])
+        model, _ = router.route(LONG_MSG)
+        assert model == "mamba-256k"

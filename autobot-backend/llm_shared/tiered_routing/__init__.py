@@ -23,6 +23,7 @@ from .complexity_router import ComplexityRouter
 from .complexity_scorer import TaskComplexityScorer
 from .cost_router import CostRouter
 from .latency_router import LatencyRouter
+from .long_context_router import LONG_CONTEXT_MIN_WINDOW, LONG_CONTEXT_PROMPT_THRESHOLD, LongContextRouter
 from .registry import get_active_router, route
 from .tier_config import (
     ComplexityResult,
@@ -40,6 +41,7 @@ __all__ = [
     "ComplexityRouter",
     "CostRouter",
     "LatencyRouter",
+    "LongContextRouter",
     # Registry
     "get_active_router",
     "route",
@@ -52,6 +54,9 @@ __all__ = [
     # Results and metrics
     "ComplexityResult",
     "TierMetrics",
+    # Long-context constants
+    "LONG_CONTEXT_PROMPT_THRESHOLD",
+    "LONG_CONTEXT_MIN_WINDOW",
     # Backward-compat
     "TieredModelRouter",
     "get_tiered_router",

@@ -384,6 +384,45 @@ def get_architecture_family(
     return ArchitectureFamily.TRANSFORMER
 
 
+def list_long_context_candidates(
+    min_context_window: int = 32768,
+    families: "frozenset[str] | None" = None,
+) -> List[str]:
+    """Return display_names of models eligible for long_context routing.
+
+    A model is eligible when its ``architecture_family`` is in *families*
+    (default: ``{"ssm", "hybrid"}``) AND its ``context_window_tokens`` exceeds
+    *min_context_window*.  Results are sorted by ``context_window_tokens``
+    descending so the caller can simply take the first entry.
+
+    Args:
+        min_context_window: Minimum native context window in tokens (default 32K).
+        families:           Architecture family strings to include.  Defaults to
+                            ``{"ssm", "hybrid"}``.
+
+    Returns:
+        List of canonical display_names; empty when none qualify.
+    """
+    if families is None:
+        families = frozenset({ArchitectureFamily.SSM, ArchitectureFamily.HYBRID})
+
+    reg = _load_registry()
+    candidates: List[tuple[int, str]] = []
+    for name, entry in reg.items():
+        if name == "_aliases" or not isinstance(entry, dict):
+            continue
+        family = str(entry.get("architecture_family", "")).strip().lower()
+        if family not in families:
+            continue
+        ctx_window = int(entry.get("context_window_tokens", 0))
+        if ctx_window > min_context_window:
+            candidates.append((ctx_window, name))
+
+    # Largest context window first.
+    candidates.sort(key=lambda t: t[0], reverse=True)
+    return [name for _, name in candidates]
+
+
 __all__ = [
     "ArchitectureFamily",
     "resolve_model_name",
@@ -393,4 +432,5 @@ __all__ = [
     "get_prompt_prefix",
     "apply_prompt_prefix",
     "get_architecture_family",
+    "list_long_context_candidates",
 ]
