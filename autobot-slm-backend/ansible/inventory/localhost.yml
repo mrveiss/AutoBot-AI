@@ -10,6 +10,7 @@ all:
       ansible_user: "{{ lookup('env', 'USER') }}"
       ansible_become: true
       ansible_become_method: sudo
+      slm_node_id: "00-SLM-Manager"
 
   children:
     # Single-host: all groups map to localhost
