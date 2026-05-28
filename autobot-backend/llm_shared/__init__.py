@@ -124,6 +124,9 @@ __all__ = [
     "apply_model_defaults",
     "get_prompt_prefix",
     "apply_prompt_prefix",
+    # Architecture-family detection (GH#7347)
+    "ArchitectureFamily",
+    "get_architecture_family",
     # Ollama helpers (MVA-178)
     "call_ollama_generate",
     # Observability (GH#6593)
