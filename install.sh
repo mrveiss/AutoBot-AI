@@ -553,10 +553,6 @@ all:
     slm_server:
       hosts:
         00-SLM-Manager:
-    # SLM-Manager needs a local Redis instance
-    database:
-      hosts:
-        00-SLM-Manager:
 INVENTORY
     success "  Localhost inventory generated"
 

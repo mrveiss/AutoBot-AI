@@ -1,8 +1,8 @@
 ---
 # Single-host SLM-Manager deployment inventory
 # localhost runs SLM components only.
-# Backend, frontend, AI, browser, NPU nodes are deployed
-# via the SLM wizard (temp inventory) — not from this file.
+# Backend, frontend, AI, browser, NPU, Redis, ChromaDB — all deployed
+# from the SLM instance via the deployment wizard on user-selected nodes.
 # Issue #2961: Single-host deployment runbook
 
 all:
@@ -16,10 +16,5 @@ all:
 
   children:
     slm:
-      hosts:
-        localhost:
-
-    # SLM-Manager needs a local Redis instance
-    database:
       hosts:
         localhost:
