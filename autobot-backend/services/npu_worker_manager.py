@@ -370,6 +370,46 @@ class NPUWorkerManager(AsyncInitializable):
         mid = len(p95s) // 2
         return p95s[mid] if len(p95s) % 2 else (p95s[mid - 1] + p95s[mid]) / 2
 
+    def _check_heartbeat_reachability(self, worker_id: str, status: NPUWorkerStatus | None) -> Optional[str]:
+        """Return 'heartbeat_stale' if last_heartbeat exceeds the silence threshold.
+
+        MVA-1399: The pulse-probe correctness check now includes heartbeat
+        reachability — a worker whose last_heartbeat has gone silent beyond
+        heartbeat_max_silence_seconds is classified as unreachable regardless
+        of whether its inference endpoint still responds.
+
+        Returns None when the worker is reachable (or when the check is
+        disabled / no baseline has been established yet).
+        """
+        max_silence = float(self._pulse_defaults.get("heartbeat_max_silence_seconds", 600))
+        if max_silence <= 0:
+            return None
+
+        if status is None or status.last_heartbeat is None:
+            # No heartbeat baseline yet — skip; cannot distinguish a fresh
+            # worker from a silent one until at least one heartbeat arrives.
+            return None
+
+        last_hb = status.last_heartbeat
+        now = now_utc()
+        # Normalise to tz-aware for safe subtraction (last_heartbeat is
+        # written by now_utc() so it should always be tz-aware; guard anyway).
+        if last_hb.tzinfo is None:
+            from datetime import timezone as _tz
+
+            last_hb = last_hb.replace(tzinfo=_tz.utc)
+
+        silence_s = (now - last_hb).total_seconds()
+        if silence_s > max_silence:
+            logger.warning(
+                "Pulse-probe: heartbeat silent for %.1fs (threshold %.0fs) on worker %s",
+                silence_s,
+                max_silence,
+                worker_id,
+            )
+            return "heartbeat_stale"
+        return None
+
     async def _pulse_check_worker(self, worker_id: str) -> None:
         """Send a canary inference request to verify worker correctness (GH#6739).
 
@@ -388,6 +428,51 @@ class NPUWorkerManager(AsyncInitializable):
         if status and status.status not in (WorkerStatus.ONLINE, WorkerStatus.DEGRADED):
             return
 
+        degrade_k = int(self._pulse_defaults.get("degrade_after_failures", 3))
+        unhealthy_m = int(self._pulse_defaults.get("unhealthy_after_failures", 5))
+        pulse_timeout = float(self._pulse_defaults.get("pulse_timeout_seconds", 30))
+        throttle_mult = float(self._pulse_defaults.get("latency_throttle_multiplier", 3.0))
+
+        # MVA-1399: heartbeat reachability check — runs before the inference
+        # probe so a silent worker fails fast without consuming model resources.
+        heartbeat_failure = self._check_heartbeat_reachability(worker_id, status)
+        if heartbeat_failure:
+            if _PULSE_METRICS_AVAILABLE:
+                _pulse_failure_total.labels(
+                    worker_id=worker_id, model_id="__heartbeat__", failure_class=heartbeat_failure
+                ).inc()
+            consecutive = self._pulse_failure_counts.get(worker_id, 0) + 1
+            self._pulse_failure_counts[worker_id] = consecutive
+            if consecutive >= unhealthy_m:
+                new_status = NPUWorkerStatus(
+                    id=worker_id,
+                    status=WorkerStatus.OFFLINE,
+                    error_message=f"Pulse-probe: heartbeat silent for {consecutive} consecutive checks",
+                )
+                await self._store_and_emit_status(
+                    worker_id, new_status, status.status if status else WorkerStatus.UNKNOWN
+                )
+                logger.error(
+                    "Pulse-probe: worker %s marked OFFLINE — heartbeat silent for %d checks",
+                    worker_id,
+                    consecutive,
+                )
+            elif consecutive >= degrade_k:
+                new_status = NPUWorkerStatus(
+                    id=worker_id,
+                    status=WorkerStatus.DEGRADED,
+                    error_message=f"Pulse-probe: heartbeat silent for {consecutive} consecutive checks",
+                )
+                await self._store_and_emit_status(
+                    worker_id, new_status, status.status if status else WorkerStatus.UNKNOWN
+                )
+                logger.warning(
+                    "Pulse-probe: worker %s marked DEGRADED — heartbeat silent for %d checks",
+                    worker_id,
+                    consecutive,
+                )
+            return
+
         # Pick a model to probe: prefer loaded_models from latest heartbeat, else skip
         model_id = None
         if status and hasattr(status, "error_message"):
@@ -397,11 +482,6 @@ class NPUWorkerManager(AsyncInitializable):
         if client is None:
             client = NPUWorkerClient(worker_config.url)
             self._worker_clients[worker_id] = client
-
-        degrade_k = int(self._pulse_defaults.get("degrade_after_failures", 3))
-        unhealthy_m = int(self._pulse_defaults.get("unhealthy_after_failures", 5))
-        pulse_timeout = float(self._pulse_defaults.get("pulse_timeout_seconds", 30))
-        throttle_mult = float(self._pulse_defaults.get("latency_throttle_multiplier", 3.0))
 
         try:
             models_data = await asyncio.wait_for(client.get_available_models(), timeout=10)

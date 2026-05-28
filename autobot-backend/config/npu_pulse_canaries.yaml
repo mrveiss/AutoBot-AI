@@ -21,6 +21,9 @@ defaults:
   latency_window: 20
   # p95 latency must stay within this multiplier of the pool median
   latency_throttle_multiplier: 3.0
+  # MVA-1399: heartbeat reachability — max seconds since last_heartbeat before
+  # treating the worker as unreachable.  0 disables the check entirely.
+  heartbeat_max_silence_seconds: 600  # 2× pulse_interval_seconds
 
 model_families:
   # Small/medium generative models (Gemma, Phi, Mistral, Llama ≤13 B)
