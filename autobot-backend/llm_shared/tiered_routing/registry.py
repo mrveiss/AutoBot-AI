@@ -21,6 +21,7 @@ from .base_strategy import RoutingStrategy
 from .complexity_router import ComplexityRouter
 from .cost_router import CostRouter
 from .latency_router import LatencyRouter
+from .long_context_router import LongContextRouter
 from .tier_config import ComplexityResult, TierConfig
 
 logger = get_logger(__name__)
@@ -29,6 +30,7 @@ _STRATEGY_MAP: Dict[str, type] = {
     "complexity": ComplexityRouter,
     "cost": CostRouter,
     "latency": LatencyRouter,
+    "long_context": LongContextRouter,
 }
 
 _DEFAULT_STRATEGY = "complexity"

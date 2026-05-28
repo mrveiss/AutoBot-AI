@@ -288,6 +288,21 @@ if "llm_shared" not in sys.modules:
         if _llm_sub not in sys.modules:
             sys.modules[_llm_sub] = _make_pkg_stub(_llm_sub)
 
+    # Give llm_shared.tiered_routing the real __path__ so submodule imports
+    # (e.g. from llm_shared.tiered_routing.complexity_router import ...) can
+    # find real files on disk.  The tiered_routing submodules only depend on
+    # autobot_shared.logging_manager and lightweight config — no heavy deps.
+    _tr_real_path = str(backend_root / "llm_shared" / "tiered_routing")
+    sys.modules["llm_shared.tiered_routing"].__path__ = [_tr_real_path]  # type: ignore[attr-defined]
+
+    # Stub llm_shared.optimization.model_inspector so complexity_router.py can
+    # load without the full optimization stack (inspect_model is only called in
+    # model_fits_in_vram which tests don't exercise).
+    if "llm_shared.optimization.model_inspector" not in sys.modules:
+        _mi_stub = _make_pkg_stub("llm_shared.optimization.model_inspector")
+        _mi_stub.inspect_model = MagicMock(return_value=None)  # type: ignore[attr-defined]
+        sys.modules["llm_shared.optimization.model_inspector"] = _mi_stub
+
     # llm_shared.cache — provide symbols consumed by services.llm_service
     _cache_stub = sys.modules["llm_shared.cache"]
     _cache_stub.CachedResponse = MagicMock()  # type: ignore[attr-defined]
@@ -307,6 +322,18 @@ if "llm_shared" not in sys.modules:
     )
     _tr_stub.get_tiered_router = MagicMock()  # type: ignore[attr-defined]
     sys.modules["llm_shared.tiered_routing.tier_router"] = _tr_stub
+
+    # Stub llm_shared.model_param_registry — provides symbols needed by
+    # long_context_router and other tiered_routing modules.  Tests that need
+    # real behaviour mock list_long_context_candidates via patch().
+    if "llm_shared.model_param_registry" not in sys.modules:
+        _mpr_stub = _make_pkg_stub("llm_shared.model_param_registry")
+        _mpr_stub.list_long_context_candidates = MagicMock(return_value=[])  # type: ignore[attr-defined]
+        _mpr_stub.get_architecture_family = MagicMock(return_value="transformer")  # type: ignore[attr-defined]
+        _mpr_stub.resolve_model_name = MagicMock(side_effect=lambda m: m)  # type: ignore[attr-defined]
+        _mpr_stub.get_model_kwargs = MagicMock(return_value={})  # type: ignore[attr-defined]
+        _mpr_stub.ArchitectureFamily = MagicMock()  # type: ignore[attr-defined]
+        sys.modules["llm_shared.model_param_registry"] = _mpr_stub
 
     # Load llm_shared.types (enums only) so models.py can do `from .types import`
     import importlib.util as _ilu2
