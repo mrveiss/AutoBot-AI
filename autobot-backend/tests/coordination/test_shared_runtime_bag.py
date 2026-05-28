@@ -16,6 +16,7 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
+from redis.exceptions import WatchError
 
 from autobot_shared.coordination.shared_runtime_bag import (
     SharedRuntimeBag,
@@ -59,8 +60,6 @@ class _FakePipeline:
         self._commands.append(("set", key, value, ex))
 
     async def execute(self) -> list[Any]:
-        from redis.exceptions import WatchError
-
         if self._fail_once and not self._failed:
             self._failed = True
             raise WatchError()
@@ -338,8 +337,6 @@ async def test_update_retries_on_watch_error(fake_redis: _FakeRedis) -> None:
 
 @pytest.mark.asyncio
 async def test_update_raises_after_max_retries(fake_redis: _FakeRedis) -> None:
-    from redis.exceptions import WatchError
-
     bag: SharedRuntimeBag[int] = SharedRuntimeBag("ns", int)
     fake_redis._store[_value_key("ns", "counter")] = "5"
 
