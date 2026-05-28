@@ -17,9 +17,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
 
+from ..kb.handoff_brief import HandoffBriefGenerator
 from ..models.enums import WorkItemStatus
 from ..models.work_item import LLCWorkItem
 from .base import LLCServiceBase
+
+try:
+    from user_management.database import get_async_session_factory
+except ImportError:  # pragma: no cover — not available in unit-test environment
+    get_async_session_factory = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -429,8 +435,6 @@ class HandoffService(LLCServiceBase):
     ) -> None:
         """Background task: generate KB-powered brief and persist it (GH#8239)."""
         try:
-            from ..kb.handoff_brief import HandoffBriefGenerator
-
             generator = HandoffBriefGenerator()
             brief = await generator.generate_agent_to_human_brief(
                 work_item_id=work_item_id,
@@ -442,8 +446,6 @@ class HandoffService(LLCServiceBase):
             )
             if agent_notes:
                 brief["agent_notes"] = agent_notes
-            from user_management.database import get_async_session_factory
-
             async with get_async_session_factory()() as session:
                 result = await session.execute(
                     select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
@@ -479,10 +481,6 @@ class HandoffService(LLCServiceBase):
         Also caches in Redis for low-latency repeated reads.
         """
         try:
-            from user_management.database import get_async_session_factory
-
-            from ..kb.handoff_brief import HandoffBriefGenerator
-
             generator = HandoffBriefGenerator()
             brief = await generator.generate_human_to_agent_brief(
                 work_item_id=work_item_id,
@@ -500,7 +498,7 @@ class HandoffService(LLCServiceBase):
                 item = result.scalar_one_or_none()
                 if (
                     item is not None
-                    and item.status == WorkItemStatus.READY
+                    and item.status in (WorkItemStatus.READY, WorkItemStatus.IN_PROGRESS)
                     and str(item.assignee_agent_id) == target_agent_id
                 ):
                     item.review_brief = brief

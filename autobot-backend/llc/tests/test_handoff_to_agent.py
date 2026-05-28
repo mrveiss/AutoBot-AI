@@ -361,3 +361,140 @@ class TestHumanToAgent:
             )
 
         assert result.work_item_id == str(item.id)
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for GH#8650: H2A status guard unreachable for active agents
+# ---------------------------------------------------------------------------
+
+
+class TestGenerateAndUpdateH2ABriefAsync:
+    """_generate_and_update_h2a_brief_async must write the KB brief when the
+    agent holds the item in READY *or* IN_PROGRESS status (GH#8650).
+
+    Before the fix the guard only accepted READY, so agents that had already
+    checked out the item (status=IN_PROGRESS) never received the KB brief.
+    """
+
+    def _make_db_item(self, status: WorkItemStatus, agent_id: str) -> MagicMock:
+        item = MagicMock(spec=LLCWorkItem)
+        item.status = status
+        item.assignee_agent_id = uuid.UUID(agent_id)
+        item.review_brief = None
+        item.version = 1
+        return item
+
+    async def _run(self, service, item, target_agent_id, mock_session_factory):
+        """Invoke the background method and return the item as seen after the call."""
+        brief = {"human_context": "ctx", "company_standards": [], "project_context": [], "suggested_approach": "do X"}
+        with (
+            patch("llc.services.handoff.HandoffBriefGenerator") as MockGen,
+            patch("llc.services.handoff.get_async_session_factory", return_value=mock_session_factory),
+            patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=None)),
+        ):
+            gen_instance = AsyncMock()
+            gen_instance.generate_human_to_agent_brief = AsyncMock(return_value=brief)
+            MockGen.return_value = gen_instance
+            await service._generate_and_update_h2a_brief_async(
+                work_item_id=str(uuid.uuid4()),
+                target_agent_id=target_agent_id,
+                company_id=str(uuid.uuid4()),
+                project_id=None,
+                work_item_title="Fix auth",
+                human_notes="notes",
+            )
+        return item
+
+    async def test_brief_written_when_status_ready(self):
+        """Original happy path: READY status must still write the brief."""
+        service = HandoffService()
+        agent_id = str(uuid.uuid4())
+        item = self._make_db_item(WorkItemStatus.READY, agent_id)
+
+        session = AsyncMock()
+        result_mock = MagicMock()
+        result_mock.scalar_one_or_none.return_value = item
+        session.execute = AsyncMock(return_value=result_mock)
+        session.commit = AsyncMock()
+        session.__aenter__ = AsyncMock(return_value=session)
+        session.__aexit__ = AsyncMock(return_value=False)
+
+        factory_cm = MagicMock()
+        factory_cm.__aenter__ = AsyncMock(return_value=session)
+        factory_cm.__aexit__ = AsyncMock(return_value=False)
+        factory = MagicMock(return_value=factory_cm)
+
+        await self._run(service, item, agent_id, factory)
+
+        session.commit.assert_called_once()
+        assert item.review_brief is not None
+
+    async def test_brief_written_when_status_in_progress(self):
+        """Regression for GH#8650: IN_PROGRESS status must also write the brief."""
+        service = HandoffService()
+        agent_id = str(uuid.uuid4())
+        item = self._make_db_item(WorkItemStatus.IN_PROGRESS, agent_id)
+
+        session = AsyncMock()
+        result_mock = MagicMock()
+        result_mock.scalar_one_or_none.return_value = item
+        session.execute = AsyncMock(return_value=result_mock)
+        session.commit = AsyncMock()
+        session.__aenter__ = AsyncMock(return_value=session)
+        session.__aexit__ = AsyncMock(return_value=False)
+
+        factory_cm = MagicMock()
+        factory_cm.__aenter__ = AsyncMock(return_value=session)
+        factory_cm.__aexit__ = AsyncMock(return_value=False)
+        factory = MagicMock(return_value=factory_cm)
+
+        await self._run(service, item, agent_id, factory)
+
+        session.commit.assert_called_once()
+        assert item.review_brief is not None
+
+    async def test_brief_not_written_when_agent_mismatch(self):
+        """Brief must not overwrite if a different agent now holds the item."""
+        service = HandoffService()
+        agent_id = str(uuid.uuid4())
+        other_agent_id = str(uuid.uuid4())
+        item = self._make_db_item(WorkItemStatus.IN_PROGRESS, other_agent_id)
+
+        session = AsyncMock()
+        result_mock = MagicMock()
+        result_mock.scalar_one_or_none.return_value = item
+        session.execute = AsyncMock(return_value=result_mock)
+        session.commit = AsyncMock()
+        session.__aenter__ = AsyncMock(return_value=session)
+        session.__aexit__ = AsyncMock(return_value=False)
+
+        factory_cm = MagicMock()
+        factory_cm.__aenter__ = AsyncMock(return_value=session)
+        factory_cm.__aexit__ = AsyncMock(return_value=False)
+        factory = MagicMock(return_value=factory_cm)
+
+        await self._run(service, item, agent_id, factory)
+
+        session.commit.assert_not_called()
+
+    async def test_brief_not_written_when_item_gone(self):
+        """Brief must not crash if item was deleted between handoff and background task."""
+        service = HandoffService()
+        agent_id = str(uuid.uuid4())
+
+        session = AsyncMock()
+        result_mock = MagicMock()
+        result_mock.scalar_one_or_none.return_value = None
+        session.execute = AsyncMock(return_value=result_mock)
+        session.commit = AsyncMock()
+        session.__aenter__ = AsyncMock(return_value=session)
+        session.__aexit__ = AsyncMock(return_value=False)
+
+        factory_cm = MagicMock()
+        factory_cm.__aenter__ = AsyncMock(return_value=session)
+        factory_cm.__aexit__ = AsyncMock(return_value=False)
+        factory = MagicMock(return_value=factory_cm)
+
+        await self._run(service, None, agent_id, factory)
+
+        session.commit.assert_not_called()
