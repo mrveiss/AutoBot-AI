@@ -37,7 +37,7 @@ class SecurityLayer:
         self.security_config = get_config_manager().get("security_config", {})
 
         # Check for single-user mode (development/personal use)
-        self.single_user_mode = config.single_user_mode.lower() in BOOLEAN_TRUE_VALUES
+        self.single_user_mode = str(config.single_user_mode).lower() in BOOLEAN_TRUE_VALUES
 
         # If single-user mode is enabled, disable all authentication
         # Issue #745: Added security warning for production awareness
