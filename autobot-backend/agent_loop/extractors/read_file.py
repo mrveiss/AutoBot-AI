@@ -5,7 +5,7 @@ Extractor for read_file tool output (MVA-1407).
 
 Keys produced:
   read_file:{path}:exists   → bool, confidence 1.0
-  read_file:{path}:hash     → str (sha256 hex), confidence 1.0
+  read_file:{path}:hash     → str (sha256 first 8 hex chars), confidence 1.0
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ class ReadFileExtractor:
         else:
             content_bytes = str(content).encode("utf-8")
 
-        content_hash = hashlib.sha256(content_bytes).hexdigest()
+        content_hash = hashlib.sha256(content_bytes).hexdigest()[:8]
         results.append((f"read_file:{path}:hash", content_hash, 1.0))
 
         return results

@@ -202,10 +202,11 @@ def test_read_file_extractor_exists_and_hash():
     keys = {k for k, _, _ in items}
     assert "read_file:/tmp/foo.txt:exists" in keys
     assert "read_file:/tmp/foo.txt:hash" in keys
-    expected_hash = hashlib.sha256(content.encode()).hexdigest()
+    expected_hash = hashlib.sha256(content.encode()).hexdigest()[:8]
     for k, v, _ in items:
         if k.endswith(":hash"):
             assert v == expected_hash
+            assert len(v) == 8
 
 
 def test_read_file_extractor_missing():
