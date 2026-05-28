@@ -30,7 +30,7 @@
 # a visible warning).  Mirrors the pattern in update-all-nodes.yml.
 # -------------------------------------------------------------------
 - name: "Play 0 - Pre-flight: Sync code_source from GitHub"
-  hosts: localhost
+  hosts: slm_server
   gather_facts: false
 
   vars:
@@ -681,7 +681,7 @@
 # Phase 7: Summary
 # -------------------------------------------------------------------
 - name: "Provision Summary"
-  hosts: localhost
+  hosts: slm_server
   connection: local
   gather_facts: false
 
