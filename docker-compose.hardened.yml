@@ -75,12 +75,17 @@ services:
     tmpfs:
       - /tmp
       - /var/run
-      - /chroma/chroma  # data path only — does NOT shadow /chroma/chromadb/log_config.yml
-    # NOTE: tmpfs is scoped to /chroma/chroma (the data directory) rather than
-    # the parent /chroma/.  Mounting /chroma as tmpfs would shadow the bundled
-    # log_config.yml that ChromaDB expects at /chroma/chromadb/log_config.yml.
-    # See GH#8913: without a writable /chroma/chroma the process hits EROFS on
-    # startup under read_only: true (regression introduced by PR #8912).
+      - /chroma/.chroma  # ChromaDB 0.5.23 writes migration/metadata state here on startup
+    # NOTE: /chroma/chroma is NOT in tmpfs — it is already writable via the
+    # chroma_data named volume in the base compose (named volumes always override
+    # read_only: true; adding a second mount at the same path is rejected by
+    # Docker Compose with a conflict error).
+    #
+    # /chroma/.chroma is a sibling directory that ChromaDB creates for internal
+    # state (distinct from the persist_directory at /chroma/chroma). Without this
+    # tmpfs the process hits EROFS on first write under read_only: true.
+    # Mounting /chroma as tmpfs would shadow /chroma/chromadb/log_config.yml
+    # (the regression introduced by PR #8912 that caused GH#8913).
     deploy:
       resources:
         limits:
