@@ -6,18 +6,22 @@
 Architecture-aware OpenVINO inference dispatcher.
 
 Dispatches model-load and inference requests to the correct OpenVINO code path
-based on the model's architecture_family field (GH#7352).
+based on the model's architecture_family field (GH#7352, MVA-1383).
 
 Supported families track the enum defined in llm_interface_pkg/types.py
-(GH#7347): transformer, state_space, linear_attention, hybrid.
+(GH#7347): transformer, ssm, linear_attention, hybrid.
+
+SSM path (Mamba/S4 models) is gated behind the NPU_SSM_ENABLED env-var
+feature flag (default off until validated in staging).
 """
 
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, FrozenSet, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +31,7 @@ __all__ = [
     "UnsupportedArchitectureError",
     "get_inference_config",
     "get_inference_engine",
+    "is_npu_ssm_enabled",
     "SUPPORTED_FAMILIES",
 ]
 
@@ -35,15 +40,35 @@ class ArchitectureFamily(str, Enum):
     """Architecture families understood by the NPU worker."""
 
     TRANSFORMER = "transformer"
-    STATE_SPACE = "state_space"
+    SSM = "ssm"
     LINEAR_ATTENTION = "linear_attention"
     HYBRID = "hybrid"
 
 
-# Families for which an OpenVINO inference path exists on this worker.
-# state_space / linear_attention / hybrid paths are placeholders until the
-# corresponding OpenVINO SSM kernel work lands (out of scope for GH#7352).
-SUPPORTED_FAMILIES: frozenset[str] = frozenset({ArchitectureFamily.TRANSFORMER})
+def is_npu_ssm_enabled() -> bool:
+    """Return True when the NPU_SSM_ENABLED feature flag is set.
+
+    Reads the NPU_SSM_ENABLED env var at call time so tests can patch it
+    without re-importing the module.  Default is off (False).
+    """
+    return os.environ.get("NPU_SSM_ENABLED", "").lower() in ("1", "true", "yes")
+
+
+def _get_supported_families() -> FrozenSet[str]:
+    """Return the set of currently supported architecture families.
+
+    Computed at call time so the SSM feature flag is respected without a
+    module reload.
+    """
+    families = {ArchitectureFamily.TRANSFORMER}
+    if is_npu_ssm_enabled():
+        families.add(ArchitectureFamily.SSM)
+    return frozenset(families)
+
+
+# Module-level constant exposed for introspection; callers that need runtime
+# accuracy should use _get_supported_families() instead.
+SUPPORTED_FAMILIES: FrozenSet[str] = frozenset({ArchitectureFamily.TRANSFORMER})
 
 
 class UnsupportedArchitectureError(ValueError):
@@ -53,9 +78,9 @@ class UnsupportedArchitectureError(ValueError):
         self.family = family
         super().__init__(
             f"architecture_family '{family}' is not supported on this OpenVINO worker. "
-            f"Supported families: {sorted(SUPPORTED_FAMILIES)}. "
-            "Support for state_space / linear_attention / hybrid requires an OpenVINO "
-            "SSM kernel upgrade — see GH#7352 for the planned follow-up."
+            f"Supported families: {sorted(_get_supported_families())}. "
+            "SSM path requires NPU_SSM_ENABLED=true and validated OpenVINO SSM kernels "
+            "— see GH#7352 / MVA-1383 for details."
         )
 
 
@@ -71,7 +96,7 @@ class InferenceEngine:
         device: Target OpenVINO device (e.g. "CPU", "NPU", "GPU").
         architecture_family: Resolved family string (always lowercase).
         inference_backend: Backend identifier selected by the dispatcher
-            (e.g. "openvino_transformer").
+            (e.g. "openvino_transformer", "openvino_ssm").
         run_layer: Callable that executes one model layer.  Injected at
             construction time; defaults to a direct call so the engine is
             usable without OpenVINO installed (tests, CPU-only workers).
@@ -124,7 +149,7 @@ def get_inference_engine(
 
     Raises:
         UnsupportedArchitectureError: When no inference path exists for the
-            requested family.
+            requested family (including ssm when NPU_SSM_ENABLED is not set).
     """
     cfg = get_inference_config(model_id, architecture_family, device)
     engine = InferenceEngine(
@@ -153,6 +178,7 @@ def get_inference_config(
     Return the OpenVINO inference configuration for a given model and family.
 
     Raises UnsupportedArchitectureError for families without an inference path.
+    The SSM path (family="ssm") is only available when NPU_SSM_ENABLED=true.
 
     Args:
         model_id: Opaque model identifier forwarded to OpenVINO.
@@ -165,12 +191,9 @@ def get_inference_config(
     """
     resolved_family = (architecture_family or ArchitectureFamily.TRANSFORMER).lower()
 
-    if resolved_family not in SUPPORTED_FAMILIES:
+    if resolved_family not in _get_supported_families():
         raise UnsupportedArchitectureError(resolved_family)
 
-    # Currently only the transformer path exists; this branch is where
-    # state_space / linear_attention / hybrid paths will be added when
-    # OpenVINO SSM kernel support lands.
     inference_backend = _select_backend(resolved_family)
 
     logger.debug(
@@ -193,5 +216,8 @@ def _select_backend(family: str) -> str:
     """Map a validated architecture family to an OpenVINO backend identifier."""
     if family == ArchitectureFamily.TRANSFORMER:
         return "openvino_transformer"
-    # Unreachable until SUPPORTED_FAMILIES is expanded, but explicit for clarity.
+    if family == ArchitectureFamily.SSM:
+        return "openvino_ssm"
+    # linear_attention and hybrid are not yet supported; this is unreachable
+    # until SUPPORTED_FAMILIES is expanded for those families.
     raise UnsupportedArchitectureError(family)
