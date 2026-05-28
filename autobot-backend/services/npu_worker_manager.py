@@ -370,9 +370,7 @@ class NPUWorkerManager(AsyncInitializable):
         mid = len(p95s) // 2
         return p95s[mid] if len(p95s) % 2 else (p95s[mid - 1] + p95s[mid]) / 2
 
-    def _check_heartbeat_reachability(
-        self, worker_id: str, status: NPUWorkerStatus | None
-    ) -> Optional[str]:
+    def _check_heartbeat_reachability(self, worker_id: str, status: NPUWorkerStatus | None) -> Optional[str]:
         """Return 'heartbeat_stale' if last_heartbeat exceeds the silence threshold.
 
         MVA-1399: The pulse-probe correctness check now includes heartbeat
@@ -398,6 +396,7 @@ class NPUWorkerManager(AsyncInitializable):
         # written by now_utc() so it should always be tz-aware; guard anyway).
         if last_hb.tzinfo is None:
             from datetime import timezone as _tz
+
             last_hb = last_hb.replace(tzinfo=_tz.utc)
 
         silence_s = (now - last_hb).total_seconds()
