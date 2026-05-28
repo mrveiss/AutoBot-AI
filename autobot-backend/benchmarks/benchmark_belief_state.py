@@ -17,13 +17,14 @@ Runs 5 representative task scenarios, each in both variants (baseline + belief-s
 for 10 total runs.  All tool call sequences are scripted deterministically — no LLM
 calls required, since the extraction and assertion logic is purely rule-based.
 """
+
 from __future__ import annotations
 
 import hashlib
 import json
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -226,11 +227,7 @@ def build_scenarios() -> list[TaskScenario]:
     git_log = {
         "command": "git log --oneline -5",
         "exit_code": 0,
-        "stdout": (
-            "abc1234 fix: update user query\n"
-            "def5678 feat: add route\n"
-            "ghi9012 chore: init\n"
-        ),
+        "stdout": ("abc1234 fix: update user query\n" "def5678 feat: add route\n" "ghi9012 chore: init\n"),
     }
     git_branch = {
         "command": "git branch --show-current",
@@ -429,9 +426,7 @@ def run_task(scenario: TaskScenario, belief_state_enabled: bool) -> RunResult:
         # Run belief state updater
         # -----------------------------------------------------------------
         if config.belief_state_enabled:
-            new_contradictions = updater.update(
-                ctx, call.tool_name, call.output, call_hash, iteration
-            )
+            new_contradictions = updater.update(ctx, call.tool_name, call.output, call_hash, iteration)
             # ASSUMPTION_CHECK thinks triggered when contradictions are surfaced
             for rec in new_contradictions:
                 if rec.resolution == "surfaced_to_think":
@@ -505,7 +500,8 @@ def generate_report(results: list[RunResult], output_path: Path) -> None:
         "| Contradictions | Assumption-Check Thinks | Wall-clock (ms) |"
     )
     lines.append(
-        "|---|------|---------|-----------|-------------|------------------------|----------------|------------------------|-----------------|"
+        "|---|------|---------|-----------|-------------|"
+        "------------------------|----------------|------------------------|-----------------|"
     )
     for r in results:
         lines.append(
@@ -516,9 +512,7 @@ def generate_report(results: list[RunResult], output_path: Path) -> None:
     lines.append("")
     lines.append("## Comparison Summary")
     lines.append("")
-    lines.append(
-        "| # | Task | Token Δ | Hallucinated Re-query Δ | Contradiction detected | Result |"
-    )
+    lines.append("| # | Task | Token Δ | Hallucinated Re-query Δ | Contradiction detected | Result |")
     lines.append("|---|------|---------|------------------------|------------------------|--------|")
 
     tasks_improved_tokens = 0
@@ -529,18 +523,11 @@ def generate_report(results: list[RunResult], output_path: Path) -> None:
         s = belief[num]
         token_pct_str = compute_improvement(b.input_tokens, s.input_tokens)
         halluc_delta = b.hallucinated_requeries - s.hallucinated_requeries
-        halluc_str = (
-            f"−{halluc_delta}" if halluc_delta > 0
-            else (f"+{abs(halluc_delta)}" if halluc_delta < 0 else "0")
-        )
+        halluc_str = f"−{halluc_delta}" if halluc_delta > 0 else (f"+{abs(halluc_delta)}" if halluc_delta < 0 else "0")
         contra_detected = "yes" if s.contradiction_count > 0 else "no"
 
         # Determine per-task outcome
-        token_pct_raw = (
-            (b.input_tokens - s.input_tokens) / b.input_tokens * 100
-            if b.input_tokens > 0
-            else 0
-        )
+        token_pct_raw = (b.input_tokens - s.input_tokens) / b.input_tokens * 100 if b.input_tokens > 0 else 0
         halluc_regressed = halluc_delta < 0  # belief state caused MORE re-queries
         improved_tokens = token_pct_raw >= 10.0
 
@@ -549,8 +536,10 @@ def generate_report(results: list[RunResult], output_path: Path) -> None:
         if halluc_regressed:
             tasks_regressed_halluc += 1
 
-        outcome = "✅ improved" if improved_tokens and not halluc_regressed else (
-            "⚠️ regressed" if halluc_regressed else "➡️ neutral"
+        outcome = (
+            "✅ improved"
+            if improved_tokens and not halluc_regressed
+            else ("⚠️ regressed" if halluc_regressed else "➡️ neutral")
         )
         lines.append(
             f"| {num} | {b.task_name} | {token_pct_str} tokens "
@@ -628,11 +617,10 @@ def generate_report(results: list[RunResult], output_path: Path) -> None:
         lines.append("")
         lines.append(f"**Focus**: {_task_focus(num)}")
         lines.append("")
-        lines.append(f"| Metric | Baseline | Belief State | Delta |")
-        lines.append(f"|--------|----------|--------------|-------|")
+        lines.append("| Metric | Baseline | Belief State | Delta |")
+        lines.append("|--------|----------|--------------|-------|")
         lines.append(
-            f"| Iterations | {b.iterations} | {s.iterations} | "
-            f"{compute_improvement(b.iterations, s.iterations)} |"
+            f"| Iterations | {b.iterations} | {s.iterations} | " f"{compute_improvement(b.iterations, s.iterations)} |"
         )
         lines.append(
             f"| Input Tokens | {b.input_tokens} | {s.input_tokens} | "
@@ -660,8 +648,8 @@ def generate_report(results: list[RunResult], output_path: Path) -> None:
     lines.append("---")
     lines.append("")
     lines.append(
-        f"_Benchmark generated by `benchmarks/benchmark_belief_state.py` "
-        f"on branch `issue-MVA-1408` for [MVA-1408](/MVA/issues/MVA-1408)._"
+        "_Benchmark generated by `benchmarks/benchmark_belief_state.py` "
+        "on branch `issue-MVA-1408` for [MVA-1408](/MVA/issues/MVA-1408)._"
     )
 
     output_path.write_text("\n".join(lines))
