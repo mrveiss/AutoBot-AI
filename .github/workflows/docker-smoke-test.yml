@@ -47,28 +47,30 @@ jobs:
         run: |
           docker buildx build \
             --cache-from type=local,src=/tmp/.buildx-cache \
-            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=max \
+            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
             --file docker/backend/Dockerfile \
             --tag autobot/backend:latest \
             --load \
             .
           docker buildx build \
             --cache-from type=local,src=/tmp/.buildx-cache \
-            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=max \
+            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
             --file docker/slm/Dockerfile \
             --tag autobot/slm:latest \
             --load \
             .
           docker buildx build \
             --cache-from type=local,src=/tmp/.buildx-cache \
-            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=max \
+            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
             --file docker/frontend/Dockerfile \
             --tag autobot/frontend:latest \
             --load \
             .
-          # Rotate cache so next run gets the freshest layers
+          # Rotate cache so next run gets the freshest layers (mode=min keeps only
+          # final exported layers; mode=max kept all intermediate layers and exhausted disk)
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+          df -h
 
       - name: Start services with Docker Compose
         run: docker compose --env-file docker/.env.docker up -d

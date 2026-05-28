@@ -59,27 +59,28 @@ jobs:
         run: |
           docker buildx build \
             --cache-from type=local,src=/tmp/.buildx-cache \
-            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=max \
+            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
             --file docker/backend/Dockerfile \
             --tag autobot/backend:latest \
             --load \
             .
           docker buildx build \
             --cache-from type=local,src=/tmp/.buildx-cache \
-            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=max \
+            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
             --file docker/slm/Dockerfile \
             --tag autobot/slm:latest \
             --load \
             .
           docker buildx build \
             --cache-from type=local,src=/tmp/.buildx-cache \
-            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=max \
+            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
             --file docker/frontend/Dockerfile \
             --tag autobot/frontend:latest \
             --load \
             .
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+          df -h
 
       - name: Start services with hardened overlay
         run: |
