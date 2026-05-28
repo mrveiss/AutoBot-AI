@@ -36,16 +36,16 @@ jobs:
           DATE=$(date -u +%Y-%m-%d)
           mkdir -p audit-output
           python tools/lint/canonical_check.py --all --format markdown \
-            --output audit-output/canonical-audit-py-$DATE.md
+            --output "audit-output/canonical-audit-py-$DATE.md"
           python tools/lint/canonical_check.py --all --format json \
-            --output audit-output/canonical-audit-py-$DATE.json
+            --output "audit-output/canonical-audit-py-$DATE.json"
           python tools/lint/canonical_check_infra.py --all --format markdown \
-            --output audit-output/canonical-audit-infra-$DATE.md
+            --output "audit-output/canonical-audit-infra-$DATE.md"
           python tools/lint/canonical_check_infra.py --all --format json \
-            --output audit-output/canonical-audit-infra-$DATE.json
+            --output "audit-output/canonical-audit-infra-$DATE.json"
           # Frontend audit deferred to Wave 3 (no --all support yet); empty placeholder
-          echo "# Canonical-style audit — Frontend ($DATE)" > audit-output/canonical-audit-fe-$DATE.md
-          echo "Frontend full-codebase audit not yet implemented (Wave 3)." >> audit-output/canonical-audit-fe-$DATE.md
+          echo "# Canonical-style audit — Frontend ($DATE)" > "audit-output/canonical-audit-fe-$DATE.md"
+          echo "Frontend full-codebase audit not yet implemented (Wave 3)." >> "audit-output/canonical-audit-fe-$DATE.md"
           echo "date=$DATE" >> "$GITHUB_OUTPUT"
 
       - name: Upload audit artifact
