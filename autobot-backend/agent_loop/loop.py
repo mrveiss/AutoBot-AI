@@ -49,6 +49,7 @@ from events.bus import PersistStrategy
 from events.bus import publish_event as _bus_publish_event
 from events.event_types import AGENT_ABSTAINED as EVT_AGENT_ABSTAINED
 from events.event_types import APPROVAL_REQUIRED as EVT_APPROVAL_REQUIRED
+from events.event_types import BELIEF_CACHE_HIT as EVT_BELIEF_CACHE_HIT
 from events.types import create_approval_required_event, create_message_event
 from planner import PlannerModule
 from tools.parallel import ParallelToolExecutor
@@ -457,7 +458,41 @@ class AgentLoop:
 
         # Phase 3: Execute Tools
         self._current_phase = LoopPhase.WAIT_FOR_EXECUTION
-        tool_results = await self._execute_tools(tools_to_execute)
+
+        # MVA-1434: pre-execution cache check — skip redundant tool calls when a
+        # high-confidence assertion already covers the same tool+key.
+        tools_to_run = tools_to_execute
+        cached_results: dict[str, Any] = {}
+        if self.config.belief_state_enabled and self._current_context:
+            tools_to_run = []
+            for tool in tools_to_execute:
+                tool_name = tool.get("tool_name", "")
+                tool_args = tool.get("args", tool.get("arguments", tool.get("parameters", {})))
+                if not isinstance(tool_args, dict):
+                    tool_args = {}
+                cached_val = self._maybe_use_cached_assertion(tool_name, tool_args)
+                if cached_val is not None:
+                    cached_results[tool_name] = {"cached_assertion": cached_val}
+                    await _bus_publish_event(
+                        "global",
+                        EVT_BELIEF_CACHE_HIT,
+                        {
+                            "task_id": self._current_context.task_id,
+                            "tool_name": tool_name,
+                            "iteration": self._iteration_count,
+                        },
+                        persist=PersistStrategy.MEMORY,
+                    )
+                    logger.info(
+                        "AgentLoop: belief cache hit — skipping '%s' (iteration %d)",
+                        tool_name,
+                        self._iteration_count,
+                    )
+                else:
+                    tools_to_run.append(tool)
+
+        live_results = await self._execute_tools(tools_to_run) if tools_to_run else {}
+        tool_results = {**cached_results, **live_results}
 
         # Issue #3877 / #3859: detect repetition-halt via sentinel key.
         # When halted: do not add any rejected tools to tools_executed and
@@ -473,18 +508,19 @@ class AgentLoop:
             result.phase_completed = LoopPhase.ITERATE
             return result
 
-        result.tools_executed = [t.get("tool_name", "unknown") for t in tools_to_execute]
+        # Only live executions count toward tools_executed; cached hits are not tools_executed.
+        result.tools_executed = [t.get("tool_name", "unknown") for t in tools_to_run]
         result.tool_results = tool_results
 
         for tool_name in result.tools_executed:
             self._current_context.add_tool(tool_name)
 
-        # MVA-1407: update belief state from tool results when enabled.
+        # MVA-1407: update belief state from live tool results when enabled.
         if self.config.belief_state_enabled and self._current_context:
-            for tool_info in tools_to_execute:
+            for tool_info in tools_to_run:
                 tool_name = tool_info.get("tool_name", "")
                 call_hash = self._compute_tool_call_hash(tool_info)
-                raw_result = tool_results.get(tool_name) or tool_results.get(tool_info.get("id", ""))
+                raw_result = live_results.get(tool_name) or live_results.get(tool_info.get("id", ""))
                 if raw_result is not None:
                     self._belief_updater.update(
                         self._current_context,
@@ -841,6 +877,31 @@ Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
     # =========================================================================
     # Helper Methods
     # =========================================================================
+
+    # =========================================================================
+    # Belief Cache (MVA-1434)
+    # =========================================================================
+
+    def _maybe_use_cached_assertion(self, tool_name: str, tool_args: dict) -> Any | None:
+        """Return cached assertion value if a high-confidence belief covers this call.
+
+        Returns None when belief state is disabled, no extractor key exists for the
+        tool+args, the assertion is absent or refuted, or confidence is below the
+        configured threshold.
+        """
+        from agent_loop.belief_state import build_extractor_key
+
+        if not self._current_context:
+            return None
+        key = build_extractor_key(tool_name, tool_args)
+        if not key:
+            return None
+        assertion = self._current_context.assertions.get(key)
+        if assertion is None:
+            return None
+        if assertion.is_active and assertion.confidence >= self.config.belief_cache_threshold:
+            return assertion.value
+        return None
 
     # =========================================================================
     # Repetitive Tool-Call Detection (#3255)

@@ -227,6 +227,8 @@ class AgentLoopConfig:
 
     # Belief state prototype (MVA-1407) — off by default to avoid prod changes
     belief_state_enabled: bool = False
+    # MVA-1434: min confidence to serve a cached assertion instead of re-querying
+    belief_cache_threshold: float = 0.85
 
     # Logging
     log_iterations: bool = True  # Log each iteration
