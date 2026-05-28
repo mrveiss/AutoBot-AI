@@ -23,6 +23,7 @@ Features:
 - aiohttp client auto-instrumentation (Issue #697)
 - Configurable sampling strategy (Issue #697)
 """
+from __future__ import annotations
 
 import threading
 from contextlib import contextmanager

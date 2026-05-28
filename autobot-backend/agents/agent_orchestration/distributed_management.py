@@ -7,6 +7,7 @@ Distributed Agent Management Module
 Issue #381: Extracted from agent_orchestrator.py god class refactoring.
 Contains distributed agent registration, health monitoring, and lifecycle management.
 """
+from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone

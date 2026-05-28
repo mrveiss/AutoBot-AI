@@ -7,6 +7,7 @@ Agent Execution Module
 Issue #381: Extracted from agent_orchestrator.py god class refactoring.
 Contains agent execution logic, result synthesis, and fallback handling.
 """
+from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone

@@ -30,7 +30,7 @@ logger = get_logger(__name__)
 
 # Rotation grace period: after a key is rotated the old hash remains valid for
 # this many seconds so in-flight requests finish cleanly.
-_ROTATION_GRACE_SECS = int(config.llm_key_rotation_grace_secs)
+_ROTATION_GRACE_SECS = int(config.llm_key_rotation_grace_secs or 30)
 
 _KEY_TTL_STREAM_SECS = 7 * 24 * 3600  # usage stream events retained 7 days
 

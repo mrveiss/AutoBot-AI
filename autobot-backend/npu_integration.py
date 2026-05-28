@@ -9,6 +9,7 @@ Provides high-performance processing using NPU worker for heavy computational ta
 Issue #255: Updated to use ServiceHTTPClient for authenticated service-to-service
 communication with HMAC-SHA256 signatures.
 """
+from __future__ import annotations
 
 import asyncio
 import json

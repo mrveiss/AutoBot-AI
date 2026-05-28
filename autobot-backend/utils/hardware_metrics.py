@@ -3,6 +3,7 @@ AutoBot Phase 9 Comprehensive Performance Monitoring System
 Advanced GPU/NPU utilization tracking, multi-modal AI performance monitoring,
 and real-time system optimization for Intel Ultra 9 185H + RTX 4070 hardware.
 """
+from __future__ import annotations
 
 import asyncio
 import json
