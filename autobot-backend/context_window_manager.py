@@ -22,9 +22,10 @@ from constants.model_constants import ModelConfig, ModelConstants
 logger = get_logger(__name__)
 
 # Architecture families whose cost curve does not require transformer caps.
-# Matches the string values of llm_shared.types.ArchitectureFamily; kept as a
-# frozenset of strings here to avoid a circular import with llm_shared.
-_NON_TRANSFORMER_FAMILIES: frozenset[str] = frozenset({"state_space", "linear_attention", "hybrid"})
+# "ssm" matches llm_shared.ArchitectureFamily.SSM; "state_space" is kept for
+# backward-compatible YAML entries written before MVA-1379 standardised the
+# enum.  Both string values bypass the 4K/8K compression trigger.
+_NON_TRANSFORMER_FAMILIES: frozenset[str] = frozenset({"ssm", "state_space", "linear_attention", "hybrid"})
 
 # Lazy singleton — imported on first call to avoid circular imports.
 _compression_service = None
@@ -208,27 +209,42 @@ class ContextWindowManager:
         max_tokens = self.get_max_history_tokens(model_name)
         return estimated_tokens > max_tokens
 
+    @staticmethod
+    def _registry_family(model: str) -> str:
+        """Look up architecture_family from llm_shared registry (lazy import)."""
+        try:
+            from llm_shared.model_param_registry import (
+                get_architecture_family as _get,
+            )
+
+            return _get(model)
+        except Exception:
+            return "transformer"
+
     def get_architecture_family(self, model_name: str | None = None) -> str:
         """Return the architecture_family for a model (defaults to 'transformer').
 
-        Issue #7351: reads the ``architecture_family`` key from the YAML config
-        entry for the model.  When absent or unknown the safe default is
-        ``'transformer'``, preserving existing compression behaviour.
+        Issue #7351: resolution order:
+        1. ``architecture_family`` key from ``context_windows.yaml`` (normalized).
+        2. ``llm_shared.get_architecture_family()`` — reads ``llm_models.yaml``
+           and, optionally, HuggingFace ``config.json`` (MVA-1379).
+        3. ``'transformer'`` safe default.
 
         Args:
             model_name: Optional model name, uses current if not specified.
 
         Returns:
-            Architecture family string (e.g. ``'transformer'``, ``'state_space'``).
+            Architecture family string (e.g. ``'transformer'``, ``'ssm'``).
         """
         model = model_name or self.current_model
-        # Issue #8360: unknown models fall through to default, inheriting its
-        # architecture_family.  Return the safe default directly instead.
+        # Issue #8360: unknown models must not inherit default model's family.
         if model not in self.config["models"]:
-            return "transformer"
-        # Issue #8361: normalize whitespace and case before returning so callers
-        # don't see e.g. "State_Space" fail the frozenset membership check.
-        raw = self.config["models"][model].get("architecture_family", "transformer")
+            return self._registry_family(model)
+        raw = self.config["models"][model].get("architecture_family")
+        if raw is None:
+            # Entry exists but omits architecture_family — delegate to registry.
+            return self._registry_family(model)
+        # Issue #8361: normalize whitespace and case before frozenset check.
         return raw.strip().lower()
 
     def get_compression_threshold(self, model_name: str | None = None) -> int:
@@ -254,8 +270,8 @@ class ContextWindowManager:
             model = self.config["models"]["default"]["name"]
 
         entry = self.config["models"][model]
-        # Issue #8361: normalize before frozenset check.
-        family = entry.get("architecture_family", "transformer").strip().lower()
+        # Use the method so the llm_shared registry fallback is applied.
+        family = self.get_architecture_family(model_name)
 
         # Issue #8359: explicit compression_threshold always wins, regardless of
         # architecture family.  Only fall back to family-specific defaults when
