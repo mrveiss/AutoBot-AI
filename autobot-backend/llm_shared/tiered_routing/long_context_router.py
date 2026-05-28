@@ -15,6 +15,7 @@ Eligible requests:
 When no eligible model is registered the router falls back to complexity-based
 tier selection (simple / complex) so the request still completes.
 """
+
 from __future__ import annotations
 
 from typing import Dict, List, Optional, Tuple
