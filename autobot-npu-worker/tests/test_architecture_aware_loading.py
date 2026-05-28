@@ -1,19 +1,22 @@
 """
-End-to-end tests for architecture-aware model loading (GH#7352).
+End-to-end tests for architecture-aware model loading (GH#7352, MVA-1383).
 
 Covers:
 - load_model forwards architecture_family in the HTTP payload
 - load_model omits architecture_family when not provided (backward compat)
 - Worker dispatch: transformer family uses openvino_transformer backend
-- Worker dispatch: unsupported family raises UnsupportedArchitectureError
+- Worker dispatch: ssm family uses openvino_ssm backend (NPU_SSM_ENABLED=true)
+- Worker dispatch: ssm family raises UnsupportedArchitectureError when flag off
+- Worker dispatch: unsupported families always raise UnsupportedArchitectureError
 """
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import Any, Dict
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -31,6 +34,7 @@ from openvino_dispatch import (  # noqa: E402
     UnsupportedArchitectureError,
     get_inference_config,
     get_inference_engine,
+    is_npu_ssm_enabled,
 )
 
 # ---------------------------------------------------------------------------
@@ -79,6 +83,77 @@ class TestGetInferenceConfig:
     def test_device_is_forwarded(self):
         cfg = get_inference_config("my-model", "transformer", device="NPU")
         assert cfg["device"] == "NPU"
+
+    # -------------------------------------------------------------------
+    # SSM family — feature flag gating (MVA-1383)
+    # -------------------------------------------------------------------
+
+    def test_ssm_family_raises_when_flag_disabled(self):
+        """ssm must raise UnsupportedArchitectureError when NPU_SSM_ENABLED is off."""
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("NPU_SSM_ENABLED", None)
+            with pytest.raises(UnsupportedArchitectureError) as exc_info:
+                get_inference_config("mamba-370m", "ssm")
+            assert exc_info.value.family == "ssm"
+
+    def test_ssm_family_accepted_when_flag_enabled(self):
+        """ssm must resolve to openvino_ssm backend when NPU_SSM_ENABLED=true."""
+        with patch.dict(os.environ, {"NPU_SSM_ENABLED": "true"}):
+            cfg = get_inference_config("mamba-370m", "ssm", device="NPU")
+        assert cfg["architecture_family"] == "ssm"
+        assert cfg["inference_backend"] == "openvino_ssm"
+        assert cfg["model_id"] == "mamba-370m"
+        assert cfg["device"] == "NPU"
+
+    def test_ssm_flag_accepts_numeric_one(self):
+        """NPU_SSM_ENABLED=1 must also enable the SSM path."""
+        with patch.dict(os.environ, {"NPU_SSM_ENABLED": "1"}):
+            cfg = get_inference_config("mamba-130m", "ssm")
+        assert cfg["inference_backend"] == "openvino_ssm"
+
+    def test_ssm_flag_rejects_false_string(self):
+        """NPU_SSM_ENABLED=false must keep the SSM path disabled."""
+        with patch.dict(os.environ, {"NPU_SSM_ENABLED": "false"}):
+            with pytest.raises(UnsupportedArchitectureError):
+                get_inference_config("mamba-130m", "ssm")
+
+    def test_transformer_unaffected_by_ssm_flag(self):
+        """Enabling NPU_SSM_ENABLED must not change transformer dispatch."""
+        with patch.dict(os.environ, {"NPU_SSM_ENABLED": "true"}):
+            cfg = get_inference_config("llama-7b", "transformer")
+        assert cfg["inference_backend"] == "openvino_transformer"
+
+
+# ---------------------------------------------------------------------------
+# Unit tests: is_npu_ssm_enabled helper
+# ---------------------------------------------------------------------------
+
+
+class TestIsNpuSsmEnabled:
+    def test_disabled_by_default(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("NPU_SSM_ENABLED", None)
+            assert is_npu_ssm_enabled() is False
+
+    def test_enabled_by_true(self):
+        with patch.dict(os.environ, {"NPU_SSM_ENABLED": "true"}):
+            assert is_npu_ssm_enabled() is True
+
+    def test_enabled_by_1(self):
+        with patch.dict(os.environ, {"NPU_SSM_ENABLED": "1"}):
+            assert is_npu_ssm_enabled() is True
+
+    def test_enabled_by_yes(self):
+        with patch.dict(os.environ, {"NPU_SSM_ENABLED": "yes"}):
+            assert is_npu_ssm_enabled() is True
+
+    def test_disabled_by_false(self):
+        with patch.dict(os.environ, {"NPU_SSM_ENABLED": "false"}):
+            assert is_npu_ssm_enabled() is False
+
+    def test_disabled_by_0(self):
+        with patch.dict(os.environ, {"NPU_SSM_ENABLED": "0"}):
+            assert is_npu_ssm_enabled() is False
 
 
 # ---------------------------------------------------------------------------
@@ -154,6 +229,33 @@ class TestNPUWorkerClientLoadModel:
         assert "architecture_family" not in payload
 
     @pytest.mark.asyncio
+    async def test_load_model_ssm_family_forwards_field(self):
+        """architecture_family=ssm must be forwarded in the POST payload (MVA-1383)."""
+        client = self._make_client()
+        expected_response = {"success": True, "model_id": "mamba-370m"}
+        captured_calls = []
+
+        async def fake_post(url, json=None, **kwargs):
+            captured_calls.append({"url": url, "json": json})
+            return self._mock_response(expected_response)
+
+        mock_http = MagicMock()
+        mock_http.post = fake_post
+        client._http_client = mock_http
+
+        result = await client.load_model(
+            model_id="mamba-370m",
+            device="NPU",
+            architecture_family="ssm",
+        )
+
+        assert result == expected_response
+        payload = captured_calls[0]["json"]
+        assert payload["architecture_family"] == "ssm"
+        assert payload["model_id"] == "mamba-370m"
+        assert payload["device"] == "NPU"
+
+    @pytest.mark.asyncio
     async def test_load_model_unsupported_family_returns_clean_error(self):
         """
         Worker-side: when the HTTP response signals an unsupported architecture,
@@ -166,7 +268,7 @@ class TestNPUWorkerClientLoadModel:
         client = self._make_client()
         worker_error_response = {
             "success": False,
-            "error": "architecture_family 'state_space' is not supported on this OpenVINO worker.",
+            "error": "architecture_family 'ssm' is not supported on this OpenVINO worker.",
             "error_code": "unsupported_architecture",
         }
 
@@ -179,12 +281,12 @@ class TestNPUWorkerClientLoadModel:
 
         result = await client.load_model(
             model_id="mamba-370m",
-            device="CPU",
-            architecture_family="state_space",
+            device="NPU",
+            architecture_family="ssm",
         )
 
         assert result["success"] is False
-        assert "state_space" in result["error"]
+        assert "ssm" in result["error"]
         assert result.get("error_code") == "unsupported_architecture"
 
 
@@ -216,6 +318,39 @@ class TestGetInferenceEngine:
     def test_unsupported_family_raises(self):
         with pytest.raises(UnsupportedArchitectureError):
             get_inference_engine("m", "state_space")
+
+    def test_ssm_raises_when_flag_disabled(self):
+        """SSM path must be gated by NPU_SSM_ENABLED (MVA-1383)."""
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("NPU_SSM_ENABLED", None)
+            with pytest.raises(UnsupportedArchitectureError) as exc_info:
+                get_inference_engine("mamba-370m", "ssm")
+            assert exc_info.value.family == "ssm"
+
+    def test_ssm_engine_accepted_when_flag_enabled(self):
+        """ssm must yield openvino_ssm backend when NPU_SSM_ENABLED=true (MVA-1383)."""
+        with patch.dict(os.environ, {"NPU_SSM_ENABLED": "true"}):
+            engine = get_inference_engine("mamba-370m", "ssm", device="NPU")
+        assert isinstance(engine, InferenceEngine)
+        assert engine.architecture_family == "ssm"
+        assert engine.inference_backend == "openvino_ssm"
+        assert engine.device == "NPU"
+
+    def test_ssm_engine_invokes_run_layer(self):
+        """SSM engine must invoke run_layer for each layer when forward() called."""
+        invoked_layers = []
+
+        def spy_run_layer(layer, hidden):
+            invoked_layers.append(layer)
+            return layer(hidden)
+
+        with patch.dict(os.environ, {"NPU_SSM_ENABLED": "true"}):
+            engine = get_inference_engine("mamba-370m", "ssm", run_layer=spy_run_layer)
+
+        layers = [lambda x: x + 1, lambda x: x * 2]  # noqa: E731
+        result = engine.forward(layers, 0)
+        assert result == 2  # (0 + 1) * 2
+        assert len(invoked_layers) == 2
 
     def test_custom_run_layer_is_used(self):
         calls = []
