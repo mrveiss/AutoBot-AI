@@ -157,7 +157,6 @@ def test_cache_disabled_when_belief_state_off():
     # We can still test the method directly: it should still return a value since
     # the method itself doesn't check the flag — the flag is checked by the caller.
     # The suppression path is what we care about end-to-end (tested below).
-    pass
 
 
 # ---------------------------------------------------------------------------
