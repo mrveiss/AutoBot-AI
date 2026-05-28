@@ -75,7 +75,10 @@ services:
     tmpfs:
       - /tmp
       - /var/run
-      - /chroma
+    # NOTE: /chroma intentionally omitted — mounting it as tmpfs shadows
+    # chromadb/log_config.yml that the image bundles at /chroma/chromadb/.
+    # The chroma_data named volume (base compose) already provides write
+    # access to /chroma/chroma where persistent data is stored.
     deploy:
       resources:
         limits:
