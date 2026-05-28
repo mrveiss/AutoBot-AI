@@ -29,9 +29,9 @@ export default defineConfig({
   reporter: process.env.CI ? 'github' : [['html', { open: 'never' }]],
 
   // The single test in storybook-stories.spec.ts loops through every
-  // discovered story (one iframe load + screenshot per story). With 226 stories
-  // at ~3-5s each = ~680-1130s, we budget 30 minutes per project for headroom.
-  timeout: 1_800_000,
+  // discovered story (one iframe load + screenshot per story). With 1154 stories
+  // at ~3-5s each = ~3462-5770s, we budget 150 minutes per project for headroom.
+  timeout: 9_000_000,
 
   // Snapshot baselines live next to the tests, organized per project (light/dark)
   // and OS to avoid cross-platform rendering noise and theme conflicts.
