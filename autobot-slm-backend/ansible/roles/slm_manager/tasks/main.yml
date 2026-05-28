@@ -506,26 +506,11 @@
   tags: ['slm', 'grafana']
 
 # ==========================================================
-# WSL2 host override for co-located user backend (#5608)
-# 127.0.0.1 is ECONNREFUSED via WSL2 mirrored networking;
-# use 10.255.255.254 (lo alias) so nginx upstream reaches uvicorn.
+# WSL2 note (#5608 / MVA-1423 / MVA-1454)
+# uvicorn now binds to 0.0.0.0 on WSL2 so nginx can reach it on
+# 127.0.0.1. No frontend_backend_host override is needed.
+# The UFW loopback0 rule in the backend role permits loopback traffic.
 # ==========================================================
-- name: "SLM | Read /proc/version to detect WSL2 (#5608)"
-  ansible.builtin.slurp:
-    src: /proc/version
-  register: _slm_proc_version
-  changed_when: false
-  failed_when: false
-  tags: ['slm', 'nginx']
-
-- name: "SLM | Set frontend_backend_host=10.255.255.254 on WSL2 hosts (#5608)"
-  ansible.builtin.set_fact:
-    frontend_backend_host: "10.255.255.254"
-  when:
-    - _slm_proc_version.content is defined
-    - (_slm_proc_version.content | b64decode | lower) is search('microsoft')
-    - frontend_backend_host == '127.0.0.1'
-  tags: ['slm', 'nginx']
 
 # ==========================================================
 # Nginx configuration

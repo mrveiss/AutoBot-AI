@@ -34,8 +34,9 @@ server {
     proxy_read_timeout    300s;
 
     # API — plain HTTP upstream (uvicorn no longer terminates TLS)
+    # Always connect to loopback — backend_host may be 0.0.0.0 on WSL2 (#MVA-1423/MVA-1454).
     location / {
-        proxy_pass http://{{ backend_host }}:{{ backend_port }};
+        proxy_pass http://127.0.0.1:{{ backend_port }};
     }
 
     # WebSocket paths — must set Upgrade/Connection headers

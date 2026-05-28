@@ -422,26 +422,8 @@
       when: _is_slm_frontend_colocated | bool
       tags: ['frontend', 'slm-nginx', 'provision']
 
-    # include_vars above resets frontend_backend_host to 127.0.0.1 (the default).
-    # On WSL2 mirrored networking 127.0.0.1 is ECONNREFUSED; must re-override (#5608).
-    - name: "SLM | Read /proc/version to detect WSL2 for nginx re-render (#5608)"
-      ansible.builtin.slurp:
-        src: /proc/version
-      register: _phase4c_proc_version
-      changed_when: false
-      failed_when: false
-      when: _is_slm_frontend_colocated | bool
-      tags: ['frontend', 'slm-nginx', 'provision']
-
-    - name: "SLM | Set frontend_backend_host=10.255.255.254 on WSL2 hosts (#5608)"
-      ansible.builtin.set_fact:
-        frontend_backend_host: "10.255.255.254"
-      when:
-        - _is_slm_frontend_colocated | bool
-        - _phase4c_proc_version.content is defined
-        - (_phase4c_proc_version.content | b64decode | lower) is search('microsoft')
-        - frontend_backend_host == '127.0.0.1'
-      tags: ['frontend', 'slm-nginx', 'provision']
+    # MVA-1423/MVA-1454: uvicorn now binds to 0.0.0.0 on WSL2 so nginx
+    # reaches it via 127.0.0.1. No frontend_backend_host override needed.
 
     - name: "SLM | Re-render SLM nginx config for co-located mode (#3012)"
       ansible.builtin.template:

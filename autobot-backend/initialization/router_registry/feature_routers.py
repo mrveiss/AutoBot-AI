@@ -426,10 +426,10 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "knowledge_research_ws",
     ),
     (
-        "api.knowledge_test",
+        "api.knowledge_eval",
         "/knowledge-test",
         ["knowledge-test"],
-        "knowledge_test",
+        "knowledge_eval",
     ),
     (
         "api.knowledge_maintenance",
