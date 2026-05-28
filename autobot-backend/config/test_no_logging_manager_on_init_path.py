@@ -10,7 +10,6 @@ This guard prevents the regression seen in GH#8765 (``retry_mechanism.py``).
 """
 
 import ast
-import os
 from pathlib import Path
 
 import pytest
@@ -43,7 +42,7 @@ INIT_PATH_MODULES: list[Path] = [
 
 def _has_toplevel_logging_manager_import(path: Path) -> bool:
     """Return True if the file imports logging_manager at module (top) level."""
-    source = path.read_text()
+    source = path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(path))
     for node in ast.iter_child_nodes(tree):  # only top-level nodes
         if isinstance(node, ast.Import):
