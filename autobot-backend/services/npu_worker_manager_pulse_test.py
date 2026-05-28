@@ -8,8 +8,10 @@ Covers:
 - Consecutive pulse failures → DEGRADED state
 - Continued failures → OFFLINE (unhealthy)
 - Recovery: clean pulse after DEGRADED → ONLINE
+- MVA-1399: Heartbeat reachability — stale last_heartbeat → failure class
 """
 
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -257,3 +259,141 @@ async def test_get_healthy_workers_sorted_puts_degraded_last(mgr):
     assert len(result) == 2  # OFFLINE excluded
     assert result[0].config.id == "worker-a"
     assert result[1].config.id == "worker-b"
+
+
+# ---------------------------------------------------------------------------
+# MVA-1399: Heartbeat reachability tests
+# ---------------------------------------------------------------------------
+
+
+def _status_with_heartbeat(age_seconds: float, worker_id: str = "test-worker-1") -> NPUWorkerStatus:
+    """Build an ONLINE NPUWorkerStatus whose last_heartbeat is age_seconds old."""
+    last_hb = datetime.now(timezone.utc) - timedelta(seconds=age_seconds)
+    return NPUWorkerStatus(id=worker_id, status=WorkerStatus.ONLINE, last_heartbeat=last_hb)
+
+
+def test_check_heartbeat_reachability_fresh(mgr):
+    """A heartbeat within the silence window should return None (reachable)."""
+    status = _status_with_heartbeat(age_seconds=60)  # 60 s old, threshold 600 s
+    result = mgr._check_heartbeat_reachability("test-worker-1", status)
+    assert result is None
+
+
+def test_check_heartbeat_reachability_stale(mgr):
+    """A heartbeat older than the threshold should return 'heartbeat_stale'."""
+    status = _status_with_heartbeat(age_seconds=700)  # 700 s > 600 s threshold
+    result = mgr._check_heartbeat_reachability("test-worker-1", status)
+    assert result == "heartbeat_stale"
+
+
+def test_check_heartbeat_reachability_no_baseline(mgr):
+    """A worker with last_heartbeat=None has no baseline — check is skipped."""
+    status = NPUWorkerStatus(id="test-worker-1", status=WorkerStatus.ONLINE, last_heartbeat=None)
+    result = mgr._check_heartbeat_reachability("test-worker-1", status)
+    assert result is None
+
+
+def test_check_heartbeat_reachability_disabled(mgr):
+    """Setting heartbeat_max_silence_seconds to 0 disables the check."""
+    mgr._pulse_defaults["heartbeat_max_silence_seconds"] = 0
+    status = _status_with_heartbeat(age_seconds=9999)
+    result = mgr._check_heartbeat_reachability("test-worker-1", status)
+    assert result is None
+
+
+def test_check_heartbeat_reachability_naive_datetime(mgr):
+    """A tz-naive last_heartbeat is normalised safely; stale naive dt → stale."""
+    naive_old = datetime.utcnow() - timedelta(seconds=700)
+    status = NPUWorkerStatus(id="test-worker-1", status=WorkerStatus.ONLINE, last_heartbeat=naive_old)
+    result = mgr._check_heartbeat_reachability("test-worker-1", status)
+    assert result == "heartbeat_stale"
+
+
+@pytest.mark.asyncio
+async def test_stale_heartbeat_accumulates_failures_toward_degraded(mgr, online_status):
+    """K consecutive stale-heartbeat checks should mark the worker DEGRADED."""
+    worker_id = "test-worker-1"
+    degrade_k = int(mgr._pulse_defaults["degrade_after_failures"])
+    mgr._pulse_defaults["heartbeat_max_silence_seconds"] = 600
+
+    stale_status = _status_with_heartbeat(age_seconds=700)
+    stored_statuses = []
+
+    async def fake_get_status(wid):
+        return stale_status
+
+    async def fake_store_emit(wid, status, prev):
+        stored_statuses.append(status)
+
+    mgr._get_worker_status = fake_get_status
+    mgr._store_and_emit_status = fake_store_emit
+
+    for _ in range(degrade_k):
+        await mgr._pulse_check_worker(worker_id)
+
+    assert mgr._pulse_failure_counts[worker_id] == degrade_k
+    assert stored_statuses[-1].status == WorkerStatus.DEGRADED
+
+
+@pytest.mark.asyncio
+async def test_stale_heartbeat_does_not_invoke_inference(mgr):
+    """A stale-heartbeat short-circuit must not call get_available_models or run_inference."""
+    worker_id = "test-worker-1"
+    mgr._pulse_defaults["heartbeat_max_silence_seconds"] = 600
+
+    stale_status = _status_with_heartbeat(age_seconds=700)
+    client_mock = AsyncMock()
+    mgr._worker_clients[worker_id] = client_mock
+
+    async def fake_get_status(wid):
+        return stale_status
+
+    async def fake_store_emit(wid, status, prev):
+        pass
+
+    mgr._get_worker_status = fake_get_status
+    mgr._store_and_emit_status = fake_store_emit
+
+    await mgr._pulse_check_worker(worker_id)
+
+    client_mock.get_available_models.assert_not_called()
+    client_mock.run_inference.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_fresh_heartbeat_proceeds_to_inference(mgr, online_status):
+    """A fresh heartbeat should not short-circuit; inference must be attempted."""
+    worker_id = "test-worker-1"
+    mgr._pulse_defaults["heartbeat_max_silence_seconds"] = 600
+
+    fresh_status = _status_with_heartbeat(age_seconds=60)
+    client_mock = AsyncMock()
+    client_mock.get_available_models = AsyncMock(return_value={"models": ["gemma-3-4b"]})
+    client_mock.run_inference = AsyncMock(return_value={"output": "PULSE_OK"})
+    mgr._worker_clients[worker_id] = client_mock
+
+    async def fake_get_status(wid):
+        return fresh_status
+
+    async def fake_store_emit(wid, status, prev):
+        pass
+
+    async def fake_store_latency(wid, mid, lat):
+        pass
+
+    async def fake_pool_median(mid):
+        return None
+
+    async def fake_p95(wid, mid):
+        return None
+
+    mgr._get_worker_status = fake_get_status
+    mgr._store_and_emit_status = fake_store_emit
+    mgr._store_pulse_latency = fake_store_latency
+    mgr._get_pool_median_latency = fake_pool_median
+    mgr._get_pulse_p95_latency = fake_p95
+
+    await mgr._pulse_check_worker(worker_id)
+
+    client_mock.get_available_models.assert_called_once()
+    client_mock.run_inference.assert_called_once()
