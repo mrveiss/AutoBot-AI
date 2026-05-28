@@ -75,10 +75,12 @@ services:
     tmpfs:
       - /tmp
       - /var/run
-    # NOTE: /chroma intentionally omitted — mounting it as tmpfs shadows
-    # chromadb/log_config.yml that the image bundles at /chroma/chromadb/.
-    # The chroma_data named volume (base compose) already provides write
-    # access to /chroma/chroma where persistent data is stored.
+      - /chroma/chroma  # data path only — does NOT shadow /chroma/chromadb/log_config.yml
+    # NOTE: tmpfs is scoped to /chroma/chroma (the data directory) rather than
+    # the parent /chroma/.  Mounting /chroma as tmpfs would shadow the bundled
+    # log_config.yml that ChromaDB expects at /chroma/chromadb/log_config.yml.
+    # See GH#8913: without a writable /chroma/chroma the process hits EROFS on
+    # startup under read_only: true (regression introduced by PR #8912).
     deploy:
       resources:
         limits:
