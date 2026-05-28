@@ -36,8 +36,10 @@ def _make_loop(**config_kwargs) -> AgentLoop:
     event_stream.publish = AsyncMock()
     think_tool = MagicMock()
     think_tool.think = AsyncMock(return_value=MagicMock())
+    # Pop before passing so callers can override without a duplicate-keyword error.
+    mandatory_think = config_kwargs.pop("mandatory_think_enabled", False)
     config = AgentLoopConfig(
-        mandatory_think_enabled=False,  # disabled by default; override per-test
+        mandatory_think_enabled=mandatory_think,
         **config_kwargs,
     )
     loop = AgentLoop(event_stream=event_stream, think_tool=think_tool, config=config)

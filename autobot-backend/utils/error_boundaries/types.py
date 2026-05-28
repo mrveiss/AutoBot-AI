@@ -34,16 +34,19 @@ class ErrorSeverity(Enum):
 def classify_error(error: Exception) -> ErrorSeverity:
     """Return the ErrorSeverity for an exception (GH#6628).
 
-    Precedence: CRITICAL → HIGH → RETRY (LOW) → MEDIUM → else LOW.
+    Precedence: CRITICAL → RETRY (LOW) → HIGH → MEDIUM → else LOW.
     CRITICAL is checked first as a defensive invariant so a future exception that
     subclasses both a RETRY type and a CRITICAL type is never silently downgraded.
+    RETRY must precede HIGH because ConnectionError and TimeoutError are subclasses
+    of OSError (which is in HIGH_SEVERITY_ERROR_TYPES); checking HIGH first would
+    prematurely cap transient network errors at the 1-retry HIGH budget (GH#8649).
     """
     if isinstance(error, CRITICAL_ERROR_TYPES):
         return ErrorSeverity.CRITICAL
-    if isinstance(error, HIGH_SEVERITY_ERROR_TYPES):
-        return ErrorSeverity.HIGH
     if isinstance(error, RETRY_ERROR_TYPES):
         return ErrorSeverity.LOW
+    if isinstance(error, HIGH_SEVERITY_ERROR_TYPES):
+        return ErrorSeverity.HIGH
     if isinstance(error, MEDIUM_SEVERITY_ERROR_TYPES):
         return ErrorSeverity.MEDIUM
     return ErrorSeverity.LOW
