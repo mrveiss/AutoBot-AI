@@ -97,7 +97,7 @@ export default defineConfigWithVueTs(
         },
       ],
       // Issue #7085: forbid console.* in production code — use createLogger from @/utils/debugUtils instead.
-      // eslint-disable-next-line suppression of this rule is also blocked by reportUnusedDisableDirectives.
+      // Note: you cannot suppress this rule with eslint-disable-next-line — reportUnusedDisableDirectives blocks that too.
       'no-console': 'error',
       // MVA-192 design-token spec — Phase 4: block re-introduction of deprecated size/color tokens.
       // Use canonical tokens instead: size → sm|md|lg, danger → error.
@@ -139,6 +139,14 @@ export default defineConfigWithVueTs(
       'src/utils/RumConsoleHelper.ts',
       'src/utils/chunkTestUtility.ts',
     ],
+    rules: {
+      'no-console': 'off',
+    },
+  },
+  {
+    // Service workers run in a separate runtime context with no access to createLogger.
+    name: 'app/console-allowed-in-service-worker',
+    files: ['public/service-worker.ts'],
     rules: {
       'no-console': 'off',
     },
