@@ -11,7 +11,6 @@ Parses top-level scalar key-value pairs and produces:
 from __future__ import annotations
 
 import json
-import re
 from typing import Any
 
 _CONFIG_EXTENSIONS = {".yml", ".yaml", ".toml", ".json"}
@@ -25,6 +24,7 @@ def _is_config_path(path: str) -> bool:
 def _parse_yaml(content: str) -> dict:
     try:
         import yaml  # type: ignore[import-untyped]
+
         result = yaml.safe_load(content)
         return result if isinstance(result, dict) else {}
     except Exception:
