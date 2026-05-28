@@ -1284,7 +1284,7 @@ class EnvironmentAnalyzer:
         """Use LLM to filter false positives. Issue #633."""
 
         ollama_host = config.ollama_host
-        ollama_port = config.ollama_port
+        ollama_port = config.port.ollama
         ollama_url = f"http://{ollama_host}:{ollama_port}/api/generate"
 
         candidates = self._select_llm_candidates(hardcoded_values, priority_filter)

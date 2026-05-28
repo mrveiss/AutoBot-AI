@@ -156,9 +156,9 @@ class AIStackClient:
 
         # Ollama backing URL: when the dedicated AI Stack service is absent,
         # use the local Ollama instance for health/capability signalling (#6228).
-        _ollama_host = config.ollama_host
-        _ollama_port = config.ollama_port
-        self._ollama_url: str | None = f"http://{_ollama_host}:{_ollama_port}" if _ollama_host else None
+        # config.port.ollama is the canonical path; config.ollama_port does not
+        # exist on AutoBotConfig and raises AttributeError (MVA-1454).
+        self._ollama_url: str | None = config.ollama_url or None
 
         # Get timeout, retry, and connection configuration from config
         timeout_seconds = ai_stack_config.get("timeout", 60)
