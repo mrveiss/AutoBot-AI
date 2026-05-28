@@ -280,16 +280,12 @@ class RedisConnectionManager:
 
     def _load_redis_config(self) -> Dict[str, Any]:
         """Load Redis configuration from unified config (#2477)."""
-        cm = _get_config_manager()
-        if cm is None:
-            return {
-                "host": NetworkConstants.REDIS_VM_IP,
-                "port": NetworkConstants.REDIS_PORT,
-                "password": None,
-                "enabled": True,
-            }
-        redis_config = cm.get_redis_config()
-
+        try:
+            cm = _get_config_manager()
+            redis_config: Dict[str, Any] = cm.get_redis_config() if cm is not None else {}
+        except AttributeError:
+            # ssot_config._ConfigProxy does not expose get_redis_config(); fall back to NetworkConstants
+            redis_config = {}
         return {
             "host": redis_config.get("host", NetworkConstants.REDIS_VM_IP),
             "port": redis_config.get("port", NetworkConstants.REDIS_PORT),
@@ -299,11 +295,11 @@ class RedisConnectionManager:
 
     def _load_pool_config(self) -> PoolConfig:
         """Load pool configuration from unified config (#2477)."""
-        cm = _get_config_manager()
-        if cm is None:
-            return PoolConfig()
-        redis_config = cm.get_redis_config()
-
+        try:
+            cm = _get_config_manager()
+            redis_config: Dict[str, Any] = cm.get_redis_config() if cm is not None else {}
+        except AttributeError:
+            redis_config = {}
         return PoolConfig(
             max_connections=redis_config.get("max_connections", 100),
             socket_timeout=redis_config.get("socket_timeout", 5.0),
