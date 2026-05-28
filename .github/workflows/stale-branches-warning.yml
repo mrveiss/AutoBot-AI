@@ -76,9 +76,11 @@ jobs:
           # Output formatted for issue body
           echo "count=$count" >> "$GITHUB_OUTPUT"
           if [ "$count" -gt 0 ]; then
-            echo "stale_branches<<EOF" >> "$GITHUB_OUTPUT"
-            printf "%b" "$stale_branches" >> "$GITHUB_OUTPUT"
-            echo "EOF" >> "$GITHUB_OUTPUT"
+            {
+              echo "stale_branches<<EOF"
+              printf "%b" "$stale_branches"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
           fi
 
       - name: Create or update stale branches issue
