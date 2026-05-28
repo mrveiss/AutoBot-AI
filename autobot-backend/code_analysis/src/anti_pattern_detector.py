@@ -375,6 +375,7 @@ class AntiPatternDetector:
     GOD_CLASS_METHOD_THRESHOLD = 20
     GOD_CLASS_ATTR_THRESHOLD = 15
     GOD_CLASS_LOC_THRESHOLD = 500
+    GOD_CLASS_LINE_THRESHOLD = GOD_CLASS_LOC_THRESHOLD  # alias used by api.code_intelligence
     LONG_METHOD_THRESHOLD = 50  # lines
     LONG_PARAM_LIST_THRESHOLD = 5
     FEATURE_ENVY_THRESHOLD = 3  # external refs > self refs * threshold
