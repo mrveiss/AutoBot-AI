@@ -475,6 +475,7 @@ class TestGetArchitectureFamily:
 
     def test_pattern_match_emits_warning(self, caplog):
         import logging
+
         with caplog.at_level(logging.WARNING):
             get_architecture_family("mamba-unknown-7b")
         assert "architecture_family" in caplog.text
