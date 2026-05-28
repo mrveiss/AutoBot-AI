@@ -235,6 +235,14 @@
     - restart celery
   tags: ['backend', 'deploy']
 
+- name: "Backend | Fix ownership of backend code dir after sync"
+  ansible.builtin.file:
+    path: "{{ backend_code_dir }}"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+    recurse: true
+  tags: ['backend', 'deploy']
+
 - name: Sync backend config directory from code_source
   ansible.posix.synchronize:
     src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-backend/config/"
