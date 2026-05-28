@@ -395,5 +395,91 @@ class TestLongContextTier:
         assert result.is_complex is False
 
 
+class TestSSMRouting:
+    """Tests for SSM/linear-attention tier routing (GH#7353)."""
+
+    SSM_MODEL = "mamba:3b"
+    MESSAGES = [{"role": "user", "content": "Summarize this document."}]
+
+    def _config_with_ssm(self, threshold: int = 2000) -> TierConfig:
+        return TierConfig(
+            models=TierModels(
+                simple="gemma2:2b",
+                complex=DEFAULT_LLM_MODEL,
+                long_context=DEFAULT_LLM_MODEL,
+                ssm=self.SSM_MODEL,
+            ),
+            ssm_output_token_threshold=threshold,
+        )
+
+    def test_high_expected_output_tokens_routes_to_ssm(self):
+        """expected_output_tokens >= threshold routes to SSM model when registered."""
+        config = self._config_with_ssm(threshold=2000)
+        router = TieredModelRouter(config)
+        model, result = router.route(self.MESSAGES, expected_output_tokens=2000)
+        assert result.tier == "ssm"
+        assert model == self.SSM_MODEL
+
+    def test_above_threshold_routes_to_ssm(self):
+        """expected_output_tokens well above threshold also routes to SSM."""
+        config = self._config_with_ssm(threshold=2000)
+        router = TieredModelRouter(config)
+        model, result = router.route(self.MESSAGES, expected_output_tokens=5000)
+        assert result.tier == "ssm"
+        assert model == self.SSM_MODEL
+
+    def test_below_threshold_does_not_route_to_ssm(self):
+        """expected_output_tokens below threshold uses normal complexity routing."""
+        config = self._config_with_ssm(threshold=2000)
+        router = TieredModelRouter(config)
+        model, result = router.route(self.MESSAGES, expected_output_tokens=1999)
+        assert result.tier != "ssm"
+        assert model != self.SSM_MODEL
+
+    def test_no_ssm_model_registered_falls_back_to_transformer(self):
+        """When no SSM model is registered, high output tokens fall through to transformer tier."""
+        config = TierConfig(
+            models=TierModels(simple="gemma2:2b", complex=DEFAULT_LLM_MODEL, ssm=""),
+            ssm_output_token_threshold=2000,
+        )
+        router = TieredModelRouter(config)
+        model, result = router.route(self.MESSAGES, expected_output_tokens=2000)
+        assert result.tier != "ssm"
+        assert model != ""
+
+    def test_no_hint_no_ssm_routing(self):
+        """No expected_output_tokens hint: no regression, normal routing applies."""
+        config = self._config_with_ssm(threshold=2000)
+        router = TieredModelRouter(config)
+        model, result = router.route(self.MESSAGES)
+        assert result.tier != "ssm"
+
+    def test_metrics_track_ssm_requests(self):
+        """TierMetrics records SSM tier requests."""
+        config = self._config_with_ssm(threshold=2000)
+        router = TieredModelRouter(config)
+        router.route(self.MESSAGES, expected_output_tokens=2000)
+        metrics = router.get_metrics()
+        assert metrics["ssm_tier_requests"] == 1
+        assert metrics["total_requests"] == 1
+
+    def test_is_ssm_property(self):
+        """ComplexityResult.is_ssm returns True for ssm tier."""
+        result = ComplexityResult(score=1.0, factors={}, tier="ssm", reasoning="decode-heavy")
+        assert result.is_ssm is True
+        assert result.is_simple is False
+        assert result.is_complex is False
+
+    def test_ssm_tier_default_empty(self):
+        """TierModels.ssm defaults to empty string (no SSM model registered)."""
+        models = TierModels()
+        assert models.ssm == ""
+
+    def test_ssm_output_token_threshold_default(self):
+        """TierConfig.ssm_output_token_threshold defaults to 2000."""
+        config = TierConfig()
+        assert config.ssm_output_token_threshold == 2000
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

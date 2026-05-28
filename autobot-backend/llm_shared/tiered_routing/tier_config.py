@@ -16,11 +16,21 @@ from config.registry import ConfigRegistry
 
 @dataclass
 class TierModels:
-    """Model definitions for each tier."""
+    """Model definitions for each tier.
+
+    ssm: SSM/linear-attention model (e.g. mamba, rwkv) preferred for
+    decode-bound workloads with high expected_output_tokens.  Empty string
+    means no SSM model is registered; the router falls back to the
+    transformer (complex) tier in that case.
+    """
 
     simple: str = CLASSIFICATION_MODEL
     complex: str = DEFAULT_LLM_MODEL
     long_context: str = DEFAULT_LLM_MODEL
+    # SSM/linear-attention tier: leave empty if no non-transformer model is
+    # available.  ComplexityRouter checks this before routing decode-heavy
+    # requests here (GH#7353).
+    ssm: str = ""
 
 
 @dataclass
@@ -41,7 +51,11 @@ class TierConfig:
     Attributes:
         enabled: Whether tiered routing is active
         complexity_threshold: Score below this uses simple tier (0-10 scale)
-        models: Model names for each tier
+        long_context_threshold: Input-token count above which long_context tier is used
+        ssm_output_token_threshold: expected_output_tokens value at or above which
+            decode-heavy requests are steered toward the SSM/linear-attention tier
+            (GH#7353).  Defaults to 2000.
+        models: Model names for each tier (simple, complex, long_context, ssm)
         fallback_to_complex: If simple tier fails, try complex tier
         logging: Logging settings
     """
@@ -49,6 +63,13 @@ class TierConfig:
     enabled: bool = True
     complexity_threshold: float = 3.0
     long_context_threshold: int = 16000
+    # Output-token threshold above which a decode-heavy request is steered
+    # toward the SSM/linear-attention tier (GH#7353).  SSM models scale
+    # linearly with sequence length during decode, unlike transformers which
+    # are O(n²) in KV-cache memory.  Requests with expected_output_tokens ≥
+    # this value are routed to models.ssm when one is registered, otherwise
+    # they fall through to the transformer (complex) tier.
+    ssm_output_token_threshold: int = 2000
     models: TierModels = field(default_factory=TierModels)
     fallback_to_complex: bool = True
     logging: TierLogging = field(default_factory=TierLogging)
@@ -73,10 +94,12 @@ class TierConfig:
             enabled=tier_config.get("enabled", True),
             complexity_threshold=float(tier_config.get("complexity_threshold", 3.0)),
             long_context_threshold=int(tier_config.get("long_context_threshold", 16000)),
+            ssm_output_token_threshold=int(tier_config.get("ssm_output_token_threshold", 2000)),
             models=TierModels(
                 simple=models_config.get("simple", CLASSIFICATION_MODEL),
                 complex=models_config.get("complex", DEFAULT_LLM_MODEL),
                 long_context=models_config.get("long_context", DEFAULT_LLM_MODEL),
+                ssm=models_config.get("ssm", ""),
             ),
             fallback_to_complex=tier_config.get("fallback_to_complex", True),
             logging=TierLogging(
@@ -120,6 +143,11 @@ class ComplexityResult:
         """Check if this result indicates long_context tier."""
         return self.tier == "long_context"
 
+    @property
+    def is_ssm(self) -> bool:
+        """Check if this result indicates SSM/linear-attention tier (GH#7353)."""
+        return self.tier == "ssm"
+
 
 @dataclass
 class TierMetrics:
@@ -132,6 +160,7 @@ class TierMetrics:
     simple_tier_requests: int = 0
     complex_tier_requests: int = 0
     long_context_tier_requests: int = 0
+    ssm_tier_requests: int = 0
     total_requests: int = 0
     avg_simple_score: float = 0.0
     avg_complex_score: float = 0.0
@@ -150,6 +179,8 @@ class TierMetrics:
                 self.avg_simple_score = self.score_sum_simple / self.simple_tier_requests
         elif result.is_long_context:
             self.long_context_tier_requests += 1
+        elif result.is_ssm:
+            self.ssm_tier_requests += 1
         else:
             self.complex_tier_requests += 1
             self.score_sum_complex += result.score
@@ -166,6 +197,7 @@ class TierMetrics:
             "simple_tier_requests": self.simple_tier_requests,
             "complex_tier_requests": self.complex_tier_requests,
             "long_context_tier_requests": self.long_context_tier_requests,
+            "ssm_tier_requests": self.ssm_tier_requests,
             "total_requests": self.total_requests,
             "avg_simple_score": round(self.avg_simple_score, 2),
             "avg_complex_score": round(self.avg_complex_score, 2),

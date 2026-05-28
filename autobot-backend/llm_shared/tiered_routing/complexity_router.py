@@ -42,6 +42,7 @@ class ComplexityRouter:
         self,
         messages: List[Dict],
         requested_model: str | None = None,
+        expected_output_tokens: int | None = None,
     ) -> Tuple[str, ComplexityResult]:
         if not self.config.enabled:
             return self.config.models.complex, ComplexityResult(
@@ -53,8 +54,30 @@ class ComplexityRouter:
 
         result = self.scorer.score(messages)
 
+        # SSM/linear-attention tier: decode-bound workloads with high
+        # expected_output_tokens scale better on SSM models (O(1) per decode
+        # step vs O(n) KV-cache growth for transformers).  Check this before
+        # long_context so a decode-heavy request isn't mis-routed to the
+        # long_context transformer tier (GH#7353).
+        if (
+            expected_output_tokens is not None
+            and expected_output_tokens >= self.config.ssm_output_token_threshold
+            and self.config.models.ssm
+        ):
+            result = ComplexityResult(
+                score=result.score,
+                factors=result.factors,
+                tier="ssm",
+                reasoning=(
+                    f"expected_output_tokens ({expected_output_tokens}) >= "
+                    f"ssm_output_token_threshold ({self.config.ssm_output_token_threshold})"
+                    f" and SSM model is registered"
+                ),
+                input_tokens=result.input_tokens,
+            )
+            selected_model = self.config.models.ssm
         # Long-context check takes precedence over complexity score.
-        if result.input_tokens > self.config.long_context_threshold:
+        elif result.input_tokens > self.config.long_context_threshold:
             result = ComplexityResult(
                 score=result.score,
                 factors=result.factors,
@@ -192,6 +215,8 @@ class ComplexityRouter:
             return self.config.models.complex
         if tier == "long_context":
             return self.config.models.long_context
+        if tier == "ssm":
+            return self.config.models.ssm
         raise ValueError(f"Unknown tier: {tier}")
 
     def should_fallback(self, tier: str) -> bool:
