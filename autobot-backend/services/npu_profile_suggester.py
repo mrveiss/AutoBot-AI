@@ -47,10 +47,12 @@ class ProfileSuggestion:
 
 
 def _load_tiers() -> List[Dict[str, Any]]:
+    """Load VRAM tiers from npu_model_recommendations.yaml, sorted ascending by min_vram_gb."""
     try:
         with open(_RECOMMENDATIONS_YAML, "r") as fh:
             data = yaml.safe_load(fh)
-        tiers = data.get("tiers", [])
+        data = data or {}
+        tiers = [t for t in data.get("tiers", []) if "min_vram_gb" in t]
         return sorted(tiers, key=lambda t: t["min_vram_gb"])
     except Exception as exc:
         logger.warning("Could not load npu_model_recommendations.yaml: %s", exc)
@@ -133,12 +135,11 @@ def suggest_profile(health_data: Dict[str, Any]) -> ProfileSuggestion:
     """
     Derive a ProfileSuggestion from worker health / capabilities data.
 
-    Decision table (GH#6738):
-    - GPU ≥ 12GB                        → inference (or mixed if also CPU-strong + ONNX/OV)
-    - GPU 4–8GB                         → inference (small models)
-    - GPU + ONNX/OpenVINO + strong CPU  → mixed
-    - No GPU, RAM ≥ 16GB               → embedding
-    - No GPU, RAM < 16GB               → relay
+    Decision table (GH#6738, docstring fixed GH#8674):
+    - GPU ≥ 4GB + ONNX/OpenVINO + ≥ 8 CPU cores → mixed
+    - GPU ≥ 4GB                                   → inference
+    - No GPU (< 4GB VRAM), RAM ≥ 16GB            → embedding
+    - No GPU (< 4GB VRAM), RAM < 16GB            → relay
     """
     tiers = _load_tiers()
     vram_gb = _max_vram_gb(health_data)
