@@ -34,6 +34,7 @@ def resolver(rag_assembler):
 
 
 class TestGetQueryCollections:
+    @pytest.mark.asyncio
     async def test_root_company_returns_single_collection(self, resolver):
         root_org = _make_org(PARENT_ID, parent_id=None)
         session = AsyncMock()
@@ -46,6 +47,7 @@ class TestGetQueryCollections:
         assert collection_name == f"{PARENT_ID}:company"
         assert weight == pytest.approx(1.0)
 
+    @pytest.mark.asyncio
     async def test_child_returns_two_collections_with_weight_decay(self, resolver):
         parent_org = _make_org(PARENT_ID, parent_id=None, weight=0.6)
         child_org = _make_org(CHILD_ID, parent_id=PARENT_ID, weight=0.6)
@@ -63,6 +65,7 @@ class TestGetQueryCollections:
         assert result[0] == (f"{CHILD_ID}:company", pytest.approx(1.0))
         assert result[1] == (f"{PARENT_ID}:company", pytest.approx(0.6))
 
+    @pytest.mark.asyncio
     async def test_grandchild_returns_three_collections_with_compound_decay(self, resolver):
         parent_org = _make_org(PARENT_ID, parent_id=None, weight=0.6)
         child_org = _make_org(CHILD_ID, parent_id=PARENT_ID, weight=0.6)
@@ -83,6 +86,7 @@ class TestGetQueryCollections:
         assert result[1][1] == pytest.approx(0.6)
         assert result[2][1] == pytest.approx(0.36)
 
+    @pytest.mark.asyncio
     async def test_missing_company_raises_value_error(self, resolver):
         session = AsyncMock()
         session.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=None))
@@ -90,6 +94,7 @@ class TestGetQueryCollections:
         with pytest.raises(ValueError, match="not found"):
             await resolver.get_query_collections(session, str(PARENT_ID))
 
+    @pytest.mark.asyncio
     async def test_custom_weight_multiplier(self, resolver):
         parent_org = _make_org(PARENT_ID, parent_id=None, weight=0.5)
         child_org = _make_org(CHILD_ID, parent_id=PARENT_ID, weight=0.5)
@@ -107,6 +112,7 @@ class TestGetQueryCollections:
 
 
 class TestSearchWithInheritance:
+    @pytest.mark.asyncio
     async def test_returns_empty_when_no_collections(self, resolver):
         session = AsyncMock()
         session.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=None))
@@ -114,6 +120,7 @@ class TestSearchWithInheritance:
         with pytest.raises(ValueError):
             await resolver.search_with_inheritance(session, str(PARENT_ID), "query")
 
+    @pytest.mark.asyncio
     async def test_merges_and_reranks_by_weighted_score(self, resolver):
         parent_org = _make_org(PARENT_ID, parent_id=None, weight=0.6)
         child_org = _make_org(CHILD_ID, parent_id=PARENT_ID, weight=0.6)
@@ -139,6 +146,7 @@ class TestSearchWithInheritance:
         assert results[0]["id"] == "doc-1"
         assert results[0]["source_company_id"] == str(CHILD_ID)
 
+    @pytest.mark.asyncio
     async def test_deduplicates_by_doc_id_keeping_higher_weight(self, resolver):
         parent_org = _make_org(PARENT_ID, parent_id=None, weight=0.6)
         child_org = _make_org(CHILD_ID, parent_id=PARENT_ID, weight=0.6)
@@ -163,6 +171,7 @@ class TestSearchWithInheritance:
         assert results[0]["source_company_id"] == str(CHILD_ID)
         assert results[0]["weighted_score"] == pytest.approx(0.8 * 1.0)
 
+    @pytest.mark.asyncio
     async def test_work_item_id_propagated_to_assemble(self, resolver):
         """work_item_id context filter must reach every rag_assembler.assemble() call (GH#8599)."""
         parent_org = _make_org(PARENT_ID, parent_id=None, weight=0.6)
