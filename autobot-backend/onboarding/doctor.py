@@ -98,8 +98,8 @@ async def run_doctor() -> dict[str, Any]:
 
     # Build service probe targets from env / defaults (no hardcoded IPs)
     ollama_base = config.ollama_url
-    chromadb_host = config.chromadb_host
-    chromadb_port = int(config.chromadb_port)
+    chromadb_host = config.vm.chromadb
+    chromadb_port = config.port.chromadb
 
     ollama_reachable, ollama_detail = await _probe_http(f"{ollama_base}/api/tags")
     chromadb_reachable, chromadb_detail = await _probe_http(f"http://{chromadb_host}:{chromadb_port}/api/v1/heartbeat")
