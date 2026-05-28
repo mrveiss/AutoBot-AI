@@ -9,6 +9,7 @@ existing ones, and detect / record contradictions.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any
 
 from agent_loop.types import (
@@ -20,6 +21,38 @@ from autobot_shared.time_utils import now_utc
 
 if TYPE_CHECKING:
     from agent_loop.types import TaskContext
+
+
+def _slugify(text: str) -> str:
+    text = text.lower().strip()
+    text = re.sub(r"[^\w\s-]", "", text)
+    text = re.sub(r"[\s_-]+", "_", text)
+    return text[:80]
+
+
+def build_extractor_key(tool_name: str, tool_args: dict) -> str | None:
+    """Return the primary assertion key for a tool+args pair.
+
+    Matches the key patterns used by EXTRACTOR_REGISTRY extractors so the
+    belief cache can check for an existing high-confidence assertion before
+    executing the tool.  Returns None when no extractor covers the tool or
+    the required argument is absent (MVA-1434).
+    """
+    if tool_name == "read_file":
+        path = tool_args.get("path") or tool_args.get("file_path") or tool_args.get("filename")
+        if path:
+            return f"read_file:{path}:exists"
+    elif tool_name == "web_search":
+        query = tool_args.get("query") or tool_args.get("q") or tool_args.get("search_query")
+        if query:
+            return f"web_search:{_slugify(str(query))}:answered"
+    elif tool_name == "run_command":
+        from agent_loop.extractors.run_command import _classify_command
+
+        cmd = tool_args.get("command") or tool_args.get("cmd")
+        if cmd:
+            return f"run_command:exit_code/{_classify_command(str(cmd))}"
+    return None
 
 
 class BeliefStateUpdater:
