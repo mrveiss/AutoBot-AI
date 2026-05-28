@@ -4,8 +4,11 @@
 Extractor for run_command tool output (MVA-1407).
 
 Keys produced:
-  run_command:exit_code/{cmd_class}   → int exit code, confidence 1.0
-  run_command:port/{label}            → int port number, confidence 0.9
+  run_command:exit_code/{cmd_class}          → int exit code, confidence 1.0
+  run_command:port/{label}/{port_value}      → int port number, confidence 0.9
+
+Each port gets a distinct key so multiple ports from one command do not
+produce contradictions in the belief state (MVA-1431).
 """
 
 from __future__ import annotations
@@ -84,6 +87,6 @@ class RunCommandExtractor:
         stdout = tool_output.get("stdout") or tool_output.get("output") or ""
         if stdout:
             for label, port in _extract_ports(str(stdout)):
-                results.append((f"run_command:port/{label}", port, 0.9))
+                results.append((f"run_command:port/{label}/{port}", port, 0.9))
 
         return results
