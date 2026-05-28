@@ -1,8 +1,8 @@
 [Unit]
 Description=AutoBot User Backend API
 Documentation=https://github.com/mrveiss/AutoBot-AI
-After=network.target redis.service
-Wants=redis.service
+After=network.target redis.service autobot-chromadb.service
+Wants=redis.service autobot-chromadb.service
 
 [Service]
 Type=simple
