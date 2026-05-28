@@ -1,0 +1,53 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Composite action: Free disk space + threshold guard (GH#8914)
+#
+# Removes large pre-installed toolchains that are unused by AutoBot CI, then
+# asserts that at least MIN_FREE_GB of disk space is available. Fails fast
+# before Docker builds begin, producing a clear error rather than an opaque
+# "no space left on device" inside buildx logs.
+#
+# Usage:
+#   - uses: ./.github/actions/free-disk-space
+#     with:
+#       min-free-gb: '10'   # optional, default 10
+
+name: Free Disk Space
+description: >
+  Remove unused pre-installed toolchains and assert a minimum free-disk
+  threshold so Docker builds fail fast with a clear message rather than
+  opaque buildx "no space left on device" errors.
+
+inputs:
+  min-free-gb:
+    description: 'Minimum free disk space in GB required after cleanup. Fails the step if not met.'
+    required: false
+    default: '10'
+
+runs:
+  using: composite
+  steps:
+    - name: Remove unused toolchains
+      shell: bash
+      run: |
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+        df -h
+
+    - name: Assert minimum free disk space
+      shell: bash
+      env:
+        MIN_FREE_GB: ${{ inputs.min-free-gb }}
+      run: |
+        # Available KB on the root filesystem
+        avail_kb=$(df --output=avail / | tail -1)
+        avail_gb=$(( avail_kb / 1024 / 1024 ))
+        echo "Available disk space: ${avail_gb} GB (minimum required: ${MIN_FREE_GB} GB)"
+        if [ "${avail_gb}" -lt "${MIN_FREE_GB}" ]; then
+          echo "ERROR: Insufficient disk space: ${avail_gb} GB available, ${MIN_FREE_GB} GB required."
+          echo "       Docker builds would fail mid-run with 'no space left on device'."
+          df -h
+          exit 1
+        fi
+        echo "OK: ${avail_gb} GB >= ${MIN_FREE_GB} GB — disk space check passed."
