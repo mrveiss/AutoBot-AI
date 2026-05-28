@@ -150,8 +150,8 @@ jobs:
           echo "Phase validation passed: ${MATURITY}% >= ${THRESHOLD}%"
         else
           echo "::error::Phase validation below threshold: ${MATURITY}% < ${THRESHOLD}%"
-          echo "## Phase Validation Below Threshold" >> $GITHUB_STEP_SUMMARY
-          echo "Current maturity (${MATURITY}%) is below threshold (${THRESHOLD}%)" >> $GITHUB_STEP_SUMMARY
+          echo "## Phase Validation Below Threshold" >> "$GITHUB_STEP_SUMMARY"
+          echo "Current maturity (${MATURITY}%) is below threshold (${THRESHOLD}%)" >> "$GITHUB_STEP_SUMMARY"
           exit 1
         fi
 
@@ -245,12 +245,12 @@ jobs:
 
         if (( $(echo "$MATURITY >= 70" | bc -l) )); then
           echo "System ready for integration (${MATURITY}%)"
-          echo "## Integration Ready" >> $GITHUB_STEP_SUMMARY
-          echo "System maturity: ${MATURITY}% - Ready for integration testing" >> $GITHUB_STEP_SUMMARY
+          echo "## Integration Ready" >> "$GITHUB_STEP_SUMMARY"
+          echo "System maturity: ${MATURITY}% - Ready for integration testing" >> "$GITHUB_STEP_SUMMARY"
         else
           echo "::error::System not ready for integration (${MATURITY}%)"
-          echo "## Integration Not Ready" >> $GITHUB_STEP_SUMMARY
-          echo "System maturity: ${MATURITY}% - Additional development required" >> $GITHUB_STEP_SUMMARY
+          echo "## Integration Not Ready" >> "$GITHUB_STEP_SUMMARY"
+          echo "System maturity: ${MATURITY}% - Additional development required" >> "$GITHUB_STEP_SUMMARY"
           exit 1
         fi
 
