@@ -35,7 +35,6 @@ from workers.openvino_dispatch import (  # noqa: E402
 )
 from workers.worker_node import handle_partial_forward  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
