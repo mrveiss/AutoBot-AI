@@ -146,7 +146,15 @@ export default defineConfigWithVueTs(
   {
     // Service workers run in a separate runtime context with no access to createLogger.
     name: 'app/console-allowed-in-service-worker',
-    files: ['public/service-worker.ts'],
+    files: ['public/service-worker.ts', 'public/service-worker.js', 'public/sw-cache-bust.js'],
+    rules: {
+      'no-console': 'off',
+    },
+  },
+  {
+    // Build/check scripts and test fixtures run in Node.js, not the app bundle.
+    name: 'app/console-allowed-in-scripts',
+    files: ['scripts/**/*.{ts,js,mjs,mts}', 'scripts/**/__tests__/**'],
     rules: {
       'no-console': 'off',
     },
