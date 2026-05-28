@@ -46,6 +46,7 @@ if "xxhash" not in sys.modules:
 
 from llm_shared.model_param_registry import (  # noqa: E402
     _FALLBACK_KWARGS,
+    ArchitectureFamily,
     _load_registry,
     apply_model_defaults,
     apply_prompt_prefix,
@@ -54,7 +55,6 @@ from llm_shared.model_param_registry import (  # noqa: E402
     get_prompt_prefix,
     get_provider_model_id,
     resolve_model_name,
-    ArchitectureFamily,
 )
 
 # ---------------------------------------------------------------------------
