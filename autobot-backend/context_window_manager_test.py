@@ -480,7 +480,7 @@ class TestRegistryFallback:
 
     def test_registry_exception_falls_back_to_transformer(self):
         """If llm_shared import fails, must not raise — return 'transformer'."""
-        mgr = _manager_with_config(_TRANSFORMER_ONLY_CONFIG)
+        _manager_with_config(_TRANSFORMER_ONLY_CONFIG)
         with patch(
             "context_window_manager.ContextWindowManager._registry_family",
             side_effect=RuntimeError("import error"),
