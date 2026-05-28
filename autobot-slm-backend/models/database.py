@@ -653,6 +653,7 @@ class CredentialType(str, enum.Enum):
     API_KEY = "api_key"  # nosemgrep: autobot-hardcoded-secret-key
     DATABASE = "database"
     TLS = "tls"  # Issue #725: TLS certificates for mTLS
+    RDP = "rdp"  # Issue #1525: xrdp RDP credentials
 
 
 class NodeCredential(Base):
