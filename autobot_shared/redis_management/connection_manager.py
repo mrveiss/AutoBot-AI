@@ -49,6 +49,9 @@ from autobot_shared.redis_management.statistics import (
     RedisStats,
 )
 from autobot_shared.redis_management.types import DATABASE_MAPPING, ConnectionState
+from autobot_shared.retry_mechanism import RetryConfig as _RetryConfig
+from autobot_shared.retry_mechanism import RetryMechanism as _RetryMechanism
+from autobot_shared.retry_mechanism import RetryStrategy as _RetryStrategy
 
 # ---------------------------------------------------------------------------
 # Lazy imports for backend-specific modules (#2313).
@@ -66,10 +69,6 @@ _metrics_manager_lock = Lock()
 _DEFAULT_RETRIES = 3
 _BACKOFF_BASE = 2.0
 _STANDARD_DELAY = 1.0
-
-from retry_mechanism import RetryConfig as _RetryConfig
-from retry_mechanism import RetryMechanism as _RetryMechanism
-from retry_mechanism import RetryStrategy as _RetryStrategy
 
 
 def _get_config_manager():
