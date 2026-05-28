@@ -236,7 +236,7 @@
                 :stroke-dasharray="segment.dashArray"
                 :stroke-dashoffset="segment.offset"
                 class="segment"
-                :style="{ animationDelay: `${index * 100}ms` }"
+                :style="{ animationDelay: `${(index as number) * 100}ms` }"
               />
               <!-- Center text -->
               <text x="100" y="95" text-anchor="middle" class="center-value">

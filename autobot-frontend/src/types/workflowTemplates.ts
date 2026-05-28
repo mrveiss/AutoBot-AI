@@ -30,7 +30,7 @@ import type {
   WorkflowStepStatus,
   RiskLevel,
 } from './_generated/workflow'
-export type { PromptSpec, WorkflowTask, WorkflowPlan, WorkflowStepStatus, RiskLevel }
+export type { PromptSpec, WorkflowTask, WorkflowPlan, RiskLevel }
 
 /**
  * Static template step — matches backend `_template_step_dict()` from

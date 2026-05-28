@@ -6,7 +6,12 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
     "skipLibCheck": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "vue": ["./node_modules/vue"],
+      "pinia": ["./node_modules/pinia"],
+      "@xterm/xterm": ["./node_modules/@xterm/xterm"],
+      "@xterm/addon-fit": ["./node_modules/@xterm/addon-fit"],
+      "@xterm/addon-web-links": ["./node_modules/@xterm/addon-web-links"]
     }
   }
 }

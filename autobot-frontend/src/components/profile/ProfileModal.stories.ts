@@ -20,7 +20,7 @@ export const Default: Story = {
   args: {
     isOpen: true
   },
-  render: (args) => ({
+  render: (args: any) => ({
     components: { ProfileModal },
     setup() {
       return { args };
@@ -41,7 +41,7 @@ export const Closed: Story = {
   args: {
     isOpen: false
   },
-  render: (args) => ({
+  render: (args: any) => ({
     components: { ProfileModal },
     setup() {
       return { args };
@@ -62,7 +62,7 @@ export const WithBackdrop: Story = {
   args: {
     isOpen: true
   },
-  render: (args) => ({
+  render: (args: any) => ({
     components: { ProfileModal },
     setup() {
       return { args };

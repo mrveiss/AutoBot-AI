@@ -360,6 +360,8 @@ const submitOverseerQuery = inject<(query: string) => Promise<boolean>>('submitO
 const store = useChatStore()
 const controller = useChatController()
 
+const messageText = ref('')
+
 // GH#4449: Slash command preset autocomplete
 const {
   suggestions: slashSuggestions,
@@ -390,7 +392,6 @@ const fileInput = ref<HTMLInputElement>()
 const emojiPicker = ref<HTMLElement>()
 
 // State
-const messageText = ref('')
 const attachedFiles = ref<File[]>([])
 const isInputFocused = ref(false)
 const isVoiceRecording = ref(false)

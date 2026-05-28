@@ -129,6 +129,7 @@ async function renderChart() {
 
   try {
     const embed = await loadVegaEmbed()
+    if (!embed) return
 
     // Apply prefers-reduced-motion: disable animations
     const spec = { ...chartSpec.value } as any

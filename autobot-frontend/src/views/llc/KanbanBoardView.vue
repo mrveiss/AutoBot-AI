@@ -140,6 +140,7 @@ interface WorkItem {
   story_points: number | null
   assignee_name: string | null
   assignee_type: 'human' | 'agent' | null
+  sprint_id: string | null
   column_id: string
   status: string
   labels: string[]

@@ -27,6 +27,7 @@ interface VectorizationStatusResponse {
 interface VectorizationJobResponse {
   job_id?: string
   status?: string
+  results?: Array<{ id: string; status: string; error?: string }>
   [key: string]: unknown
 }
 
