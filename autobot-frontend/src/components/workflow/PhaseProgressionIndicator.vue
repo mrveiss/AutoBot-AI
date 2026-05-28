@@ -199,7 +199,8 @@ async function loadValidationData(): Promise<void> {
       const overview = data.report.system_overview
       systemMaturity.value = overview?.overall_maturity ?? 0
 
-      phases.value = (data.report.phase_details ?? []).map((p) => ({
+      type PhaseDetail = NonNullable<NonNullable<typeof data.report>['phase_details']>[number]
+      phases.value = (data.report.phase_details ?? []).map((p: PhaseDetail) => ({
         name: p.display_name ?? p.name ?? t('workflow.phaseProgression.unknownPhase'),
         completion_percentage: p.completion_percentage ?? 0,
         status:

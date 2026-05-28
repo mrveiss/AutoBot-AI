@@ -178,8 +178,8 @@ const renderChart = async () => {
     if (prefersReducedMotion.value) {
       spec.config = {
         ...(spec.config as Record<string, unknown>),
-        mark: { ...(spec.config as Record<string, unknown>)?.mark, animationDuration: 0 },
-        axis: { ...(spec.config as Record<string, unknown>)?.axis, minExtent: 30 }
+        mark: { ...((spec.config as Record<string, unknown>)?.mark as Record<string, unknown>), animationDuration: 0 },
+        axis: { ...((spec.config as Record<string, unknown>)?.axis as Record<string, unknown>), minExtent: 30 }
       }
     }
 

@@ -136,6 +136,7 @@ interface WorkItem {
   assignee_name: string | null
   column_id: string
   status: string
+  sprint_id: string | null
   labels: string[]
   acceptance_criteria: string[]
   description: string
