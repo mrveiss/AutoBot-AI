@@ -25,27 +25,24 @@ class LocalLLM:
     """Local LLM provider using Ollama when available.
 
     Attempts to use real Ollama for text generation. Falls back to mock
-    responses only when Ollama is not configured (AUTOBOT_OLLAMA_HOST/PORT not set).
+    responses only when Ollama is not configured (AUTOBOT_OLLAMA_ENDPOINT not set).
     """
 
     def __init__(self):
         """Initialize local LLM with Ollama connection check."""
-        self._ollama_host = config.ollama_host
-        self._ollama_port = config.ollama_port
-        self._ollama_available = bool(self._ollama_host and self._ollama_port)
-        self._ollama_url: str | None = None
+        self._ollama_url: str | None = config.ollama_url or None
+        self._ollama_available = bool(self._ollama_url)
         self._default_model = config.default_llm_model
 
         if self._ollama_available:
-            self._ollama_url = f"http://{self._ollama_host}:{self._ollama_port}"
             logger.info("LocalLLM initialized with Ollama at %s", self._ollama_url)
         else:
             # Issue #665: More informative warning - LocalLLM is optional
             logger.debug(
                 "LocalLLM (Ollama) not configured - this provider will use mock responses. "
                 "This only affects the 'local' LLM provider. Other providers (OpenAI, Anthropic, "
-                "Google) work independently. To enable local Ollama: set AUTOBOT_OLLAMA_HOST "
-                "and AUTOBOT_OLLAMA_PORT in .env file."
+                "Google) work independently. To enable local Ollama: set AUTOBOT_OLLAMA_ENDPOINT "
+                "in .env file."
             )
 
     def _create_mock_response(self, prompt: str) -> dict:
