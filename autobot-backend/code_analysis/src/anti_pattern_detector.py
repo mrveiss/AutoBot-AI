@@ -375,11 +375,17 @@ class AntiPatternDetector:
     GOD_CLASS_METHOD_THRESHOLD = 20
     GOD_CLASS_ATTR_THRESHOLD = 15
     GOD_CLASS_LOC_THRESHOLD = 500
-    GOD_CLASS_LINE_THRESHOLD = GOD_CLASS_LOC_THRESHOLD  # alias used by api.code_intelligence
-    LONG_METHOD_THRESHOLD = 50  # lines
+    GOD_CLASS_LINE_THRESHOLD = 500        # alias for api.code_intelligence compat
+    LONG_METHOD_THRESHOLD = 50
     LONG_PARAM_LIST_THRESHOLD = 5
-    FEATURE_ENVY_THRESHOLD = 3  # external refs > self refs * threshold
-    LAZY_CLASS_METHOD_THRESHOLD = 2  # classes with fewer methods
+    LONG_PARAMETER_THRESHOLD = 5          # alias for api.code_intelligence compat
+    LARGE_FILE_THRESHOLD = 1000           # alias for api.code_intelligence compat
+    DEEP_NESTING_THRESHOLD = 4            # alias for api.code_intelligence compat
+    MESSAGE_CHAIN_THRESHOLD = 4           # alias for api.code_intelligence compat
+    COMPLEX_CONDITIONAL_THRESHOLD = 3     # alias for api.code_intelligence compat
+    MAGIC_NUMBER_THRESHOLD = 3            # alias for api.code_intelligence compat
+    FEATURE_ENVY_THRESHOLD = 3
+    LAZY_CLASS_METHOD_THRESHOLD = 2
     LAZY_CLASS_LOC_THRESHOLD = 20
 
     def __init__(self, redis_client=None):
