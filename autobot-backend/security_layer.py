@@ -18,7 +18,7 @@ import yaml
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
-from config import config as global_config_manager
+from config import get_config_manager
 from constants.network_constants import NetworkConstants
 
 logger = get_logger(__name__)
@@ -34,7 +34,7 @@ class SecurityLayer:
     def __init__(self):
         """Initialize security layer with config, role permissions, and audit logging."""
         # Use centralized config manager instead of direct file loading
-        self.security_config = global_config_manager.get("security_config", {})
+        self.security_config = get_config_manager().get("security_config", {})
 
         # Check for single-user mode (development/personal use)
         self.single_user_mode = config.single_user_mode.lower() in BOOLEAN_TRUE_VALUES
