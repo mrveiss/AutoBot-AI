@@ -14,6 +14,8 @@ This module provides comprehensive cost tracking for all LLM API calls:
 Related Issues: #59 (Advanced Analytics & Business Intelligence)
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 from dataclasses import dataclass, field

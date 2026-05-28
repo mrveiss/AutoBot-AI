@@ -78,10 +78,11 @@ _worker_prefetch = _celery_config.get("worker_prefetch_multiplier", 1)
 _worker_max_tasks = _celery_config.get("worker_max_tasks_per_child", 100)
 
 # Configure Celery with Redis broker and result backend
+# ssot_config env vars (CELERY_BROKER_URL / CELERY_RESULT_BACKEND) override the computed defaults
 celery_app = Celery(
     "autobot",
-    broker=config.celery_broker_url,
-    backend=config.celery_result_backend,
+    broker=ssot_config.celery_broker_url or _default_broker_url,
+    backend=ssot_config.celery_result_backend or _default_backend_url,
 )
 
 # Celery configuration

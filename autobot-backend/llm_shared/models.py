@@ -6,6 +6,7 @@ LLM Interface Models - Dataclasses and settings for LLM operations.
 
 Extracted from llm_interface.py as part of Issue #381 god class refactoring.
 """
+from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
@@ -166,10 +167,6 @@ class LLMRequest:
     request_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     tools: List["ToolDefinition"] | None = None
     tool_choice: str | None = None  # "auto" | "none" | specific tool name
-    # Hint for decode-bound workload routing (GH#7353): expected number of
-    # output tokens.  Values >= TierConfig.ssm_output_token_threshold steer
-    # the request toward SSM/linear-attention models when one is registered.
-    expected_output_tokens: int | None = None
 
 
 __all__ = [
