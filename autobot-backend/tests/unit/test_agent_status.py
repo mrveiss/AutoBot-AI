@@ -66,6 +66,7 @@ def _load_models_and_scheduler():
 
     _make_stub("models.agent", Agent=MagicMock())
     _make_stub("services")
+    _make_stub("services.task_workspace")
     _make_stub(
         "services.run_jwt",
         get_run_jwt_scopes=MagicMock(),
@@ -101,10 +102,14 @@ class TestAgentStatusEnum:
         assert AgentStatus.ACTIVE == "active"
         assert AgentStatus.DISABLED == "disabled"
         assert AgentStatus.PAUSED == "paused"
+        assert AgentStatus.ERROR == "error"
         assert AgentStatus.TERMINATED == "terminated"
 
     def test_value(self):
         assert AgentStatus.ACTIVE.value == "active"
+
+    def test_error_value(self):
+        assert AgentStatus.ERROR.value == "error"
 
 
 # ---------------------------------------------------------------------------
@@ -128,6 +133,10 @@ class TestHeartbeatEnabledHybridProperty:
 
     def test_paused_is_not_enabled(self):
         state = self._make_state(AgentStatus.PAUSED.value)
+        assert state.heartbeat_enabled is False
+
+    def test_error_is_not_enabled(self):
+        state = self._make_state(AgentStatus.ERROR.value)
         assert state.heartbeat_enabled is False
 
     def test_terminated_is_not_enabled(self):
@@ -167,51 +176,83 @@ class TestIsAgentPaused:
         session_factory = MagicMock()
         return HeartbeatScheduler(session_factory)
 
-    @pytest.mark.asyncio
-    async def test_paused_returns_true(self):
-        sched = self._make_scheduler()
+    def _make_cm(self, sched, status_value):
         mock_session = AsyncMock()
         mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = AgentStatus.PAUSED.value
+        mock_result.scalar_one_or_none.return_value = status_value
         mock_session.execute = AsyncMock(return_value=mock_result)
-
         cm = MagicMock()
         cm.__aenter__ = AsyncMock(return_value=mock_session)
         cm.__aexit__ = AsyncMock(return_value=False)
         sched._session_factory = MagicMock(return_value=cm)
 
-        result = await sched._is_agent_paused("agent-1")
-        assert result is True
+    @pytest.mark.asyncio
+    async def test_paused_returns_true(self):
+        sched = self._make_scheduler()
+        self._make_cm(sched, AgentStatus.PAUSED.value)
+        assert await sched._is_agent_paused("agent-1") is True
 
     @pytest.mark.asyncio
     async def test_active_returns_false(self):
         sched = self._make_scheduler()
-        mock_session = AsyncMock()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = AgentStatus.ACTIVE.value
-        mock_session.execute = AsyncMock(return_value=mock_result)
-
-        cm = MagicMock()
-        cm.__aenter__ = AsyncMock(return_value=mock_session)
-        cm.__aexit__ = AsyncMock(return_value=False)
-        sched._session_factory = MagicMock(return_value=cm)
-
-        result = await sched._is_agent_paused("agent-1")
-        assert result is False
+        self._make_cm(sched, AgentStatus.ACTIVE.value)
+        assert await sched._is_agent_paused("agent-1") is False
 
     @pytest.mark.asyncio
     async def test_terminated_returns_false(self):
         """Terminated agents are not 'paused'; they simply never run."""
         sched = self._make_scheduler()
+        self._make_cm(sched, AgentStatus.TERMINATED.value)
+        assert await sched._is_agent_paused("agent-1") is False
+
+
+# ---------------------------------------------------------------------------
+# Scheduler: _should_skip_heartbeat (MVA-1411)
+# ---------------------------------------------------------------------------
+
+
+class TestShouldSkipHeartbeat:
+    def _make_scheduler(self):
+        return HeartbeatScheduler(MagicMock())
+
+    def _make_cm(self, sched, status_value):
         mock_session = AsyncMock()
         mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = AgentStatus.TERMINATED.value
+        mock_result.scalar_one_or_none.return_value = status_value
         mock_session.execute = AsyncMock(return_value=mock_result)
-
         cm = MagicMock()
         cm.__aenter__ = AsyncMock(return_value=mock_session)
         cm.__aexit__ = AsyncMock(return_value=False)
         sched._session_factory = MagicMock(return_value=cm)
 
-        result = await sched._is_agent_paused("agent-1")
-        assert result is False
+    @pytest.mark.asyncio
+    async def test_paused_skips(self):
+        sched = self._make_scheduler()
+        self._make_cm(sched, AgentStatus.PAUSED.value)
+        assert await sched._should_skip_heartbeat("agent-1") is True
+
+    @pytest.mark.asyncio
+    async def test_error_skips(self):
+        """ERROR agents must be suppressed until recovered (MVA-1411)."""
+        sched = self._make_scheduler()
+        self._make_cm(sched, AgentStatus.ERROR.value)
+        assert await sched._should_skip_heartbeat("agent-1") is True
+
+    @pytest.mark.asyncio
+    async def test_active_does_not_skip(self):
+        sched = self._make_scheduler()
+        self._make_cm(sched, AgentStatus.ACTIVE.value)
+        assert await sched._should_skip_heartbeat("agent-1") is False
+
+    @pytest.mark.asyncio
+    async def test_terminated_does_not_skip_via_should_skip(self):
+        """Terminated agents are cancelled at task level, not via skip guard."""
+        sched = self._make_scheduler()
+        self._make_cm(sched, AgentStatus.TERMINATED.value)
+        assert await sched._should_skip_heartbeat("agent-1") is False
+
+    @pytest.mark.asyncio
+    async def test_disabled_does_not_skip(self):
+        sched = self._make_scheduler()
+        self._make_cm(sched, AgentStatus.DISABLED.value)
+        assert await sched._should_skip_heartbeat("agent-1") is False
