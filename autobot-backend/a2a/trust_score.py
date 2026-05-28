@@ -43,7 +43,6 @@ Usage
 """
 
 import json
-import logging
 import os
 import sqlite3
 import time
@@ -52,10 +51,11 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, Optional, Set
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from utils.paths_manager import PathsManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Trust levels
