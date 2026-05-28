@@ -55,7 +55,7 @@ ports:
     description: "ChromaDB HTTP API (vector store for embeddings)"
 
 health:
-  endpoint: "http://localhost:6379"
+  endpoint: "http://localhost:8100/api/v2/heartbeat"
   interval: "30s"
   timeout: "5s"
   retries: 3
