@@ -2,11 +2,23 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Attention backend selector with tiered fallback chain.
+Attention backend selector with architecture-family dispatch.
 
 Selects and applies the best available attention backend for a given model
-and hardware environment.  Three tiers are tried in order:
+and hardware environment, routing first on architecture family and then on
+available library tiers.
 
+Architecture-family dispatch (Issue #7350)
+  transformer      — tiered flash/sdpa/eager path (BetterTransformer → SDPA → Vanilla)
+  state_space      — SSM recurrent kernel stub (NOT_APPLICABLE until kernel is wired)
+  linear_attention — linear-attn kernel stub (NOT_APPLICABLE until kernel is wired)
+  hybrid           — mixed dispatch stub (NOT_APPLICABLE until per-layer routing is wired)
+
+The dispatch table (ARCH_DISPATCH_TABLE) is data-driven: adding a new architecture
+family requires only an entry in the table and a handler method.  select_backend()
+does not need modification.
+
+Transformer tier fallback chain (Issue #1951, unchanged)
   Tier 1 — BetterTransformer  (optimum)
   Tier 2 — SDPA               (torch >= 2.0)
   Tier 3 — Vanilla            (always available)
@@ -20,12 +32,13 @@ Heavy third-party libraries (optimum, torch) are imported lazily so the
 module loads cleanly even when those packages are absent.
 
 Issue #1951: Attention backend fallback chain.
+Issue #7350: Architecture-family dispatch table.
 """
 
 import gc
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, List
+from typing import Any, ClassVar, List
 
 from autobot_shared.logging_manager import get_logger
 from llm_shared.types import ArchitectureFamily
@@ -111,6 +124,21 @@ class ModelConfig:
 
 
 # ---------------------------------------------------------------------------
+# Architecture-family dispatch table  (Issue #7350)
+# ---------------------------------------------------------------------------
+
+# Maps each ArchitectureFamily to the handler method name on
+# AttentionBackendSelector.  Extend this dict at startup (or via plugin) to
+# register a new family — select_backend() needs no modification.
+ARCH_DISPATCH_TABLE: dict[ArchitectureFamily, str] = {
+    ArchitectureFamily.TRANSFORMER: "_handle_transformer",
+    ArchitectureFamily.STATE_SPACE: "_handle_ssm",
+    ArchitectureFamily.LINEAR_ATTENTION: "_handle_linear_attention",
+    ArchitectureFamily.HYBRID: "_handle_hybrid",
+}
+
+
+# ---------------------------------------------------------------------------
 # Selector
 # ---------------------------------------------------------------------------
 
@@ -118,16 +146,24 @@ class ModelConfig:
 class AttentionBackendSelector:
     """Select and apply the best available attention backend for a model.
 
-    Selection follows a strict tier order:
+    Architecture-family dispatch (Issue #7350):
+      The module-level ``ARCH_DISPATCH_TABLE`` maps each ``ArchitectureFamily``
+      to a handler method on this class.  ``select_backend`` looks up the
+      handler and delegates — adding a new family requires only a new table
+      entry plus a corresponding method; ``select_backend`` is never touched.
+
+    Transformer tier fallback (Issue #1951):
       1. BetterTransformer  (requires ``optimum``, blocked for some models)
       2. SDPA               (requires ``torch >= 2.0``)
       3. Vanilla            (always available)
 
     Each ``select_backend`` call is stateless; the same selector instance can
     be reused for multiple models without side-effects.
-
-    Issue #1951.
     """
+
+    # Per-class copy of the dispatch table.  Tests may patch this without
+    # affecting the module-level ARCH_DISPATCH_TABLE.
+    _arch_dispatch: ClassVar[dict[ArchitectureFamily, str]] = ARCH_DISPATCH_TABLE
 
     # Model families known to be incompatible with BetterTransformer.
     # Entries are matched case-insensitively against ModelConfig.model_type
@@ -148,50 +184,41 @@ class AttentionBackendSelector:
     def select_backend(self, model_config: ModelConfig) -> AttentionBackend:
         """Determine the highest available backend tier for *model_config*.
 
-        Non-transformer architectures (state-space, linear-attention, hybrid)
-        have no scaled-dot-product attention to optimise.  For those families
-        this method returns ``NOT_APPLICABLE`` immediately so callers can skip
-        the optimisation step without emitting spurious warnings.
-        Issue #7350.
+        Dispatches on ``model_config.architecture_family`` via
+        ``_arch_dispatch`` (sourced from module-level ``ARCH_DISPATCH_TABLE``).
+        Unknown families fall back to the transformer path with a WARNING so
+        operators know to register the new family in the table.
 
-        For transformer models, tries each tier in order.  A tier is skipped when:
-        - The required library is absent, or
-        - The model appears in the BetterTransformer blocklist (Tier 1 only).
+        Emits a structured ``arch_dispatch_event`` log entry on every call.
+        Issue #7350.
 
         Args:
             model_config: Description of the model to be optimised.
 
         Returns:
-            The highest tier that is both available and compatible, or
-            ``NOT_APPLICABLE`` for non-transformer architectures.
+            The backend selected by the architecture-family handler.
         """
-        if model_config.architecture_family != ArchitectureFamily.TRANSFORMER:
-            logger.debug(
-                "AttentionBackend: NOT_APPLICABLE for %s (architecture_family=%s)",
-                model_config.model_name or model_config.model_type,
-                model_config.architecture_family.value,
+        family = model_config.architecture_family
+        handler_name = self._arch_dispatch.get(family)
+        if handler_name is None:
+            logger.warning(
+                "arch_dispatch_event: unknown architecture_family=%s for %s — "
+                "falling back to transformer path; add to ARCH_DISPATCH_TABLE to suppress",
+                family.value if hasattr(family, "value") else family,
+                model_config.model_name or model_config.model_type or "(unknown)",
             )
-            return AttentionBackend.NOT_APPLICABLE
+            handler_name = "_handle_transformer"
 
-        if self._can_use_better_transformer(model_config):
-            logger.info(
-                "AttentionBackend: selected BetterTransformer for %s",
-                model_config.model_name or model_config.model_type,
-            )
-            return AttentionBackend.BETTER_TRANSFORMER
-
-        if self._can_use_sdpa():
-            logger.info(
-                "AttentionBackend: selected SDPA for %s",
-                model_config.model_name or model_config.model_type,
-            )
-            return AttentionBackend.SDPA
+        handler = getattr(self, handler_name, self._handle_transformer)
+        result = handler(model_config)
 
         logger.info(
-            "AttentionBackend: falling back to vanilla for %s",
-            model_config.model_name or model_config.model_type,
+            "arch_dispatch_event architecture_family=%s selected_backend=%s model=%s",
+            family.value if hasattr(family, "value") else family,
+            result.value,
+            model_config.model_name or model_config.model_type or "(unknown)",
         )
-        return AttentionBackend.VANILLA
+        return result
 
     def apply_backend(self, model: Any, backend: AttentionBackend) -> Any:
         """Apply *backend* to *model*, falling through on any failure.
@@ -248,6 +275,68 @@ class AttentionBackendSelector:
 
         available.append(AttentionBackend.VANILLA)
         return available
+
+    # ------------------------------------------------------------------
+    # Architecture-family handlers  (Issue #7350)
+    # ------------------------------------------------------------------
+
+    def _handle_transformer(self, model_config: ModelConfig) -> AttentionBackend:
+        """Transformer: tiered flash/sdpa/eager selection (unchanged from #1951)."""
+        if self._can_use_better_transformer(model_config):
+            logger.info(
+                "AttentionBackend: selected BetterTransformer for %s",
+                model_config.model_name or model_config.model_type,
+            )
+            return AttentionBackend.BETTER_TRANSFORMER
+
+        if self._can_use_sdpa():
+            logger.info(
+                "AttentionBackend: selected SDPA for %s",
+                model_config.model_name or model_config.model_type,
+            )
+            return AttentionBackend.SDPA
+
+        logger.info(
+            "AttentionBackend: falling back to vanilla for %s",
+            model_config.model_name or model_config.model_type,
+        )
+        return AttentionBackend.VANILLA
+
+    def _handle_ssm(self, model_config: ModelConfig) -> AttentionBackend:
+        """State-space / Mamba: SSM recurrent kernel stub.
+
+        Returns NOT_APPLICABLE — SSM models use recurrent scan kernels, not
+        scaled-dot-product attention.  FlashAttention must not be invoked.
+        Wire to the actual kernel once available.
+        """
+        logger.debug(
+            "SSM recurrent kernel stub: NOT_APPLICABLE for %s (kernel not yet wired)",
+            model_config.model_name or model_config.model_type or "(unknown)",
+        )
+        return AttentionBackend.NOT_APPLICABLE
+
+    def _handle_linear_attention(self, model_config: ModelConfig) -> AttentionBackend:
+        """Linear-attention: linear-attn kernel stub.
+
+        Returns NOT_APPLICABLE until the linear-attn kernel is wired.
+        """
+        logger.debug(
+            "Linear-attn kernel stub: NOT_APPLICABLE for %s (kernel not yet wired)",
+            model_config.model_name or model_config.model_type or "(unknown)",
+        )
+        return AttentionBackend.NOT_APPLICABLE
+
+    def _handle_hybrid(self, model_config: ModelConfig) -> AttentionBackend:
+        """Hybrid (Jamba-style): mixed dispatch stub.
+
+        Attention layers → transformer path; SSM layers → SSM path.
+        Returns NOT_APPLICABLE until per-layer routing is wired.
+        """
+        logger.debug(
+            "Hybrid dispatch stub: NOT_APPLICABLE for %s (per-layer routing not yet wired)",
+            model_config.model_name or model_config.model_type or "(unknown)",
+        )
+        return AttentionBackend.NOT_APPLICABLE
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -362,6 +451,7 @@ def get_attention_backend_selector() -> AttentionBackendSelector:
 
 
 __all__ = [
+    "ARCH_DISPATCH_TABLE",
     "AttentionBackend",
     "AttentionBackendSelector",
     "ModelConfig",
