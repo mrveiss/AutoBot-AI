@@ -1745,7 +1745,7 @@ def create_lifespan_manager():
         logger.info("🧵 Bounded thread pool configured (max %d workers)", MAX_WORKER_THREADS)
 
         # Register the running event loop for sync-endpoint audit scheduling (#1568)
-        from autobot_backend.audit_middleware import set_main_event_loop
+        from middleware.audit_middleware import set_main_event_loop
 
         set_main_event_loop(asyncio.get_running_loop())
 
