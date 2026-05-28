@@ -213,9 +213,7 @@ class ContextWindowManager:
     def _registry_family(model: str) -> str:
         """Look up architecture_family from llm_shared registry (lazy import)."""
         try:
-            from llm_shared.model_param_registry import (
-                get_architecture_family as _get,
-            )
+            from llm_shared.model_param_registry import get_architecture_family as _get
 
             return _get(model)
         except Exception:
