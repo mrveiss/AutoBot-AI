@@ -305,15 +305,6 @@
   changed_when: false
   tags: ['backend', 'deploy']
 
-- name: Create backend symlink for imports
-  ansible.builtin.file:
-    src: "{{ backend_code_dir }}"
-    dest: "{{ backend_install_dir }}/backend"
-    state: link
-    force: true
-    owner: "{{ backend_user }}"
-    group: "{{ backend_group }}"
-
 # Issue #912: Deploy error catalog so it is always available on the VM.
 # path_constants.py resolves PROJECT_ROOT as 3 levels up from constants/,
 # putting CONFIG_DIR at /opt/autobot/infrastructure/shared/config/ which is
