@@ -8,6 +8,7 @@ Issue #732: Unified Gateway for multi-channel communication.
 Main Gateway class that coordinates session management, message routing,
 and channel adapters.
 """
+
 from __future__ import annotations
 
 import asyncio

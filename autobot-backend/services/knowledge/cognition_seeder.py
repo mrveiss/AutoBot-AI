@@ -11,6 +11,7 @@ Seeds are stored in a dedicated ``cognition_store`` collection with metadata
 flags ``seeded: true`` and ``seed_priority: high/medium/low`` so that
 AdvancedRAGOptimizer can apply a retrieval score boost.
 """
+
 from __future__ import annotations
 
 import asyncio

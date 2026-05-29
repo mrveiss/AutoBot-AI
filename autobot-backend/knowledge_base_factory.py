@@ -24,6 +24,7 @@ from autobot_shared.logging_manager import get_logger
     # Sync context (uses thread pool)
     kb = await asyncio.to_thread(get_knowledge_base_sync)
 """
+
 from __future__ import annotations
 
 import asyncio
