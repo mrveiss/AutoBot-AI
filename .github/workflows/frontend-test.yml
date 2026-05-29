@@ -213,18 +213,22 @@ jobs:
 
       - name: Generate test summary
         run: |
-          echo "# 🧪 Frontend Test Results" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "## Test Jobs Status:" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Unit Tests: ${{ needs.unit-tests.result }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Security Scan: ${{ needs.security-scan.result }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Build Test: ${{ needs.build-test.result }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "# 🧪 Frontend Test Results"
+            echo ""
+            echo "## Test Jobs Status:"
+            echo "- Unit Tests: ${{ needs.unit-tests.result }}"
+            echo "- Security Scan: ${{ needs.security-scan.result }}"
+            echo "- Build Test: ${{ needs.build-test.result }}"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
 
           if [ -d "test-artifacts/test-results-unit/coverage" ]; then
-            echo "## Coverage Report Available" >> "$GITHUB_STEP_SUMMARY"
-            echo "Coverage reports have been uploaded to Codecov." >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "## Coverage Report Available"
+              echo "Coverage reports have been uploaded to Codecov."
+              echo ""
+            } >> "$GITHUB_STEP_SUMMARY"
           fi
 
           if [ -d "test-artifacts" ]; then
@@ -235,6 +239,8 @@ jobs:
             echo "" >> "$GITHUB_STEP_SUMMARY"
           fi
 
-          echo "## Quick Links:" >> "$GITHUB_STEP_SUMMARY"
-          echo "- [View Coverage Report](https://app.codecov.io/gh/${{ github.repository }})" >> "$GITHUB_STEP_SUMMARY"
-          echo "- [Download Test Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Quick Links:"
+            echo "- [View Coverage Report](https://app.codecov.io/gh/${{ github.repository }})"
+            echo "- [Download Test Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          } >> "$GITHUB_STEP_SUMMARY"

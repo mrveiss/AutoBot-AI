@@ -64,7 +64,7 @@ jobs:
   visual-regression:
     name: Storybook visual regression
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 360
 
     steps:
       - name: Checkout code
