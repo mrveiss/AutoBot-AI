@@ -118,6 +118,18 @@
     backend_slm_auth_tok: "{{ _backend_slm_auth_tok.stdout | default('') | trim }}"
   tags: ['backend', 'config']
 
+# MVA-1633: Prevent systemd Restart=always race during env updates.
+# The backend service may restart BEFORE the new .env is written if we use
+# async notify. Stop explicitly, write env files, verify they exist, then start.
+- name: "Backend | Stop service before env update (MVA-1633)"
+  ansible.builtin.systemd:
+    name: autobot-backend
+    state: stopped
+    daemon_reload: false
+  changed_when: false
+  failed_when: false
+  tags: ['backend', 'config']
+
 - name: "Backend | Deploy /etc/autobot/autobot-backend.env"
   ansible.builtin.template:
     src: backend.env.j2
@@ -125,7 +137,6 @@
     mode: "0640"
     owner: root
     group: "{{ backend_service_account }}"
-  notify: restart backend
   tags: ['backend', 'config']
 
 # Issue #2953: Write deployment.mode into config/config.yaml so the backend
@@ -241,6 +252,15 @@
     owner: "{{ backend_user }}"
     group: "{{ backend_group }}"
     recurse: true
+  tags: ['backend', 'deploy']
+
+# MVA-1633: Ensure startup validation script is executable
+- name: "Backend | Make startup validation script executable (MVA-1633)"
+  ansible.builtin.file:
+    path: "{{ backend_code_dir }}/startup_validation.py"
+    mode: "0755"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
   tags: ['backend', 'deploy']
 
 - name: Sync backend config directory from code_source
@@ -565,7 +585,14 @@
     owner: "{{ backend_user }}"
     group: "{{ backend_group }}"
     backup: true
-  notify: restart backend
+  tags: ['backend', 'config']
+
+# MVA-1633: Verify .env file exists (will be read by service on restart)
+- name: "Backend | Verify .env file readable (MVA-1633)"
+  ansible.builtin.stat:
+    path: "{{ backend_code_dir | default(backend_install_dir) }}/.env"
+  register: _backend_env_stat
+  failed_when: not _backend_env_stat.stat.exists or not _backend_env_stat.stat.readable
   tags: ['backend', 'config']
 
 - name: Deploy backend systemd service
