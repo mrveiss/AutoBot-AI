@@ -230,7 +230,7 @@ class TestNPUWorkerClientLoadModel:
 
     @pytest.mark.asyncio
     async def test_load_model_ssm_family_forwards_field(self):
-        """architecture_family=ssm must be forwarded in the POST payload (MVA-1383)."""
+        """architecture_family=ssm must be forwarded in the POST payload when NPU_SSM_ENABLED=true (MVA-1383)."""
         client = self._make_client()
         expected_response = {"success": True, "model_id": "mamba-370m"}
         captured_calls = []
@@ -243,11 +243,12 @@ class TestNPUWorkerClientLoadModel:
         mock_http.post = fake_post
         client._http_client = mock_http
 
-        result = await client.load_model(
-            model_id="mamba-370m",
-            device="NPU",
-            architecture_family="ssm",
-        )
+        with patch.dict(os.environ, {"NPU_SSM_ENABLED": "true"}):
+            result = await client.load_model(
+                model_id="mamba-370m",
+                device="NPU",
+                architecture_family="ssm",
+            )
 
         assert result == expected_response
         payload = captured_calls[0]["json"]
@@ -288,6 +289,52 @@ class TestNPUWorkerClientLoadModel:
         assert result["success"] is False
         assert "ssm" in result["error"]
         assert result.get("error_code") == "unsupported_architecture"
+
+    @pytest.mark.asyncio
+    async def test_load_model_ssm_without_flag_rejected_before_http(self):
+        """load_model must reject ssm family locally when NPU_SSM_ENABLED is off — no HTTP call (GH#8690)."""
+        client = self._make_client()
+        http_calls = []
+
+        async def fake_post(url, json=None, **kwargs):
+            http_calls.append(url)
+            return self._mock_response({"success": True})
+
+        mock_http = MagicMock()
+        mock_http.post = fake_post
+        client._http_client = mock_http
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("NPU_SSM_ENABLED", None)
+            result = await client.load_model(
+                model_id="mamba-370m",
+                device="NPU",
+                architecture_family="ssm",
+            )
+
+        assert result["success"] is False
+        assert result.get("error_code") == "unsupported_architecture"
+        assert len(http_calls) == 0, "no HTTP request should be made for unsupported family"
+
+    @pytest.mark.asyncio
+    async def test_load_model_none_family_skips_validation(self):
+        """Omitting architecture_family must skip get_inference_config and forward to worker (GH#8690)."""
+        client = self._make_client()
+        captured_calls = []
+
+        async def fake_post(url, json=None, **kwargs):
+            captured_calls.append({"url": url, "json": json})
+            return self._mock_response({"success": True})
+
+        mock_http = MagicMock()
+        mock_http.post = fake_post
+        client._http_client = mock_http
+
+        result = await client.load_model(model_id="bert-base", device="CPU")
+
+        assert result == {"success": True}
+        assert len(captured_calls) == 1
+        assert "architecture_family" not in captured_calls[0]["json"]
 
 
 # ---------------------------------------------------------------------------
