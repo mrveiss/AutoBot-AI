@@ -700,7 +700,8 @@ class TestDockerBackendSnapshot:
         result = await backend.delete_snapshot("ghost-snap")
         assert result is False
 
-    def test_get_snapshots_for_session(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_get_snapshots_for_session(self, tmp_path):
         from services.execution.snapshot_index import SnapshotIndex, SnapshotRecord
 
         idx = SnapshotIndex(storage_path=tmp_path)
@@ -723,7 +724,7 @@ class TestDockerBackendSnapshot:
             backend = DockerBackend(snapshot_index=idx)
             backend.client = mock_client
 
-        records = backend.get_snapshots_for_session("sess-Q")
+        records = await backend.get_snapshots_for_session("sess-Q")
         assert len(records) == 2
 
     @pytest.mark.asyncio

@@ -10,8 +10,10 @@ Snapshots are Docker images created via ``docker commit``.
 
 import json
 import os
+import threading
 import uuid
 from dataclasses import asdict, dataclass
+from dataclasses import fields as dataclass_fields
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -59,7 +61,9 @@ class SnapshotRecord:
 
     @classmethod
     def from_dict(cls, data: Dict) -> "SnapshotRecord":
-        return cls(**data)
+        # Filter to known fields so future schema additions don't crash older code.
+        known = {f.name for f in dataclass_fields(cls)}
+        return cls(**{k: v for k, v in data.items() if k in known})
 
 
 class SnapshotIndex:
@@ -72,6 +76,7 @@ class SnapshotIndex:
     def __init__(self, storage_path: Optional[Path] = None) -> None:
         self._storage_path = storage_path or _resolve_storage_path()
         self._index_path = self._storage_path / _INDEX_FILENAME
+        self._lock = threading.Lock()
 
     def _ensure_storage(self) -> None:
         self._storage_path.mkdir(parents=True, exist_ok=True)
@@ -94,38 +99,54 @@ class SnapshotIndex:
         tmp.replace(self._index_path)
 
     def add(self, record: SnapshotRecord) -> None:
-        records = self._load()
-        records[record.snapshot_id] = record.to_dict()
-        self._save(records)
-        logger.debug("Snapshot %s added to index", record.snapshot_id)
+        with self._lock:
+            records = self._load()
+            records[record.snapshot_id] = record.to_dict()
+            self._save(records)
+            logger.debug("Snapshot %s added to index", record.snapshot_id)
 
     def get(self, snapshot_id: str) -> Optional[SnapshotRecord]:
         records = self._load()
         data = records.get(snapshot_id)
         if data is None:
             return None
-        return SnapshotRecord.from_dict(data)
+        try:
+            return SnapshotRecord.from_dict(data)
+        except (TypeError, KeyError) as exc:
+            logger.warning("Malformed snapshot record for %s: %s", snapshot_id, exc)
+            return None
 
     def list_by_session(self, session_id: str) -> List[SnapshotRecord]:
         records = self._load()
-        return [
-            SnapshotRecord.from_dict(v)
-            for v in records.values()
-            if v.get("session_id") == session_id
-        ]
+        result = []
+        for v in records.values():
+            if v.get("session_id") != session_id:
+                continue
+            try:
+                result.append(SnapshotRecord.from_dict(v))
+            except (TypeError, KeyError) as exc:
+                logger.warning("Skipping malformed snapshot record: %s", exc)
+        return result
 
     def list_all(self) -> List[SnapshotRecord]:
         records = self._load()
-        return [SnapshotRecord.from_dict(v) for v in records.values()]
+        result = []
+        for v in records.values():
+            try:
+                result.append(SnapshotRecord.from_dict(v))
+            except (TypeError, KeyError) as exc:
+                logger.warning("Skipping malformed snapshot record: %s", exc)
+        return result
 
     def remove(self, snapshot_id: str) -> bool:
-        records = self._load()
-        if snapshot_id not in records:
-            return False
-        del records[snapshot_id]
-        self._save(records)
-        logger.debug("Snapshot %s removed from index", snapshot_id)
-        return True
+        with self._lock:
+            records = self._load()
+            if snapshot_id not in records:
+                return False
+            del records[snapshot_id]
+            self._save(records)
+            logger.debug("Snapshot %s removed from index", snapshot_id)
+            return True
 
 
 def make_snapshot_id() -> str:
