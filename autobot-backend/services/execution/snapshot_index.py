@@ -1,0 +1,136 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+Snapshot index for resumable agent sessions (GH#4458).
+
+Maintains a JSON file-based index of container snapshot metadata.
+Snapshots are Docker images created via ``docker commit``.
+"""
+
+import json
+import os
+import uuid
+from dataclasses import asdict, dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional
+
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import now_utc
+
+logger = get_logger(__name__)
+
+_DEFAULT_SNAPSHOT_PATH = "/tmp/autobot_snapshots"
+_INDEX_FILENAME = "snapshot_index.json"
+
+_SNAPSHOT_STORAGE_PATH: str = os.getenv("AUTOBOT_SNAPSHOT_STORAGE_PATH", _DEFAULT_SNAPSHOT_PATH)
+
+
+def _resolve_storage_path() -> Path:
+    raw = os.getenv("AUTOBOT_SNAPSHOT_STORAGE_PATH", _DEFAULT_SNAPSHOT_PATH)
+    if not raw:
+        logger.warning(
+            "AUTOBOT_SNAPSHOT_STORAGE_PATH is empty, using default %s",
+            _DEFAULT_SNAPSHOT_PATH,
+        )
+        raw = _DEFAULT_SNAPSHOT_PATH
+    return Path(raw)
+
+
+@dataclass
+class SnapshotRecord:
+    """Metadata for one container snapshot."""
+
+    snapshot_id: str
+    session_id: str
+    container_id: str
+    image_name: str
+    created_at: str
+    size_bytes: int = 0
+    labels: Dict[str, str] = None
+
+    def __post_init__(self) -> None:
+        if self.labels is None:
+            self.labels = {}
+
+    def to_dict(self) -> Dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> "SnapshotRecord":
+        return cls(**data)
+
+
+class SnapshotIndex:
+    """File-backed index of container snapshot records (GH#4458).
+
+    Thread-safety: each operation re-reads and re-writes the index file.
+    This is safe for the expected low-frequency snapshot operations.
+    """
+
+    def __init__(self, storage_path: Optional[Path] = None) -> None:
+        self._storage_path = storage_path or _resolve_storage_path()
+        self._index_path = self._storage_path / _INDEX_FILENAME
+
+    def _ensure_storage(self) -> None:
+        self._storage_path.mkdir(parents=True, exist_ok=True)
+
+    def _load(self) -> Dict[str, dict]:
+        if not self._index_path.exists():
+            return {}
+        try:
+            with open(self._index_path, encoding="utf-8") as fh:
+                return json.load(fh)
+        except (json.JSONDecodeError, OSError) as exc:
+            logger.warning("Failed to load snapshot index, starting fresh: %s", exc)
+            return {}
+
+    def _save(self, records: Dict[str, dict]) -> None:
+        self._ensure_storage()
+        tmp = self._index_path.with_suffix(".tmp")
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(records, fh, indent=2)
+        tmp.replace(self._index_path)
+
+    def add(self, record: SnapshotRecord) -> None:
+        records = self._load()
+        records[record.snapshot_id] = record.to_dict()
+        self._save(records)
+        logger.debug("Snapshot %s added to index", record.snapshot_id)
+
+    def get(self, snapshot_id: str) -> Optional[SnapshotRecord]:
+        records = self._load()
+        data = records.get(snapshot_id)
+        if data is None:
+            return None
+        return SnapshotRecord.from_dict(data)
+
+    def list_by_session(self, session_id: str) -> List[SnapshotRecord]:
+        records = self._load()
+        return [
+            SnapshotRecord.from_dict(v)
+            for v in records.values()
+            if v.get("session_id") == session_id
+        ]
+
+    def list_all(self) -> List[SnapshotRecord]:
+        records = self._load()
+        return [SnapshotRecord.from_dict(v) for v in records.values()]
+
+    def remove(self, snapshot_id: str) -> bool:
+        records = self._load()
+        if snapshot_id not in records:
+            return False
+        del records[snapshot_id]
+        self._save(records)
+        logger.debug("Snapshot %s removed from index", snapshot_id)
+        return True
+
+
+def make_snapshot_id() -> str:
+    return uuid.uuid4().hex[:16]
+
+
+def _image_name_for_snapshot(snapshot_id: str) -> str:
+    return f"autobot-snapshot-{snapshot_id}:latest"
