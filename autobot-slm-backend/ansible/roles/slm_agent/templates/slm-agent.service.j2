@@ -28,6 +28,7 @@ ConditionPathExists={{ slm_agent_dir }}/slm/agent/agent.py
 Type=simple
 User={{ slm_agent_user }}
 Group={{ slm_agent_group }}
+SupplementaryGroups=systemd-journal
 WorkingDirectory={{ slm_agent_dir }}
 
 # Environment variables

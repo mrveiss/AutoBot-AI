@@ -49,6 +49,14 @@
   notify: Reload systemd
   tags: ['slm_agent', 'cleanup']
 
+- name: "SLM Agent | Add agent user to systemd-journal group for log access"
+  ansible.builtin.user:
+    name: "{{ slm_agent_user }}"
+    groups: systemd-journal
+    append: true
+  become: true
+  tags: ['slm_agent', 'setup']
+
 - name: "SLM Agent | Create agent directories"
   file:
     path: "{{ item }}"
