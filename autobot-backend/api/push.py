@@ -33,10 +33,17 @@ class SubscribeRequest(BaseModel):
     endpoint: str
     p256dh: str
     auth: str
+    # GH#8967: user_id MUST NOT be accepted from request body.
+    # Subscriptions are ALWAYS bound to the authenticated user.
+    # If user_id is provided, it will be silently ignored (fail-closed).
+    user_id: str | None = None
 
 
 class UnsubscribeRequest(BaseModel):
     endpoint: str
+    # GH#8967: user_id MUST NOT be accepted from request body.
+    # Unsubscribe targets ONLY the authenticated user's subscription.
+    user_id: str | None = None
 
 
 @router.get("/vapid-public-key", response_model=Dict[str, str])
@@ -67,10 +74,21 @@ async def subscribe(
     current_user: Dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> Dict[str, str]:
-    """Store a browser Web Push subscription for the authenticated user."""
+    """Store a browser Web Push subscription for the authenticated user (GH#8967: IDOR fix).
+
+    Security: subscription user_id is ALWAYS bound to the authenticated user.
+    Any user_id in the request body is silently ignored (fail-closed design).
+    """
     user_id = current_user.get("user_id") or current_user.get("username", "")
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Cannot identify user")
+
+    # GH#8967: Reject IDOR attempts by logging and ignoring any user_id in request body.
+    if body.user_id and body.user_id != user_id:
+        logger.warning(
+            "SECURITY: push subscribe IDOR attempt — attacker user_id=%s, authenticated user_id=%s, endpoint=%s",
+            body.user_id, user_id, body.endpoint[:50],
+        )
 
     # Upsert: if endpoint already exists, update keys in place.
     result = await session.execute(
@@ -109,10 +127,21 @@ async def unsubscribe(
     current_user: Dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> Dict[str, str]:
-    """Remove a browser Web Push subscription."""
+    """Remove a browser Web Push subscription (GH#8967: IDOR fix).
+
+    Security: unsubscribe targets ONLY the authenticated user's subscription.
+    Any user_id in the request body is silently ignored (fail-closed design).
+    """
     user_id = current_user.get("user_id") or current_user.get("username", "")
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Cannot identify user")
+
+    # GH#8967: Reject IDOR attempts by logging and ignoring any user_id in request body.
+    if body.user_id and body.user_id != user_id:
+        logger.warning(
+            "SECURITY: push unsubscribe IDOR attempt — attacker user_id=%s, authenticated user_id=%s, endpoint=%s",
+            body.user_id, user_id, body.endpoint[:50],
+        )
 
     result = await session.execute(
         delete(PushSubscription).where(
