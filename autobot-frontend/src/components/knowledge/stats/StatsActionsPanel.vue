@@ -27,6 +27,7 @@
  *
  * Issue #184: Split oversized Vue components
  */
+import Icon from '@/components/ui/Icon.vue'
 
 interface Emits {
   (e: 'export'): void

@@ -5,6 +5,7 @@
 Claude API Integration with Intelligent Request Batching
 Integrates the batching system with AutoBot's existing Claude API infrastructure
 """
+
 from __future__ import annotations
 
 import asyncio

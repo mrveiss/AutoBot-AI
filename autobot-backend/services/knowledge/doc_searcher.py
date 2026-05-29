@@ -7,6 +7,7 @@ Documentation Searcher
 Issue #381: Extracted from chat_knowledge_service.py god class refactoring.
 Contains DocumentationSearcher for AutoBot documentation search integration.
 """
+
 from __future__ import annotations
 
 import re

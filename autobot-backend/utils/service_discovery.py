@@ -6,6 +6,7 @@
 Service Discovery System for AutoBot Distributed Architecture
 Provides dynamic service resolution and health monitoring across 6 VMs
 """
+
 from __future__ import annotations
 
 import asyncio

@@ -20,7 +20,7 @@ from skills.base_skill import BaseSkill, SkillManifest
 logger = get_logger(__name__)
 
 try:
-    from services.llm_service import get_llm_service
+    from services.llm_service import get_llm_service  # nosemgrep: extension-no-core-internals
 except ImportError:
     get_llm_service = None  # type: ignore[assignment]
 

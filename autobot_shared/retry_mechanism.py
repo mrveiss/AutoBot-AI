@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from functools import wraps
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.singleton_factory import lazy_singleton
@@ -110,7 +110,7 @@ class RetryMechanism:
         """Initialize retry mechanism with optional configuration."""
         self.config = config or RetryConfig()
         self._stats_lock = threading.Lock()
-        self.stats = {
+        self.stats: Dict[str, Any] = {
             "total_attempts": 0,
             "successful_retries": 0,
             "failed_operations": 0,
@@ -212,7 +212,7 @@ class RetryMechanism:
 
         return True
 
-    async def execute_async(self, func: Callable, *args, operation_name: str = None, **kwargs) -> Any:
+    async def execute_async(self, func: Callable, *args, operation_name: Optional[str] = None, **kwargs) -> Any:
         """Execute an async function with retry mechanism (thread-safe)"""
         operation_name = operation_name or func.__name__
         last_exception = None
@@ -244,6 +244,7 @@ class RetryMechanism:
 
         self._update_stats_failure(operation_name)
         logger.error(f"{operation_name} failed after {self.config.max_attempts} attempts")
+        assert last_exception is not None
         raise RetryExhaustedError(self.config.max_attempts, last_exception)
 
     def _execute_sync_attempt(self, func: Callable, operation_name: str, attempt: int, *args, **kwargs) -> Any:
@@ -281,7 +282,7 @@ class RetryMechanism:
         logger.debug("Retrying %s in %.2f seconds...", operation_name, delay)
         time.sleep(delay)
 
-    def execute_sync(self, func: Callable, *args, operation_name: str = None, **kwargs) -> Any:
+    def execute_sync(self, func: Callable, *args, operation_name: Optional[str] = None, **kwargs) -> Any:
         """Execute a synchronous function with retry mechanism (thread-safe)"""
         operation_name = operation_name or func.__name__
         last_exception = None
@@ -301,6 +302,7 @@ class RetryMechanism:
 
         self._update_stats_failure(operation_name)
         logger.error(f"{operation_name} failed after {self.config.max_attempts} attempts")
+        assert last_exception is not None
         raise RetryExhaustedError(self.config.max_attempts, last_exception)
 
     def get_stats(self) -> Dict[str, Any]:
@@ -336,8 +338,8 @@ def retry_async(
     max_delay: float = ThresholdRetryConfig.BACKOFF_MAX_DELAY,
     backoff_multiplier: float = ThresholdRetryConfig.BACKOFF_BASE,
     strategy: RetryStrategy = RetryStrategy.EXPONENTIAL_BACKOFF,
-    retryable_exceptions: tuple = None,
-    operation_name: str = None,
+    retryable_exceptions: Optional[tuple] = None,
+    operation_name: Optional[str] = None,
 ):
     """
     Decorator for async functions with retry mechanism
@@ -386,8 +388,8 @@ def retry_sync(
     max_delay: float = ThresholdRetryConfig.BACKOFF_MAX_DELAY,
     backoff_multiplier: float = ThresholdRetryConfig.BACKOFF_BASE,
     strategy: RetryStrategy = RetryStrategy.EXPONENTIAL_BACKOFF,
-    retryable_exceptions: tuple = None,
-    operation_name: str = None,
+    retryable_exceptions: Optional[tuple] = None,
+    operation_name: Optional[str] = None,
 ):
     """
     Decorator for synchronous functions with retry mechanism

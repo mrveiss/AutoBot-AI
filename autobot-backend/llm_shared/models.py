@@ -6,6 +6,7 @@ LLM Interface Models - Dataclasses and settings for LLM operations.
 
 Extracted from llm_interface.py as part of Issue #381 god class refactoring.
 """
+
 from __future__ import annotations
 
 import uuid

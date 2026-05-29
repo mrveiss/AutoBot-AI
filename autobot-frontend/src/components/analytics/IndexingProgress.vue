@@ -98,6 +98,7 @@
  * Issue #184: Split oversized Vue components
  * Issue #704: Migrated to design tokens
  */
+import Icon from '@/components/ui/Icon.vue'
 
 interface Phase {
   id: string

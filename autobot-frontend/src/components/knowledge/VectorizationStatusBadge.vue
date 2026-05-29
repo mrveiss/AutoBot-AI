@@ -88,6 +88,7 @@ const tooltipText = computed(() => {
       return t('knowledge.vectorization.tooltipUnknown')
   }
 })
+import Icon from '@/components/ui/Icon.vue'
 </script>
 
 <style scoped>

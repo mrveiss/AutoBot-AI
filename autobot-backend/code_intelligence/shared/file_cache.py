@@ -32,6 +32,7 @@ Usage:
 
 Part of EPIC #217 - Advanced Code Intelligence Methods
 """
+
 from __future__ import annotations
 
 import asyncio
