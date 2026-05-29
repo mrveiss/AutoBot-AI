@@ -18,7 +18,7 @@ from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config as _ssot_config
-from config import config as global_config_manager
+from config import get_config_manager
 from context_window_manager import ContextWindowManager
 from encryption_service import get_encryption_service, is_encryption_enabled
 
@@ -56,7 +56,7 @@ class ChatHistoryBase:
             redis_host: Optional override for Redis host
             redis_port: Optional override for Redis port
         """
-        data_config = global_config_manager.get("data", {})
+        data_config = get_config_manager().get("data", {})
 
         self.history_file = history_file or data_config.get(
             "chat_history_file",
@@ -199,7 +199,7 @@ class ChatHistoryBase:
 
     def _get_chats_directory(self) -> str:
         """Get the chats directory path from configuration."""
-        data_config = global_config_manager.get("data", {})
+        data_config = get_config_manager().get("data", {})
         return data_config.get(
             "chats_directory",
             _ssot_config.misc.chats_directory or "data/chats",
