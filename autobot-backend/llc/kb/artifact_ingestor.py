@@ -124,26 +124,16 @@ class ArtifactIngestor:
 
         # Guard: verify requester's company does not write to ancestor company's project (GH#8598).
         if company_id:
-            try:
-                project_result = await session.execute(
-                    select(LLCProject).where(LLCProject.id == uuid.UUID(project_id))
+            project_result = await session.execute(
+                select(LLCProject).where(LLCProject.id == uuid.UUID(project_id))
+            )
+            project = project_result.scalar_one_or_none()
+            if project:
+                await assert_not_writing_to_ancestor_kb(
+                    requester_org_id=company_id,
+                    target_org_id=str(project.company_id),
+                    session=session,
                 )
-                project = project_result.scalar_one_or_none()
-                if project:
-                    await assert_not_writing_to_ancestor_kb(
-                        requester_org_id=company_id,
-                        target_org_id=str(project.company_id),
-                        session=session,
-                    )
-            except Exception as e:
-                logger.warning(
-                    "ArtifactIngestor write guard failed for product %s: %s",
-                    work_product_id,
-                    e,
-                    exc_info=True,
-                )
-                if hasattr(e, "status_code") and e.status_code == 403:
-                    raise
 
         text = await self._resolve_text(product)
         if text is None:

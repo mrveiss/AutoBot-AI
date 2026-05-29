@@ -101,17 +101,7 @@ class AgentDiaryKbWriter:
 
         # Guard: verify requester's company does not write diary for ancestor company's work item (GH#8598).
         if company_id and work_item_id and session:
-            try:
-                await self._check_write_guard(work_item_id, company_id, session)
-            except Exception as e:
-                logger.warning(
-                    "AgentDiaryKbWriter write guard failed for work_item %s: %s",
-                    work_item_id,
-                    e,
-                    exc_info=True,
-                )
-                if hasattr(e, "status_code") and e.status_code == 403:
-                    raise
+            await self._check_write_guard(work_item_id, company_id, session)
 
         try:
             await self._write_diary_entry(run_id, agent_id, status, work_item_id, context_snapshot)
