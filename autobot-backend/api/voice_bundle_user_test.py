@@ -80,7 +80,7 @@ async def test_get_own_bundle():
     mock_session.__aexit__ = AsyncMock(return_value=False)
     mock_session.execute = AsyncMock(return_value=mock_row)
 
-    with patch("user_management.database.get_async_session", return_value=mock_session):
+    with patch("user_management.database.db_session_context", return_value=mock_session):
         result = await get_user_bundle(user_id, mock_request, current_user)
 
     assert result.user_id == user_id
@@ -103,7 +103,7 @@ async def test_admin_can_view_other_user_bundle():
     mock_session.__aexit__ = AsyncMock(return_value=False)
     mock_session.execute = AsyncMock(return_value=mock_row)
 
-    with patch("user_management.database.get_async_session", return_value=mock_session):
+    with patch("user_management.database.db_session_context", return_value=mock_session):
         result = await get_user_bundle(target_user_id, mock_request, current_user)
 
     assert result.user_id == target_user_id
@@ -141,7 +141,7 @@ async def test_get_bundle_no_assignment():
     mock_session.__aexit__ = AsyncMock(return_value=False)
     mock_session.execute = AsyncMock(return_value=mock_row)
 
-    with patch("user_management.database.get_async_session", return_value=mock_session):
+    with patch("user_management.database.db_session_context", return_value=mock_session):
         result = await get_user_bundle(user_id, mock_request, current_user)
 
     assert result.user_id == user_id
@@ -169,7 +169,7 @@ async def test_user_can_assign_own_bundle():
     mock_session.execute = AsyncMock()
     mock_session.commit = AsyncMock()
 
-    with patch("user_management.database.get_async_session", return_value=mock_session):
+    with patch("user_management.database.db_session_context", return_value=mock_session):
         with patch("services.audit.unified_audit.emit"):
             result = await set_user_bundle(user_id, body, mock_request, current_user)
 
@@ -195,7 +195,7 @@ async def test_admin_can_assign_bundle_to_other_user():
     mock_session.execute = AsyncMock()
     mock_session.commit = AsyncMock()
 
-    with patch("user_management.database.get_async_session", return_value=mock_session):
+    with patch("user_management.database.db_session_context", return_value=mock_session):
         with patch("services.audit.unified_audit.emit"):
             result = await set_user_bundle(target_user_id, body, mock_request, current_user)
 
@@ -252,7 +252,7 @@ async def test_clear_bundle_assignment():
     mock_session.execute = AsyncMock()
     mock_session.commit = AsyncMock()
 
-    with patch("user_management.database.get_async_session", return_value=mock_session):
+    with patch("user_management.database.db_session_context", return_value=mock_session):
         with patch("services.audit.unified_audit.emit"):
             result = await set_user_bundle(user_id, body, mock_request, current_user)
 

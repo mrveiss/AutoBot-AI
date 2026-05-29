@@ -14,7 +14,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from auth_middleware import get_auth_middleware, get_current_user
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from utils.catalog_http_exceptions import raise_auth_error
@@ -155,10 +155,10 @@ async def get_user_bundle(
         raise_auth_error("AUTH_0003", "Cannot access other user's bundle assignment")
 
     try:
-        from user_management.database import get_async_session  # noqa: PLC0415
+        from user_management.database import db_session_context  # noqa: PLC0415
         from sqlalchemy import text  # noqa: PLC0415
 
-        async with get_async_session() as session:
+        async with db_session_context() as session:
             row = await session.execute(
                 text("SELECT bundle_name FROM user_voice_bundle WHERE user_id = :uid"),
                 {"uid": user_id},
@@ -209,10 +209,10 @@ async def set_user_bundle(
     current_user_id = _get_user_id(current_user)
 
     try:
-        from user_management.database import get_async_session  # noqa: PLC0415
+        from user_management.database import db_session_context  # noqa: PLC0415
         from sqlalchemy import text  # noqa: PLC0415
 
-        async with get_async_session() as session:
+        async with db_session_context() as session:
             if body.bundle_name is None:
                 # Clear override
                 await session.execute(
