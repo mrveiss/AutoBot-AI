@@ -94,13 +94,14 @@ async def test_low_complexity_no_escalation(router):
     with patch("llm_shared.tiered_routing.complexity_router.ssot_config") as mock_cfg:
         mock_cfg.llm = mock_llm_config
         with patch(
-            "llm_shared.tiered_routing.complexity_router.AnthropicProvider",
-            autospec=True,
-        ) as mock_provider_cls:
+            "llm_shared.provider_registry.get_provider_registry"
+        ) as mock_registry_fn:
+            mock_registry = MagicMock()
+            mock_registry_fn.return_value = mock_registry
             result = await router.route_with_escalation(request)
 
     assert result is None
-    mock_provider_cls.assert_not_called()
+    mock_registry.get_provider.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -114,18 +115,24 @@ async def test_high_complexity_escalation_enabled(router):
     request = LLMRequest(messages=_COMPLEX_MESSAGES)
     mock_llm_config = MagicMock()
     mock_llm_config.claude_escalation_enabled = True
-    mock_llm_config.claude_escalation_threshold = 7.0
+    mock_llm_config.claude_escalation_threshold = 5.0
 
     mock_claude = AsyncMock()
     mock_claude._chat_completion_impl = AsyncMock(return_value=_make_ok_response())
 
+    mock_score_result = MagicMock()
+    mock_score_result.score = 8.0
+
     with patch("llm_shared.tiered_routing.complexity_router.ssot_config") as mock_cfg:
         mock_cfg.llm = mock_llm_config
-        with patch(
-            "llm_shared.tiered_routing.complexity_router.AnthropicProvider",
-            return_value=mock_claude,
-        ):
-            result = await router.route_with_escalation(request)
+        with patch.object(router.scorer, "score", return_value=mock_score_result):
+            with patch(
+                "llm_shared.tiered_routing.complexity_router.get_provider_registry"
+            ) as mock_registry_fn:
+                mock_registry = MagicMock()
+                mock_registry.get_provider = AsyncMock(return_value=mock_claude)
+                mock_registry_fn.return_value = mock_registry
+                result = await router.route_with_escalation(request)
 
     assert result is not None
     assert result.content == "Claude escalated response"
@@ -147,13 +154,14 @@ async def test_high_complexity_escalation_disabled(router):
     with patch("llm_shared.tiered_routing.complexity_router.ssot_config") as mock_cfg:
         mock_cfg.llm = mock_llm_config
         with patch(
-            "llm_shared.tiered_routing.complexity_router.AnthropicProvider",
-            autospec=True,
-        ) as mock_provider_cls:
+            "llm_shared.provider_registry.get_provider_registry"
+        ) as mock_registry_fn:
+            mock_registry = MagicMock()
+            mock_registry_fn.return_value = mock_registry
             result = await router.route_with_escalation(request)
 
     assert result is None
-    mock_provider_cls.assert_not_called()
+    mock_registry.get_provider.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -175,9 +183,11 @@ async def test_claude_error_falls_through(router):
     with patch("llm_shared.tiered_routing.complexity_router.ssot_config") as mock_cfg:
         mock_cfg.llm = mock_llm_config
         with patch(
-            "llm_shared.tiered_routing.complexity_router.AnthropicProvider",
-            return_value=mock_claude,
-        ):
+            "llm_shared.provider_registry.get_provider_registry"
+        ) as mock_registry_fn:
+            mock_registry = MagicMock()
+            mock_registry.get_provider = AsyncMock(return_value=mock_claude)
+            mock_registry_fn.return_value = mock_registry
             result = await router.route_with_escalation(request)
 
     assert result is None
@@ -202,9 +212,11 @@ async def test_claude_exception_falls_through(router):
     with patch("llm_shared.tiered_routing.complexity_router.ssot_config") as mock_cfg:
         mock_cfg.llm = mock_llm_config
         with patch(
-            "llm_shared.tiered_routing.complexity_router.AnthropicProvider",
-            return_value=mock_claude,
-        ):
+            "llm_shared.provider_registry.get_provider_registry"
+        ) as mock_registry_fn:
+            mock_registry = MagicMock()
+            mock_registry.get_provider = AsyncMock(return_value=mock_claude)
+            mock_registry_fn.return_value = mock_registry
             result = await router.route_with_escalation(request)
 
     assert result is None
@@ -273,7 +285,10 @@ async def test_escalation_sets_prompt_cache_flag_when_system_present(router):
     request = LLMRequest(messages=_COMPLEX_MESSAGES)  # has system role
     mock_llm_config = MagicMock()
     mock_llm_config.claude_escalation_enabled = True
-    mock_llm_config.claude_escalation_threshold = 7.0
+    mock_llm_config.claude_escalation_threshold = 5.0
+
+    mock_score_result = MagicMock()
+    mock_score_result.score = 8.0
 
     captured_requests = []
 
@@ -286,11 +301,14 @@ async def test_escalation_sets_prompt_cache_flag_when_system_present(router):
 
     with patch("llm_shared.tiered_routing.complexity_router.ssot_config") as mock_cfg:
         mock_cfg.llm = mock_llm_config
-        with patch(
-            "llm_shared.tiered_routing.complexity_router.AnthropicProvider",
-            return_value=mock_claude,
-        ):
-            await router.route_with_escalation(request)
+        with patch.object(router.scorer, "score", return_value=mock_score_result):
+            with patch(
+                "llm_shared.tiered_routing.complexity_router.get_provider_registry"
+            ) as mock_registry_fn:
+                mock_registry = MagicMock()
+                mock_registry.get_provider = AsyncMock(return_value=mock_claude)
+                mock_registry_fn.return_value = mock_registry
+                await router.route_with_escalation(request)
 
     assert len(captured_requests) == 1
     assert captured_requests[0].metadata.get("enable_prompt_cache") is True
@@ -331,11 +349,39 @@ async def test_escalation_no_prompt_cache_without_system(router):
     with patch("llm_shared.tiered_routing.complexity_router.ssot_config") as mock_cfg:
         mock_cfg.llm = mock_llm_config
         with patch(
-            "llm_shared.tiered_routing.complexity_router.AnthropicProvider",
-            return_value=mock_claude,
-        ):
+            "llm_shared.provider_registry.get_provider_registry"
+        ) as mock_registry_fn:
+            mock_registry = MagicMock()
+            mock_registry.get_provider = AsyncMock(return_value=mock_claude)
+            mock_registry_fn.return_value = mock_registry
             result = await router.route_with_escalation(request)
 
     # If the score was high enough to escalate, verify no prompt cache flag
     if result is not None and captured_requests:
         assert captured_requests[0].metadata.get("enable_prompt_cache") is not True
+
+
+# ---------------------------------------------------------------------------
+# Test 10: Provider not available in registry → falls through (returns None)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_provider_unavailable_falls_through(router):
+    """When provider registry returns None (unavailable), route_with_escalation returns None."""
+    request = LLMRequest(messages=_COMPLEX_MESSAGES)
+    mock_llm_config = MagicMock()
+    mock_llm_config.claude_escalation_enabled = True
+    mock_llm_config.claude_escalation_threshold = 7.0
+
+    with patch("llm_shared.tiered_routing.complexity_router.ssot_config") as mock_cfg:
+        mock_cfg.llm = mock_llm_config
+        with patch(
+            "llm_shared.provider_registry.get_provider_registry"
+        ) as mock_registry_fn:
+            mock_registry = MagicMock()
+            mock_registry.get_provider = AsyncMock(return_value=None)
+            mock_registry_fn.return_value = mock_registry
+            result = await router.route_with_escalation(request)
+
+    assert result is None
