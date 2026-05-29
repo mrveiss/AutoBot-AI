@@ -13,7 +13,7 @@ from typing import Any, Dict, List
 from pydantic import BaseModel, Field, field_validator
 
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
-from knowledge.ownership import VisibilityLevel
+from knowledge.ownership import AccessLevel, VisibilityLevel
 from type_defs.common import Metadata
 from utils.path_validation import contains_path_traversal
 
@@ -987,14 +987,16 @@ _VALID_SORT_OPTIONS = ("newest", "oldest", "longest")
 
 
 # Issue #685: Access level filtering
-class AccessLevelFilter(str, Enum):
-    """Filter enum for access levels in knowledge search."""
+# Create AccessLevelFilter from AccessLevel to prevent value drift
+_filter_values = {member.name: member.value for member in AccessLevel}
+_filter_values["ALL"] = "all"  # Add the special filter-only value
+AccessLevelFilter = Enum("AccessLevelFilter", _filter_values, type=str)
+AccessLevelFilter.__doc__ = """Filter enum for access levels in knowledge search.
 
-    ALL = "all"  # No filter (default)
-    AUTOBOT = "autobot"  # Platform documentation only
-    GENERAL = "general"  # Public knowledge only
-    SYSTEM = "system"  # System capability docs only
-    USER = "user"  # User-created content only
+Dynamically created from AccessLevel to ensure synchronized values.
+Includes an additional ALL value for no-filter searches.
+This approach prevents accidental drift between AccessLevel and AccessLevelFilter.
+"""
 
 
 # ===== BASIC VALIDATION MODELS =====
