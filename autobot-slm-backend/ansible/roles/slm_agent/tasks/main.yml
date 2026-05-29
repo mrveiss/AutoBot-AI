@@ -57,6 +57,20 @@
   become: true
   tags: ['slm_agent', 'setup']
 
+- name: "SLM Agent | Ensure ansible.log is readable by agent user (GH#8925-2)"
+  ansible.builtin.acl:
+    path: /var/log/autobot/ansible.log
+    entity: "{{ slm_agent_user }}"
+    etype: user
+    permissions: r
+    state: present
+  become: true
+  # (#2872) Intentional: file may not exist yet on first provisioning;
+  # ACL is applied if/when the file is created. On systems without ACL
+  # support, the task is skipped gracefully.
+  failed_when: false
+  tags: ['slm_agent', 'setup']
+
 - name: "SLM Agent | Create agent directories"
   file:
     path: "{{ item }}"
