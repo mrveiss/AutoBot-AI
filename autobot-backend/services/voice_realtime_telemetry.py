@@ -27,6 +27,7 @@ from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc
+from constants.ttl_constants import TTL_90_DAYS
 
 logger = get_logger(__name__)
 
@@ -45,9 +46,32 @@ _TOKEN_COST_PER_1M: dict[str, float] = {
     "cached_input": 2.50,
 }
 
-# Redis key prefix + TTL
+# Redis key prefix
 _KEY_PREFIX = "voice_realtime_session"
-_SESSION_TTL = config.misc.voice_realtime_session_ttl_days * 86400
+
+
+# #6743: voice_realtime_session:* cache TTL.
+#
+# Previously hard-coded to 90 days. Raises issues during memory pressure tuning
+# because the constant is buried in config defaults. Follow the canonical resolver
+# pattern: module-level constant resolved from env var with logged-fallback default.
+# Override via AUTOBOT_VOICE_REALTIME_SESSION_TTL_DAYS when tuning Redis memory.
+def _resolve_voice_realtime_session_ttl() -> int:
+	"""Return TTL seconds for voice_realtime_session:* Redis keys."""
+	raw_days = config.misc.voice_realtime_session_ttl_days
+	if raw_days is None or raw_days <= 0:
+		logger.warning(
+			"voice_realtime_session_ttl_days=%r is invalid; falling back to %d days (%ds)",
+			raw_days,
+			90,
+			TTL_90_DAYS,
+		)
+		return TTL_90_DAYS
+	ttl_seconds = raw_days * 86_400
+	return ttl_seconds
+
+
+_SESSION_TTL = _resolve_voice_realtime_session_ttl()
 
 
 class DisconnectReason(str, Enum):
