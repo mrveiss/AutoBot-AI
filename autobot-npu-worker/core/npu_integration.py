@@ -32,6 +32,16 @@ _backend_path = _project_root / "autobot-backend"
 if str(_backend_path) not in sys.path:
     sys.path.insert(0, str(_backend_path))
 
+# Workers path for openvino_dispatch (GH#8690)
+_workers_path = Path(__file__).parent.parent / "workers"
+if str(_workers_path) not in sys.path:
+    sys.path.insert(0, str(_workers_path))
+
+try:
+    from workers.openvino_dispatch import UnsupportedArchitectureError, get_inference_config
+except ImportError:
+    from openvino_dispatch import UnsupportedArchitectureError, get_inference_config  # type: ignore[no-redef]
+
 try:
     from autobot_shared.http_client import HTTPClientManager, get_http_client
     from constants.threshold_constants import LLMDefaults, TimingConstants
@@ -286,6 +296,21 @@ class NPUWorkerClient:
                 One of "transformer", "state_space", "linear_attention", "hybrid".
                 Defaults to "transformer" on the worker side when omitted.
         """
+        if architecture_family is not None:
+            try:
+                get_inference_config(model_id, architecture_family, device)
+            except UnsupportedArchitectureError as exc:
+                logger.warning(
+                    "load_model rejected unsupported architecture_family=%s for model=%s: %s",
+                    architecture_family,
+                    model_id,
+                    exc,
+                )
+                return {
+                    "success": False,
+                    "error": str(exc),
+                    "error_code": "unsupported_architecture",
+                }
         try:
             http_client = await self._get_http_client()
             payload: Dict[str, Any] = {"model_id": model_id, "device": device}
