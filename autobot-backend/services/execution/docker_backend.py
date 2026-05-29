@@ -420,7 +420,19 @@ class DockerBackend(ExecutionBackend):
             created_at=created_at,
             size_bytes=size_bytes,
         )
-        await asyncio.to_thread(self._snapshot_index.add, record)
+        try:
+            await asyncio.to_thread(self._snapshot_index.add, record)
+        except Exception as exc:
+            # Roll back the committed image — without an index entry it would be an orphan.
+            try:
+                await asyncio.to_thread(self.client.images.remove, image_name, force=True)
+            except Exception as cleanup_exc:
+                logger.warning(
+                    "Failed to clean up orphaned snapshot image %s after index failure: %s",
+                    image_name,
+                    cleanup_exc,
+                )
+            raise RuntimeError(f"Failed to record snapshot {snapshot_id} in index: {exc}") from exc
         logger.info(
             "Snapshot %s created for container %s (session=%s, size=%d bytes)",
             snapshot_id,
@@ -460,6 +472,9 @@ class DockerBackend(ExecutionBackend):
                 f"Failed to restore snapshot {snapshot_id} from image {record.image_name}: {exc}"
             ) from exc
 
+        # Track restored container so cleanup() can stop it at session end.
+        self._container_map[snapshot_id] = container.id
+
         logger.info(
             "Restored snapshot %s → container %s (session=%s)",
             snapshot_id,
@@ -484,15 +499,20 @@ class DockerBackend(ExecutionBackend):
         try:
             await asyncio.to_thread(self.client.images.remove, record.image_name, force=True)
         except Exception as exc:
-            logger.warning("Could not remove snapshot image %s: %s", record.image_name, exc)
+            logger.warning(
+                "Could not remove snapshot image %s, index entry preserved for retry: %s",
+                record.image_name,
+                exc,
+            )
+            return False
 
         removed = await asyncio.to_thread(self._snapshot_index.remove, snapshot_id)
         logger.info("Snapshot %s deleted", snapshot_id)
         return removed
 
-    def get_snapshots_for_session(self, session_id: str) -> list:
-        """Return all SnapshotRecords for the given session_id (synchronous helper)."""
-        return self._snapshot_index.list_by_session(session_id)
+    async def get_snapshots_for_session(self, session_id: str) -> list:
+        """Return all SnapshotRecords for the given session_id."""
+        return await asyncio.to_thread(self._snapshot_index.list_by_session, session_id)
 
     # ------------------------------------------------------------------
     # Helpers
