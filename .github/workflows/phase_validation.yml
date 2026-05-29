@@ -114,8 +114,8 @@ jobs:
           || echo '{"overall_maturity": 0, "phases": []}' > phase_validation_results.json
 
         # Display results summary
-        echo "## Phase Validation Results" >> $GITHUB_STEP_SUMMARY
-        python3 -c 'import json; r=json.load(open("phase_validation_results.json")); print(f"**Overall System Maturity:** {r.get(\"overall_maturity\", 0):.1f}%")' >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "Results not available" >> $GITHUB_STEP_SUMMARY
+        echo "## Phase Validation Results" >> "$GITHUB_STEP_SUMMARY"
+        python3 -c 'import json; r=json.load(open("phase_validation_results.json")); print(f"**Overall System Maturity:** {r.get(\"overall_maturity\", 0):.1f}%")' >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "Results not available" >> "$GITHUB_STEP_SUMMARY"
 
     - name: Generate Validation Dashboard
       env:
@@ -147,11 +147,11 @@ jobs:
 
         # Compare maturity to threshold
         if (( $(echo "$MATURITY >= $THRESHOLD" | bc -l) )); then
-          echo "Phase validation passed: ${MATURITY}% >= ${THRESHOLD}%"
+          echo "Phase validation passed: $MATURITY% >= $THRESHOLD%"
         else
-          echo "::error::Phase validation below threshold: ${MATURITY}% < ${THRESHOLD}%"
+          echo "::error::Phase validation below threshold: $MATURITY% < $THRESHOLD%"
           echo "## Phase Validation Below Threshold" >> "$GITHUB_STEP_SUMMARY"
-          echo "Current maturity (${MATURITY}%) is below threshold (${THRESHOLD}%)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Current maturity ($MATURITY%) is below threshold ($THRESHOLD%)" >> "$GITHUB_STEP_SUMMARY"
           exit 1
         fi
 
