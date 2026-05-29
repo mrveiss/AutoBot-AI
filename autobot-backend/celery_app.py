@@ -224,3 +224,12 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=2, minute=15),
     },
 }
+
+# GH#4459: Register web-push task_success signal so tasks that pass user_id
+# in their kwargs trigger a browser push notification on completion.
+try:
+    from services.push_notification_service import register_celery_task_success_hook
+
+    register_celery_task_success_hook()
+except Exception:
+    pass  # pywebpush absent or push service not configured — non-fatal

@@ -642,6 +642,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["mobile-devices", "push-notifications"],
         "mobile_devices",
     ),
+    # GH#4459: Web push notification endpoints (subscribe/unsubscribe/vapid-key)
+    ("api.push", "/push", ["push", "notifications"], "push"),
 ]
 
 
