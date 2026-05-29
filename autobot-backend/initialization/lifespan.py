@@ -10,9 +10,12 @@ Handles application startup and shutdown with 2-phase initialization:
 """
 
 import asyncio
+import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import FastAPI
 
@@ -58,6 +61,11 @@ app_state: Metadata = {
     "initialization_message": "Backend starting...",
     "startup_error": None,  # GH#8947: capture startup errors for health visibility
 }
+
+# GH#8947: Persist Phase 1 startup errors across process exit so /api/health
+# can report them even when the server never bound to port.
+# /run/autobot/ is created by Ansible and owned by the autobot user.
+_STARTUP_ERROR_FILE = Path("/run/autobot/startup-error.json")
 
 
 async def update_app_state(key: str, value) -> None:
@@ -450,12 +458,30 @@ async def initialize_critical_services(app: FastAPI):
     except Exception as critical_error:
         logger.error("❌ CRITICAL INITIALIZATION FAILED: %s", critical_error)
         logger.error("Backend startup ABORTED - critical services must be operational")
-        error_detail = f"{type(critical_error).__name__}: {str(critical_error)}"
+        error_type = type(critical_error).__name__
+        error_detail = f"{error_type}: {str(critical_error)}"
         await update_app_state_multi(
             initialization_status="error",
             initialization_message=f"Startup failed: {error_detail}",
-            startup_error=error_detail,
+            startup_error=error_type,
         )
+        # GH#8947: Persist error type to disk before re-raising — the process will
+        # exit before binding to port, so the in-memory app_state update above is
+        # unreachable. The file survives process exit and lets /api/health report
+        # the failure when the next (probe) process reads it.
+        try:
+            _STARTUP_ERROR_FILE.parent.mkdir(parents=True, exist_ok=True)
+            _STARTUP_ERROR_FILE.write_text(
+                json.dumps(
+                    {
+                        "error_type": error_type,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                ),
+                encoding="utf-8",
+            )
+        except Exception:
+            pass  # File write failure must not mask the original startup error
         raise  # Re-raise to prevent app from starting
 
 
@@ -1554,6 +1580,12 @@ async def initialize_background_services(app: FastAPI):
             initialization_status="ready",
             initialization_message="All services initialized",
         )
+        # GH#8947: Successful startup — remove the Phase 1 error file if it exists
+        # from a previous failed boot attempt.
+        try:
+            _STARTUP_ERROR_FILE.unlink(missing_ok=True)
+        except Exception:
+            pass
         logger.info("✅ [100%] PHASE 2 COMPLETE: All background services initialized")
 
     except Exception as e:

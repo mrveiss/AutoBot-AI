@@ -10,8 +10,10 @@ inspection to aid observability and debugging.
 
 import asyncio
 import importlib
+import json
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
@@ -46,6 +48,10 @@ config = get_config_manager()
 router = APIRouter()
 
 logger = get_logger(__name__)
+
+# GH#8947: Disk-persisted Phase 1 error file written by lifespan.py before
+# process exit. Path must match _STARTUP_ERROR_FILE in initialization/lifespan.py.
+_STARTUP_ERROR_FILE = Path("/run/autobot/startup-error.json")
 
 # Issue #380: Module-level tuple for allowed dynamic import modules
 _ALLOWED_IMPORT_MODULES = (
@@ -302,10 +308,25 @@ async def get_system_health(
             },
         }
 
-        # GH#8947: Surface startup errors for provisioning visibility
+        # GH#8947: Surface startup errors for provisioning visibility.
+        # Only expose the exception type name — never the message, which may
+        # contain credentials (connection strings, Redis URLs, etc.).
         startup_error = app_state.get("startup_error")
         if startup_error:
-            health_status["startup_error"] = startup_error
+            # In-memory value may be "TypeName: message" — strip to type only.
+            startup_error = startup_error.split(":")[0].strip()
+        if not startup_error:
+            # Phase 1 failures kill the process before it can serve requests, so
+            # app_state is unreachable. Fall back to the disk file written by
+            # lifespan.py before re-raising.
+            try:
+                if _STARTUP_ERROR_FILE.exists():
+                    data = json.loads(_STARTUP_ERROR_FILE.read_text(encoding="utf-8"))
+                    startup_error = data.get("error_type")
+            except Exception:
+                pass
+        if startup_error:
+            health_status["startup_error"] = startup_error  # type name only
             health_status["status"] = "down"
             health_status["components"]["backend"] = "down"
 
