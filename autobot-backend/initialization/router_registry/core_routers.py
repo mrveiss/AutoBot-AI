@@ -89,6 +89,7 @@ from api.vnc_proxy import router as vnc_proxy_router
 from api.voice import realtime_router as voice_realtime_router
 from api.voice import router as voice_router
 from api.voice_bundle_admin import bundle_admin_router, bundle_me_router
+from api.voice_bundle_user import router as voice_bundle_user_router
 from api.voice_stream import router as voice_stream_router
 from api.wake_word import router as wake_word_router
 from api.websockets import router as websockets_router  # Issue #6229
@@ -317,6 +318,7 @@ def _get_service_routers() -> list:
         (voice_router, "/voice", ["voice"], "voice"),
         (bundle_me_router, "/voice", ["voice", "rbac"], "voice_bundle_me"),
         (bundle_admin_router, "", ["admin", "voice", "rbac"], "voice_bundle_admin"),
+        (voice_bundle_user_router, "/voice", ["voice", "rbac"], "voice_bundle_user"),
         (voice_stream_router, "/voice", ["voice", "websocket"], "voice_stream"),
         (wake_word_router, "/wake_word", ["wake_word", "voice"], "wake_word"),
         (websockets_router, "", ["websockets"], "websockets"),  # Issue #6229
