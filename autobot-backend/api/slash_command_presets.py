@@ -111,8 +111,14 @@ async def create_preset(
 ) -> SlashCommandPresetResponse:
     """Create a new slash command preset (personal or org-scoped)."""
     user_id = current_user.get("username", "")
+    user_org_id = current_user.get("org_id")
 
     if payload.org_id:
+        if payload.org_id != user_org_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Cannot create preset in another organization",
+            )
         scope_user_id = None
         scope_org_id = payload.org_id
     else:
