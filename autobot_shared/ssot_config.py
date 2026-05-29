@@ -1148,7 +1148,7 @@ class MiscConfig(BaseSettings):
     anthropic_api_base_url: str = Field(default="", alias="ANTHROPIC_API_BASE_URL")
     api_key: str = Field(default="", alias="API_KEY")
     ast_cache_max_size: int = Field(default=0, alias="AST_CACHE_MAX_SIZE")
-    audit_log_file: str = Field(default="", alias="AUTOBOT_AUDIT_LOG_FILE")
+    audit_log_file: str = Field(default="/opt/autobot/logs/audit.log", alias="AUTOBOT_AUDIT_LOG_FILE")
     autoresearch_docker_cpus: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_DOCKER_CPUS")
     autoresearch_data_dir: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_DATA_DIR")
     autoresearch_dir: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_DIR")

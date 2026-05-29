@@ -67,7 +67,11 @@ class EnhancedSecurityLayer:
         self.security_config = global_config_manager.get("security_config", {})
         self.enable_auth = self.security_config.get("enable_auth", False)
         self.enable_command_security = self.security_config.get("enable_command_security", True)
-        self.audit_log_file = self.security_config.get("audit_log_file", config.audit_log_file)
+        self.audit_log_file = (
+            self.security_config.get("audit_log_file")
+            or config.audit_log_file
+            or "/opt/autobot/logs/audit.log"
+        )
         self.roles = self.security_config.get("roles", {})
         self.allowed_users = self.security_config.get("allowed_users", {})
 
@@ -97,7 +101,10 @@ class EnhancedSecurityLayer:
         self.pending_approvals: Dict[str, asyncio.Event] = {}
         self.approval_results: Dict[str, bool] = {}
 
-        os.makedirs(os.path.dirname(self.audit_log_file), exist_ok=True)
+        if self.audit_log_file:
+            log_dir = os.path.dirname(self.audit_log_file)
+            if log_dir:
+                os.makedirs(log_dir, exist_ok=True)
         logger.info("EnhancedSecurityLayer initialized")
         logger.debug("Authentication enabled: %s", self.enable_auth)
         logger.debug("Command security enabled: %s", self.enable_command_security)
