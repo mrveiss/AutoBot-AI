@@ -22,6 +22,7 @@
  * Action button to trigger vectorization for a single knowledge base document.
  * Disabled when the document is already vectorized or has a pending job in flight.
  */
+import Icon from '@/components/ui/Icon.vue'
 
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'

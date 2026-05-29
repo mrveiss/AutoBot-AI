@@ -233,6 +233,7 @@ import { useBrowserAutomation } from '@/composables/useBrowserAutomation'
 import BaseButton from '@/components/base/BaseButton.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import Icon from '@/components/ui/Icon.vue'
 import type { SessionStatus } from '@/types/browser'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -243,7 +244,8 @@ export default {
   components: {
     BaseButton,
     StatusBadge,
-    EmptyState
+    EmptyState,
+    Icon
   },
   setup() {
     const { t } = useI18n()

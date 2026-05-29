@@ -32,6 +32,7 @@
  *
  * Issue #184: Split oversized Vue components
  */
+import Icon from '@/components/ui/Icon.vue'
 
 import BasePanel from '@/components/base/BasePanel.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'

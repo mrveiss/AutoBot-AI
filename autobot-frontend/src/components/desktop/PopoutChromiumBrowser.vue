@@ -430,6 +430,7 @@ import LoadingBoundary from '@/components/ui/LoadingBoundary.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import Icon from '@/components/ui/Icon.vue'
 import { NetworkConstants } from '@/constants/network'
 import { useAsyncHandler } from '@/composables/useErrorHandler'
 import { createLogger } from '@/utils/debugUtils'
@@ -451,6 +452,7 @@ export default {
     EmptyState,
     StatusBadge,
     BaseButton,
+    Icon,
     InteractiveScreenshot,
     ScrapeTemplatePanel,
   },

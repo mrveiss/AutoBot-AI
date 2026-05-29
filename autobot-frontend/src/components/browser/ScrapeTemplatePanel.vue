@@ -195,11 +195,13 @@ import { ref, onMounted } from 'vue'
 import { useScrapeTemplates } from '@/composables/browser/useScrapeTemplates'
 import type { ScrapeTemplate } from '@/composables/browser/useScrapeTemplates'
 import { createLogger } from '@/utils/debugUtils'
+import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('ScrapeTemplatePanel')
 
 export default {
   name: 'ScrapeTemplatePanel',
+  components: { Icon },
   setup() {
     const api = useScrapeTemplates()
 

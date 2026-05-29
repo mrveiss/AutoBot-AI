@@ -123,6 +123,7 @@ function formatDuration(ms: number): string {
 }
 
 /* Header */
+import Icon from '@/components/ui/Icon.vue'
 .reasoning-trace__header {
   display: flex;
   align-items: center;
