@@ -13,6 +13,13 @@ Usage:
     from autobot_shared.auth import Permission, Role, ROLE_PERMISSIONS
 """
 
+from autobot_shared.auth.connector_auth import (
+    ApiKeyAuth,
+    BasicAuth,
+    BearerAuth,
+    OAuthRefreshAuth,
+    validate_config_against_schema,
+)
 from autobot_shared.auth.jwt_core import (
     JWTDecodeError,
     JWTExpiredError,
@@ -32,6 +39,11 @@ from autobot_shared.auth.permissions import (
 )
 
 __all__ = [
+    "ApiKeyAuth",
+    "BasicAuth",
+    "BearerAuth",
+    "OAuthRefreshAuth",
+    "validate_config_against_schema",
     "decode_jwt",
     "decode_jwt_no_verify_exp",
     "decode_jwt_or_none",

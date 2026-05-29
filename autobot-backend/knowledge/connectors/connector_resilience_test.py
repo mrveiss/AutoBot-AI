@@ -22,7 +22,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from knowledge.connectors.auth import (
+from autobot_shared.auth import (
     ApiKeyAuth,
     BasicAuth,
     BearerAuth,
