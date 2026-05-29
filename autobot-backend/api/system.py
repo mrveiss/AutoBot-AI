@@ -302,6 +302,13 @@ async def get_system_health(
             },
         }
 
+        # GH#8947: Surface startup errors for provisioning visibility
+        startup_error = app_state.get("startup_error")
+        if startup_error:
+            health_status["startup_error"] = startup_error
+            health_status["status"] = "down"
+            health_status["components"]["backend"] = "down"
+
         # Test configuration access
         try:
             ssot_config.ollama_url

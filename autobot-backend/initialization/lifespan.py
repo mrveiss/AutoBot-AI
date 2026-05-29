@@ -56,6 +56,7 @@ app_state: Metadata = {
     "config": None,
     "initialization_status": "starting",  # starting, phase1, phase2, ready, error
     "initialization_message": "Backend starting...",
+    "startup_error": None,  # GH#8947: capture startup errors for health visibility
 }
 
 
@@ -449,6 +450,12 @@ async def initialize_critical_services(app: FastAPI):
     except Exception as critical_error:
         logger.error("❌ CRITICAL INITIALIZATION FAILED: %s", critical_error)
         logger.error("Backend startup ABORTED - critical services must be operational")
+        error_detail = f"{type(critical_error).__name__}: {str(critical_error)}"
+        await update_app_state_multi(
+            initialization_status="error",
+            initialization_message=f"Startup failed: {error_detail}",
+            startup_error=error_detail,
+        )
         raise  # Re-raise to prevent app from starting
 
 
