@@ -254,9 +254,9 @@ def is_encryption_enabled() -> bool:
     Returns:
         True if encryption should be used
     """
-    from config import config as global_config_manager
+    from config import get_config_manager
 
-    return global_config_manager.get_nested("security.enable_encryption", False)
+    return get_config_manager().get_nested("security.enable_encryption", False)
 
 
 # Convenience functions
