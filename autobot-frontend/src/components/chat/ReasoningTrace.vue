@@ -106,6 +106,7 @@ function formatDuration(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`
   return `${(ms / 1000).toFixed(1)}s`
 }
+import Icon from '@/components/ui/Icon.vue'
 </script>
 
 <style scoped>
@@ -123,7 +124,6 @@ function formatDuration(ms: number): string {
 }
 
 /* Header */
-import Icon from '@/components/ui/Icon.vue'
 .reasoning-trace__header {
   display: flex;
   align-items: center;

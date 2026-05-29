@@ -88,11 +88,11 @@ const tooltipText = computed(() => {
       return t('knowledge.vectorization.tooltipUnknown')
   }
 })
+import Icon from '@/components/ui/Icon.vue'
 </script>
 
 <style scoped>
 /* Issue #704: Migrated to CSS design tokens */
-import Icon from '@/components/ui/Icon.vue'
 .vectorization-badge {
   display: inline-flex;
   align-items: center;
