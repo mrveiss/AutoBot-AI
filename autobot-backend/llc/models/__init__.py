@@ -39,6 +39,7 @@ from .membership import LLCCompanyMembership
 from .review_gate import LLCReviewGatePolicy
 from .secret import LLCSecret
 from .sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint
+from .template import TemplateCategory
 from .work_item import LLCWorkItem, LLCWorkItemComment, LLCWorkItemRelation
 from .work_product import LLCWorkProduct
 
@@ -87,6 +88,7 @@ __all__ = [
     "LLCWorkItemRelation",
     "WorkItemRelationType",
     "SprintStatus",
+    "TemplateCategory",
     "WorkItemPriority",
     "WorkItemStatus",
     "WorkItemType",
