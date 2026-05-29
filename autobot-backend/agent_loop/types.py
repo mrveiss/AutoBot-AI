@@ -328,6 +328,18 @@ class Assertion:
     def is_active(self) -> bool:
         return self.refuted_at is None
 
+    def to_dict(self) -> dict:
+        """Serialize assertion to dictionary."""
+        return {
+            "key": self.key,
+            "value": self.value,
+            "confidence": self.confidence,
+            "sources": [{"tool_name": s.tool_name, "iteration": s.iteration, "call_hash": s.call_hash} for s in self.sources],
+            "confirmed_at": self.confirmed_at.isoformat(),
+            "refuted_at": self.refuted_at.isoformat() if self.refuted_at else None,
+            "is_active": self.is_active,
+        }
+
 
 @dataclass
 class ContradictionRecord:
@@ -341,6 +353,19 @@ class ContradictionRecord:
     iteration: int
     resolution: str  # "updated" | "suppressed" | "surfaced_to_think"
     timestamp: datetime = field(default_factory=now_utc)
+
+    def to_dict(self) -> dict:
+        """Serialize contradiction record to dictionary."""
+        return {
+            "key": self.key,
+            "prior_value": self.prior_value,
+            "prior_confidence": self.prior_confidence,
+            "new_value": self.new_value,
+            "new_confidence": self.new_confidence,
+            "iteration": self.iteration,
+            "resolution": self.resolution,
+            "timestamp": self.timestamp.isoformat(),
+        }
 
 
 # =============================================================================
