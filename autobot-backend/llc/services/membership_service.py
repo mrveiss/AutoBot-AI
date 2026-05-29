@@ -54,7 +54,7 @@ class MembershipService(LLCServiceBase):
 
         if self.activity_log:
             try:
-                from .activity_log import ActivityEventType
+                from ..models.enums import ActivityEventType
 
                 await self.activity_log.record(
                     session,
@@ -83,7 +83,7 @@ class MembershipService(LLCServiceBase):
 
         if self.activity_log:
             try:
-                from .activity_log import ActivityEventType
+                from ..models.enums import ActivityEventType
 
                 await self.activity_log.record(
                     session,

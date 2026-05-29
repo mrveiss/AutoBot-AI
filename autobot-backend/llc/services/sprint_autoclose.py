@@ -24,10 +24,9 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..kb.sprint_summarizer import SprintKbSummarizer
-from ..models.enums import ApprovalStatus, ApprovalType, SprintStatus, WorkItemStatus
+from ..models.enums import ActivityEventType, ApprovalStatus, ApprovalType, SprintStatus, WorkItemStatus
 from ..models.sprint import LLCSprint
 from ..models.work_item import LLCWorkItem
-from ..services.activity_log import ActivityEventType
 from ..services.approval import ApprovalService
 from .base import LLCServiceBase
 

@@ -33,7 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
 
-from ..models.enums import CoWorkerType, WorkItemPriority, WorkItemStatus, WorkItemType
+from ..models.enums import ActivityEventType, CoWorkerType, WorkItemPriority, WorkItemStatus, WorkItemType
 from ..models.label import LLCWorkItemLabel
 from ..models.membership import LLCCompanyMembership
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
@@ -418,8 +418,6 @@ class WorkItemService(LLCServiceBase):
 
         if self.activity_log:
             try:
-                from .activity_log import ActivityEventType
-
                 await self.activity_log.record(
                     session,
                     company_id=company_id,
@@ -469,8 +467,6 @@ class WorkItemService(LLCServiceBase):
 
         if self.activity_log:
             try:
-                from .activity_log import ActivityEventType
-
                 await self.activity_log.record(
                     session,
                     company_id=company_id,
@@ -545,8 +541,6 @@ class WorkItemService(LLCServiceBase):
 
         if self.activity_log:
             try:
-                from .activity_log import ActivityEventType
-
                 await self.activity_log.record(
                     session,
                     company_id=company_id,
@@ -612,8 +606,6 @@ class WorkItemService(LLCServiceBase):
 
         if self.activity_log:
             try:
-                from .activity_log import ActivityEventType
-
                 await self.activity_log.record(
                     session,
                     company_id=company_id,
@@ -785,8 +777,6 @@ class WorkItemService(LLCServiceBase):
 
         if self.activity_log:
             try:
-                from .activity_log import ActivityEventType
-
                 meta: dict = {}
                 if is_board_override:
                     meta["board_override"] = True

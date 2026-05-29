@@ -16,9 +16,8 @@ import sqlalchemy as sa
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..models.enums import WorkItemRelationType, WorkItemStatus
+from ..models.enums import ActivityEventType, WorkItemRelationType, WorkItemStatus
 from ..models.work_item import LLCWorkItem, LLCWorkItemRelation
-from .activity_log import ActivityEventType
 from .base import LLCServiceBase
 
 logger = logging.getLogger(__name__)

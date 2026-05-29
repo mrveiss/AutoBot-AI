@@ -153,7 +153,7 @@ class LLCLabelService(LLCServiceBase):
         await session.flush()
 
         if added and self.activity_log:
-            from .activity_log import ActivityEventType
+            from ..models.enums import ActivityEventType
 
             await self.activity_log.record(
                 session,
@@ -186,7 +186,7 @@ class LLCLabelService(LLCServiceBase):
         await session.flush()
 
         if self.activity_log:
-            from .activity_log import ActivityEventType
+            from ..models.enums import ActivityEventType
 
             await self.activity_log.record(
                 session,

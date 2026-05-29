@@ -23,7 +23,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from llc.exceptions import ProviderRateLimited
-from llc.models.enums import HeartbeatRunStatus
+from llc.models.enums import LLCRunStatus
 from llc.models.heartbeat_run import LLCHeartbeatRun
 from llc.scheduler.heartbeat_scheduler import (
     _MAX_RATE_LIMIT_RETRIES,
@@ -56,7 +56,7 @@ def _make_agent(**kwargs):
     return defaults
 
 
-def _make_run(status=HeartbeatRunStatus.RATE_LIMITED.value, retry_count=1, retry_after=None):
+def _make_run(status=LLCRunStatus.RATE_LIMITED.value, retry_count=1, retry_after=None):
     run = MagicMock(spec=LLCHeartbeatRun)
     run.id = _RUN_ID
     run.agent_id = _AGENT_ID
@@ -127,7 +127,7 @@ async def test_handle_rate_limited_writes_status_and_requeues():
     session_mock.execute.assert_called_once()
     call_args = session_mock.execute.call_args[0][0]
     compiled = call_args.compile(compile_kwargs={"literal_binds": True})
-    assert HeartbeatRunStatus.RATE_LIMITED.value in str(compiled)
+    assert LLCRunStatus.RATE_LIMITED.value in str(compiled)
 
     # Agent re-queued in Redis
     redis.zadd.assert_called_once()
@@ -239,7 +239,7 @@ async def test_handle_rate_limited_demotes_after_max_retries():
 
     # FAILED written, not re-queued
     compiled = str(session_mock.execute.call_args[0][0].compile(compile_kwargs={"literal_binds": True}))
-    assert HeartbeatRunStatus.FAILED.value in compiled
+    assert LLCRunStatus.FAILED.value in compiled
     redis.zadd.assert_not_called()
 
 
@@ -324,7 +324,7 @@ async def test_handle_due_agent_creates_fresh_run_when_no_rate_limited():
     scheduler = HeartbeatScheduler()
     agent = _make_agent()
     redis = _make_redis()
-    fresh_run = _make_run(status=HeartbeatRunStatus.QUEUED.value, retry_count=0)
+    fresh_run = _make_run(status=LLCRunStatus.QUEUED.value, retry_count=0)
     fresh_run.context_snapshot = None
 
     session_mock = AsyncMock()

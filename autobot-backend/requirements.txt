@@ -77,6 +77,7 @@ weasyprint>=68.1        # HTML→PDF rendering for canvas PDF export
 # Media processing pipelines (Issue #932)
 aiohttp>=3.13.4         # Async HTTP client - SECURITY UPDATE
 httpx>=0.28.1           # Issue #4412: hub registry fetches (async HTTP)
+pywebpush>=2.0.0        # VAPID/RFC8291 browser push delivery (GH#4459)
 beautifulsoup4>=4.14.3  # HTML parsing for link pipeline
 Pillow>=12.1.1          # Image processing - SECURITY UPDATE (OOB write fix)
 jsonschema>=4.26.0      # Issue #7405: JSON Schema validation for /knowledge/extract

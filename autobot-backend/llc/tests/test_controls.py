@@ -18,8 +18,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from llc.models.enums import LLCAgentStatus
-from llc.services.activity_log import ActivityEventType, LLCActivityLogService
+from llc.models.enums import ActivityEventType, LLCAgentStatus
+from llc.services.activity_log import LLCActivityLogService
 from llc.services.controls_service import (
     AgentNotFoundError,
     ControlsService,

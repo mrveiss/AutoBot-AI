@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from llc.models.enums import ActivityEventType
 from llc.models.template import (
     TemplateCategory,
     TemplateDetail,
@@ -27,7 +28,7 @@ from llc.models.template import (
     TemplateSearchResult,
 )
 
-from .activity_log import ActivityEventType, ActorType, LLCActivityLogService
+from .activity_log import ActorType, LLCActivityLogService
 
 logger = logging.getLogger(__name__)
 

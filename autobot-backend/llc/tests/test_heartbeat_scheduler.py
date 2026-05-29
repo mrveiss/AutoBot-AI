@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from llc.models.enums import HeartbeatRunStatus
+from llc.models.enums import LLCRunStatus
 from llc.models.heartbeat_run import LLCHeartbeatRun
 from llc.scheduler.heartbeat_scheduler import (
     _SCHEDULE_KEY,
@@ -258,7 +258,7 @@ class TestTriggerManual:
 
         mock_run = MagicMock(spec=LLCHeartbeatRun)
         mock_run.id = uuid.uuid4()
-        mock_run.status = HeartbeatRunStatus.QUEUED.value
+        mock_run.status = LLCRunStatus.QUEUED.value
 
         mock_session = AsyncMock()
         mock_session.flush = AsyncMock()
@@ -271,7 +271,7 @@ class TestTriggerManual:
             run, agent_cfg = await scheduler.trigger_manual(mock_session, "agent-abc")
 
         assert run.id == mock_run.id
-        assert run.status == HeartbeatRunStatus.QUEUED.value
+        assert run.status == LLCRunStatus.QUEUED.value
         assert agent_cfg == agent
 
     @pytest.mark.asyncio

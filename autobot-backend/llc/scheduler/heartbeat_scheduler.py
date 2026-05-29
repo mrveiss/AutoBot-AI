@@ -45,7 +45,7 @@ from user_management.database import get_async_session_factory
 
 from ..adapters import AutoBotAgentAdapter
 from ..exceptions import ProviderRateLimited
-from ..models.enums import HeartbeatInvocationSource, HeartbeatRunStatus
+from ..models.enums import HeartbeatInvocationSource, LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
 
 logger = logging.getLogger(__name__)
@@ -164,7 +164,7 @@ class HeartbeatScheduler:
         async with factory() as session:
             result = await session.execute(
                 select(LLCHeartbeatRun).where(
-                    LLCHeartbeatRun.status == HeartbeatRunStatus.RATE_LIMITED.value,
+                    LLCHeartbeatRun.status == LLCRunStatus.RATE_LIMITED.value,
                     LLCHeartbeatRun.retry_after.isnot(None),
                 )
             )
@@ -268,7 +268,7 @@ class HeartbeatScheduler:
                     update(LLCHeartbeatRun)
                     .where(LLCHeartbeatRun.id == run.id)
                     .values(
-                        status=HeartbeatRunStatus.QUEUED.value,
+                        status=LLCRunStatus.QUEUED.value,
                         retry_after=None,
                     )
                 )
@@ -338,7 +338,7 @@ class HeartbeatScheduler:
             select(LLCHeartbeatRun)
             .where(
                 LLCHeartbeatRun.agent_id == agent_id,
-                LLCHeartbeatRun.status == HeartbeatRunStatus.RATE_LIMITED.value,
+                LLCHeartbeatRun.status == LLCRunStatus.RATE_LIMITED.value,
             )
             .order_by(LLCHeartbeatRun.created_at.desc())
             .limit(1)
@@ -420,7 +420,7 @@ class HeartbeatScheduler:
             company_id=company_id,
             agent_id=agent["agent_id"],
             invocation_source=source.value,
-            status=HeartbeatRunStatus.QUEUED.value,
+            status=LLCRunStatus.QUEUED.value,
         )
         session.add(run)
         return run
@@ -444,7 +444,7 @@ class HeartbeatScheduler:
                     update(LLCHeartbeatRun)
                     .where(LLCHeartbeatRun.id == run_id)
                     .values(
-                        status=HeartbeatRunStatus.RUNNING.value,
+                        status=LLCRunStatus.RUNNING.value,
                         started_at=datetime.now(tz=timezone.utc),
                     )
                 )
@@ -457,7 +457,7 @@ class HeartbeatScheduler:
                         update(LLCHeartbeatRun)
                         .where(LLCHeartbeatRun.id == run_id)
                         .values(
-                            status=HeartbeatRunStatus.FAILED.value,
+                            status=LLCRunStatus.FAILED.value,
                             finished_at=datetime.now(tz=timezone.utc),
                             error=str(exc),
                         )
@@ -468,7 +468,7 @@ class HeartbeatScheduler:
             return
 
         error_msg: Optional[str] = None
-        final_status = HeartbeatRunStatus.SUCCEEDED.value
+        final_status = LLCRunStatus.COMPLETED.value
         rate_limited_exc: Optional[ProviderRateLimited] = None
 
         try:
@@ -478,7 +478,7 @@ class HeartbeatScheduler:
         except Exception as exc:
             logger.exception("Adapter error for run %s", run_id)
             error_msg = str(exc)
-            final_status = HeartbeatRunStatus.FAILED.value
+            final_status = LLCRunStatus.FAILED.value
 
         if rate_limited_exc is not None:
             await self._handle_rate_limited(agent, run_id, retry_count, rate_limited_exc)
@@ -495,7 +495,7 @@ class HeartbeatScheduler:
                         error=error_msg,
                     )
                 )
-                if final_status == HeartbeatRunStatus.SUCCEEDED.value:
+                if final_status == LLCRunStatus.COMPLETED.value:
                     await session.execute(
                         text("UPDATE agent_org_nodes SET last_heartbeat_at = now()" " WHERE agent_id = :aid"),
                         {"aid": agent["agent_id"]},
@@ -536,7 +536,7 @@ class HeartbeatScheduler:
                         update(LLCHeartbeatRun)
                         .where(LLCHeartbeatRun.id == run_id)
                         .values(
-                            status=HeartbeatRunStatus.FAILED.value,
+                            status=LLCRunStatus.FAILED.value,
                             finished_at=datetime.now(tz=timezone.utc),
                             error=f"Rate-limit retries exhausted ({new_retry_count}): {exc}",
                             retry_count=new_retry_count,
@@ -572,7 +572,7 @@ class HeartbeatScheduler:
                     update(LLCHeartbeatRun)
                     .where(LLCHeartbeatRun.id == run_id)
                     .values(
-                        status=HeartbeatRunStatus.RATE_LIMITED.value,
+                        status=LLCRunStatus.RATE_LIMITED.value,
                         finished_at=datetime.now(tz=timezone.utc),
                         error=str(exc),
                         retry_after=retry_after_dt,

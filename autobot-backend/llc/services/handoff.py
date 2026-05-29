@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.redis_client import get_async_redis_client
 
 from ..kb.handoff_brief import HandoffBriefGenerator
-from ..models.enums import WorkItemStatus
+from ..models.enums import ActivityEventType, WorkItemStatus
 from ..models.work_item import LLCWorkItem
 from .base import LLCServiceBase
 
@@ -168,7 +168,6 @@ class HandoffService(LLCServiceBase):
         if self.activity_log:
             try:
                 from ..models.activity import ActorType
-                from .activity_log import ActivityEventType
 
                 await self.activity_log.record(
                     session,
@@ -232,7 +231,6 @@ class HandoffService(LLCServiceBase):
         if self.activity_log:
             try:
                 from ..models.activity import ActorType
-                from .activity_log import ActivityEventType
 
                 await self.activity_log.record(
                     session,
@@ -286,7 +284,6 @@ class HandoffService(LLCServiceBase):
         if self.activity_log:
             try:
                 from ..models.activity import ActorType
-                from .activity_log import ActivityEventType
 
                 await self.activity_log.record(
                     session,
@@ -403,8 +400,6 @@ class HandoffService(LLCServiceBase):
         if not self.activity_log:
             return
         try:
-            from .activity_log import ActivityEventType
-
             await self.activity_log.record(
                 session,
                 company_id=company_id,

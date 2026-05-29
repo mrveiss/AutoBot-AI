@@ -36,7 +36,13 @@ class GovernanceMode(str, Enum):
     LOCKED = "locked"
 
 
-class TrustLevel(str, Enum):
+class SkillActivationLevel(str, Enum):
+    """Trust level for skill activation governance (GH#8957).
+
+    Controls what level of monitoring and sandboxing is applied when
+    activating a skill.
+    """
+
     TRUSTED = "trusted"
     MONITORED = "monitored"
     SANDBOXED = "sandboxed"

@@ -17,7 +17,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from user_management.models.base import Base
 
-from .enums import HeartbeatInvocationSource, HeartbeatRunStatus
+from .enums import HeartbeatInvocationSource, LLCRunStatus
 
 
 class LLCHeartbeatRun(Base):
@@ -46,7 +46,7 @@ class LLCHeartbeatRun(Base):
     status: Mapped[str] = mapped_column(
         sa.String(32),
         nullable=False,
-        server_default=HeartbeatRunStatus.QUEUED.value,
+        server_default=LLCRunStatus.QUEUED.value,
         index=True,
     )
 

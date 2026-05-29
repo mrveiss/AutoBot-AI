@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from autobot_shared.logging_manager import get_logger
-from skills.models import GovernanceMode, SkillPackage, TrustLevel
+from skills.models import GovernanceMode, SkillActivationLevel, SkillPackage
 
 if TYPE_CHECKING:
     pass  # future typing-only imports
@@ -31,7 +31,7 @@ class ActivationResult:
     requires_human_review: bool
     approval_id: str | None = None
     reason: str = ""
-    trust_level: TrustLevel = TrustLevel.MONITORED
+    trust_level: SkillActivationLevel = SkillActivationLevel.MONITORED
 
 
 class GovernanceEngine:
@@ -40,7 +40,7 @@ class GovernanceEngine:
     def __init__(
         self,
         mode: GovernanceMode = GovernanceMode.SEMI_AUTO,
-        default_trust: TrustLevel = TrustLevel.MONITORED,
+        default_trust: SkillActivationLevel = SkillActivationLevel.MONITORED,
     ) -> None:
         """Initialize with governance mode and default trust level."""
         self.mode = mode
@@ -69,7 +69,7 @@ class GovernanceEngine:
         self,
         approval_id: str,
         admin_id: str,
-        trust_level: TrustLevel = TrustLevel.MONITORED,
+        trust_level: SkillActivationLevel = SkillActivationLevel.MONITORED,
         notes: str = "",
     ) -> ActivationResult:
         """Admin approves a pending skill activation."""

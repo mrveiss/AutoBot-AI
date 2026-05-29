@@ -25,10 +25,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.redis_client import get_async_redis_client
 from user_management.database import get_async_session_factory
 
-from ..models.enums import WorkItemStatus, WorkItemType
+from ..models.enums import ActivityEventType, WorkItemStatus, WorkItemType
 from ..models.heartbeat_run import LLCHeartbeatRun
 from ..models.work_item import LLCWorkItem
-from ..services.activity_log import ActivityEventType, LLCActivityLogService
+from ..services.activity_log import LLCActivityLogService
 from ..services.work_item_service import WorkItemService
 
 logger = logging.getLogger(__name__)

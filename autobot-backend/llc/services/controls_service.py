@@ -21,8 +21,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
 
-from ..models.enums import LLCAgentStatus
-from .activity_log import ActivityEventType, LLCActivityLogService
+from ..models.enums import ActivityEventType, LLCAgentStatus
+from .activity_log import LLCActivityLogService
 
 logger = logging.getLogger(__name__)
 

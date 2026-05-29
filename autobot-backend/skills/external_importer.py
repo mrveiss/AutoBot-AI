@@ -5,7 +5,7 @@
 External Skill Importer (Issue #5063)
 
 Imports skill packages from external git repositories and HTTP catalogs.
-All imported skills are always assigned TrustLevel.SANDBOXED -- they are never
+All imported skills are always assigned SkillActivationLevel.SANDBOXED -- they are never
 automatically promoted to BUILTIN or TRUSTED.
 """
 
@@ -20,7 +20,7 @@ import aiohttp
 
 from autobot_shared.logging_manager import get_logger
 from skills.manifest_parser import parse_manifest
-from skills.models import SkillPackage, SkillState, TrustLevel
+from skills.models import SkillActivationLevel, SkillPackage, SkillState
 
 logger = get_logger(__name__)
 

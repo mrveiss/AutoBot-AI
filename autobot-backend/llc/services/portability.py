@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from llc.models.enums import LLCCompanyStatus
+from llc.models.enums import ActivityEventType, LLCCompanyStatus
 from llc.models.export import LLCExportArtifact
 from llc.models.goal import LLCGoal
 from llc.models.routine import LLCRoutine
@@ -26,7 +26,7 @@ from llc.models.sprint import LLCPortfolio, LLCProject, LLCSprint
 from llc.models.work_item import LLCWorkItem
 from user_management.models.organization import Organization
 
-from .activity_log import ActivityEventType, LLCActivityLogService
+from .activity_log import LLCActivityLogService
 from .base import LLCServiceBase
 
 logger = get_logger(__name__)
