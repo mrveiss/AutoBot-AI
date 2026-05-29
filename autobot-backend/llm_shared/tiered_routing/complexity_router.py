@@ -157,9 +157,13 @@ class ComplexityRouter:
             if has_system:
                 escalation_request.metadata["enable_prompt_cache"] = True
 
-            from ..providers.anthropic import AnthropicProvider
+            from ..provider_registry import get_provider_registry
 
-            claude = AnthropicProvider()
+            registry = get_provider_registry()
+            claude = await registry.get_provider("anthropic")
+            if claude is None:
+                logger.warning("ComplexityRouter: Anthropic provider not available; falling through")
+                return None
             response = await claude._chat_completion_impl(escalation_request)
             if response.error:
                 logger.warning(
