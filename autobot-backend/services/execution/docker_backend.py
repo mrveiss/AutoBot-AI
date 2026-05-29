@@ -16,7 +16,7 @@ GH#4458: Snapshot/restore for resumable agent sessions.
 ``snapshot(container_id, session_id)`` commits a container to a named image and
 records metadata in a file-based index (``SnapshotIndex``).
 ``restore(snapshot_id)`` starts a new detached container from the saved image.
-Storage path is controlled by AUTOBOT_SNAPSHOT_STORAGE_PATH (default /tmp/autobot_snapshots).
+Storage path is controlled by AUTOBOT_SNAPSHOT_STORAGE_PATH (default /opt/autobot/snapshots).
 """
 
 import asyncio
@@ -96,6 +96,7 @@ class DockerBackend(ExecutionBackend):
             raise RuntimeError(f"Failed to connect to Docker daemon: {e}")
 
         self._container_map: Dict[str, str] = {}  # task_id -> container_id
+        self._restored_containers: Dict[str, str] = {}  # snapshot_id -> container_id
         self._default_image = "python:3.10-slim"
 
         # Pre-warmed pool (GH#4452)
@@ -337,14 +338,17 @@ class DockerBackend(ExecutionBackend):
 
     async def cleanup(self) -> None:
         """Clean up active containers and stop the pool if running."""
-        for task_id, container_id in list(self._container_map.items()):
+        all_containers = list(self._container_map.items()) + [
+            (f"restored:{k}", v) for k, v in self._restored_containers.items()
+        ]
+        for key, container_id in all_containers:
             try:
                 container = self.client.containers.get(container_id)
                 if container.status == "running":
                     container.kill()
                 container.remove(force=True)
             except Exception as e:
-                logger.warning("Error cleaning up container %s: %s", container_id, e)
+                logger.warning("Error cleaning up container %s (key=%s): %s", container_id, key, e)
 
         if self._pool_registry is not None:
             await self._pool_registry.stop()
@@ -470,8 +474,10 @@ class DockerBackend(ExecutionBackend):
                 f"Failed to restore snapshot {snapshot_id} from image {record.image_name}: {exc}"
             ) from exc
 
-        # Track restored container so cleanup() can stop it at session end.
-        self._container_map[snapshot_id] = container.id
+        # Track restored container in a dedicated map so cleanup() can stop it.
+        # Using _container_map (keyed by task_id) would cause cleanup to skip these
+        # containers because snapshot_id is not a task_id.
+        self._restored_containers[snapshot_id] = container.id
 
         logger.info(
             "Restored snapshot %s → container %s (session=%s)",
