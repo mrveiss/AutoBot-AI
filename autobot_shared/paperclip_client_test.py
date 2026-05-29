@@ -26,6 +26,24 @@ def _make_client(**kwargs) -> PaperclipClient:
 
 
 # ---------------------------------------------------------------------------
+# Base headers — X-Paperclip-Run-Id contract
+# ---------------------------------------------------------------------------
+
+
+def test_base_headers_includes_run_id():
+    client = _make_client()
+    headers = client._base_headers()
+    assert headers.get("X-Paperclip-Run-Id") == "run-123"
+
+
+def test_base_headers_omits_run_id_when_explicitly_cleared():
+    client = PaperclipClient(api_url="http://x.test", run_id="placeholder")
+    client._run_id = ""  # clear after construction to bypass env fallback
+    headers = client._base_headers()
+    assert "X-Paperclip-Run-Id" not in headers
+
+
+# ---------------------------------------------------------------------------
 # _content_fingerprint
 # ---------------------------------------------------------------------------
 
@@ -56,8 +74,8 @@ async def test_create_issue_returns_existing_when_found():
         patch.object(client, "_get_issue", new_callable=AsyncMock, return_value=None),
         patch.object(client, "_search_issue_by_title", new_callable=AsyncMock, return_value=existing),
         patch.object(client, "_post_json", new_callable=AsyncMock) as mock_post,
-        patch.object(client, "_redis_get", return_value=None),
-        patch.object(client, "_redis_set"),
+        patch.object(client, "_redis_get", new_callable=AsyncMock, return_value=None),
+        patch.object(client, "_redis_set", new_callable=AsyncMock),
         patch.object(client, "_ensure_session", new_callable=AsyncMock, return_value=MagicMock()),
     ):
         result = await client.create_issue_idempotent("co-1", "Fix 99")
@@ -72,8 +90,8 @@ async def test_create_issue_creates_when_not_found():
 
     client = _make_client()
     with (
-        patch.object(client, "_redis_get", return_value=None),
-        patch.object(client, "_redis_set"),
+        patch.object(client, "_redis_get", new_callable=AsyncMock, return_value=None),
+        patch.object(client, "_redis_set", new_callable=AsyncMock),
         patch.object(client, "_search_issue_by_title", new_callable=AsyncMock, return_value=None),
         patch.object(client, "_post_json", new_callable=AsyncMock, return_value=new_issue),
         patch.object(client, "_ensure_session", new_callable=AsyncMock, return_value=MagicMock()),
@@ -89,7 +107,7 @@ async def test_create_issue_uses_redis_cache_hit():
 
     client = _make_client()
     with (
-        patch.object(client, "_redis_get", return_value="issue-cached"),
+        patch.object(client, "_redis_get", new_callable=AsyncMock, return_value="issue-cached"),
         patch.object(client, "_get_issue", new_callable=AsyncMock, return_value=existing),
         patch.object(client, "_search_issue_by_title", new_callable=AsyncMock) as mock_search,
         patch.object(client, "_post_json", new_callable=AsyncMock) as mock_post,
@@ -108,9 +126,9 @@ async def test_create_issue_falls_through_on_stale_cache():
 
     client = _make_client()
     with (
-        patch.object(client, "_redis_get", return_value="issue-stale"),
-        patch.object(client, "_redis_delete"),
-        patch.object(client, "_redis_set"),
+        patch.object(client, "_redis_get", new_callable=AsyncMock, return_value="issue-stale"),
+        patch.object(client, "_redis_delete", new_callable=AsyncMock),
+        patch.object(client, "_redis_set", new_callable=AsyncMock),
         patch.object(client, "_get_issue", new_callable=AsyncMock, return_value=None),
         patch.object(client, "_search_issue_by_title", new_callable=AsyncMock, return_value=None),
         patch.object(client, "_post_json", new_callable=AsyncMock, return_value=new_issue),
@@ -130,7 +148,7 @@ async def test_create_issue_falls_through_on_stale_cache():
 async def test_post_comment_suppressed_when_redis_hit():
     client = _make_client()
     with (
-        patch.object(client, "_redis_exists", return_value=True),
+        patch.object(client, "_redis_exists", new_callable=AsyncMock, return_value=True),
         patch.object(client, "_post_json", new_callable=AsyncMock) as mock_post,
     ):
         result = await client.post_comment_idempotent("issue-1", "All good.")
@@ -144,8 +162,8 @@ async def test_post_comment_proceeds_and_sets_dedup_key():
     comment = {"id": "c-1", "body": "All good."}
     client = _make_client()
     with (
-        patch.object(client, "_redis_exists", return_value=False),
-        patch.object(client, "_redis_set") as mock_set,
+        patch.object(client, "_redis_exists", new_callable=AsyncMock, return_value=False),
+        patch.object(client, "_redis_set", new_callable=AsyncMock) as mock_set,
         patch.object(client, "_post_json", new_callable=AsyncMock, return_value=comment),
         patch.object(client, "_ensure_session", new_callable=AsyncMock, return_value=MagicMock()),
     ):
@@ -160,8 +178,8 @@ async def test_post_comment_dedup_disabled_via_ttl_zero():
     comment = {"id": "c-2", "body": "Always post."}
     client = _make_client()
     with (
-        patch.object(client, "_redis_exists") as mock_exists,
-        patch.object(client, "_redis_set") as mock_set,
+        patch.object(client, "_redis_exists", new_callable=AsyncMock) as mock_exists,
+        patch.object(client, "_redis_set", new_callable=AsyncMock) as mock_set,
         patch.object(client, "_post_json", new_callable=AsyncMock, return_value=comment),
         patch.object(client, "_ensure_session", new_callable=AsyncMock, return_value=MagicMock()),
     ):
@@ -228,8 +246,8 @@ async def test_update_status_applies_when_issue_not_found():
 async def test_create_issue_continues_when_redis_unavailable():
     new_issue = {"id": "issue-new", "title": "Fix 99", "status": "todo"}
     client = _make_client()
+    client._redis = None  # simulate Redis unavailable
     with (
-        patch("autobot_shared.paperclip_client._get_sync_redis", return_value=None),
         patch.object(client, "_search_issue_by_title", new_callable=AsyncMock, return_value=None),
         patch.object(client, "_post_json", new_callable=AsyncMock, return_value=new_issue),
         patch.object(client, "_ensure_session", new_callable=AsyncMock, return_value=MagicMock()),
@@ -243,8 +261,8 @@ async def test_create_issue_continues_when_redis_unavailable():
 async def test_post_comment_continues_when_redis_unavailable():
     comment = {"id": "c-3", "body": "ok"}
     client = _make_client()
+    client._redis = None  # simulate Redis unavailable
     with (
-        patch("autobot_shared.paperclip_client._get_sync_redis", return_value=None),
         patch.object(client, "_post_json", new_callable=AsyncMock, return_value=comment),
         patch.object(client, "_ensure_session", new_callable=AsyncMock, return_value=MagicMock()),
     ):

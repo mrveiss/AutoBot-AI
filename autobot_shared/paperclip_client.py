@@ -49,10 +49,11 @@ import logging
 import os
 import re
 from typing import Any
+from urllib.parse import quote as _url_quote
 
 import aiohttp
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,7 @@ logger = logging.getLogger(__name__)
 _COMMENT_DEDUP_TTL_SECONDS = int(
     os.environ.get("AUTOBOT_PAPERCLIP_COMMENT_DEDUP_TTL", 3600)
 )
-_ISSUE_SEARCH_LIMIT = 20  # max results to scan when checking for duplicates
+_ISSUE_SEARCH_LIMIT = 50  # max results to scan when checking for duplicates
 _REDIS_KEY_PREFIX = "paperclip:idem:"
 
 
@@ -88,15 +89,6 @@ def _comment_dedup_key(issue_id: str, fingerprint: str) -> str:
 
 def _issue_search_key(company_id: str, title_fingerprint: str) -> str:
     return f"{_REDIS_KEY_PREFIX}issue:{company_id}:{title_fingerprint}"
-
-
-def _get_sync_redis():
-    """Return a synchronous Redis client, or None when unavailable."""
-    try:
-        return get_redis_client(async_client=False, database="main")
-    except Exception as exc:
-        logger.warning("paperclip_client: Redis unavailable (%s) — failing open", exc)
-        return None
 
 
 # ---------------------------------------------------------------------------
@@ -132,6 +124,7 @@ class PaperclipClient:
         self._run_id = run_id or os.environ.get("PAPERCLIP_RUN_ID", "")
         self._comment_dedup_ttl = comment_dedup_ttl
         self._session: aiohttp.ClientSession | None = None
+        self._redis: Any | None = None  # async Redis client; None when unavailable
 
     # ------------------------------------------------------------------
     # Context manager / lifecycle
@@ -150,11 +143,18 @@ class PaperclipClient:
                 headers=self._base_headers(),
                 timeout=aiohttp.ClientTimeout(total=30, connect=5),
             )
+        if self._redis is None:
+            try:
+                self._redis = await get_async_redis_client(database="main")
+            except Exception as exc:
+                logger.warning("paperclip_client: Redis unavailable (%s) — failing open", exc)
+                self._redis = None
 
     async def close(self) -> None:
         if self._session and not self._session.closed:
             await self._session.close()
         self._session = None
+        self._redis = None
 
     # ------------------------------------------------------------------
     # Idempotent public API
@@ -193,7 +193,7 @@ class PaperclipClient:
         cache_key = _issue_search_key(company_id, fp)
 
         # Fast path: Redis has the issue ID from a previous call.
-        cached_id = self._redis_get(cache_key)
+        cached_id = await self._redis_get(cache_key)
         if cached_id:
             existing = await self._get_issue(session, cached_id)
             if existing:
@@ -204,7 +204,7 @@ class PaperclipClient:
                 )
                 return existing
             # Cached ID no longer resolves — fall through to search.
-            self._redis_delete(cache_key)
+            await self._redis_delete(cache_key)
 
         # Slow path: search the API for an existing issue.
         existing = await self._search_issue_by_title(session, company_id, title)
@@ -214,7 +214,7 @@ class PaperclipClient:
                 title,
                 existing.get("id"),
             )
-            self._redis_set(cache_key, existing["id"], ttl=86400)
+            await self._redis_set(cache_key, existing["id"], ttl=86400)
             return existing
 
         # Not found — create it.
@@ -234,7 +234,7 @@ class PaperclipClient:
             title,
         )
         if created.get("id"):
-            self._redis_set(cache_key, created["id"], ttl=86400)
+            await self._redis_set(cache_key, created["id"], ttl=86400)
         return created
 
     async def post_comment_idempotent(
@@ -260,11 +260,11 @@ class PaperclipClient:
             The created comment dict, or ``None`` when the post was suppressed.
         """
         ttl = self._comment_dedup_ttl if dedup_ttl is None else dedup_ttl
+        fp = _content_fingerprint(body)
 
         if ttl > 0:
-            fp = _content_fingerprint(body)
             dedup_key = _comment_dedup_key(issue_id, fp)
-            if self._redis_exists(dedup_key):
+            if await self._redis_exists(dedup_key):
                 logger.debug(
                     "paperclip_client.post_comment_idempotent: suppressed duplicate "
                     "issue_id=%s fingerprint=%s",
@@ -279,8 +279,7 @@ class PaperclipClient:
         )
 
         if ttl > 0 and comment.get("id"):
-            fp = _content_fingerprint(body)
-            self._redis_set(_comment_dedup_key(issue_id, fp), "1", ttl=ttl)
+            await self._redis_set(_comment_dedup_key(issue_id, fp), "1", ttl=ttl)
 
         logger.debug(
             "paperclip_client.post_comment_idempotent: posted id=%s issue=%s",
@@ -370,17 +369,25 @@ class PaperclipClient:
         self, session: aiohttp.ClientSession, path: str, payload: dict
     ) -> dict:
         url = f"{self._api_url}{path}"
-        async with session.post(url, json=payload) as resp:
-            resp.raise_for_status()
-            return await resp.json()
+        try:
+            async with session.post(url, json=payload) as resp:
+                resp.raise_for_status()
+                return await resp.json()
+        except aiohttp.ClientError as exc:
+            logger.error("paperclip_client POST %s failed: %s", path, exc)
+            raise
 
     async def _patch_json(
         self, session: aiohttp.ClientSession, path: str, payload: dict
     ) -> dict:
         url = f"{self._api_url}{path}"
-        async with session.patch(url, json=payload) as resp:
-            resp.raise_for_status()
-            return await resp.json()
+        try:
+            async with session.patch(url, json=payload) as resp:
+                resp.raise_for_status()
+                return await resp.json()
+        except aiohttp.ClientError as exc:
+            logger.error("paperclip_client PATCH %s failed: %s", path, exc)
+            raise
 
     async def _get_issue(
         self, session: aiohttp.ClientSession, issue_id: str
@@ -391,56 +398,59 @@ class PaperclipClient:
         self, session: aiohttp.ClientSession, company_id: str, title: str
     ) -> dict | None:
         """Return the first open issue whose title exactly matches *title*."""
-        encoded = aiohttp.helpers.quote(title, safe="")
+        encoded = _url_quote(title, safe="")
         path = f"/api/companies/{company_id}/issues?q={encoded}&limit={_ISSUE_SEARCH_LIMIT}"
         result = await self._get_json(session, path)
         if not result:
             return None
         items: list[dict] = result if isinstance(result, list) else result.get("items", [])
+        if len(items) >= _ISSUE_SEARCH_LIMIT:
+            logger.warning(
+                "paperclip_client._search_issue_by_title: hit scan limit (%d) for title=%r"
+                " — exact match may have been missed",
+                _ISSUE_SEARCH_LIMIT,
+                title,
+            )
         for item in items:
             if item.get("title") == title and item.get("status") not in ("done", "cancelled"):
                 return item
         return None
 
     # ------------------------------------------------------------------
-    # Redis helpers — synchronous, fail-open
+    # Redis helpers — async, fail-open
     # ------------------------------------------------------------------
 
-    def _redis_get(self, key: str) -> str | None:
-        redis = _get_sync_redis()
-        if redis is None:
+    async def _redis_get(self, key: str) -> str | None:
+        if self._redis is None:
             return None
         try:
-            value = redis.get(key)
+            value = await self._redis.get(key)
             return value.decode() if isinstance(value, bytes) else value
         except Exception as exc:
             logger.warning("paperclip_client: Redis GET %s failed: %s", key, exc)
             return None
 
-    def _redis_set(self, key: str, value: str, *, ttl: int) -> None:
-        redis = _get_sync_redis()
-        if redis is None:
+    async def _redis_set(self, key: str, value: str, *, ttl: int) -> None:
+        if self._redis is None:
             return
         try:
-            redis.set(key, value, ex=ttl)
+            await self._redis.set(key, value, ex=ttl)
         except Exception as exc:
             logger.warning("paperclip_client: Redis SET %s failed: %s", key, exc)
 
-    def _redis_exists(self, key: str) -> bool:
-        redis = _get_sync_redis()
-        if redis is None:
+    async def _redis_exists(self, key: str) -> bool:
+        if self._redis is None:
             return False
         try:
-            return bool(redis.exists(key))
+            return bool(await self._redis.exists(key))
         except Exception as exc:
             logger.warning("paperclip_client: Redis EXISTS %s failed: %s", key, exc)
             return False
 
-    def _redis_delete(self, key: str) -> None:
-        redis = _get_sync_redis()
-        if redis is None:
+    async def _redis_delete(self, key: str) -> None:
+        if self._redis is None:
             return
         try:
-            redis.delete(key)
+            await self._redis.delete(key)
         except Exception as exc:
             logger.warning("paperclip_client: Redis DELETE %s failed: %s", key, exc)
