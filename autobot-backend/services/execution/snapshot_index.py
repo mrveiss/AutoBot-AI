@@ -58,6 +58,7 @@ class SnapshotRecord:
     created_at: str
     size_bytes: int = 0
     labels: Dict[str, str] = None
+    user_id: str = ""
 
     def __post_init__(self) -> None:
         if self.labels is None:

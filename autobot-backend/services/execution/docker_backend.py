@@ -381,12 +381,14 @@ class DockerBackend(ExecutionBackend):
     # Snapshot / restore (GH#4458)
     # ------------------------------------------------------------------
 
-    async def snapshot(self, container_id: str, session_id: str = "") -> SnapshotRecord:
+    async def snapshot(self, container_id: str, session_id: str = "", user_id: str = "") -> SnapshotRecord:
         """Commit a running container's filesystem to a named image and record metadata.
 
         Args:
             container_id: ID or name of the Docker container to snapshot.
             session_id: Caller-supplied identifier for the agent session.
+            user_id: ID of the user creating the snapshot; used for ownership checks on
+                restore/delete (GH#8968).
 
         Returns:
             SnapshotRecord with snapshot_id, image_name, size_bytes, and timestamps.
@@ -421,6 +423,7 @@ class DockerBackend(ExecutionBackend):
             image_name=image_name,
             created_at=created_at,
             size_bytes=size_bytes,
+            user_id=user_id,
         )
         try:
             await asyncio.to_thread(self._snapshot_index.add, record)
@@ -444,22 +447,30 @@ class DockerBackend(ExecutionBackend):
         )
         return record
 
-    async def restore(self, snapshot_id: str) -> str:
+    async def restore(self, snapshot_id: str, caller_user_id: str | None = None) -> str:
         """Start a new detached container from a previously saved snapshot.
 
         Args:
             snapshot_id: ID returned by a prior ``snapshot()`` call.
+            caller_user_id: ID of the user requesting restore.  When the snapshot has a
+                non-empty ``user_id``, the caller must match it (GH#8968).
 
         Returns:
             The new container ID.
 
         Raises:
             KeyError: If snapshot_id is not found in the index.
+            PermissionError: If caller_user_id does not own the snapshot.
             RuntimeError: If container creation from the snapshot image fails.
         """
         record = await asyncio.to_thread(self._snapshot_index.get, snapshot_id)
         if record is None:
             raise KeyError(f"Snapshot '{snapshot_id}' not found")
+
+        if record.user_id and caller_user_id != record.user_id:
+            raise PermissionError(
+                f"User '{caller_user_id}' is not authorised to restore snapshot '{snapshot_id}'"
+            )
 
         try:
             container = await asyncio.to_thread(
@@ -487,18 +498,28 @@ class DockerBackend(ExecutionBackend):
         )
         return container.id
 
-    async def delete_snapshot(self, snapshot_id: str) -> bool:
+    async def delete_snapshot(self, snapshot_id: str, caller_user_id: str | None = None) -> bool:
         """Remove the snapshot image and its index entry.
 
         Args:
             snapshot_id: ID returned by a prior ``snapshot()`` call.
+            caller_user_id: ID of the user requesting deletion.  When the snapshot has a
+                non-empty ``user_id``, the caller must match it (GH#8968).
 
         Returns:
             True if the snapshot was found and removed; False if not found.
+
+        Raises:
+            PermissionError: If caller_user_id does not own the snapshot.
         """
         record = await asyncio.to_thread(self._snapshot_index.get, snapshot_id)
         if record is None:
             return False
+
+        if record.user_id and caller_user_id != record.user_id:
+            raise PermissionError(
+                f"User '{caller_user_id}' is not authorised to delete snapshot '{snapshot_id}'"
+            )
 
         try:
             await asyncio.to_thread(self.client.images.remove, record.image_name, force=True)
