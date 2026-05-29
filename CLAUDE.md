@@ -68,6 +68,7 @@ You are the world's best AI developer working on AutoBot. Every decision must op
 - **Branch target:** `Dev_new_gui` for all PRs unless told otherwise
 - **Commit format:** `<type>(scope): <description> (#issue-number)`
 - **Pre-commit:** Never `--no-verify`. PostToolUse hook auto-formats `.py` files.
+- **Hook scripts:** Before committing any change to `.claude/hooks/block-dangerous-commands.sh`, run `bash .claude/hooks/block-dangerous-commands_test.sh` (must be 27/27). Add new test cases for new rules. Test with `bash`, never interactively — the shell's `grep` alias is `ugrep` (PCRE2) but bash uses GNU grep 3.7 (no variable-length lookbehinds). See #8262.
 - **Branching discipline:** Direct commits on `main`/`master` are blocked by pre-commit hook (Issue #4113). All development flows through `Dev_new_gui` first.
 - **Worktrees:** No nesting. Manual creation for PRs (not `isolation: "worktree"`). Clean up after issue closure.
 - **Agents:** Prefer direct implementation. Reserve subagents for research/exploration. Subagents can't acquire Bash permission.
