@@ -46,6 +46,18 @@ import yaml
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+# Workers path for openvino_dispatch (GH#8690)
+_workers_path = Path(__file__).parent.parent.parent / "workers"
+if str(_workers_path) not in sys.path:
+    sys.path.insert(0, str(_workers_path))
+
+try:
+    from openvino_dispatch import UnsupportedArchitectureError, get_inference_config
+except ImportError:
+    logger.warning("openvino_dispatch not available; architecture validation disabled")
+    UnsupportedArchitectureError = None  # type: ignore
+    get_inference_config = None  # type: ignore
+
 # =============================================================================
 # Constants (Issue #68 - Code smells fix: Extract magic numbers)
 # =============================================================================
@@ -1002,6 +1014,14 @@ class PairResponse(BaseModel):
     device_info: Dict[str, Any] | None = None
 
 
+class LoadModelRequest(BaseModel):
+    """Load model request with optional architecture_family dispatch (GH#8690)."""
+
+    model_id: str
+    device: str = "CPU"
+    architecture_family: str | None = None
+
+
 class WindowsNPUWorker:
     """
     Windows-optimized NPU Worker
@@ -1429,7 +1449,58 @@ class WindowsNPUWorker:
             raise HTTPException(status_code=500, detail="Semantic search failed")
 
     def _register_model_routes(self):
-        """Register /model/optimize and /performance/benchmark routes."""
+        """Register /models/load, /model/optimize, and /performance/benchmark routes."""
+
+        @self.app.post("/models/load")
+        async def load_model(request: LoadModelRequest):
+            """Load model with architecture-aware dispatch (GH#8690).
+
+            Accepts optional architecture_family for dispatch validation.
+            Returns 422 with error_code 'unsupported_architecture' if not supported.
+            """
+            try:
+                # Validate architecture_family if provided (GH#8690, MVA-1613)
+                if request.architecture_family is not None and get_inference_config is not None:
+                    try:
+                        config = get_inference_config(
+                            request.model_id,
+                            request.architecture_family,
+                            request.device,
+                        )
+                        logger.debug(
+                            "architecture_family=%s → inference_backend=%s for model=%s",
+                            config["architecture_family"],
+                            config["inference_backend"],
+                            request.model_id,
+                        )
+                    except UnsupportedArchitectureError as e:
+                        logger.warning(
+                            "load_model rejected unsupported architecture_family=%s for model=%s: %s",
+                            request.architecture_family,
+                            request.model_id,
+                            e,
+                        )
+                        raise HTTPException(
+                            status_code=422,
+                            detail={
+                                "error": str(e),
+                                "error_code": "unsupported_architecture",
+                            },
+                        )
+
+                # Load the model
+                await self.load_and_optimize_model(request.model_id)
+                return {
+                    "success": True,
+                    "model_id": request.model_id,
+                    "device": request.device,
+                    "architecture_family": request.architecture_family,
+                }
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Model loading failed for {request.model_id}: {e}")
+                raise HTTPException(status_code=500, detail=f"Model loading failed: {e}")
 
         @self.app.post("/model/optimize")
         async def optimize_model(model_name: str, optimization_level: str = "balanced"):
