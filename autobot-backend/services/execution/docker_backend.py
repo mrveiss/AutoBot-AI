@@ -106,9 +106,7 @@ class DockerBackend(ExecutionBackend):
             try:
                 pool_size = int(os.getenv("AUTOBOT_DOCKER_POOL_SIZE", str(_DEFAULT_POOL_SIZE)))
             except ValueError:
-                logger.warning(
-                    "Invalid AUTOBOT_DOCKER_POOL_SIZE env var, using default %d", _DEFAULT_POOL_SIZE
-                )
+                logger.warning("Invalid AUTOBOT_DOCKER_POOL_SIZE env var, using default %d", _DEFAULT_POOL_SIZE)
                 pool_size = _DEFAULT_POOL_SIZE
 
         self._use_pool = use_pool
