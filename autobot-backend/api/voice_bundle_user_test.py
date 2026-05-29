@@ -170,7 +170,7 @@ async def test_user_can_assign_own_bundle():
     mock_session.commit = AsyncMock()
 
     with patch("user_management.database.get_async_session", return_value=mock_session):
-        with patch("services.event_log.emit"):
+        with patch("services.audit.unified_audit.emit"):
             result = await set_user_bundle(user_id, body, mock_request, current_user)
 
     assert result.user_id == user_id
@@ -196,7 +196,7 @@ async def test_admin_can_assign_bundle_to_other_user():
     mock_session.commit = AsyncMock()
 
     with patch("user_management.database.get_async_session", return_value=mock_session):
-        with patch("services.event_log.emit"):
+        with patch("services.audit.unified_audit.emit"):
             result = await set_user_bundle(target_user_id, body, mock_request, current_user)
 
     assert result.user_id == target_user_id
@@ -253,7 +253,7 @@ async def test_clear_bundle_assignment():
     mock_session.commit = AsyncMock()
 
     with patch("user_management.database.get_async_session", return_value=mock_session):
-        with patch("services.event_log.emit"):
+        with patch("services.audit.unified_audit.emit"):
             result = await set_user_bundle(user_id, body, mock_request, current_user)
 
     assert result.user_id == user_id
