@@ -155,7 +155,7 @@ async def get_user_bundle(
         raise_auth_error("AUTH_0003", "Cannot access other user's bundle assignment")
 
     try:
-        from database.session import get_async_session  # noqa: PLC0415
+        from user_management.database import get_async_session  # noqa: PLC0415
         from sqlalchemy import text  # noqa: PLC0415
 
         async with get_async_session() as session:
@@ -209,7 +209,7 @@ async def set_user_bundle(
     current_user_id = _get_user_id(current_user)
 
     try:
-        from database.session import get_async_session  # noqa: PLC0415
+        from user_management.database import get_async_session  # noqa: PLC0415
         from sqlalchemy import text  # noqa: PLC0415
 
         async with get_async_session() as session:
@@ -238,18 +238,21 @@ async def set_user_bundle(
         raise HTTPException(status_code=500, detail="Database error") from exc
 
     # Audit log
-    from services.event_log import EventType, emit  # noqa: PLC0415
+    from services.audit.unified_audit import AuditCategory, AuditEvent, emit  # noqa: PLC0415
 
     emit(
-        EventType.CONFIG_CHANGED,
-        user_id=str(current_user_id),
-        resource_type="user_voice_bundle",
-        resource_id=user_id,
-        metadata={
-            "target_user_id": user_id,
-            "bundle_name": body.bundle_name,
-            "action": "clear" if body.bundle_name is None else "assign",
-        },
+        AuditEvent(
+            category=AuditCategory.SECURITY,
+            action="voice_bundle_assignment_changed",
+            actor_id=str(current_user_id),
+            resource_type="user_voice_bundle",
+            resource_id=user_id,
+            metadata={
+                "target_user_id": user_id,
+                "bundle_name": body.bundle_name,
+                "assignment_action": "clear" if body.bundle_name is None else "assign",
+            },
+        )
     )
 
     logger.info(

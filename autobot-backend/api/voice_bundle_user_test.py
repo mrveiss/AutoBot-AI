@@ -80,7 +80,7 @@ async def test_get_own_bundle():
     mock_session.__aexit__ = AsyncMock(return_value=False)
     mock_session.execute = AsyncMock(return_value=mock_row)
 
-    with patch("database.session.get_async_session", return_value=mock_session):
+    with patch("user_management.database.get_async_session", return_value=mock_session):
         result = await get_user_bundle(user_id, mock_request, current_user)
 
     assert result.user_id == user_id
@@ -103,7 +103,7 @@ async def test_admin_can_view_other_user_bundle():
     mock_session.__aexit__ = AsyncMock(return_value=False)
     mock_session.execute = AsyncMock(return_value=mock_row)
 
-    with patch("database.session.get_async_session", return_value=mock_session):
+    with patch("user_management.database.get_async_session", return_value=mock_session):
         result = await get_user_bundle(target_user_id, mock_request, current_user)
 
     assert result.user_id == target_user_id
@@ -113,14 +113,15 @@ async def test_admin_can_view_other_user_bundle():
 @pytest.mark.asyncio
 async def test_user_cannot_view_other_user_bundle():
     """User cannot view other user's bundle assignment."""
+    from fastapi import HTTPException
+
     from api.voice_bundle_user import get_user_bundle
-    from utils.catalog_http_exceptions import CatalogHTTPException
 
     target_user_id = "other-user"
     current_user = {"user_id": "user-123", "role": "user"}
     mock_request = MagicMock()
 
-    with pytest.raises(CatalogHTTPException):
+    with pytest.raises(HTTPException):
         await get_user_bundle(target_user_id, mock_request, current_user)
 
 
@@ -140,7 +141,7 @@ async def test_get_bundle_no_assignment():
     mock_session.__aexit__ = AsyncMock(return_value=False)
     mock_session.execute = AsyncMock(return_value=mock_row)
 
-    with patch("database.session.get_async_session", return_value=mock_session):
+    with patch("user_management.database.get_async_session", return_value=mock_session):
         result = await get_user_bundle(user_id, mock_request, current_user)
 
     assert result.user_id == user_id
@@ -168,7 +169,7 @@ async def test_user_can_assign_own_bundle():
     mock_session.execute = AsyncMock()
     mock_session.commit = AsyncMock()
 
-    with patch("database.session.get_async_session", return_value=mock_session):
+    with patch("user_management.database.get_async_session", return_value=mock_session):
         with patch("services.event_log.emit"):
             result = await set_user_bundle(user_id, body, mock_request, current_user)
 
@@ -194,7 +195,7 @@ async def test_admin_can_assign_bundle_to_other_user():
     mock_session.execute = AsyncMock()
     mock_session.commit = AsyncMock()
 
-    with patch("database.session.get_async_session", return_value=mock_session):
+    with patch("user_management.database.get_async_session", return_value=mock_session):
         with patch("services.event_log.emit"):
             result = await set_user_bundle(target_user_id, body, mock_request, current_user)
 
@@ -205,15 +206,16 @@ async def test_admin_can_assign_bundle_to_other_user():
 @pytest.mark.asyncio
 async def test_user_cannot_assign_bundle_to_other_user():
     """User cannot assign bundle to other users."""
-    from api.voice_bundle_user import set_user_bundle, BundleAssignRequest
-    from utils.catalog_http_exceptions import CatalogHTTPException
+    from fastapi import HTTPException
+
+    from api.voice_bundle_user import BundleAssignRequest, set_user_bundle
 
     target_user_id = "other-user"
     current_user = {"user_id": "user-123", "role": "user"}
     mock_request = MagicMock()
     body = BundleAssignRequest(bundle_name="voice_extended")
 
-    with pytest.raises(CatalogHTTPException):
+    with pytest.raises(HTTPException):
         await set_user_bundle(target_user_id, body, mock_request, current_user)
 
 
@@ -250,7 +252,7 @@ async def test_clear_bundle_assignment():
     mock_session.execute = AsyncMock()
     mock_session.commit = AsyncMock()
 
-    with patch("database.session.get_async_session", return_value=mock_session):
+    with patch("user_management.database.get_async_session", return_value=mock_session):
         with patch("services.event_log.emit"):
             result = await set_user_bundle(user_id, body, mock_request, current_user)
 
