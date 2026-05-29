@@ -254,9 +254,7 @@ def is_encryption_enabled() -> bool:
     Returns:
         True if encryption should be used
     """
-    from autobot_shared.ssot_config import config
-
-    return getattr(config, "security_enable_encryption", False)
+    return bool(config.misc.encryption_key)
 
 
 # Convenience functions
