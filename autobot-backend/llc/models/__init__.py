@@ -13,11 +13,13 @@ from .company import (
     CompanyUpdate,
 )
 from .enums import (
+    ActivityEventType,
     ApprovalStatus,
     ApprovalType,
     AssignmentType,
     BoardType,
     ContextMode,
+    CoWorkerType,
     HeartbeatInvocationSource,
     HeartbeatRunStatus,
     LLCAgentStatus,
@@ -44,12 +46,14 @@ from .work_item import LLCWorkItem, LLCWorkItemComment, LLCWorkItemRelation
 from .work_product import LLCWorkProduct
 
 __all__ = [
+    "ActivityEventType",
     "ActorType",
     "ApprovalStatus",
     "ApprovalType",
     "AssignmentType",
     "BoardType",
     "ContextMode",
+    "CoWorkerType",
     "CompanyAncestor",
     "CompanyCreate",
     "CompanyRead",
