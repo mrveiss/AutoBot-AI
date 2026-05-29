@@ -1058,6 +1058,33 @@ async def _init_metrics_collection():
         logger.warning("Metrics collection initialization failed: %s", metrics_error)
 
 
+async def _init_pricing_refresh() -> None:
+    """
+    Initialize pricing refresh from provider APIs (GH#6480).
+
+    Runs the daily pricing refresh task immediately on startup to ensure
+    MODEL_PRICING is current. The Celery beat task will then refresh again
+    on schedule (default: 02:15 UTC daily).
+
+    Non-critical: if pricing refresh fails, cost calculations fall back to
+    hardcoded MODEL_PRICING_PER_1M_TOKENS.
+    """
+    logger.info("✅ [ 72%] Pricing: Refreshing MODEL_PRICING from provider APIs...")
+    try:
+        from services.pricing_refresh import refresh_pricing_daily
+
+        result = refresh_pricing_daily()
+        providers_summary = {
+            k: f"{v.get('model_count', 0)} models" for k, v in result.items()
+        }
+        logger.info(
+            "✅ [ 72%] Pricing: Refreshed successfully — %s",
+            providers_summary,
+        )
+    except Exception as pricing_error:
+        logger.warning("Pricing refresh failed (non-critical, using hardcoded fallback): %s", pricing_error)
+
+
 async def _init_background_llm_sync(app: FastAPI):
     """
     Initialize background LLM sync and AI Stack client (NON-CRITICAL).
@@ -1515,6 +1542,7 @@ async def initialize_background_services(app: FastAPI):
         await _warmup_npu_connection(app)
         await _init_memory_graph(app)
         await _init_slm_client()
+        await _init_pricing_refresh()
         await _init_background_llm_sync(app)
         await _init_documentation_watcher()
         await _start_doc_sync_queue_worker(app)

@@ -24,7 +24,7 @@ from enum import Enum
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import RedisDatabase
+from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.model_constants import (
@@ -48,6 +48,7 @@ from constants.model_constants import (
     OPENAI_O4_MINI,
 )
 from constants.ttl_constants import TTL_30_DAYS, TTL_90_DAYS
+from llm_shared.pricing.redis_store import PricingRedisStore
 
 logger = get_logger(__name__)
 
@@ -277,13 +278,65 @@ class LLMCostTracker(AsyncRedisClientMixin):
                     return pricing
         return None
 
+    def _get_pricing_from_redis(self, model: str, provider: str) -> Dict[str, float] | None:
+        """
+        Get pricing for a model from Redis cache (GH#6480).
+
+        The pricing_refresh task populates Redis daily with pricing from provider APIs.
+        Falls back to None if Redis is unavailable or pricing is not cached yet.
+
+        Args:
+            model: Model ID (e.g., "claude-opus-4")
+            provider: Provider name (e.g., "anthropic", "openai")
+
+        Returns:
+            Dict with "input" and "output" keys, or None if not found
+        """
+        try:
+            redis = get_redis_client(database="analytics")
+            if redis is None:
+                return None
+
+            key = f"model_pricing:{provider}:{model}"
+            raw = redis.get(key)
+            if raw is None:
+                return None
+
+            data = json.loads(raw)
+            # Convert from ModelPricing format to legacy format
+            return {
+                "input": float(data.get("input_per_1m", 0)),
+                "output": float(data.get("output_per_1m", 0)),
+            }
+        except Exception as exc:
+            logger.debug("_get_pricing_from_redis failed for %s/%s: %s", provider, model, exc)
+            return None
+
+    def _infer_provider_from_model(self, model_lower: str) -> str:
+        """
+        Infer the provider from the model name.
+
+        Used to look up pricing in Redis (GH#6480).
+        """
+        if any(name in model_lower for name in ["claude", "anthropic"]):
+            return "anthropic"
+        elif any(name in model_lower for name in ["gpt", "openai"]):
+            return "openai"
+        elif any(name in model_lower for name in ["gemini", "google"]):
+            return "google"
+        elif any(name in model_lower for name in ["deepseek"]):
+            return "deepseek"
+        return "unknown"
+
     def calculate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
         """
         Calculate cost for a given model and token counts.
 
-        For models not in MODEL_PRICING, a pattern-based heuristic is applied
-        before falling back to $0.00 for unrecognised (presumed local) models.
-        Issue #1961 added the heuristic fallback.
+        Fallback chain (GH#6480):
+          1. Redis cache (populated by pricing_refresh task)
+          2. Hardcoded MODEL_PRICING
+          3. Pattern-based heuristic for cloud models (#1961)
+          4. $0.00 for unknown/local models
 
         Args:
             model: Model name (e.g., "claude-3-5-sonnet-20241022")
@@ -295,11 +348,21 @@ class LLMCostTracker(AsyncRedisClientMixin):
         """
         # Normalize model name (handle variations)
         model_lower = model.lower()
+        pricing = None
 
-        # 1. Exact match — fastest and most precise path
-        pricing = MODEL_PRICING.get(model_lower)
+        # 1. Check Redis cache first (GH#6480) — populated by daily pricing_refresh task
+        provider = self._infer_provider_from_model(model_lower)
+        if provider != "unknown":
+            redis_pricing = self._get_pricing_from_redis(model, provider)
+            if redis_pricing is not None:
+                pricing = redis_pricing
+                logger.debug("Using pricing from Redis cache for model %r", model)
 
-        # 2. Prefix match (longest key first) — handles versioned suffixes such as
+        # 2. Exact match in hardcoded MODEL_PRICING
+        if pricing is None:
+            pricing = MODEL_PRICING.get(model_lower)
+
+        # 3. Prefix match (longest key first) — handles versioned suffixes such as
         #    "gpt-4o-2024-11-20" matching "gpt-4o", while preventing "o3" from
         #    incorrectly matching "o3-mini". Fixes bidirectional substring bug (#2030).
         if pricing is None:
@@ -308,10 +371,11 @@ class LLMCostTracker(AsyncRedisClientMixin):
                     pricing = MODEL_PRICING[model_key]
                     break
 
+        # 4. Pattern-based heuristic for unknown cloud models (#1961)
         if pricing is None:
-            # Pattern-based heuristic for unknown cloud models (#1961)
             pricing = self._estimate_pricing_by_pattern(model_lower)
 
+        # 5. Fall back to $0.00 for unknown/local models
         if pricing is None:
             logger.warning(
                 "Unknown model %r has no pricing entry and matched no fallback pattern; "
