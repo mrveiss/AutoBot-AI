@@ -38,6 +38,9 @@ from models.completion_feedback import CompletionFeedback
 from models.config_revision import ConfigRevision
 from models.ml_model import MLModel
 
+# Slash command preset model (GH#8595)
+from models.slash_command_preset import SlashCommandPreset
+
 # Process adapter models (#1406)
 from models.process_run import AgentSession, ProcessRun, TaskDecomposition
 from models.secret import Secret
@@ -73,6 +76,8 @@ __all__ = [
     "TaskApprovalLink",
     # Config revision model (#1404)
     "ConfigRevision",
+    # Slash command preset model (GH#8595)
+    "SlashCommandPreset",
     # Task delegation model (#1753)
     "TaskDelegation",
     # Process adapter models (#1406)
