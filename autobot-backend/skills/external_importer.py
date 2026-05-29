@@ -188,7 +188,7 @@ def _build_package_from_manifest(
         skill_md=skill_md_text,
         skill_py=skill_py,
         manifest={**manifest, **meta},
-        trust_level=TrustLevel.SANDBOXED,
+        trust_level=SkillActivationLevel.SANDBOXED,
         requested_by="external-import",
     )
 
@@ -196,7 +196,7 @@ def _build_package_from_manifest(
 class ExternalSkillImporter:
     """Import skills from git repositories and HTTP catalogs.
 
-    All imported skills are assigned TrustLevel.SANDBOXED and stored in the
+    All imported skills are assigned SkillActivationLevel.SANDBOXED and stored in the
     DB for subsequent review before any promotion attempt.
     """
 

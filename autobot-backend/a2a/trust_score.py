@@ -54,6 +54,7 @@ from typing import Dict, Optional, Set
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
+from autobot_shared.trust_enums import TrustLevel
 
 logger = get_logger(__name__)
 
@@ -62,14 +63,6 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 PROMOTION_WINDOW: int = 50  # consecutive successes required for any promotion
-
-
-class TrustLevel(str, Enum):
-    UNTRUSTED = "UNTRUSTED"  # score ≤ 0.30
-    LIMITED = "LIMITED"  # 0.30 < score ≤ 0.60
-    STANDARD = "STANDARD"  # 0.60 < score ≤ 0.85
-    TRUSTED = "TRUSTED"  # score > 0.85
-
 
 _LEVEL_ORDER = [TrustLevel.UNTRUSTED, TrustLevel.LIMITED, TrustLevel.STANDARD, TrustLevel.TRUSTED]
 

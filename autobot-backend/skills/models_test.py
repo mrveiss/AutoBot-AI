@@ -7,11 +7,11 @@ from skills.models import (
     GovernanceConfig,
     GovernanceMode,
     RepoType,
+    SkillActivationLevel,
     SkillApproval,
     SkillPackage,
     SkillRepo,
     SkillState,
-    TrustLevel,
 )
 
 
@@ -50,7 +50,7 @@ def test_skill_states_all_defined():
     assert SkillState.BUILTIN == "builtin"
 
 
-def test_trust_levels():
-    """TrustLevel enum string values match expected security tier names."""
-    assert TrustLevel.MONITORED == "monitored"
-    assert TrustLevel.SANDBOXED == "sandboxed"
+def test_skill_activation_levels():
+    """SkillActivationLevel enum string values match expected security tier names."""
+    assert SkillActivationLevel.MONITORED == "monitored"
+    assert SkillActivationLevel.SANDBOXED == "sandboxed"

@@ -61,7 +61,7 @@ class SkillPackage(SkillsBase):
     skill_md = Column(Text, nullable=False)
     skill_py = Column(Text, nullable=True)
     manifest = Column(JSON, default=dict)
-    trust_level = Column(String, default=TrustLevel.MONITORED)
+    trust_level = Column(String, default=SkillActivationLevel.MONITORED)
     mcp_pid = Column(Integer, nullable=True)
     gap_reason = Column(Text, nullable=True)
     requested_by = Column(String, default="autobot-self")
@@ -113,7 +113,7 @@ class GovernanceConfig(SkillsBase):
     __tablename__ = "skill_governance"
     id = Column(Integer, primary_key=True, default=1)
     mode = Column(String, default=GovernanceMode.SEMI_AUTO)
-    default_trust_level = Column(String, default=TrustLevel.MONITORED)
+    default_trust_level = Column(String, default=SkillActivationLevel.MONITORED)
     gap_detection_enabled = Column(Boolean, default=True)
     self_generation_enabled = Column(Boolean, default=True)
     updated_at = Column(
@@ -126,7 +126,7 @@ class GovernanceConfig(SkillsBase):
     def __init__(self, **kwargs):
         """Set Python-level defaults for columns used before DB INSERT."""
         kwargs.setdefault("mode", GovernanceMode.SEMI_AUTO)
-        kwargs.setdefault("default_trust_level", TrustLevel.MONITORED)
+        kwargs.setdefault("default_trust_level", SkillActivationLevel.MONITORED)
         kwargs.setdefault("gap_detection_enabled", True)
         kwargs.setdefault("self_generation_enabled", True)
         super().__init__(**kwargs)

@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from models.session_collaboration import PermissionLevel
 from services.personality_service import SUPPORTED_LANGUAGES
-from skills.models import GovernanceMode, TrustLevel
+from skills.models import GovernanceMode, SkillActivationLevel
 from type_defs.common import Metadata
 from user_management.schemas import UserResponse as _UserResponse
 
@@ -1683,7 +1683,7 @@ class ApprovalDecision(BaseModel):
     """Request body for approving or rejecting a skill approval record."""
 
     approved: bool
-    trust_level: TrustLevel = TrustLevel.MONITORED
+    trust_level: SkillActivationLevel = SkillActivationLevel.MONITORED
     notes: str = ""
 
 

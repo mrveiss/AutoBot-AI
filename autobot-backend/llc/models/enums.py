@@ -175,25 +175,6 @@ class MembershipRole(str, Enum):
     GUEST = "guest"
 
 
-class TrustLevel(str, Enum):
-    """Trust level for federated peer evaluation (GH#8957, Issue #7358).
-
-    Used to determine what capabilities a peer agent can access based on
-    continuous trust scoring. Higher levels grant more capabilities.
-
-    Score ranges:
-      UNTRUSTED  (score ≤ 0.30)  — discovery info only
-      LIMITED    (0.30–0.60)     — discovery + task submission
-      STANDARD   (0.60–0.85)     — + memory/knowledge queries
-      TRUSTED    (> 0.85)        — + new agent definitions
-    """
-
-    UNTRUSTED = "UNTRUSTED"
-    LIMITED = "LIMITED"
-    STANDARD = "STANDARD"
-    TRUSTED = "TRUSTED"
-
-
 class RoutineStatus(str, Enum):
     """Lifecycle status of an LLC routine (GH#8229)."""
 

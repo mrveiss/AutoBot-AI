@@ -1,5 +1,7 @@
 """LLC models package."""
 
+from autobot_shared.trust_enums import TrustLevel
+
 from .activity import ActorType, LLCActivityLog, LLCBase
 from .approval import LLCApproval
 from .board import LLCBoard, LLCBoardColumn
@@ -28,7 +30,6 @@ from .enums import (
     RoutineProduces,
     RoutineStatus,
     SprintStatus,
-    TrustLevel,
     WorkItemPriority,
     WorkItemRelationType,
     WorkItemStatus,
