@@ -91,3 +91,6 @@ service_auth_rate_limit_max_failures: 10
 backend_health_check_port: 8001
 backend_health_check_retries: 120      # Max retry attempts (120 × 5s = 600s total)
 backend_health_check_delay: 5          # Seconds between retries
+
+# Audit log file path (#8936: ensures AUTOBOT_AUDIT_LOG_FILE is always set in prod)
+backend_audit_log_file: /opt/autobot/logs/audit.log
