@@ -14,6 +14,7 @@ constructor. The pool runs ``sleep infinity`` containers per image and uses
 """
 
 import asyncio
+import os
 from typing import Any, Dict, Tuple
 
 from autobot_shared.logging_manager import get_logger
@@ -37,7 +38,7 @@ from services.execution.container_pool import ContainerPoolRegistry
 
 logger = get_logger(__name__)
 
-_DEFAULT_POOL_SIZE = 2
+_DEFAULT_POOL_SIZE = 3
 
 
 class DockerBackend(ExecutionBackend):
@@ -52,15 +53,17 @@ class DockerBackend(ExecutionBackend):
     def __init__(
         self,
         docker_host: str | None = None,
-        use_pool: bool = False,
-        pool_size: int = _DEFAULT_POOL_SIZE,
+        use_pool: bool | None = None,
+        pool_size: int | None = None,
     ) -> None:
         """Initialize Docker backend.
 
         Args:
             docker_host: Docker daemon URL (default: unix socket)
             use_pool: Enable pre-warmed container pool (GH#4452).
+                Overrides AUTOBOT_DOCKER_USE_POOL env var if provided.
             pool_size: Number of warm containers to maintain per image.
+                Overrides AUTOBOT_DOCKER_POOL_SIZE env var if provided.
 
         Raises:
             RuntimeError: If Docker is not available or not configured
@@ -80,6 +83,18 @@ class DockerBackend(ExecutionBackend):
         self._default_image = "python:3.10-slim"
 
         # Pre-warmed pool (GH#4452)
+        # Read from env vars if not explicitly provided
+        if use_pool is None:
+            use_pool = os.getenv("AUTOBOT_DOCKER_USE_POOL", "false").lower() == "true"
+        if pool_size is None:
+            try:
+                pool_size = int(os.getenv("AUTOBOT_DOCKER_POOL_SIZE", str(_DEFAULT_POOL_SIZE)))
+            except ValueError:
+                logger.warning(
+                    "Invalid AUTOBOT_DOCKER_POOL_SIZE env var, using default %d", _DEFAULT_POOL_SIZE
+                )
+                pool_size = _DEFAULT_POOL_SIZE
+
         self._use_pool = use_pool
         self._pool_size = pool_size
         self._pool_registry: ContainerPoolRegistry | None = None
@@ -88,6 +103,7 @@ class DockerBackend(ExecutionBackend):
                 docker_client=self.client,
                 pool_size=pool_size,
             )
+            logger.info("Docker pool enabled with size %d (GH#4452)", pool_size)
 
     # ------------------------------------------------------------------
     # Pool lifecycle helpers

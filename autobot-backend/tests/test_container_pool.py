@@ -330,3 +330,58 @@ class TestDockerBackendWithPool:
 
         stats = backend.get_pool_stats()
         assert "python:3.10-slim" in stats
+
+    async def test_env_var_enable_pool(self, monkeypatch, mock_docker):
+        """AUTOBOT_DOCKER_USE_POOL=true enables the pool."""
+        from services.execution.docker_backend import DockerBackend
+
+        monkeypatch.setenv("AUTOBOT_DOCKER_USE_POOL", "true")
+        mock_docker.containers.run.return_value = _make_container()
+
+        backend = DockerBackend()
+        assert backend._use_pool is True
+        assert backend._pool_registry is not None
+
+    async def test_env_var_disable_pool(self, monkeypatch, mock_docker):
+        """AUTOBOT_DOCKER_USE_POOL=false disables the pool."""
+        from services.execution.docker_backend import DockerBackend
+
+        monkeypatch.setenv("AUTOBOT_DOCKER_USE_POOL", "false")
+
+        backend = DockerBackend()
+        assert backend._use_pool is False
+        assert backend._pool_registry is None
+
+    async def test_env_var_pool_size(self, monkeypatch, mock_docker):
+        """AUTOBOT_DOCKER_POOL_SIZE sets the pool size."""
+        from services.execution.docker_backend import DockerBackend
+
+        monkeypatch.setenv("AUTOBOT_DOCKER_USE_POOL", "true")
+        monkeypatch.setenv("AUTOBOT_DOCKER_POOL_SIZE", "5")
+        mock_docker.containers.run.return_value = _make_container()
+
+        backend = DockerBackend()
+        assert backend._pool_size == 5
+
+    async def test_env_var_pool_size_invalid_fallback(self, monkeypatch, mock_docker):
+        """Invalid AUTOBOT_DOCKER_POOL_SIZE falls back to default (3)."""
+        from services.execution.docker_backend import DockerBackend
+
+        monkeypatch.setenv("AUTOBOT_DOCKER_USE_POOL", "true")
+        monkeypatch.setenv("AUTOBOT_DOCKER_POOL_SIZE", "invalid")
+        mock_docker.containers.run.return_value = _make_container()
+
+        backend = DockerBackend()
+        assert backend._pool_size == 3  # Default pool size
+
+    async def test_constructor_param_overrides_env_var(self, monkeypatch, mock_docker):
+        """Constructor parameters override env vars."""
+        from services.execution.docker_backend import DockerBackend
+
+        monkeypatch.setenv("AUTOBOT_DOCKER_USE_POOL", "false")
+        monkeypatch.setenv("AUTOBOT_DOCKER_POOL_SIZE", "2")
+        mock_docker.containers.run.return_value = _make_container()
+
+        backend = DockerBackend(use_pool=True, pool_size=7)
+        assert backend._use_pool is True
+        assert backend._pool_size == 7
