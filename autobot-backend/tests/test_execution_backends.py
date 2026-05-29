@@ -500,3 +500,266 @@ class TestExecutionResult:
 
         assert result.metadata["run_id"] == "abc123"
         assert result.metadata["cost"] == 0.01
+
+
+# ---------------------------------------------------------------------------
+# Snapshot / restore tests (GH#4458)
+# ---------------------------------------------------------------------------
+
+
+class TestSnapshotIndex:
+    """Unit tests for SnapshotIndex file-based storage."""
+
+    def test_add_and_get(self, tmp_path):
+        from pathlib import Path
+
+        from services.execution.snapshot_index import SnapshotIndex, SnapshotRecord
+
+        idx = SnapshotIndex(storage_path=tmp_path)
+        rec = SnapshotRecord(
+            snapshot_id="abc123",
+            session_id="sess-1",
+            container_id="cont-xyz",
+            image_name="autobot-snapshot-abc123:latest",
+            created_at="2025-01-01T00:00:00",
+            size_bytes=1024,
+        )
+        idx.add(rec)
+        fetched = idx.get("abc123")
+        assert fetched is not None
+        assert fetched.snapshot_id == "abc123"
+        assert fetched.session_id == "sess-1"
+        assert fetched.size_bytes == 1024
+
+    def test_get_missing_returns_none(self, tmp_path):
+        from services.execution.snapshot_index import SnapshotIndex
+
+        idx = SnapshotIndex(storage_path=tmp_path)
+        assert idx.get("does-not-exist") is None
+
+    def test_list_by_session(self, tmp_path):
+        from services.execution.snapshot_index import SnapshotIndex, SnapshotRecord
+
+        idx = SnapshotIndex(storage_path=tmp_path)
+        for i in range(3):
+            idx.add(
+                SnapshotRecord(
+                    snapshot_id=f"snap{i}",
+                    session_id="sess-A" if i < 2 else "sess-B",
+                    container_id=f"c{i}",
+                    image_name=f"autobot-snapshot-snap{i}:latest",
+                    created_at="2025-01-01T00:00:00",
+                )
+            )
+        sess_a = idx.list_by_session("sess-A")
+        assert len(sess_a) == 2
+        assert all(r.session_id == "sess-A" for r in sess_a)
+
+    def test_remove(self, tmp_path):
+        from services.execution.snapshot_index import SnapshotIndex, SnapshotRecord
+
+        idx = SnapshotIndex(storage_path=tmp_path)
+        rec = SnapshotRecord(
+            snapshot_id="del-me",
+            session_id="s",
+            container_id="c",
+            image_name="autobot-snapshot-del-me:latest",
+            created_at="2025-01-01T00:00:00",
+        )
+        idx.add(rec)
+        assert idx.remove("del-me") is True
+        assert idx.get("del-me") is None
+        assert idx.remove("del-me") is False  # idempotent
+
+    def test_index_survives_empty_file(self, tmp_path):
+        from services.execution.snapshot_index import SnapshotIndex
+
+        idx_file = tmp_path / "snapshot_index.json"
+        idx_file.write_text("", encoding="utf-8")
+        idx = SnapshotIndex(storage_path=tmp_path)
+        assert idx.list_all() == []
+
+
+class TestDockerBackendSnapshot:
+    """Tests for DockerBackend snapshot/restore (GH#4458)."""
+
+    def _make_backend(self, tmp_path):
+        from services.execution.snapshot_index import SnapshotIndex
+
+        mock_client = MagicMock()
+        mock_client.ping.return_value = True
+        with patch("services.execution.docker_backend.docker") as mock_docker:
+            mock_docker.from_env.return_value = mock_client
+            mock_docker.errors.DockerException = Exception
+            idx = SnapshotIndex(storage_path=tmp_path)
+            backend = DockerBackend(snapshot_index=idx)
+            backend.client = mock_client
+            return backend, mock_client, idx
+
+    @pytest.mark.asyncio
+    async def test_snapshot_creates_record(self, tmp_path):
+        backend, mock_client, idx = self._make_backend(tmp_path)
+
+        mock_container = MagicMock()
+        mock_image = MagicMock()
+        mock_image.attrs = {"Size": 4096}
+        mock_container.commit.return_value = mock_image
+        mock_client.containers.get.return_value = mock_container
+
+        record = await backend.snapshot("cont-abc", session_id="sess-xyz")
+
+        assert record.session_id == "sess-xyz"
+        assert record.container_id == "cont-abc"
+        assert record.size_bytes == 4096
+        assert record.image_name.startswith("autobot-snapshot-")
+        stored = idx.get(record.snapshot_id)
+        assert stored is not None
+        assert stored.snapshot_id == record.snapshot_id
+
+    @pytest.mark.asyncio
+    async def test_snapshot_raises_on_missing_container(self, tmp_path):
+        backend, mock_client, _ = self._make_backend(tmp_path)
+        mock_client.containers.get.side_effect = Exception("Not found")
+
+        with pytest.raises(RuntimeError, match="Failed to snapshot"):
+            await backend.snapshot("no-such-container")
+
+    @pytest.mark.asyncio
+    async def test_restore_starts_container(self, tmp_path):
+        from services.execution.snapshot_index import SnapshotIndex, SnapshotRecord
+
+        idx = SnapshotIndex(storage_path=tmp_path)
+        idx.add(
+            SnapshotRecord(
+                snapshot_id="snap-001",
+                session_id="sess-1",
+                container_id="orig-cont",
+                image_name="autobot-snapshot-snap-001:latest",
+                created_at="2025-01-01T00:00:00",
+            )
+        )
+
+        mock_client = MagicMock()
+        mock_client.ping.return_value = True
+        with patch("services.execution.docker_backend.docker") as mock_docker:
+            mock_docker.from_env.return_value = mock_client
+            mock_docker.errors.DockerException = Exception
+            backend = DockerBackend(snapshot_index=idx)
+            backend.client = mock_client
+
+        mock_new_container = MagicMock()
+        mock_new_container.id = "new-cont-id-123"
+        mock_client.containers.run.return_value = mock_new_container
+
+        new_id = await backend.restore("snap-001")
+
+        assert new_id == "new-cont-id-123"
+        mock_client.containers.run.assert_called_once_with(
+            "autobot-snapshot-snap-001:latest",
+            "sleep infinity",
+            detach=True,
+            remove=False,
+        )
+
+    @pytest.mark.asyncio
+    async def test_restore_raises_for_unknown_snapshot(self, tmp_path):
+        from services.execution.snapshot_index import SnapshotIndex
+
+        idx = SnapshotIndex(storage_path=tmp_path)
+        mock_client = MagicMock()
+        mock_client.ping.return_value = True
+        with patch("services.execution.docker_backend.docker") as mock_docker:
+            mock_docker.from_env.return_value = mock_client
+            mock_docker.errors.DockerException = Exception
+            backend = DockerBackend(snapshot_index=idx)
+            backend.client = mock_client
+
+        with pytest.raises(KeyError, match="not found"):
+            await backend.restore("nonexistent-snap")
+
+    @pytest.mark.asyncio
+    async def test_delete_snapshot_removes_record(self, tmp_path):
+        backend, mock_client, idx = self._make_backend(tmp_path)
+
+        mock_container = MagicMock()
+        mock_image = MagicMock()
+        mock_image.attrs = {"Size": 512}
+        mock_container.commit.return_value = mock_image
+        mock_client.containers.get.return_value = mock_container
+
+        record = await backend.snapshot("cont-del", session_id="s")
+        assert idx.get(record.snapshot_id) is not None
+
+        deleted = await backend.delete_snapshot(record.snapshot_id)
+        assert deleted is True
+        assert idx.get(record.snapshot_id) is None
+
+    @pytest.mark.asyncio
+    async def test_delete_nonexistent_snapshot_returns_false(self, tmp_path):
+        backend, _, _ = self._make_backend(tmp_path)
+        result = await backend.delete_snapshot("ghost-snap")
+        assert result is False
+
+    def test_get_snapshots_for_session(self, tmp_path):
+        from services.execution.snapshot_index import SnapshotIndex, SnapshotRecord
+
+        idx = SnapshotIndex(storage_path=tmp_path)
+        for i in range(2):
+            idx.add(
+                SnapshotRecord(
+                    snapshot_id=f"s{i}",
+                    session_id="sess-Q",
+                    container_id=f"c{i}",
+                    image_name=f"autobot-snapshot-s{i}:latest",
+                    created_at="2025-01-01T00:00:00",
+                )
+            )
+
+        mock_client = MagicMock()
+        mock_client.ping.return_value = True
+        with patch("services.execution.docker_backend.docker") as mock_docker:
+            mock_docker.from_env.return_value = mock_client
+            mock_docker.errors.DockerException = Exception
+            backend = DockerBackend(snapshot_index=idx)
+            backend.client = mock_client
+
+        records = backend.get_snapshots_for_session("sess-Q")
+        assert len(records) == 2
+
+    @pytest.mark.asyncio
+    async def test_snapshot_env_var_storage_path(self, tmp_path, monkeypatch):
+        """AUTOBOT_SNAPSHOT_STORAGE_PATH controls where the index is stored."""
+        monkeypatch.setenv("AUTOBOT_SNAPSHOT_STORAGE_PATH", str(tmp_path))
+
+        from services.execution.snapshot_index import SnapshotIndex
+
+        idx = SnapshotIndex()
+        assert idx._storage_path == tmp_path
+
+    @pytest.mark.asyncio
+    async def test_existing_ephemeral_execution_unchanged(self, tmp_path):
+        """Snapshot feature must not affect normal cold-start execution."""
+        from services.execution.snapshot_index import SnapshotIndex
+
+        mock_client = MagicMock()
+        mock_client.ping.return_value = True
+
+        mock_container = MagicMock()
+        mock_container.id = "ephemeral-id"
+        mock_container.wait.return_value = {"StatusCode": 0}
+        mock_container.logs.return_value = b"hello"
+        mock_client.containers.run.return_value = mock_container
+
+        snapshot_idx = SnapshotIndex(storage_path=tmp_path)
+        with patch("services.execution.docker_backend.docker") as mock_docker:
+            mock_docker.from_env.return_value = mock_client
+            mock_docker.errors.DockerException = Exception
+            backend = DockerBackend(snapshot_index=snapshot_idx)
+            backend.client = mock_client
+
+        task = ExecutionTask(task_id="t1", code="print('hi')", language="python")
+        result = await backend._execute_cold(task, "python:3.10-slim")
+
+        assert result.status == ExecutionStatus.SUCCESS
+        assert result.stdout == "hello"
+        assert snapshot_idx.list_all() == []  # no snapshots created by normal execution

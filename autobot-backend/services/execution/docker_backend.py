@@ -11,11 +11,17 @@ GH#4452: Optional pre-warmed container pool for near-zero cold-start latency.
 Enable it by passing ``use_pool=True`` (and optionally ``pool_size``) to the
 constructor. The pool runs ``sleep infinity`` containers per image and uses
 ``exec_run`` instead of ``containers.run`` so callers skip image-layer spin-up.
+
+GH#4458: Snapshot/restore for resumable agent sessions.
+``snapshot(container_id, session_id)`` commits a container to a named image and
+records metadata in a file-based index (``SnapshotIndex``).
+``restore(snapshot_id)`` starts a new detached container from the saved image.
+Storage path is controlled by AUTOBOT_SNAPSHOT_STORAGE_PATH (default /tmp/autobot_snapshots).
 """
 
 import asyncio
 import os
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
@@ -35,6 +41,12 @@ from services.execution.base_backend import (
     ExecutionTask,
 )
 from services.execution.container_pool import ContainerPoolRegistry
+from services.execution.snapshot_index import (
+    SnapshotIndex,
+    SnapshotRecord,
+    _image_name_for_snapshot,
+    make_snapshot_id,
+)
 
 logger = get_logger(__name__)
 
@@ -55,6 +67,7 @@ class DockerBackend(ExecutionBackend):
         docker_host: str | None = None,
         use_pool: bool | None = None,
         pool_size: int | None = None,
+        snapshot_index: Optional[SnapshotIndex] = None,
     ) -> None:
         """Initialize Docker backend.
 
@@ -64,6 +77,9 @@ class DockerBackend(ExecutionBackend):
                 Overrides AUTOBOT_DOCKER_USE_POOL env var if provided.
             pool_size: Number of warm containers to maintain per image.
                 Overrides AUTOBOT_DOCKER_POOL_SIZE env var if provided.
+            snapshot_index: SnapshotIndex instance for GH#4458 snapshot/restore.
+                Defaults to a new SnapshotIndex resolved from
+                AUTOBOT_SNAPSHOT_STORAGE_PATH env var.
 
         Raises:
             RuntimeError: If Docker is not available or not configured
@@ -104,6 +120,9 @@ class DockerBackend(ExecutionBackend):
                 pool_size=pool_size,
             )
             logger.info("Docker pool enabled with size %d (GH#4452)", pool_size)
+
+        # Snapshot/restore index (GH#4458)
+        self._snapshot_index: SnapshotIndex = snapshot_index or SnapshotIndex()
 
     # ------------------------------------------------------------------
     # Pool lifecycle helpers
@@ -355,6 +374,125 @@ class DockerBackend(ExecutionBackend):
             pass
 
         return True, ""
+
+    # ------------------------------------------------------------------
+    # Snapshot / restore (GH#4458)
+    # ------------------------------------------------------------------
+
+    async def snapshot(self, container_id: str, session_id: str = "") -> SnapshotRecord:
+        """Commit a running container's filesystem to a named image and record metadata.
+
+        Args:
+            container_id: ID or name of the Docker container to snapshot.
+            session_id: Caller-supplied identifier for the agent session.
+
+        Returns:
+            SnapshotRecord with snapshot_id, image_name, size_bytes, and timestamps.
+
+        Raises:
+            RuntimeError: If the container cannot be found or committed.
+        """
+        snapshot_id = make_snapshot_id()
+        image_name = _image_name_for_snapshot(snapshot_id)
+        created_at = now_utc().isoformat()
+
+        try:
+            container = await asyncio.to_thread(self.client.containers.get, container_id)
+            image = await asyncio.to_thread(
+                container.commit,
+                repository=f"autobot-snapshot-{snapshot_id}",
+                tag="latest",
+            )
+        except Exception as exc:
+            raise RuntimeError(f"Failed to snapshot container {container_id}: {exc}") from exc
+
+        size_bytes = 0
+        try:
+            size_bytes = image.attrs.get("Size", 0)
+        except Exception:
+            pass
+
+        record = SnapshotRecord(
+            snapshot_id=snapshot_id,
+            session_id=session_id,
+            container_id=container_id,
+            image_name=image_name,
+            created_at=created_at,
+            size_bytes=size_bytes,
+        )
+        await asyncio.to_thread(self._snapshot_index.add, record)
+        logger.info(
+            "Snapshot %s created for container %s (session=%s, size=%d bytes)",
+            snapshot_id,
+            container_id,
+            session_id,
+            size_bytes,
+        )
+        return record
+
+    async def restore(self, snapshot_id: str) -> str:
+        """Start a new detached container from a previously saved snapshot.
+
+        Args:
+            snapshot_id: ID returned by a prior ``snapshot()`` call.
+
+        Returns:
+            The new container ID.
+
+        Raises:
+            KeyError: If snapshot_id is not found in the index.
+            RuntimeError: If container creation from the snapshot image fails.
+        """
+        record = await asyncio.to_thread(self._snapshot_index.get, snapshot_id)
+        if record is None:
+            raise KeyError(f"Snapshot '{snapshot_id}' not found")
+
+        try:
+            container = await asyncio.to_thread(
+                self.client.containers.run,
+                record.image_name,
+                "sleep infinity",
+                detach=True,
+                remove=False,
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to restore snapshot {snapshot_id} from image {record.image_name}: {exc}"
+            ) from exc
+
+        logger.info(
+            "Restored snapshot %s → container %s (session=%s)",
+            snapshot_id,
+            container.id,
+            record.session_id,
+        )
+        return container.id
+
+    async def delete_snapshot(self, snapshot_id: str) -> bool:
+        """Remove the snapshot image and its index entry.
+
+        Args:
+            snapshot_id: ID returned by a prior ``snapshot()`` call.
+
+        Returns:
+            True if the snapshot was found and removed; False if not found.
+        """
+        record = await asyncio.to_thread(self._snapshot_index.get, snapshot_id)
+        if record is None:
+            return False
+
+        try:
+            await asyncio.to_thread(self.client.images.remove, record.image_name, force=True)
+        except Exception as exc:
+            logger.warning("Could not remove snapshot image %s: %s", record.image_name, exc)
+
+        removed = await asyncio.to_thread(self._snapshot_index.remove, snapshot_id)
+        logger.info("Snapshot %s deleted", snapshot_id)
+        return removed
+
+    def get_snapshots_for_session(self, session_id: str) -> list:
+        """Return all SnapshotRecords for the given session_id (synchronous helper)."""
+        return self._snapshot_index.list_by_session(session_id)
 
     # ------------------------------------------------------------------
     # Helpers
