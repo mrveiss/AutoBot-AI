@@ -633,6 +633,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["voice", "realtime", "webrtc"],
         "realtime_session",
     ),
+    # GH#4463: Mobile device pairing for push notifications and offline sync
+    (
+        "api.mobile_devices",
+        "/devices",
+        ["mobile-devices", "push-notifications"],
+        "mobile_devices",
+    ),
 ]
 
 
