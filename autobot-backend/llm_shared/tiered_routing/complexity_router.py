@@ -160,7 +160,7 @@ class ComplexityRouter:
             from ..providers.anthropic import AnthropicProvider
 
             claude = AnthropicProvider()
-            response = await claude._chat_completion_impl(escalation_request)
+            response = await claude.chat_completion(escalation_request)
             if response.error:
                 logger.warning(
                     "ComplexityRouter: Claude escalation returned error=%s; falling through",
