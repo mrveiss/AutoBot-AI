@@ -246,9 +246,9 @@ class UnifiedLLMInterface:
 
         # Claude escalation (#8171): attempt top-tier routing before local providers.
         # Returns None when disabled, score too low, or Claude errors — safe fallthrough.
-        from llm_shared.tiered_routing.complexity_router import ComplexityRouter
+        from llm_shared.tiered_routing.tier_router import get_tiered_router
 
-        _escalation_result = await ComplexityRouter().route_with_escalation(request)
+        _escalation_result = await get_tiered_router().route_with_escalation(request)
         if _escalation_result is not None:
             return _escalation_result
 
@@ -265,7 +265,9 @@ class UnifiedLLMInterface:
             )
         return await selected.chat_completion(request)
 
-    async def generate_response(self, prompt: str, llm_type: str = "task", **kwargs: Any) -> str:
+    async def generate_response(
+        self, prompt: str, llm_type: str = "task", **kwargs: Any
+    ) -> str:
         """Legacy helper: run a single-turn prompt and return the text."""
         messages = [{"role": "user", "content": prompt}]
         response = await self.chat_completion(messages, llm_type=llm_type, **kwargs)
@@ -285,7 +287,9 @@ class UnifiedLLMInterface:
         """Return registry stats."""
         return self._get_registry().get_stats()
 
-    async def get_available_models(self, provider: ProviderType | None = None) -> Dict[str, List[str]]:
+    async def get_available_models(
+        self, provider: ProviderType | None = None
+    ) -> Dict[str, List[str]]:
         """Return available models per provider."""
         registry = self._get_registry()
         name_filter = provider.value if provider else None
