@@ -123,17 +123,24 @@ class ArtifactIngestor:
             return False
 
         # Guard: verify requester's company does not write to ancestor company's project (GH#8598).
+        # Deny-by-default: a missing project is not a bypass — it is a hard stop.
         if company_id:
             project_result = await session.execute(
                 select(LLCProject).where(LLCProject.id == uuid.UUID(project_id))
             )
             project = project_result.scalar_one_or_none()
-            if project:
-                await assert_not_writing_to_ancestor_kb(
-                    requester_org_id=company_id,
-                    target_org_id=str(project.company_id),
-                    session=session,
+            if not project:
+                logger.warning(
+                    "ArtifactIngestor: project %s not found — denying KB write for company %s",
+                    project_id,
+                    company_id,
                 )
+                return False
+            await assert_not_writing_to_ancestor_kb(
+                requester_org_id=company_id,
+                target_org_id=str(project.company_id),
+                session=session,
+            )
 
         text = await self._resolve_text(product)
         if text is None:
