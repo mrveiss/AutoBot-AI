@@ -24,6 +24,25 @@ from secure_command_executor import CommandRisk, SecureCommandExecutor, Security
 
 logger = get_logger(__name__)
 
+# Audit log file path resolved from AUTOBOT_AUDIT_LOG_FILE env var at import time.
+# Set AUTOBOT_AUDIT_LOG_FILE to override the default path.
+_AUDIT_LOG_FILE_DEFAULT = "/opt/autobot/logs/audit.log"
+
+
+def _resolve_audit_log_file() -> str:
+    """Return audit log file path from AUTOBOT_AUDIT_LOG_FILE env var with logged fallback."""
+    value = config.audit_log_file
+    if not value:
+        logger.warning(
+            "AUTOBOT_AUDIT_LOG_FILE is not set or empty; falling back to %s",
+            _AUDIT_LOG_FILE_DEFAULT,
+        )
+        return _AUDIT_LOG_FILE_DEFAULT
+    return value
+
+
+_AUDIT_LOG_FILE = _resolve_audit_log_file()
+
 # Performance optimization: O(1) lookup for security checks (Issue #326)
 DEPRECATED_PRIVILEGED_ROLES = {"god", "superuser", "root"}
 HIGH_RISK_COMMAND_RISKS = {CommandRisk.HIGH, CommandRisk.MODERATE}
@@ -67,11 +86,7 @@ class EnhancedSecurityLayer:
         self.security_config = global_config_manager.get("security_config", {})
         self.enable_auth = self.security_config.get("enable_auth", False)
         self.enable_command_security = self.security_config.get("enable_command_security", True)
-        self.audit_log_file = (
-            self.security_config.get("audit_log_file")
-            or config.audit_log_file
-            or "/opt/autobot/logs/audit.log"
-        )
+        self.audit_log_file = self.security_config.get("audit_log_file") or _AUDIT_LOG_FILE
         self.roles = self.security_config.get("roles", {})
         self.allowed_users = self.security_config.get("allowed_users", {})
 
