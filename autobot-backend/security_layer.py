@@ -53,11 +53,18 @@ class SecurityLayer:
             self.enable_auth = self.security_config.get("enable_auth", True)
             logger.info("Multi-user mode - authentication enabled by default")
 
-        self.audit_log_file = self.security_config.get("audit_log_file", config.audit_log_file)
+        self.audit_log_file = (
+            self.security_config.get("audit_log_file")
+            or config.audit_log_file
+            or "/opt/autobot/logs/audit.log"
+        )
         self.roles = self.security_config.get("roles", {})
         self.allowed_users = self.security_config.get("allowed_users", {})  # For simple demo auth
 
-        os.makedirs(os.path.dirname(self.audit_log_file), exist_ok=True)
+        if self.audit_log_file:
+            log_dir = os.path.dirname(self.audit_log_file)
+            if log_dir:
+                os.makedirs(log_dir, exist_ok=True)
         logger.info(f"SecurityLayer initialized. Authentication enabled: {self.enable_auth}")
         logger.debug("Audit log file: %s", self.audit_log_file)
 
