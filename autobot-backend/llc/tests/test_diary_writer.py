@@ -360,6 +360,8 @@ async def test_on_run_complete_calls_writer_for_terminal_status() -> None:
         "status": "succeeded",
         "work_item_id": "item-1",
         "context_snapshot": {"title": "Task A"},
+        "company_id": None,
+        "session": None,
     }
 
 
@@ -391,3 +393,88 @@ async def test_on_run_complete_swallows_writer_exception() -> None:
     with patch.object(AgentDiaryKbWriter, "write_from_run", failing_write):
         # Must not raise
         await scheduler.on_run_complete(run_id="run-err", agent_id="agent-A", status="failed")
+
+
+# ---------------------------------------------------------------------------
+# Write guard tests (GH#8598)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_write_from_run_enforces_write_guard_on_ancestor_work_item() -> None:
+    """Verify write_from_run() raises HTTPException(403) if requester writes to ancestor's work item."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from fastapi import HTTPException
+
+    writer = AgentDiaryKbWriter()
+    mock_session = AsyncMock()
+    company_id = "child-company-id"
+    work_item_id = "work-item-id"
+
+    with patch.object(writer, "_check_write_guard", new=AsyncMock(side_effect=HTTPException(status_code=403, detail="Forbidden"))):
+        with pytest.raises(HTTPException) as exc_info:
+            await writer.write_from_run(
+                run_id="run-1",
+                agent_id="agent-A",
+                status="succeeded",
+                work_item_id=work_item_id,
+                company_id=company_id,
+                session=mock_session,
+            )
+        assert exc_info.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_write_from_run_skips_guard_when_no_company_id() -> None:
+    """Verify write_from_run() does not call guard if company_id is not provided."""
+    from unittest.mock import AsyncMock, patch
+
+    writer = AgentDiaryKbWriter()
+
+    with patch.object(writer, "_write_diary_entry", new=AsyncMock()):
+        with patch.object(writer, "_write_patterns", new=AsyncMock()):
+            with patch.object(writer, "_check_write_guard", new=AsyncMock()) as mock_guard:
+                await writer.write_from_run(
+                    run_id="run-1",
+                    agent_id="agent-A",
+                    status="succeeded",
+                    work_item_id="work-item-id",
+                    company_id=None,  # No company_id, guard should not be called
+                    session=None,
+                )
+
+                # Guard should not be called if company_id is None
+                mock_guard.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_check_write_guard_queries_work_item_company() -> None:
+    """Verify _check_write_guard() fetches work item and calls assert_not_writing_to_ancestor_kb()."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    import uuid
+
+    writer = AgentDiaryKbWriter()
+    mock_session = AsyncMock()
+    work_item_id = str(uuid.uuid4())
+    company_id = "requester-company-id"
+    work_item_company_id = "work-item-company-id"
+
+    # Mock the work_item lookup
+    mock_work_item = MagicMock()
+    mock_work_item.company_id = work_item_company_id
+
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_work_item
+    mock_session.execute.return_value = mock_result
+
+    with patch("llc.kb.diary_writer.assert_not_writing_to_ancestor_kb", new=AsyncMock()) as mock_guard:
+        await writer._check_write_guard(work_item_id, company_id, mock_session)
+
+        # Guard should be called with the correct parameters
+        mock_guard.assert_awaited_once_with(
+            requester_org_id=company_id,
+            target_org_id=work_item_company_id,
+            session=mock_session,
+        )

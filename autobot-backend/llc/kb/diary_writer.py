@@ -13,11 +13,19 @@ After each heartbeat run reaches a terminal status (succeeded/failed),
 
 All operations are best-effort: failures are logged and swallowed so a KB
 write error never blocks run teardown.
+
+Write guard (GH#8598): When company_id is provided and work_item_id is available,
+verifies that the agent's company does not write diary entries for a parent
+company's work item via ``assert_not_writing_to_ancestor_kb()``.
 """
 
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from .write_guard import assert_not_writing_to_ancestor_kb
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +79,8 @@ class AgentDiaryKbWriter:
         status: str,
         work_item_id: Optional[str] = None,
         context_snapshot: Optional[Dict[str, Any]] = None,
+        company_id: Optional[str] = None,
+        session: Optional[AsyncSession] = None,
     ) -> None:
         """Write diary entry and patterns for a completed heartbeat run.
 
@@ -80,9 +90,29 @@ class AgentDiaryKbWriter:
             status: Terminal status — ``"succeeded"`` or ``"failed"``.
             work_item_id: Optional work item the run was scoped to.
             context_snapshot: JSONB snapshot from ``LLCHeartbeatRun.context_snapshot``.
+            company_id: UUID of the requester's company (for write guard).
+            session: Async SQLAlchemy session (required if company_id is provided).
+
+        Raises:
+            HTTPException: If requester's company is a child of the work item's company (GH#8598).
         """
         if status not in ("succeeded", "failed", "completed"):
             return
+
+        # Guard: verify requester's company does not write diary for ancestor company's work item (GH#8598).
+        if company_id and work_item_id and session:
+            try:
+                await self._check_write_guard(work_item_id, company_id, session)
+            except Exception as e:
+                logger.warning(
+                    "AgentDiaryKbWriter write guard failed for work_item %s: %s",
+                    work_item_id,
+                    e,
+                    exc_info=True,
+                )
+                if hasattr(e, "status_code") and e.status_code == 403:
+                    raise
+
         try:
             await self._write_diary_entry(run_id, agent_id, status, work_item_id, context_snapshot)
         except Exception:
@@ -98,6 +128,34 @@ class AgentDiaryKbWriter:
                 "AgentDiaryKbWriter.write_from_run: pattern write failed for run_id=%s",
                 run_id,
                 exc_info=True,
+            )
+
+    # ------------------------------------------------------------------
+    # Write guard
+    # ------------------------------------------------------------------
+
+    async def _check_write_guard(
+        self,
+        work_item_id: str,
+        company_id: str,
+        session: AsyncSession,
+    ) -> None:
+        """Verify requester's company owns the work item (GH#8598)."""
+        import uuid
+
+        from sqlalchemy import select
+
+        from ..models.work_item import LLCWorkItem
+
+        result = await session.execute(
+            select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id))
+        )
+        work_item = result.scalar_one_or_none()
+        if work_item:
+            await assert_not_writing_to_ancestor_kb(
+                requester_org_id=company_id,
+                target_org_id=str(work_item.company_id),
+                session=session,
             )
 
     # ------------------------------------------------------------------

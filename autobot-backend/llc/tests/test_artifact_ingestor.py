@@ -249,3 +249,84 @@ async def test_ingest_all_pending_counts_only_successful(ingestor, mock_session)
         )
 
     assert count == 1
+
+
+# ---------------------------------------------------------------------------
+# Write guard tests (GH#8598)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_ingest_enforces_write_guard_on_ancestor_collection(ingestor, mock_session):
+    """Verify ingest() raises HTTPException(403) if requester writes to ancestor's project."""
+    from fastapi import HTTPException
+
+    product_id = uuid.uuid4()
+    project_id = uuid.uuid4()
+    company_id = "child-company-id"
+    ancestor_company_id = "ancestor-company-id"
+
+    product = _make_product(id=product_id, content_text="test content")
+    project = MagicMock()
+    project.company_id = ancestor_company_id
+
+    # Mock product lookup
+    product_result = MagicMock()
+    product_result.scalar_one_or_none.return_value = product
+
+    # Mock project lookup
+    project_result = MagicMock()
+    project_result.scalar_one_or_none.return_value = project
+
+    # Alternate execute() results: product, then project
+    mock_session.execute.side_effect = [product_result, project_result]
+
+    with patch(
+        "llc.kb.artifact_ingestor.assert_not_writing_to_ancestor_kb",
+        new=AsyncMock(side_effect=HTTPException(status_code=403, detail="Forbidden")),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await ingestor.ingest(
+                mock_session,
+                work_product_id=str(product_id),
+                project_id=str(project_id),
+                work_item_identifier="MVA-999",
+                company_id=company_id,
+            )
+        assert exc_info.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_ingest_skips_guard_when_no_company_id(ingestor, mock_session):
+    """Verify ingest() does not call guard if company_id is not provided."""
+    product_id = uuid.uuid4()
+    project_id = uuid.uuid4()
+
+    product = _make_product(id=product_id, content_text="test content")
+    product_result = MagicMock()
+    product_result.scalar_one_or_none.return_value = product
+
+    mock_session.execute.return_value = product_result
+
+    with patch(
+        "llc.kb.artifact_ingestor.assert_not_writing_to_ancestor_kb",
+        new=AsyncMock(),
+    ) as mock_guard:
+        # Mock ChromaDB client
+        mock_client = AsyncMock()
+        mock_collection = AsyncMock()
+        mock_client.get_or_create_collection.return_value = mock_collection
+
+        with patch(
+            "utils.async_chromadb_client.get_async_chromadb_client", new=AsyncMock(return_value=mock_client)
+        ):
+            result = await ingestor.ingest(
+                mock_session,
+                work_product_id=str(product_id),
+                project_id=str(project_id),
+                work_item_identifier="MVA-999",
+                company_id=None,  # No company_id, guard should not be called
+            )
+
+        # Guard should not be called if company_id is None
+        mock_guard.assert_not_called()

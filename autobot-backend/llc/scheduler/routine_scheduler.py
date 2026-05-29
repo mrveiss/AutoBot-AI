@@ -234,6 +234,36 @@ class RoutineScheduler:
         """
         if status not in ("succeeded", "failed", "completed"):
             return
+
+        # Fetch company_id from work_item if available, for write guard (GH#8598).
+        company_id: Optional[str] = None
+        session = None
+        if work_item_id:
+            try:
+                import uuid
+
+                from sqlalchemy import select
+                from sqlalchemy.ext.asyncio import AsyncSession
+
+                from database.get_session import get_async_session_factory
+
+                from ..models.work_item import LLCWorkItem
+
+                factory = get_async_session_factory()
+                session = factory()
+                result = await session.execute(
+                    select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id))
+                )
+                work_item = result.scalar_one_or_none()
+                if work_item:
+                    company_id = str(work_item.company_id)
+            except Exception:
+                logger.debug(
+                    "RoutineScheduler: failed to fetch company_id for work_item %s",
+                    work_item_id,
+                    exc_info=True,
+                )
+
         try:
             from ..kb.diary_writer import AgentDiaryKbWriter
 
@@ -244,6 +274,8 @@ class RoutineScheduler:
                 status=status,
                 work_item_id=work_item_id,
                 context_snapshot=context_snapshot,
+                company_id=company_id,
+                session=session,
             )
         except Exception:
             logger.warning(
@@ -251,3 +283,6 @@ class RoutineScheduler:
                 run_id,
                 exc_info=True,
             )
+        finally:
+            if session:
+                await session.close()

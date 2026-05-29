@@ -882,6 +882,7 @@ class WorkItemService(LLCServiceBase):
                 work_item_id=str(item.id),
                 project_id=str(item.project_id) if item.project_id else None,
                 work_item_identifier=item.identifier,
+                company_id=str(item.company_id),
                 completed_at=item.completed_at,
             )
         except Exception:

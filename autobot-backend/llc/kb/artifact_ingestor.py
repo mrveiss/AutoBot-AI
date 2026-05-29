@@ -10,6 +10,9 @@ files are skipped with ``kb_indexed = false``).
 Text is split into ≤1000-token chunks (approximated as ≤4000 characters) and
 added to the ``project:{project_id}`` ChromaDB collection with metadata that
 links each chunk back to the source work item.
+
+Write guard (GH#8598): Verifies that a sub-company agent does not write
+to a parent company's project collection via ``assert_not_writing_to_ancestor_kb()``.
 """
 
 import logging
@@ -20,6 +23,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.work_product import LLCWorkProduct
+from .write_guard import assert_not_writing_to_ancestor_kb
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +86,7 @@ class ArtifactIngestor:
         work_product_id: str,
         project_id: Optional[str],
         work_item_identifier: str,
+        company_id: Optional[str] = None,
         completed_at: Optional[Any] = None,
     ) -> bool:
         """Read a work product row, chunk its text, index into project KB.
@@ -91,12 +96,18 @@ class ArtifactIngestor:
             work_product_id: UUID of the ``llc_work_products`` row.
             project_id: UUID of the project (determines target collection).
             work_item_identifier: Human-readable identifier (e.g. ``MVA-123``).
+            company_id: UUID of the requester's company (for write guard).
             completed_at: When the work item was completed (used as metadata).
 
         Returns:
             True if indexed successfully; False if skipped (binary/no project).
+
+        Raises:
+            HTTPException: If requester's company is a child of the project's company (GH#8598).
         """
         from sqlalchemy import select
+
+        from ..models.sprint import LLCProject
 
         result = await session.execute(select(LLCWorkProduct).where(LLCWorkProduct.id == uuid.UUID(work_product_id)))
         product = result.scalar_one_or_none()
@@ -110,6 +121,29 @@ class ArtifactIngestor:
                 work_product_id,
             )
             return False
+
+        # Guard: verify requester's company does not write to ancestor company's project (GH#8598).
+        if company_id:
+            try:
+                project_result = await session.execute(
+                    select(LLCProject).where(LLCProject.id == uuid.UUID(project_id))
+                )
+                project = project_result.scalar_one_or_none()
+                if project:
+                    await assert_not_writing_to_ancestor_kb(
+                        requester_org_id=company_id,
+                        target_org_id=str(project.company_id),
+                        session=session,
+                    )
+            except Exception as e:
+                logger.warning(
+                    "ArtifactIngestor write guard failed for product %s: %s",
+                    work_product_id,
+                    e,
+                    exc_info=True,
+                )
+                if hasattr(e, "status_code") and e.status_code == 403:
+                    raise
 
         text = await self._resolve_text(product)
         if text is None:
@@ -161,9 +195,18 @@ class ArtifactIngestor:
         work_item_id: str,
         project_id: Optional[str],
         work_item_identifier: str,
+        company_id: Optional[str] = None,
         completed_at: Optional[Any] = None,
     ) -> int:
         """Ingest all non-indexed products for a work item (called on done transition).
+
+        Args:
+            session: Async SQLAlchemy session.
+            work_item_id: UUID of the work item.
+            project_id: UUID of the project (determines target collection).
+            work_item_identifier: Human-readable identifier.
+            company_id: UUID of the requester's company (for write guard).
+            completed_at: When the work item was completed.
 
         Returns:
             Number of products successfully indexed.
@@ -184,7 +227,8 @@ class ArtifactIngestor:
                 str(p.id),
                 project_id,
                 work_item_identifier,
-                completed_at,
+                company_id=company_id,
+                completed_at=completed_at,
             )
             if ok:
                 count += 1
