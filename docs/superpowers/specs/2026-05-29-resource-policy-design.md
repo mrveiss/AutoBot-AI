@@ -1,0 +1,194 @@
+# Resource Policy Design
+**Date:** 2026-05-29  
+**Status:** Approved  
+**Scope:** System-wide resource governance for all AutoBot services across all deployment types
+
+---
+
+## Problem
+
+AutoBot services have no coordinated resource limits. Under embedding/indexing load, the main backend consumed all 46 GB RAM and 12 GB swap on a production host, causing an OOM death spiral that made the system unusable. Individual services can starve each other, and the OS itself has no guaranteed headroom.
+
+---
+
+## Goal
+
+No single AutoBot service can consume resources that starve other services or the OS, regardless of host size (Raspberry Pi to large server) or deployment type (single-host bare-metal, distributed VMs, Docker Compose).
+
+---
+
+## Design
+
+### Core Concept
+
+A single Ansible role — `autobot-resource-policy` — runs on every host at the end of every deploy playbook. It detects actual host RAM and vCPU count via Ansible facts, computes per-service allocations from a shared percentage table, and writes resource limits as output artifacts. The same percentage vars drive both systemd and Docker output.
+
+### Deployment Types
+
+| Type | Output |
+|---|---|
+| `systemd` | `autobot.slice` hierarchy + per-service drop-in files |
+| `docker` | `docker-compose.override.yml` with `deploy.resources` blocks |
+| `both` | Both outputs |
+
+Set via `autobot_deployment_type: systemd | docker | both`.
+
+### Budget Computation
+
+```
+total_ram_mb      = ansible_memtotal_mb
+os_reserve_mb     = total_ram_mb × os_reserve_pct%     # default 15% — never touched
+autobot_budget_mb = total_ram_mb × global_cap_pct%     # default 85% — autobot.slice ceiling
+
+per_service_high_mb = max(autobot_budget_mb × service_pct%, service_floor_mb)
+per_service_max_mb  = per_service_high_mb × 1.25       # 25% burst headroom above soft limit
+# Note: individual MemoryMax values may sum above autobot_budget_mb — the
+# autobot.slice MemoryMax is the hard ceiling that prevents the total from
+# exceeding it; individual limits are per-service, not additive guarantees.
+```
+
+`MemoryHigh` triggers kernel soft reclaim (service slows down gracefully). `MemoryMax` is the hard kill ceiling. The 25% gap between them gives services room to absorb brief spikes without being killed immediately.
+
+Services whose floor would exceed available budget on a small host are auto-disabled via `autobot_<service>_enabled: false`.
+
+### Priority Tiers and Kill Order
+
+Services are grouped into three systemd slices. `OOMScoreAdj` controls which processes the kernel OOM-kills first when pressure exceeds cgroup limits.
+
+| Service | Tier | OOMScoreAdj | Rationale |
+|---|---|---|---|
+| Redis | critical | −500 | Session state — losing it breaks everything |
+| SLM backend | critical | −400 | Control plane |
+| Main backend | standard | −200 | Primary API |
+| Monitoring | standard | −100 | Must survive to observe failures |
+| ChromaDB | standard | 0 | Degraded retrieval is recoverable |
+| AI Stack / Ollama | standard | +100 | Heavy but recoverable |
+| Celery workers | standard | +200 | Async — jobs can requeue |
+| Browser worker | background | +400 | Optional feature |
+
+### Allocation Table (defaults)
+
+| Service | RAM % | Floor | Min host RAM | CPUWeight | TasksMax |
+|---|---|---|---|---|---|
+| Redis | 8% | 64 MB | always | 800 | scaled |
+| SLM backend | 8% | 128 MB | always | 600 | scaled |
+| Main backend | 20% | 256 MB | always | 500 | scaled |
+| ChromaDB | 12% | 256 MB | 2 GB | 400 | scaled |
+| Celery workers | 8% | 128 MB | 1 GB | 300 | scaled |
+| AI Stack / Ollama | 15% | 512 MB | **8 GB** | 300 | scaled |
+| Browser worker | 6% | 256 MB | **4 GB** | 200 | scaled |
+| Monitoring | 4% | 32 MB | always | 100 | scaled |
+| **OS reserve** | **15%** | — | — | — | — |
+| **AutoBot ceiling** | **85%** | — | — | — | — |
+
+`TasksMax` (processes + threads) scales with vCPUs: `max(32, ansible_processor_vcpus × 16)`. On a 4-core Pi this is 64; on a 22-core server it is 352.
+
+`OMP_NUM_THREADS` / `MKL_NUM_THREADS` / `OPENBLAS_NUM_THREADS` for compute-heavy services (backend, AI Stack): `max(2, ansible_processor_vcpus // 4)`. Prevents PyTorch from spinning up threads equal to all cores in every worker.
+
+### systemd Slice Hierarchy
+
+```
+system.slice
+└── autobot.slice                   MemoryMax = total_ram × 85%
+    ├── autobot-critical.slice      Redis, SLM backend
+    ├── autobot-standard.slice      Backend, ChromaDB, Celery, AI Stack, Monitoring
+    └── autobot-background.slice    Browser worker
+```
+
+Each service template gains one line: `Slice=autobot-<tier>.slice`. The resource-policy role writes all slice unit files and per-service drop-ins. Existing service templates are otherwise unchanged.
+
+Drop-in path: `/etc/systemd/system/<service>.service.d/resource-policy.conf`
+
+### Docker Override
+
+`docker-compose.yml` stays static. The role generates `docker-compose.override.yml` in the same directory:
+
+```yaml
+# Auto-generated by autobot-resource-policy — do not edit manually
+services:
+  autobot-backend:
+    deploy:
+      resources:
+        limits:
+          memory: "<computed>m"
+          cpus: "<computed>"
+        reservations:
+          memory: "<computed>m"   # 50% of limit
+```
+
+CPU allocation in Docker: `cpus = total_vcpus × (cpuweight / sum_of_weights_for_enabled_services_on_this_host)`, capped at `total_vcpus × 0.5` to always leave headroom for bursts and OS work. `sum_of_weights` is computed at role runtime — distributed hosts with fewer services get proportionally more CPU each.
+
+### Distributed Deployment
+
+When a host runs only one service (e.g., a ChromaDB-only VM), the role detects which AutoBot services are present and only writes drop-ins for those. ChromaDB gets the full `autobot.slice` budget on that machine. No manual override needed.
+
+---
+
+## Role File Structure
+
+```
+autobot-slm-backend/ansible/roles/autobot-resource-policy/
+├── defaults/
+│   └── main.yml              # All percentages, floors, RAM thresholds, OOMScoreAdj
+├── vars/
+│   └── computed.yml          # Jinja2 derived values (high_mb, max_mb, cpus, tasks)
+├── tasks/
+│   ├── main.yml              # Dispatch: detect facts, compute, call sub-tasks
+│   ├── systemd-slices.yml    # Write autobot.slice + tier slices
+│   ├── systemd-dropins.yml   # Write per-service resource-policy.conf drop-ins
+│   └── docker-override.yml   # Generate docker-compose.override.yml
+└── templates/
+    ├── autobot.slice.j2
+    ├── autobot-tier.slice.j2           # Parameterised, used for all three tiers
+    ├── resource-policy.conf.j2         # Systemd drop-in, parameterised per service
+    └── docker-compose.override.yml.j2
+```
+
+---
+
+## Integration
+
+1. Add `autobot-resource-policy` as the **last role** in every deploy playbook that installs services.
+2. Add `Slice=autobot-<tier>.slice` to each service's `[Service]` section in its `.j2` template.
+3. For Docker: `docker compose up` automatically merges `docker-compose.override.yml` — no change to existing Docker workflows.
+4. To override limits for a specific host, set any `autobot_resource_*` var in that host's inventory vars. Everything downstream recomputes.
+
+---
+
+## What This Does Not Cover
+
+- **Kubernetes:** Out of scope. K8s uses `resources.requests/limits` natively; a separate design is needed.
+- **Runtime adaptive throttling (Option C):** Not in this design. systemd's `MemoryHigh` provides kernel-level soft reclaim which covers most adaptive behaviour without a daemon.
+- **Per-request rate limiting:** Handled by the existing circuit breaker and connection pool code, not this role.
+
+---
+
+## Example: 46 GB / 22-core host (current production)
+
+| Service | MemoryHigh | MemoryMax | OMP threads | TasksMax |
+|---|---|---|---|---|
+| OS reserve | 6.9 GB | — | — | — |
+| autobot.slice ceiling | — | 39.1 GB | — | — |
+| Redis | 3.1 GB | 3.9 GB | — | 352 |
+| SLM backend | 3.1 GB | 3.9 GB | — | 352 |
+| Main backend | 7.8 GB | 9.8 GB | 5 | 352 |
+| ChromaDB | 4.7 GB | 5.9 GB | — | 352 |
+| Celery workers | 3.1 GB | 3.9 GB | 5 | 352 |
+| AI Stack / Ollama | 5.9 GB | 7.3 GB | 5 | 352 |
+| Browser worker | 2.3 GB | 2.9 GB | — | 352 |
+| Monitoring | 1.6 GB | 2.0 GB | — | 352 |
+
+## Example: Raspberry Pi 4 / 4 GB / 4 cores
+
+| Service | MemoryHigh | MemoryMax | OMP threads | TasksMax | Enabled |
+|---|---|---|---|---|---|
+| OS reserve | 614 MB | — | — | — | always |
+| autobot.slice ceiling | — | 3.5 GB | — | — | — |
+| Redis | 264 MB | 330 MB | — | 64 | ✅ |
+| SLM backend | 264 MB | 330 MB | — | 64 | ✅ |
+| Main backend | 660 MB | 825 MB | 2 | 64 | ✅ |
+| ChromaDB | 396 MB | 495 MB | — | 64 | ✅ (≥2 GB) |
+| Celery workers | 264 MB | 330 MB | — | 64 | ✅ |
+| AI Stack / Ollama | floor: 512 MB | 640 MB | 2 | 64 | ❌ (needs ≥8 GB) |
+| Browser worker | floor: 256 MB | 320 MB | — | 64 | ❌ (needs ≥4 GB) |
+| Monitoring | 132 MB | 165 MB | — | 64 | ✅ |
