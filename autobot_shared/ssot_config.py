@@ -1253,6 +1253,11 @@ class MiscConfig(BaseSettings):
         alias="AUTOBOT_VOICE_REALTIME_MAX_COST_USD",
         description="Soft-cap: auto-disconnect Realtime sessions exceeding this estimated USD cost. Default $5.00.",
     )
+    voice_realtime_session_ttl_days: int = Field(
+        default=90,
+        alias="AUTOBOT_VOICE_REALTIME_SESSION_TTL_DAYS",
+        description="Redis TTL (days) for voice_realtime_session:* keys. Default 90 days.",
+    )
     memory_log_threshold_mb: int = Field(default=0, alias="AUTOBOT_MEMORY_LOG_THRESHOLD_MB")
     memory_pool_size: int = Field(default=0, alias="AUTOBOT_MEMORY_POOL_SIZE")
     memory_threshold_mb: int = Field(default=0, alias="AUTOBOT_MEMORY_THRESHOLD_MB")
