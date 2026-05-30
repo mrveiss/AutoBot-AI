@@ -15,6 +15,7 @@ from typing import Any
 
 from sqlalchemy import select
 
+from autobot_shared.redis_client import get_redis_client
 from user_management.models.sso import SSOProvider, SSOProviderType, UserSSOLink
 from user_management.models.user import User
 from user_management.schemas.sso import SSOProviderCreate, SSOProviderUpdate
@@ -38,9 +39,6 @@ except ImportError:
     Saml2Client = Saml2Config = None  # type: ignore
 
 logger = logging.getLogger(__name__)
-
-# Module-level OAuth2 state storage
-_oauth_states: dict[str, uuid.UUID] = {}
 
 
 class SSOServiceError(Exception):
@@ -143,18 +141,23 @@ class SSOService(BaseService):
             logger.error("LDAP connection test failed: %s", e)
             return {"success": False, "message": "LDAP connection test failed"}
 
-    def _generate_oauth_state(self, provider_id: uuid.UUID) -> str:
-        """Generate OAuth2 state token and store provider mapping."""
+    async def _generate_oauth_state(self, provider_id: uuid.UUID) -> str:
+        """Generate OAuth2 state token and store provider mapping in Redis with 10-min TTL."""
         state = secrets.token_urlsafe(32)
-        _oauth_states[state] = provider_id
+        redis = get_redis_client()
+        if redis:
+            await redis.set(f"sso:state:{state}", str(provider_id), ex=600)
         return state
 
-    def _validate_oauth_state(self, state: str) -> uuid.UUID:
-        """Validate OAuth2 state token and return provider ID."""
-        provider_id = _oauth_states.pop(state, None)
-        if not provider_id:
-            raise SSOAuthenticationError("Invalid or expired OAuth state")
-        return provider_id
+    async def _validate_oauth_state(self, state: str) -> uuid.UUID:
+        """Validate OAuth2 state token via atomic GETDEL (single-use, replay-safe)."""
+        redis = get_redis_client()
+        if redis:
+            provider_id_str = await redis.getdel(f"sso:state:{state}")
+            if not provider_id_str:
+                raise SSOAuthenticationError("Invalid or expired OAuth state")
+            return uuid.UUID(provider_id_str)
+        raise SSOAuthenticationError("Redis unavailable for state validation")
 
     def _build_oauth_client(self, provider: SSOProvider) -> Any:
         """Build OAuth2 client from provider config."""
@@ -170,7 +173,7 @@ class SSOService(BaseService):
     async def _get_oauth_authorize_url(self, provider: SSOProvider, callback_url: str) -> tuple[str, str]:
         """Generate OAuth2 authorization URL."""
         client = self._build_oauth_client(provider)
-        state = self._generate_oauth_state(provider.id)
+        state = await self._generate_oauth_state(provider.id)
         authorize_url = provider.config.get("authorize_url")
         scope = provider.config.get("scope", "openid email profile")
         url, _ = await client.create_authorization_url(
@@ -210,7 +213,7 @@ class SSOService(BaseService):
 
     async def complete_oauth_login(self, provider_id: uuid.UUID, code: str, state: str, callback_url: str) -> User:
         """Complete OAuth2 login flow and return authenticated user."""
-        validated_provider_id = self._validate_oauth_state(state)
+        validated_provider_id = await self._validate_oauth_state(state)
         if validated_provider_id != provider_id:
             raise SSOAuthenticationError("OAuth state mismatch")
         provider = await self.get_provider(provider_id)
@@ -314,11 +317,13 @@ class SSOService(BaseService):
         saml_config.load(config_dict)
         return Saml2Client(config=saml_config)
 
-    def _generate_saml_authn_request(self, provider: SSOProvider) -> tuple[str, str]:
-        """Generate SAML AuthnRequest."""
+    async def _generate_saml_authn_request(self, provider: SSOProvider) -> tuple[str, str]:
+        """Generate SAML AuthnRequest; relay state stored in Redis with 10-min TTL."""
         client = self._build_saml_client(provider)
         relay_state = secrets.token_urlsafe(32)
-        _oauth_states[relay_state] = provider.id
+        redis = get_redis_client()
+        if redis:
+            await redis.set(f"sso:state:{relay_state}", str(provider.id), ex=600)
         request_id, info = client.prepare_for_authenticate()
         redirect_url = dict(info["headers"])["Location"]
         return redirect_url, relay_state
