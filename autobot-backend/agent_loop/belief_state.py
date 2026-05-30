@@ -199,7 +199,9 @@ class BeliefStateUpdater:
         extracted: list[tuple[str, Any, float]] = extractor.extract(tool_output)
         logger.debug(
             "belief_update tool=%s iter=%d extracted=%d assertions",
-            tool_name, iteration, len(extracted),
+            tool_name,
+            iteration,
+            len(extracted),
         )
         ref = ToolExecutionRef(tool_name=tool_name, iteration=iteration, call_hash=call_hash)
         new_contradictions: list[ContradictionRecord] = []
@@ -236,7 +238,9 @@ class BeliefStateUpdater:
                 _log = logger.warning if resolution == "surfaced_to_think" else logger.debug
                 _log(
                     "belief contradiction key=%s delta=%.2f resolution=%s",
-                    key, confidence_delta, resolution,
+                    key,
+                    confidence_delta,
+                    resolution,
                 )
 
                 record = ContradictionRecord(
@@ -273,6 +277,8 @@ class BeliefStateUpdater:
 
         logger.debug(
             "belief_update done tool=%s iter=%d contradictions=%d",
-            tool_name, iteration, len(new_contradictions),
+            tool_name,
+            iteration,
+            len(new_contradictions),
         )
         return new_contradictions
