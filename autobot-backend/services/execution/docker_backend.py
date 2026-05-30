@@ -389,8 +389,9 @@ class DockerBackend(ExecutionBackend):
         Args:
             container_id: ID or name of the Docker container to snapshot.
             session_id: Caller-supplied identifier for the agent session.
-            user_id: ID of the user creating the snapshot; used for ownership checks on
-                restore/delete (GH#8968).
+            user_id: ID of the authenticated user creating the snapshot.  MUST be forwarded
+                from ``request.state.user_id`` when called from an API route — empty string
+                disables the ownership guard on restore/delete (GH#8968).
 
         Returns:
             SnapshotRecord with snapshot_id, image_name, size_bytes, and timestamps.
