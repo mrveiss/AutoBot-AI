@@ -1176,6 +1176,10 @@ class MiscConfig(BaseSettings):
     chat_history_file: str = Field(default="", alias="AUTOBOT_CHAT_HISTORY_FILE")
     chat_recent_max_entries: str = Field(default="", alias="AUTOBOT_CHAT_RECENT_MAX_ENTRIES")
     chat_session_cache_ttl: str = Field(default="", alias="AUTOBOT_CHAT_SESSION_CACHE_TTL")
+    contradiction_surface_threshold: str = Field(
+        default="",
+        alias="AUTOBOT_CONTRADICTION_SURFACE_THRESHOLD",
+    )
     chat_ssot_strict: str = Field(default="", alias="AUTOBOT_CHAT_SSOT_STRICT")
     chat_timeout: int = Field(default=0, alias="AUTOBOT_CHAT_TIMEOUT")
     chromadb_collection: str = Field(default="", alias="AUTOBOT_CHROMADB_COLLECTION")
