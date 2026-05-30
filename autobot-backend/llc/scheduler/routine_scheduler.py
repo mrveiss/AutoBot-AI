@@ -244,7 +244,6 @@ class RoutineScheduler:
 
                 from database.get_session import get_async_session_factory
                 from sqlalchemy import select
-                from sqlalchemy.ext.asyncio import AsyncSession
 
                 from ..models.work_item import LLCWorkItem
 
