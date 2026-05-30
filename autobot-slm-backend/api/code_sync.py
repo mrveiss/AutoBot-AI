@@ -666,7 +666,7 @@ async def _rsync_component_local(
 
     Used when source_ip matches the SLM server's own IP — no SSH needed.
     """
-    cmd = ["rsync", "-avz", "--delete"]
+    cmd = ["rsync", "-avz", "--delete", "--no-group", "--no-owner"]
     for exc in excludes:
         cmd.append(f"--exclude={exc}")
     cmd.append(f"{source_path}/{component}/")
