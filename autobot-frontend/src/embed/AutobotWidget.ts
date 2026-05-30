@@ -12,7 +12,7 @@
  *   data-button-label  Accessible label for the open/close toggle
  */
 
-import { createApp, defineComponent, ref, computed, h, nextTick, getCurrentInstance } from 'vue'
+import { createApp, defineComponent, ref, computed, h, nextTick, getCurrentInstance, onUnmounted } from 'vue'
 import type { App } from 'vue'
 import { WIDGET_STYLES } from './embed-styles'
 
@@ -136,6 +136,12 @@ const EmbedChatApp = defineComponent({
     const loading = ref(false)
     const errorMsg = ref('')
     let nextId = 1
+    let abortController: AbortController | null = null
+
+    onUnmounted(() => {
+      abortController?.abort()
+      abortController = null
+    })
 
     // Dynamically computed CSS custom properties
     const cssVars = computed(() => ({
@@ -162,6 +168,7 @@ const EmbedChatApp = defineComponent({
       await nextTick()
       scrollToBottom()
 
+      abortController = new AbortController()
       try {
         const apiBase = props.config.apiUrl.replace(/\/$/, '')
         const endpoint = `${apiBase}/api/chats/embed/message`
@@ -172,6 +179,7 @@ const EmbedChatApp = defineComponent({
             ...(props.config.orgId ? { 'X-Org-Id': props.config.orgId } : {}),
           },
           body: JSON.stringify({ message: text }),
+          signal: abortController.signal,
         })
 
         if (!resp.ok) {
@@ -220,10 +228,16 @@ const EmbedChatApp = defineComponent({
 
         placeholder.pending = false
       } catch (err: unknown) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          // Component unmounted mid-stream — discard silently
+          placeholder.pending = false
+          return
+        }
         placeholder.content = 'Sorry, something went wrong. Please try again.'
         placeholder.pending = false
         errorMsg.value = err instanceof Error ? err.message : String(err)
       } finally {
+        abortController = null
         loading.value = false
         await nextTick()
         scrollToBottom()

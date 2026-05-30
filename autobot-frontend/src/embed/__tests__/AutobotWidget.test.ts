@@ -76,6 +76,20 @@ describe('AutobotWidget', () => {
     el = mount({ 'data-api-url': 'http://localhost:8001' })
     expect(() => unmount(el)).not.toThrow()
   })
+
+  it('injects dark theme CSS when data-theme=dark (GH#9100)', () => {
+    el = mount({ 'data-api-url': 'http://localhost:8001', 'data-theme': 'dark' })
+    const styleEl = el.shadowRoot!.querySelector('style')
+    expect(styleEl!.textContent).toContain(':host([data-theme="dark"])')
+    expect(styleEl!.textContent).toContain('--ab-bg')
+  })
+
+  it('unmounts without throw when AbortController is present (GH#9101)', () => {
+    vi.stubGlobal('AbortController', vi.fn(() => ({ abort: vi.fn(), signal: {} as AbortSignal })))
+    el = mount({ 'data-api-url': 'http://localhost:8001' })
+    expect(() => unmount(el)).not.toThrow()
+    vi.unstubAllGlobals()
+  })
 })
 
 describe('embed-entry auto-inject', () => {

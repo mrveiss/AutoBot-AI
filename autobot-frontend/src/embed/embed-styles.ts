@@ -33,6 +33,18 @@ export const WIDGET_STYLES = `
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
+/* ── Dark theme ─────────────────────────────────────────────────────────── */
+:host([data-theme="dark"]) {
+  --ab-bg: #1e1e2e;
+  --ab-surface: #181825;
+  --ab-border: #313244;
+  --ab-text: #cdd6f4;
+  --ab-text-muted: #6c7086;
+  --ab-bot-bg: #313244;
+  --ab-bot-text: #cdd6f4;
+  --ab-shadow: 0 20px 60px rgba(0,0,0,0.45), 0 4px 12px rgba(0,0,0,0.30);
+}
+
 /* ── Widget container ───────────────────────────────────────────────────── */
 .ab-widget {
   position: fixed;
