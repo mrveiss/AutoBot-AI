@@ -1,7 +1,7 @@
 """Add push_subscriptions table for web push notification delivery (GH#4459).
 
-Revision ID: 20260529_047
-Revises: 20260528_046
+Revision ID: 20260530_048
+Revises: 20260529_047
 """
 
 from typing import Sequence, Union
@@ -9,8 +9,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "20260529_047"
-down_revision: Union[str, None] = "20260528_046"
+revision: str = "20260530_048"
+down_revision: Union[str, None] = "20260529_047"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
