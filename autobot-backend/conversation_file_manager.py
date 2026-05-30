@@ -123,7 +123,7 @@ class ConversationFileManager:
     @staticmethod
     def _get_default_paths() -> tuple:
         """Get default storage directory and database path from environment or defaults."""
-        storage = Path(config.storage_dir or str(_PROJECT_ROOT / "data" / "conversation_files"))
+        storage = Path(getattr(config, "storage_dir", None) or str(_PROJECT_ROOT / "data" / "conversation_files"))
         db = Path(config.data_db or str(_PROJECT_ROOT / "data" / "conversation_files.db"))
         return storage, db
 
