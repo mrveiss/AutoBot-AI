@@ -10,7 +10,7 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.push import subscribe, unsubscribe, SubscribeRequest, UnsubscribeRequest
+from api.push import SubscribeRequest, UnsubscribeRequest, subscribe, unsubscribe
 
 
 @pytest.mark.asyncio

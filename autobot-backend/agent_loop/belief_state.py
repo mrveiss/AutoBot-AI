@@ -16,15 +16,14 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any
 
-from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config
-from autobot_shared.time_utils import now_utc
-
 from agent_loop.types import (
     Assertion,
     ContradictionRecord,
     ToolExecutionRef,
 )
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
+from autobot_shared.time_utils import now_utc
 
 if TYPE_CHECKING:
     from agent_loop.types import TaskContext
