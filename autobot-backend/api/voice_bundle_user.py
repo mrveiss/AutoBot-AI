@@ -171,8 +171,9 @@ async def get_user_bundle(
         raise_auth_error("AUTH_0003", "Cannot access other user's bundle assignment")
 
     try:
-        from user_management.database import get_async_session  # noqa: PLC0415
         from sqlalchemy import text  # noqa: PLC0415
+
+        from user_management.database import get_async_session  # noqa: PLC0415
 
         async with get_async_session() as session:
             row = await session.execute(
@@ -230,8 +231,9 @@ async def set_user_bundle(
     stored_bundle_name: Optional[str] = None
 
     try:
-        from user_management.database import get_async_session  # noqa: PLC0415
         from sqlalchemy import text  # noqa: PLC0415
+
+        from user_management.database import get_async_session  # noqa: PLC0415
 
         async with get_async_session() as session:
             if body.bundle_name is None:

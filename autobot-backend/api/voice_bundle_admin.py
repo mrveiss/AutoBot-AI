@@ -104,8 +104,9 @@ async def get_user_bundle(
 ) -> BundleAssignmentResponse:
     """Return the explicit bundle assignment for a user (admin only)."""
     try:
-        from user_management.database import get_async_session  # noqa: PLC0415
         from sqlalchemy import text  # noqa: PLC0415
+
+        from user_management.database import get_async_session  # noqa: PLC0415
 
         async with get_async_session() as session:
             row = await session.execute(
@@ -143,8 +144,9 @@ async def set_user_bundle(
     admin_id = admin_user.get("user_id") or admin_user.get("sub") or admin_user.get("username") or "unknown"
 
     try:
-        from user_management.database import get_async_session  # noqa: PLC0415
         from sqlalchemy import text  # noqa: PLC0415
+
+        from user_management.database import get_async_session  # noqa: PLC0415
 
         async with get_async_session() as session:
             if body.bundle_name is None:
