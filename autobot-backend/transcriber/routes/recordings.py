@@ -7,7 +7,7 @@ import uuid
 from pathlib import Path
 
 import aiofiles
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, UploadFile, File
 
 from autobot_shared.logging_manager import get_logger
 from transcriber.database import Database
@@ -61,11 +61,17 @@ async def upload_recording(
 
 
 @router.get("/projects/{project_id}/recordings", response_model=list[RecordingOut])
-async def list_recordings(project_id: int, request: Request, db: Database = Depends(get_db)):
+async def list_recordings(
+    project_id: int,
+    request: Request,
+    db: Database = Depends(get_db),
+    limit: int = Query(200, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+):
     project = await db.get_project(project_id)
     if not project or project["user_id"] != _user_id(request):
         raise HTTPException(404, "Project not found")
-    rows = await db.list_recordings(project_id)
+    rows = await db.list_recordings(project_id, limit=limit, offset=offset)
     return [RecordingOut(**r) for r in rows]
 
 
@@ -85,6 +91,9 @@ async def delete_recording(recording_id: int, request: Request, db: Database = D
     filepath = Path(rec["filepath"])
     if filepath.exists():
         filepath.unlink(missing_ok=True)
-    await db.delete_recording(recording_id)
+    try:
+        await db.delete_recording(recording_id)
+    except KeyError:
+        raise HTTPException(404, "Recording not found")
     logger.info("Recording deleted: recording_id=%s", recording_id)
     return Response(status_code=204)
