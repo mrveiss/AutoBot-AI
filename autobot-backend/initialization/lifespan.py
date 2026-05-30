@@ -1446,6 +1446,36 @@ async def _start_community_clustering_loop(app: FastAPI) -> None:
     )
 
 
+async def _init_liveness_monitor(app: FastAPI) -> None:
+    """Start LLC LivenessMonitor to recover stuck heartbeat runs (GH#9028)."""
+    logger.info("LLC LivenessMonitor: Starting...")
+    try:
+        from llc.scheduler.liveness_monitor import LivenessMonitor
+
+        monitor = LivenessMonitor()
+        monitor.start()
+        app.state.llc_liveness_monitor = monitor
+        logger.info("LLC LivenessMonitor: Started")
+    except Exception as exc:
+        logger.warning("LLC liveness monitor startup failed (non-fatal): %s", exc)
+        app.state.llc_liveness_monitor = None
+
+
+async def _init_budget_watchdog(app: FastAPI) -> None:
+    """Start LLC BudgetWatchdog for per-agent budget enforcement (GH#9029)."""
+    logger.info("LLC BudgetWatchdog: Starting...")
+    try:
+        from llc.scheduler.budget_watchdog import BudgetWatchdog
+
+        watchdog = BudgetWatchdog()
+        watchdog.start()
+        app.state.llc_budget_watchdog = watchdog
+        logger.info("LLC BudgetWatchdog: Started")
+    except Exception as exc:
+        logger.warning("LLC budget watchdog startup failed (non-fatal): %s", exc)
+        app.state.llc_budget_watchdog = None
+
+
 async def _start_llc_notification_router(app: FastAPI) -> None:
     """Start the LLC notification router background task (GH#8255).
 
@@ -1555,6 +1585,8 @@ async def initialize_background_services(app: FastAPI):
         await _init_log_forwarding()
         await _init_heartbeat_scheduler(app)
         await _init_llc_routine_scheduler(app)
+        await _init_liveness_monitor(app)
+        await _init_budget_watchdog(app)
         await _init_llc_outbound_sync(app)
         await _start_connector_scheduler()
         await _init_trigger_service(app)
@@ -1672,6 +1704,15 @@ async def cleanup_services(app: FastAPI):
         # REMOVED as part of Issue #729 - SLM moved to slm-server
         # SLM server manages its own reconciler lifecycle
         pass  # SLM reconciler now in slm-server
+
+        # GH#9028: Stop LLC liveness monitor
+        if hasattr(app.state, "llc_liveness_monitor") and app.state.llc_liveness_monitor:
+            app.state.llc_liveness_monitor.stop()
+            logger.info("✅ LLC liveness monitor stopped")
+        # GH#9029: Stop LLC budget watchdog
+        if hasattr(app.state, "llc_budget_watchdog") and app.state.llc_budget_watchdog:
+            app.state.llc_budget_watchdog.stop()
+            logger.info("✅ LLC budget watchdog stopped")
 
         # GH#8257: Stop LLC outbound sync service
         if hasattr(app.state, "llc_outbound_sync") and app.state.llc_outbound_sync:
