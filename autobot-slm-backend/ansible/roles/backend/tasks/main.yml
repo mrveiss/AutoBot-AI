@@ -592,7 +592,17 @@
   ansible.builtin.stat:
     path: "{{ backend_code_dir | default(backend_install_dir) }}/.env"
   register: _backend_env_stat
-  failed_when: not _backend_env_stat.stat.exists or not _backend_env_stat.stat.readable
+  failed_when: not _backend_env_stat.stat.exists
+  tags: ['backend', 'config']
+
+# MVA-1633: Explicit start to match the unconditional stop above. Without this,
+# idempotent tag-filtered runs (--tags backend,config) stop the service and
+# never restart it when no change-detected task accumulates notify: restart backend.
+- name: "Backend | Start service after env update (MVA-1633)"
+  ansible.builtin.systemd:
+    name: autobot-backend
+    state: started
+    daemon_reload: false
   tags: ['backend', 'config']
 
 - name: Deploy backend systemd service
