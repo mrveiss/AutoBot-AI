@@ -205,6 +205,18 @@
       "deleteFailed": "Failed to delete some chats",
       "sharedSuccess": "Chat shared successfully"
     },
+    "folders": {
+      "folders": "Folders",
+      "newFolder": "New folder",
+      "folderName": "Folder name",
+      "rename": "Rename folder",
+      "addSubfolder": "Add subfolder",
+      "pin": "Pin folder",
+      "unpin": "Unpin folder",
+      "assignToFolder": "Move to folder",
+      "removeFromFolder": "Remove from folder",
+      "confirmDelete": "Delete folder \"{name}\"? Subfolders will be moved to root."
+    },
     "interface": {
       "loadFailed": "Failed to load chat interface",
       "voiceOutputOn": "Voice output on",

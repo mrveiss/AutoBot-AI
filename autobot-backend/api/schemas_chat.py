@@ -536,3 +536,47 @@ class SessionMcpCallData(BaseModel):
     model_config = {"extra": "allow"}
 
     success: bool
+
+
+# ── Chat Folder schemas (GH#8987) ────────────────────────────────────────────
+
+
+class FolderCreate(BaseModel):
+    """Request body for POST /chat/folders."""
+
+    name: str = Field(..., min_length=1, max_length=100, description="Folder display name")
+    parent_id: str | None = Field(None, description="Parent folder ID for nesting (max 3 levels)")
+
+
+class FolderUpdate(BaseModel):
+    """Request body for PUT /chat/folders/{folder_id}."""
+
+    name: str | None = Field(None, min_length=1, max_length=100, description="New folder name")
+    parent_id: str | None = Field(None, description="New parent folder ID (None = root)")
+    pinned: bool | None = Field(None, description="Pin folder to top of list")
+
+
+class FolderData(BaseModel):
+    """Single folder object returned by the API."""
+
+    id: str
+    name: str
+    parent_id: str | None = None
+    owner: str
+    pinned: bool = False
+    created_at: str
+    session_ids: List[str] = Field(default_factory=list)
+    session_count: int = 0
+
+
+class FolderListData(BaseModel):
+    """data payload for GET /chat/folders."""
+
+    folders: List[FolderData]
+    count: int
+
+
+class SessionFolderAssign(BaseModel):
+    """Request body for PUT /chat/sessions/{session_id}/folder."""
+
+    folder_id: str | None = Field(None, description="Folder ID to assign; None removes from folder")
