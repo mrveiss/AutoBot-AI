@@ -57,6 +57,13 @@ WatchdogSec={{ slm_agent_watchdog_sec }}
 LimitNOFILE=65536
 LimitNPROC=4096
 
+# Memory limits — agent is lightweight; hard cap prevents OOM cascade (#9086)
+MemoryMax=256M
+MemoryHigh=200M
+
+# OOM priority — kernel kills agent before critical services like Paperclip (#9086)
+OOMScoreAdjust=500
+
 # Security hardening
 NoNewPrivileges=true
 PrivateTmp=true
