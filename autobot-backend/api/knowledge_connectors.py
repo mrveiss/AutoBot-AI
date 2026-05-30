@@ -40,6 +40,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from constants.error_constants import ERR_CONNECTOR_NOT_FOUND
+from knowledge.connectors.credential_store import get_credential_store
 from knowledge.connectors.models import ConnectorConfig
 from knowledge.connectors.registry import ConnectorRegistry
 from knowledge.connectors.scheduler import get_connector_scheduler
@@ -107,6 +108,8 @@ async def _save_connector(cfg: ConnectorConfig) -> None:
         "tier": int(getattr(cfg, "tier", 0)),
         "auth_type": getattr(cfg, "auth_type", None),
         "max_concurrency": cfg.max_concurrency,
+        "secret_id": cfg.secret_id,
+        "owner_id": cfg.owner_id,
     }
     await asyncio.to_thread(
         redis.set,
@@ -145,6 +148,8 @@ def _deserialize_connector(raw: Any) -> ConnectorConfig:
         tier=int(data.get("tier", 0)),
         auth_type=data.get("auth_type"),
         max_concurrency=int(raw_mc) if raw_mc is not None else None,
+        secret_id=data.get("secret_id"),
+        owner_id=data.get("owner_id"),
     )
 
 
@@ -208,6 +213,26 @@ async def _delete_connector_keys(connector_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+async def _cfg_with_credentials(cfg: ConnectorConfig, auth_cls: type | None) -> ConnectorConfig:
+    """Return a ConnectorConfig with sensitive credentials merged back in (ADR-007).
+
+    When cfg.secret_id is set, loads the secret and merges credentials into a
+    copy of cfg.config.  Returns cfg unchanged when there is no secret_id or
+    no auth_cls with __sensitive_fields__.
+    """
+    if not cfg.secret_id or auth_cls is None or not hasattr(auth_cls, "__sensitive_fields__"):
+        return cfg
+    owner_id = cfg.owner_id or "system"
+    try:
+        full_config = await get_credential_store().load(cfg.secret_id, cfg.config, auth_cls, owner_id)
+    except (LookupError, PermissionError) as exc:
+        logger.error("Failed to load credentials for connector %s: %s", cfg.connector_id, exc)
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    import dataclasses
+
+    return dataclasses.replace(cfg, config=full_config)
+
+
 async def _load_or_create_instance(cfg: ConnectorConfig):
     """Return existing instance or create+register a new one (Issue #1254)."""
     existing = ConnectorRegistry.get(cfg.connector_id)
@@ -224,6 +249,15 @@ async def _run_sync_background(connector_id: str, incremental: bool) -> None:
     cfg = await _load_connector(connector_id)
     if cfg is None:
         logger.error("Background sync: connector %s not found", connector_id)
+        return
+
+    # ADR-007: reconstruct full config with credentials before invoking connector.
+    klass = ConnectorRegistry.get_registered_class(cfg.connector_type)
+    auth_cls = klass.auth_schema() if klass else None
+    try:
+        cfg = await _cfg_with_credentials(cfg, auth_cls)
+    except HTTPException as exc:
+        logger.error("Background sync: credential load failed for %s: %s", connector_id, exc.detail)
         return
 
     instance = await _load_or_create_instance(cfg)
@@ -344,11 +378,24 @@ async def create_connector(request: CreateConnectorRequest):
                 detail="Auth config invalid for %s: %s" % (auth_type, "; ".join(errors)),
             )
 
+    # ADR-007: extract sensitive credential fields and store encrypted.
+    owner_id = getattr(request, "owner_id", None) or "system"
+    safe_config = request.config
+    secret_id: str | None = None
+    if auth_cls is not None and hasattr(auth_cls, "__sensitive_fields__"):
+        credential_store = get_credential_store()
+        secret_id, safe_config = await credential_store.store(
+            connector_id=connector_id,
+            owner_id=owner_id,
+            auth_cls=auth_cls,
+            config=request.config,
+        )
+
     cfg = ConnectorConfig(
         connector_id=connector_id,
         connector_type=request.connector_type,
         name=request.name,
-        config=request.config,
+        config=safe_config,
         enabled=request.enabled,
         verification_mode=request.verification_mode,
         schedule_cron=request.schedule_cron,
@@ -357,11 +404,20 @@ async def create_connector(request: CreateConnectorRequest):
         tier=int(getattr(klass, "tier", 0)),
         auth_type=auth_type,
         max_concurrency=request.max_concurrency,
+        secret_id=secret_id,
+        owner_id=owner_id,
     )
-    instance = await _load_or_create_instance(cfg)
+    # For the connection test pass full config with credentials reconstructed.
+    test_cfg = await _cfg_with_credentials(cfg, auth_cls)
+    instance = await _load_or_create_instance(test_cfg)
     healthy = await instance.test_connection()
     if not healthy:
         ConnectorRegistry.remove_instance(connector_id)
+        if secret_id:
+            try:
+                await get_credential_store().revoke(secret_id, owner_id)
+            except Exception as exc:
+                logger.warning("Failed to revoke credential after failed test: %s", exc)
         raise HTTPException(
             status_code=400,
             detail="Connection test failed — verify connector config and target availability",
@@ -477,6 +533,19 @@ async def update_connector(connector_id: str, request: UpdateConnectorRequest):
     if cfg is None:
         raise HTTPException(status_code=404, detail=ERR_CONNECTOR_NOT_FOUND)
 
+    # ADR-007: if request includes sensitive fields, rotate the stored secret.
+    if request.config is not None and cfg.secret_id and cfg.auth_type:
+        klass = ConnectorRegistry.get_registered_class(cfg.connector_type)
+        auth_cls = klass.auth_schema() if klass else None
+        if auth_cls is not None and hasattr(auth_cls, "__sensitive_fields__"):
+            sensitive = auth_cls.__sensitive_fields__
+            new_creds = {k: v for k, v in request.config.items() if k in sensitive}
+            if new_creds:
+                owner_id = cfg.owner_id or "system"
+                await get_credential_store().rotate(cfg.secret_id, new_creds, owner_id)
+                # Strip sensitive fields from the config that goes to Redis.
+                request.config = {k: v for k, v in request.config.items() if k not in sensitive}
+
     _apply_updates(cfg, request)
     await _save_connector(cfg)
 
@@ -501,6 +570,14 @@ async def delete_connector(connector_id: str):
     if cfg is None:
         raise HTTPException(status_code=404, detail=ERR_CONNECTOR_NOT_FOUND)
 
+    # ADR-007: revoke stored credentials before removing Redis key.
+    if cfg.secret_id:
+        owner_id = cfg.owner_id or "system"
+        try:
+            await get_credential_store().revoke(cfg.secret_id, owner_id)
+        except Exception as exc:
+            logger.warning("Failed to revoke credential for connector %s: %s", connector_id, exc)
+
     scheduler = get_connector_scheduler()
     await scheduler.stop(connector_id)
     ConnectorRegistry.remove_instance(connector_id)
@@ -519,6 +596,10 @@ async def test_connector_connection(connector_id: str):
     cfg = await _load_connector(connector_id)
     if cfg is None:
         raise HTTPException(status_code=404, detail=ERR_CONNECTOR_NOT_FOUND)
+    # ADR-007: reconstruct full config with credentials before invoking connector.
+    klass = ConnectorRegistry.get_registered_class(cfg.connector_type)
+    auth_cls = klass.auth_schema() if klass else None
+    cfg = await _cfg_with_credentials(cfg, auth_cls)
     instance = await _load_or_create_instance(cfg)
     try:
         healthy = await instance.test_connection()
@@ -666,7 +747,12 @@ async def _get_status_for_config(cfg: ConnectorConfig) -> Dict[str, Any]:
 
 
 def _cfg_to_dict(cfg: ConnectorConfig) -> Dict[str, Any]:
-    """Serialize ConnectorConfig to a plain dict for API responses."""
+    """Serialize ConnectorConfig to a plain dict for API responses.
+
+    ADR-007: secret_id and owner_id are internal fields — never included in
+    the public response.  Sensitive credential fields are already absent from
+    cfg.config (stripped at write time).
+    """
     return {
         "connector_id": cfg.connector_id,
         "connector_type": cfg.connector_type,

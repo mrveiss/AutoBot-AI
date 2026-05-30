@@ -10,7 +10,7 @@ validates incoming config dicts against the declared schema before persisting.
 """
 
 from dataclasses import dataclass, field
-from typing import List
+from typing import ClassVar, List
 
 
 @dataclass
@@ -18,6 +18,8 @@ class BearerAuth:
     """Bearer-token authentication — Authorization: Bearer <token>."""
 
     token: str
+
+    __sensitive_fields__: ClassVar[frozenset] = frozenset({"token"})
 
 
 @dataclass
@@ -27,6 +29,8 @@ class ApiKeyAuth:
     key: str
     header: str = "X-Api-Key"
 
+    __sensitive_fields__: ClassVar[frozenset] = frozenset({"key"})
+
 
 @dataclass
 class BasicAuth:
@@ -34,6 +38,8 @@ class BasicAuth:
 
     username: str
     password: str
+
+    __sensitive_fields__: ClassVar[frozenset] = frozenset({"password"})
 
 
 @dataclass
@@ -45,6 +51,8 @@ class OAuthRefreshAuth:
     refresh_token: str
     token_url: str
     scopes: List[str] = field(default_factory=list)
+
+    __sensitive_fields__: ClassVar[frozenset] = frozenset({"client_secret", "refresh_token"})
 
 
 # Registry used by the API validation layer to resolve auth type by name.

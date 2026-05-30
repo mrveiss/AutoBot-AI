@@ -95,6 +95,11 @@ class ConnectorConfig:
     # Issue #8152: schema version — used by ConnectorRegistry.create() to detect
     # and apply config migrations before instantiation.
     config_version: int = 1
+    # ADR-007: ID of the SecretsService secret holding sensitive credential fields.
+    # None for connectors without auth (tier=0) or pre-migration connectors.
+    secret_id: str | None = None
+    # ADR-007: user/owner identifier for cross-user isolation checks.
+    owner_id: str | None = None
 
 
 @dataclass
