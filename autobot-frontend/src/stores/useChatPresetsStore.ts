@@ -50,6 +50,7 @@ export const useChatPresetsStore = defineStore('chatPresets', () => {
 
   async function createPreset(payload: SlashCommandPresetCreate): Promise<SlashCommandPreset | null> {
     const api = useApiClient()
+    error.value = null
     try {
       const created = await api.post<SlashCommandPreset>(PRESETS_ENDPOINT, payload)
       presets.value.push(created)
@@ -63,6 +64,7 @@ export const useChatPresetsStore = defineStore('chatPresets', () => {
 
   async function updatePreset(id: string, payload: SlashCommandPresetUpdate): Promise<SlashCommandPreset | null> {
     const api = useApiClient()
+    error.value = null
     try {
       const updated = await api.put<SlashCommandPreset>(`${PRESETS_ENDPOINT}/${id}`, payload)
       const idx = presets.value.findIndex((p) => p.id === id)
@@ -77,6 +79,7 @@ export const useChatPresetsStore = defineStore('chatPresets', () => {
 
   async function deletePreset(id: string): Promise<boolean> {
     const api = useApiClient()
+    error.value = null
     try {
       await api.delete(`${PRESETS_ENDPOINT}/${id}`)
       presets.value = presets.value.filter((p) => p.id !== id)
