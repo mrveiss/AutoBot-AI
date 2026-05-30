@@ -459,10 +459,10 @@ async def initialize_critical_services(app: FastAPI):
         logger.error("❌ CRITICAL INITIALIZATION FAILED: %s", critical_error)
         logger.error("Backend startup ABORTED - critical services must be operational")
         error_type = type(critical_error).__name__
-        error_detail = f"{error_type}: {str(critical_error)}"
+        logger.error("Startup error detail: %s: %s", error_type, str(critical_error))
         await update_app_state_multi(
             initialization_status="error",
-            initialization_message=f"Startup failed: {error_detail}",
+            initialization_message="Startup failed — check server logs for details",
             startup_error=error_type,
         )
         # GH#8947: Persist error type to disk before re-raising — the process will
