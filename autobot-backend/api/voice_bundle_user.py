@@ -230,6 +230,13 @@ async def set_user_bundle(
                     {"uid": user_id, "bundle": body.bundle_name, "by": str(current_user_id)},
                 )
             await session.commit()
+            # Re-read after commit so response reflects actual stored value, not request input.
+            row = await session.execute(
+                text("SELECT bundle_name FROM user_voice_bundle WHERE user_id = :uid"),
+                {"uid": user_id},
+            )
+            result = row.fetchone()
+            stored_bundle_name: Optional[str] = result[0] if result else None
     except Exception as exc:
         logger.error("set_user_bundle: DB error: %s", exc)
         raise HTTPException(status_code=500, detail="Database error") from exc
@@ -246,8 +253,8 @@ async def set_user_bundle(
             resource_id=user_id,
             metadata={
                 "target_user_id": user_id,
-                "bundle_name": body.bundle_name,
-                "assignment_action": "clear" if body.bundle_name is None else "assign",
+                "bundle_name": stored_bundle_name,
+                "assignment_action": "clear" if stored_bundle_name is None else "assign",
             },
         )
     )
@@ -256,7 +263,7 @@ async def set_user_bundle(
         "voice_bundle user_id=%s target=%s bundle=%s",
         current_user_id,
         user_id,
-        body.bundle_name,
+        stored_bundle_name,
     )
 
-    return UserBundleResponse(user_id=user_id, bundle_name=body.bundle_name)
+    return UserBundleResponse(user_id=user_id, bundle_name=stored_bundle_name)
