@@ -10,6 +10,8 @@ Endpoints:
   GET    /api/push/vapid-public-key — return the VAPID public key for the SW
 """
 
+import ipaddress
+import socket
 import uuid
 from typing import Dict
 from urllib.parse import urlparse
@@ -42,15 +44,35 @@ class SubscribeRequest(BaseModel):
     @field_validator("endpoint")
     @classmethod
     def validate_endpoint_https(cls, v: str) -> str:
-        """Reject non-HTTPS endpoints to prevent SSRF via arbitrary URL registration."""
+        """Reject non-HTTPS endpoints and SSRF targets.
+
+        Validates scheme, resolves hostname, and rejects private/loopback/
+        link-local IPs to prevent SSRF via arbitrary push endpoint registration.
+        """
         try:
             parsed = urlparse(v)
         except Exception as exc:
             raise ValueError(f"Invalid endpoint URL: {exc}") from exc
         if parsed.scheme != "https":
             raise ValueError("Push endpoint must use https:// scheme")
-        if not parsed.netloc:
+        hostname = parsed.hostname
+        if not hostname:
             raise ValueError("Push endpoint must include a valid host")
+        # DNS resolution check: reject if any resolved IP is internal.
+        try:
+            addr_infos = socket.getaddrinfo(hostname, None)
+        except socket.gaierror as exc:
+            raise ValueError(f"Push endpoint hostname could not be resolved: {exc}") from exc
+        for addr_info in addr_infos:
+            ip_str = addr_info[4][0]
+            try:
+                ip = ipaddress.ip_address(ip_str)
+            except ValueError:
+                continue
+            if ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_reserved:
+                raise ValueError(
+                    "Push endpoint resolves to a private/internal address — SSRF rejected"
+                )
         return v
 
 
