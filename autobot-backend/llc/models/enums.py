@@ -134,8 +134,6 @@ class HeartbeatInvocationSource(str, Enum):
     CALLBACK = "callback"
 
 
-
-
 class ContextMode(str, Enum):
     """Context window loading mode for heartbeat runs."""
 

@@ -334,7 +334,9 @@ class Assertion:
             "key": self.key,
             "value": self.value,
             "confidence": self.confidence,
-            "sources": [{"tool_name": s.tool_name, "iteration": s.iteration, "call_hash": s.call_hash} for s in self.sources],
+            "sources": [
+                {"tool_name": s.tool_name, "iteration": s.iteration, "call_hash": s.call_hash} for s in self.sources
+            ],
             "confirmed_at": self.confirmed_at.isoformat(),
             "refuted_at": self.refuted_at.isoformat() if self.refuted_at else None,
             "is_active": self.is_active,

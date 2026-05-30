@@ -101,9 +101,7 @@ class SessionCheckpointer:
         """Single scan — write checkpoints for all currently running runs."""
         factory = get_async_session_factory()
         async with factory() as session:
-            result = await session.execute(
-                select(LLCHeartbeatRun).where(LLCHeartbeatRun.status == "running")
-            )
+            result = await session.execute(select(LLCHeartbeatRun).where(LLCHeartbeatRun.status == "running"))
             runs = list(result.scalars().all())
             for run in runs:
                 try:
@@ -141,9 +139,7 @@ async def recover_incomplete_runs() -> None:
     factory = get_async_session_factory()
     try:
         async with factory() as session:
-            result = await session.execute(
-                select(LLCHeartbeatRun).where(LLCHeartbeatRun.status == "running")
-            )
+            result = await session.execute(select(LLCHeartbeatRun).where(LLCHeartbeatRun.status == "running"))
             runs = list(result.scalars().all())
 
             if not runs:
@@ -167,17 +163,13 @@ async def recover_incomplete_runs() -> None:
                         try:
                             await redis.delete(f"{_CHECKOUT_KEY_PREFIX}{run.work_item_id}")
                         except Exception:
-                            logger.debug(
-                                "Redis DEL checkout key failed for run %s (swallowed)", run_id
-                            )
+                            logger.debug("Redis DEL checkout key failed for run %s (swallowed)", run_id)
 
                     if redis is not None:
                         try:
                             await redis.zadd(_SCHEDULE_KEY, {run.agent_id: now_ts})
                         except Exception:
-                            logger.debug(
-                                "Redis ZADD re-queue failed for agent %s (swallowed)", run.agent_id
-                            )
+                            logger.debug("Redis ZADD re-queue failed for agent %s (swallowed)", run.agent_id)
 
                     logger.info(
                         "SessionCheckpointer: recovered run %s for agent %s",
@@ -190,9 +182,7 @@ async def recover_incomplete_runs() -> None:
             try:
                 await session.commit()
             except Exception:
-                logger.exception(
-                    "SessionCheckpointer: commit failed during recovery (swallowed)"
-                )
+                logger.exception("SessionCheckpointer: commit failed during recovery (swallowed)")
                 await session.rollback()
     except Exception:
         logger.exception("SessionCheckpointer: recover_incomplete_runs failed (swallowed)")

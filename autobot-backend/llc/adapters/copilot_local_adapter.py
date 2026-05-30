@@ -45,10 +45,7 @@ _DEFAULT_COPILOT_MODEL = "copilot-4o"
 def _resolve_gh_cli() -> str:
     path = shutil.which("gh")
     if path is None:
-        raise RuntimeError(
-            "gh CLI not found on PATH. "
-            "Install the GitHub CLI and ensure 'gh' is on PATH."
-        )
+        raise RuntimeError("gh CLI not found on PATH. " "Install the GitHub CLI and ensure 'gh' is on PATH.")
     return path
 
 
@@ -111,11 +108,7 @@ class CopilotLocalAdapter:
                     cwd=workspace_dir or None,
                 )
             except FileNotFoundError as e:
-                if (
-                    workspace_dir
-                    and e.filename
-                    and os.path.abspath(str(e.filename)) == os.path.abspath(workspace_dir)
-                ):
+                if workspace_dir and e.filename and os.path.abspath(str(e.filename)) == os.path.abspath(workspace_dir):
                     logger.warning(
                         "CopilotLocalAdapter: workspace_dir %r missing, retrying without cwd",
                         workspace_dir,

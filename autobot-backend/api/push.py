@@ -70,9 +70,7 @@ class SubscribeRequest(BaseModel):
             except ValueError:
                 continue
             if ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_reserved:
-                raise ValueError(
-                    "Push endpoint resolves to a private/internal address — SSRF rejected"
-                )
+                raise ValueError("Push endpoint resolves to a private/internal address — SSRF rejected")
         return v
 
 
@@ -124,13 +122,13 @@ async def subscribe(
     if body.user_id and body.user_id != user_id:
         logger.warning(
             "SECURITY: push subscribe IDOR attempt — attacker user_id=%s, authenticated user_id=%s, endpoint=%s",
-            body.user_id, user_id, body.endpoint[:50],
+            body.user_id,
+            user_id,
+            body.endpoint[:50],
         )
 
     # Upsert: if endpoint already exists, update keys in place — but only for the owner.
-    result = await session.execute(
-        select(PushSubscription).where(PushSubscription.endpoint == body.endpoint)
-    )
+    result = await session.execute(select(PushSubscription).where(PushSubscription.endpoint == body.endpoint))
     existing = result.scalar_one_or_none()
 
     if existing:
@@ -138,7 +136,9 @@ async def subscribe(
         if existing.user_id != str(user_id):
             logger.warning(
                 "SECURITY: push subscribe endpoint conflict — requester=%s, owner=%s, endpoint=%s",
-                user_id, existing.user_id, body.endpoint[:50],
+                user_id,
+                existing.user_id,
+                body.endpoint[:50],
             )
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -186,7 +186,9 @@ async def unsubscribe(
     if body.user_id and body.user_id != user_id:
         logger.warning(
             "SECURITY: push unsubscribe IDOR attempt — attacker user_id=%s, authenticated user_id=%s, endpoint=%s",
-            body.user_id, user_id, body.endpoint[:50],
+            body.user_id,
+            user_id,
+            body.endpoint[:50],
         )
 
     result = await session.execute(
