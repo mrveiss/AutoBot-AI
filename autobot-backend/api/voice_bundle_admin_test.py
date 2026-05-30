@@ -176,101 +176,67 @@ async def test_list_realtime_tools_uses_user_bundle():
 
 @pytest.mark.asyncio
 async def test_set_user_bundle_emit_raises_in_except_still_raises_http_exception():
-    """If the failure-path emit raises, the original HTTPException is still raised (GH#9096)."""
-    from fastapi import FastAPI
-    from fastapi.testclient import TestClient
+    """Failure-path emit that raises must not swallow the original HTTPException (GH#9096)."""
+    from fastapi import HTTPException
 
-    from api.voice_bundle_user import router
-
-    app = FastAPI()
-    app.include_router(router)
-
-    with TestClient(app, raise_server_exceptions=False) as client:
-        with (
-            patch(
-                "api.voice_bundle_user.get_current_user",
-                return_value={"user_id": "admin-1", "role": "admin"},
-            ),
-            patch(
-                "api.voice_bundle_user.get_auth_middleware",
-                return_value=MagicMock(),
-            ),
-            patch(
-                "user_management.database.get_async_session",
-                side_effect=RuntimeError("db gone"),
-            ),
-            patch(
-                "api.voice_bundle_user.emit",
-                side_effect=RuntimeError("audit bus down"),
-            ),
-        ):
-            resp = client.put(
-                "/users/user-42/bundle",
-                json={"bundle_name": "voice_safe"},
-                headers={"Authorization": "Bearer fake"},
-            )
-
-    assert resp.status_code == 500
-    assert resp.json()["detail"] == "Database error"
-
-
-@pytest.mark.asyncio
-async def test_set_user_bundle_success_audit_uses_stored_bundle_name():
-    """Success audit metadata must include stored_bundle_name, not body.bundle_name (GH#9098)."""
-    from fastapi import FastAPI
-    from fastapi.testclient import TestClient
-
-    from api.voice_bundle_user import router
-
-    mock_row_write = MagicMock()
-    mock_row_write.fetchone.return_value = None
-
-    mock_row_read = MagicMock()
-    mock_row_read.fetchone.return_value = ("voice_extended",)
-
-    execute_calls = []
-
-    async def fake_execute(query, params=None):
-        execute_calls.append(params)
-        if params and "uid" in params and len(execute_calls) >= 3:
-            return mock_row_read
-        return mock_row_write
+    from api.voice_bundle_user import BundleAssignRequest, set_user_bundle
 
     mock_session = AsyncMock()
     mock_session.__aenter__ = AsyncMock(return_value=mock_session)
     mock_session.__aexit__ = AsyncMock(return_value=False)
-    mock_session.execute = fake_execute
+    mock_session.execute = AsyncMock(side_effect=RuntimeError("db gone"))
     mock_session.commit = AsyncMock()
 
-    emitted_events = []
-
-    def fake_emit(event):
-        emitted_events.append(event)
-
-    app = FastAPI()
-    app.include_router(router)
-
-    with TestClient(app) as client:
-        with (
-            patch(
-                "api.voice_bundle_user.get_current_user",
-                return_value={"user_id": "admin-1", "role": "admin"},
-            ),
-            patch(
-                "user_management.database.get_async_session",
-                return_value=mock_session,
-            ),
-            patch("api.voice_bundle_user.emit", side_effect=fake_emit),
-        ):
-            resp = client.put(
-                "/users/user-77/bundle",
-                json={"bundle_name": "voice_extended"},
-                headers={"Authorization": "Bearer fake"},
+    with (
+        patch("user_management.database.get_async_session", return_value=mock_session),
+        patch("api.voice_bundle_user.emit", side_effect=RuntimeError("audit bus down")),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await set_user_bundle(
+                "user-42",
+                BundleAssignRequest(bundle_name="voice_safe"),
+                MagicMock(),
+                {"user_id": "admin-1", "role": "admin"},
             )
 
-    assert resp.status_code == 200
-    assert len(emitted_events) == 1
-    event = emitted_events[0]
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail == "Database error"
+
+
+@pytest.mark.asyncio
+async def test_set_user_bundle_success_audit_uses_stored_bundle_name():
+    """Success audit must use DB-stored value for bundle_name, not body.bundle_name (GH#9098).
+
+    The requested value goes into requested_bundle_name; the actual stored
+    value (returned by the re-read after commit) goes into bundle_name.
+    """
+    from api.voice_bundle_user import BundleAssignRequest, set_user_bundle
+
+    mock_row = MagicMock()
+    mock_row.fetchone.return_value = ("voice_extended",)
+
+    mock_session = AsyncMock()
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=False)
+    mock_session.execute = AsyncMock(return_value=mock_row)
+    mock_session.commit = AsyncMock()
+
+    emitted: list = []
+
+    with (
+        patch("user_management.database.get_async_session", return_value=mock_session),
+        patch("api.voice_bundle_user.emit", side_effect=emitted.append),
+    ):
+        resp = await set_user_bundle(
+            "user-77",
+            BundleAssignRequest(bundle_name="voice_safe"),
+            MagicMock(),
+            {"user_id": "admin-1", "role": "admin"},
+        )
+
+    assert resp.bundle_name == "voice_extended"
+    assert len(emitted) == 1
+    event = emitted[0]
     assert event.outcome == "success"
     assert event.metadata.get("bundle_name") == "voice_extended"
-    assert "requested_bundle_name" in event.metadata
+    assert event.metadata.get("requested_bundle_name") == "voice_safe"
