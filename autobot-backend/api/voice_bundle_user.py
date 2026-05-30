@@ -4,12 +4,12 @@
 """User endpoints for per-user voice bundle assignment (GH#8605).
 
 Endpoints:
-    GET  /api/voice/bundles              — list available bundles
-    GET  /api/voice/users/{userId}/bundle  — get user's bundle assignment (self or admin)
-    PUT  /api/voice/users/{userId}/bundle  — assign bundle to user (admin only, GH#8969)
+    GET  /api/voice/bundles                     — list available bundles (with descriptions)
+    GET  /api/voice/users/{userId}/bundle       — get user's bundle assignment (self or admin)
+    PUT  /api/voice/users/{userId}/bundle       — assign bundle to user (admin only, GH#8969)
 """
 
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -30,17 +30,24 @@ router = APIRouter(tags=["voice", "rbac"])
 
 
 class BundleInfo(BaseModel):
+    """Information about an available voice bundle."""
+
     name: str
     label: str
+    description: str
     tool_count: int
 
 
 class UserBundleResponse(BaseModel):
+    """User's voice bundle assignment."""
+
     user_id: str
-    bundle_name: Optional[str]
+    bundle_name: Optional[str] = None
 
 
 class BundleAssignRequest(BaseModel):
+    """Request to assign or clear a bundle for a user."""
+
     bundle_name: Optional[str] = None  # None = clear override
 
 
@@ -50,10 +57,19 @@ class BundleAssignRequest(BaseModel):
 
 VALID_BUNDLES = {"voice_safe", "voice_extended", "voice_admin"}
 
-BUNDLE_LABELS = {
-    "voice_safe": "Voice Safe",
-    "voice_extended": "Voice Extended",
-    "voice_admin": "Voice Admin",
+BUNDLE_DEFINITIONS: dict[str, dict[str, str]] = {
+    "voice_safe": {
+        "label": "Voice Safe",
+        "description": "Basic voice commands for standard users",
+    },
+    "voice_extended": {
+        "label": "Voice Extended",
+        "description": "Extended voice commands with advanced features",
+    },
+    "voice_admin": {
+        "label": "Voice Admin",
+        "description": "Full voice command set for administrators",
+    },
 }
 
 
@@ -87,7 +103,7 @@ def _check_self_or_admin(request: Request, current_user: dict, target_user_id: s
 # ---------------------------------------------------------------------------
 
 
-@router.get("/bundles", response_model=List[BundleInfo])
+@router.get("/bundles", response_model=list[BundleInfo])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="voice_list_bundles",
@@ -95,36 +111,30 @@ def _check_self_or_admin(request: Request, current_user: dict, target_user_id: s
 )
 async def list_voice_bundles(
     current_user: dict = Depends(get_current_user),
-) -> List[BundleInfo]:
-    """Return list of available voice bundles.
+) -> list[BundleInfo]:
+    """Return list of available voice bundles with descriptions and tool counts.
 
     Filters bundles based on user role (admins see all, users see allowed).
+    Results are sorted by bundle name for deterministic ordering.
     """
-    role = current_user.get("role", "user")
-    is_admin = role == "admin"
+    is_admin = current_user.get("role", "user") == "admin"
 
     result = []
-    for bundle_name in VALID_BUNDLES:
+    for bundle_name in sorted(VALID_BUNDLES):
+        defn = BUNDLE_DEFINITIONS.get(bundle_name, {})
         try:
             tool_count = await _count_tools_for_bundle(bundle_name, is_admin=is_admin)
-            label = BUNDLE_LABELS.get(bundle_name, bundle_name)
-            result.append(
-                BundleInfo(
-                    name=bundle_name,
-                    label=label,
-                    tool_count=tool_count,
-                )
-            )
         except Exception as exc:
             logger.warning("Failed to count tools for bundle %s: %s", bundle_name, exc)
-            label = BUNDLE_LABELS.get(bundle_name, bundle_name)
-            result.append(
-                BundleInfo(
-                    name=bundle_name,
-                    label=label,
-                    tool_count=0,
-                )
+            tool_count = 0
+        result.append(
+            BundleInfo(
+                name=bundle_name,
+                label=defn.get("label", bundle_name),
+                description=defn.get("description", ""),
+                tool_count=tool_count,
             )
+        )
 
     return result
 
@@ -147,7 +157,7 @@ async def get_user_bundle(
 ) -> UserBundleResponse:
     """Return the explicit bundle assignment for a user.
 
-    Users can only view their own assignment (or admins can view any user).
+    Permission: self or admin only.
     """
     if not _check_self_or_admin(request, current_user, user_id):
         raise_auth_error("AUTH_0003", "Cannot access other user's bundle assignment")
@@ -211,13 +221,11 @@ async def set_user_bundle(
 
         async with get_async_session() as session:
             if body.bundle_name is None:
-                # Clear override
                 await session.execute(
                     text("DELETE FROM user_voice_bundle WHERE user_id = :uid"),
                     {"uid": user_id},
                 )
             else:
-                # Upsert
                 await session.execute(
                     text("""
                         INSERT INTO user_voice_bundle (user_id, bundle_name, assigned_by, assigned_at)
@@ -230,7 +238,7 @@ async def set_user_bundle(
                     {"uid": user_id, "bundle": body.bundle_name, "by": str(current_user_id)},
                 )
             await session.commit()
-            # Re-read after commit so response reflects actual stored value, not request input.
+            # Re-read after commit so response reflects actual stored value.
             row = await session.execute(
                 text("SELECT bundle_name FROM user_voice_bundle WHERE user_id = :uid"),
                 {"uid": user_id},
@@ -241,7 +249,6 @@ async def set_user_bundle(
         logger.error("set_user_bundle: DB error: %s", exc)
         raise HTTPException(status_code=500, detail="Database error") from exc
 
-    # Audit log
     from services.audit.unified_audit import AuditCategory, AuditEvent, emit  # noqa: PLC0415
 
     emit(
