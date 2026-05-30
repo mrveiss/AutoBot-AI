@@ -15,15 +15,35 @@ import os
 import sys
 from pathlib import Path
 
-REQUIRED_ENV_VARS = [
-    "AUTOBOT_REDIS_URL",
-    "AUTOBOT_KNOWLEDGE_BASE_URL",
-    "AUTOBOT_EMBEDDING_MODEL",
-]
+# Required vars are declared in a manifest written by Ansible alongside .env.
+# This keeps the validator in sync with the template without a parallel hardcoded list.
+# Fallback list is used when the manifest is absent (dev/bare checkout).
+_MANIFEST_PATH = Path(__file__).parent / ".validation_vars"
+
+
+def _load_required_vars() -> list[str]:
+    if _MANIFEST_PATH.exists():
+        return [
+            line.strip()
+            for line in _MANIFEST_PATH.read_text().splitlines()
+            if line.strip() and not line.startswith("#")
+        ]
+    # Fallback: vars that Ansible always emits from backend.env.j2 (no | default() guard).
+    # Keep this list in sync with backend.env.j2 and the Ansible manifest task.
+    return [
+        "AUTOBOT_REDIS_URL",          # redis://host:port — composed by Ansible from backend_redis_host/port
+        "AUTOBOT_AI_STACK_HOST",      # required Ansible inventory var (backend_ai_stack_host)
+        "AUTOBOT_CHROMADB_HOST",      # required Ansible inventory var (backend_chromadb_host)
+        "AUTOBOT_JWT_SECRET",         # required Ansible inventory var (backend_jwt_secret)
+        "AUTOBOT_DEFAULT_LLM_MODEL",  # required Ansible inventory var (backend_llm_model)
+        "AUTOBOT_EMBEDDING_MODEL",    # light-processing model tier — emitted from backend_light_model
+    ]
+
+
+REQUIRED_ENV_VARS = _load_required_vars()
 
 
 def validate_env_file(env_path: str) -> tuple[bool, str]:
-    """Check if .env file is readable."""
     try:
         path = Path(env_path)
         if not path.exists():
@@ -36,7 +56,6 @@ def validate_env_file(env_path: str) -> tuple[bool, str]:
 
 
 def validate_env_vars() -> tuple[bool, list[str]]:
-    """Check if all required env vars are set."""
     missing = []
     for var in REQUIRED_ENV_VARS:
         if not os.environ.get(var):
@@ -47,13 +66,11 @@ def validate_env_vars() -> tuple[bool, list[str]]:
 def main():
     env_path = os.environ.get("AUTOBOT_ENV_PATH", ".env")
 
-    # Check .env file
     readable, err = validate_env_file(env_path)
     if not readable:
         print(f"FATAL: {err}", file=sys.stderr)
         sys.exit(2)
 
-    # Check required vars
     valid, missing = validate_env_vars()
     if not valid:
         print(
