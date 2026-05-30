@@ -104,6 +104,10 @@
     "filterByCategory": "Filter by category"
   },
   "chat": {
+    "contextWindow": {
+      "ariaLabel": "{used} of {max} tokens used",
+      "tooltip": "{used} / {max} tokens used ({percent}% of context window)"
+    },
     "sendMessage": "Send a message...",
     "newChat": "New Chat",
     "clearChat": "Clear chat",
