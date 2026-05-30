@@ -1241,8 +1241,8 @@ onMounted(async () => {
 
 /* THOUGHT MESSAGES - Purple theme for AI reasoning */
 .message-wrapper.type-thought {
-  background: var(--color-info-bg);
-  border-color: rgba(139, 92, 246, 0.5);
+  background: rgba(139, 92, 246, 0.08);
+  border-color: rgba(139, 92, 246, 0.4);
   color: var(--text-secondary);
 }
 
@@ -1274,8 +1274,8 @@ onMounted(async () => {
 
 /* PLANNING MESSAGES - Indigo theme for task planning */
 .message-wrapper.type-planning {
-  background: var(--color-info-bg);
-  border-color: rgba(99, 102, 241, 0.5);
+  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.4);
   color: var(--text-secondary);
 }
 
@@ -1371,8 +1371,8 @@ onMounted(async () => {
 
 /* JSON MESSAGES - Primary-tinted theme-aware for structured data */
 .message-wrapper.type-json {
-  background: var(--color-primary-bg);
-  border-color: rgba(59, 130, 246, 0.4);
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.5);
   color: var(--text-primary);
 }
 
