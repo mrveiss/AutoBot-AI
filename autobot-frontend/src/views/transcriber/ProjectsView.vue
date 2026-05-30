@@ -1,0 +1,6 @@
+<!-- AutoBot - AI-Powered Automation Platform -->
+<!-- Copyright (c) 2025 mrveiss -->
+<script setup lang="ts">
+// Implemented in Plan 4
+</script>
+<template><div class="projects-view">Projects — coming in Plan 4</div></template>
