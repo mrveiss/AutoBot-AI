@@ -22,7 +22,7 @@
  * └─────────────────────────────────────────────────────────┘
  */
 
-/* Fonts: IBM Plex Sans, IBM Plex Mono, JetBrains Mono loaded via system fallbacks.
+/* Fonts: Inter, IBM Plex Mono, JetBrains Mono loaded via system fallbacks.
  * Use @fontsource packages for any local font loading needs. */
 
 :root {
@@ -291,7 +291,7 @@
    * ============================================ */
 
   /* Font families - Issue #901: Technical Precision Theme */
-  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, BlinkMacSystemFont,
+  --font-sans: Inter, system-ui, -apple-system, BlinkMacSystemFont,
     'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas,
     'Courier New', monospace;
