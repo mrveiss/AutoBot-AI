@@ -13,6 +13,7 @@ import asyncio
 import functools
 import json
 import os
+import threading
 import uuid
 from typing import Optional
 
@@ -173,14 +174,24 @@ def register_celery_task_success_hook() -> None:
             return
 
         task_name = getattr(sender, "name", str(sender))
-        try:
-            asyncio.run(
-                send_push_notification(
-                    user_id=str(user_id),
-                    title="Task complete",
-                    body=f"{task_name} finished successfully.",
-                    url="/",
+        # GH#9091: asyncio.run() inside a Celery signal handler raises
+        # RuntimeError when a loop is already running (gevent/eventlet pools).
+        # Run in a daemon thread so each call owns a fresh event loop regardless
+        # of the Celery worker pool type.
+        _uid = str(user_id)
+        _name = task_name
+
+        def _dispatch() -> None:
+            try:
+                asyncio.run(
+                    send_push_notification(
+                        user_id=_uid,
+                        title="Task complete",
+                        body=f"{_name} finished successfully.",
+                        url="/",
+                    )
                 )
-            )
-        except Exception:
-            logger.debug("Push notification dispatch failed after task %s", task_name, exc_info=True)
+            except Exception:
+                logger.debug("Push notification dispatch failed after task %s", _name, exc_info=True)
+
+        threading.Thread(target=_dispatch, daemon=True).start()

@@ -10,6 +10,7 @@ Endpoints:
   GET    /api/push/vapid-public-key — return the VAPID public key for the SW
 """
 
+import asyncio
 import ipaddress
 import socket
 import uuid
@@ -44,33 +45,15 @@ class SubscribeRequest(BaseModel):
     @field_validator("endpoint")
     @classmethod
     def validate_endpoint_https(cls, v: str) -> str:
-        """Reject non-HTTPS endpoints and SSRF targets.
-
-        Validates scheme, resolves hostname, and rejects private/loopback/
-        link-local IPs to prevent SSRF via arbitrary push endpoint registration.
-        """
+        """Reject non-HTTPS endpoints. DNS-based SSRF check is async — see _check_ssrf."""
         try:
             parsed = urlparse(v)
         except Exception as exc:
             raise ValueError(f"Invalid endpoint URL: {exc}") from exc
         if parsed.scheme != "https":
             raise ValueError("Push endpoint must use https:// scheme")
-        hostname = parsed.hostname
-        if not hostname:
+        if not parsed.hostname:
             raise ValueError("Push endpoint must include a valid host")
-        # DNS resolution check: reject if any resolved IP is internal.
-        try:
-            addr_infos = socket.getaddrinfo(hostname, None)
-        except socket.gaierror as exc:
-            raise ValueError(f"Push endpoint hostname could not be resolved: {exc}") from exc
-        for addr_info in addr_infos:
-            ip_str = addr_info[4][0]
-            try:
-                ip = ipaddress.ip_address(ip_str)
-            except ValueError:
-                continue
-            if ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_reserved:
-                raise ValueError("Push endpoint resolves to a private/internal address — SSRF rejected")
         return v
 
 
@@ -79,6 +62,32 @@ class UnsubscribeRequest(BaseModel):
     # GH#8967: user_id MUST NOT be accepted from request body.
     # Unsubscribe targets ONLY the authenticated user's subscription.
     user_id: str | None = None
+
+
+async def _check_ssrf(endpoint: str) -> None:
+    """Reject endpoints that resolve to private/loopback IPs (SSRF guard, GH#9093).
+
+    DNS resolution runs in a thread pool so it never blocks the async event loop.
+    """
+    hostname = urlparse(endpoint).hostname or ""
+    try:
+        addr_infos = await asyncio.to_thread(socket.getaddrinfo, hostname, None)
+    except socket.gaierror as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Push endpoint hostname could not be resolved: {exc}",
+        )
+    for addr_info in addr_infos:
+        ip_str = addr_info[4][0]
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except ValueError:
+            continue
+        if ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_reserved:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Push endpoint resolves to a private/internal address — SSRF rejected",
+            )
 
 
 @router.get("/vapid-public-key", response_model=Dict[str, str])
@@ -117,6 +126,9 @@ async def subscribe(
     user_id = current_user.get("user_id") or current_user.get("username", "")
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Cannot identify user")
+
+    # GH#9093: DNS-based SSRF guard runs async so it never blocks the event loop.
+    await _check_ssrf(body.endpoint)
 
     # GH#8967: Reject IDOR attempts by logging and ignoring any user_id in request body.
     if body.user_id and body.user_id != user_id:

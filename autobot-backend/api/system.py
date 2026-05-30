@@ -320,8 +320,9 @@ async def get_system_health(
             # app_state is unreachable. Fall back to the disk file written by
             # lifespan.py before re-raising.
             try:
-                if _STARTUP_ERROR_FILE.exists():
-                    data = json.loads(_STARTUP_ERROR_FILE.read_text(encoding="utf-8"))
+                if await asyncio.to_thread(_STARTUP_ERROR_FILE.exists):
+                    text = await asyncio.to_thread(_STARTUP_ERROR_FILE.read_text, encoding="utf-8")
+                    data = json.loads(text)
                     startup_error = data.get("error_type")
             except Exception:
                 pass
