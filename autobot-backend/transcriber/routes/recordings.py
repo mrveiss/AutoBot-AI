@@ -9,9 +9,12 @@ from pathlib import Path
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile, File
 
+from autobot_shared.logging_manager import get_logger
 from transcriber.database import Database
 from transcriber.deps import get_db
 from transcriber.models import RecordingOut
+
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["transcriber-recordings"])
 
@@ -22,9 +25,13 @@ def _upload_dir(request: Request) -> Path:
     return Path(request.app.state.transcriber_upload_dir)
 
 
+# Development fallback — auth middleware populates request.state.user in production (Plan 2)
+_DEFAULT_USER = "default"
+
+
 def _user_id(request: Request) -> str:
     user = getattr(request.state, "user", None)
-    return user.id if user else "default"
+    return user.id if user else _DEFAULT_USER
 
 
 @router.post("/projects/{project_id}/recordings", response_model=RecordingOut, status_code=202)
@@ -43,11 +50,12 @@ async def upload_recording(
     safe_name = f"{uuid.uuid4().hex}{ext}"
     dest = _upload_dir(request) / safe_name
     async with aiofiles.open(dest, "wb") as f:
-        content = await file.read()
-        await f.write(content)
+        while chunk := await file.read(65536):
+            await f.write(chunk)
     rid = await db.create_recording(
         project_id, file.filename or safe_name, str(dest), user_id=_user_id(request)
     )
+    logger.info("Recording uploaded: recording_id=%s project_id=%s filename=%s", rid, project_id, file.filename)
     rec = await db.get_recording(rid)
     return RecordingOut(**rec)
 
@@ -78,4 +86,5 @@ async def delete_recording(recording_id: int, request: Request, db: Database = D
     if filepath.exists():
         filepath.unlink(missing_ok=True)
     await db.delete_recording(recording_id)
+    logger.info("Recording deleted: recording_id=%s", recording_id)
     return Response(status_code=204)
