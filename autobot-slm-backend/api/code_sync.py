@@ -49,6 +49,7 @@ from models.schemas import (
     ScheduleResponse,
     ScheduleRunResponse,
     ScheduleUpdate,
+    SelfUpdateResponse,
 )
 from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
@@ -1070,6 +1071,43 @@ async def sync_node(
 
     # Normal execution - wait for result with progress updates
     return await _execute_node_playbook(executor, node, node_id, request, progress_callback, db)
+
+
+@router.post("/self-update", response_model=SelfUpdateResponse)
+async def self_update(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> SelfUpdateResponse:
+    """Trigger an Ansible-based update of the SLM server itself (#9073).
+
+    Looks up the SLM's own node record by matching the external_url IP,
+    then runs update-all-nodes.yml against it as a fire-and-forget task
+    (the service restarts mid-run, so the caller should poll health).
+    Returns immediately with a queued message.
+    """
+    slm_own_ip = urlparse(settings.external_url).hostname or ""
+    if not slm_own_ip:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Cannot determine SLM IP from external_url setting",
+        )
+
+    result = await db.execute(select(Node).where(Node.ip_address == slm_own_ip))
+    slm_node = result.scalar_one_or_none()
+    if not slm_node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No node found with IP {slm_own_ip} — ensure this server is registered",
+        )
+
+    logger.info("SLM self-update via Ansible: queuing for node %s", slm_node.node_id)
+    asyncio.create_task(_sync_slm_from_code_source(slm_node.node_id))
+
+    return SelfUpdateResponse(
+        success=True,
+        message="SLM update queued: syncing from code source + restarting services. Check backend health in ~30s.",
+        node_id=slm_node.node_id,
+    )
 
 
 async def _sync_regular_nodes(executor, job: FleetSyncJob, regular_nodes: list) -> None:

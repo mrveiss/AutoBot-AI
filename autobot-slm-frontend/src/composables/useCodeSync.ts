@@ -744,5 +744,22 @@ export function useCodeSync() {
     // Drift detection (Issue #2834) + resolution (#7149)
     fetchDrift,
     resolveDrift,
+
+    // SLM self-update (#9073)
+    selfUpdate,
+  }
+
+  async function selfUpdate(): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await client.post<{ success: boolean; message: string; node_id?: string }>(
+        '/code-sync/self-update'
+      )
+      return { success: response.data.success, message: response.data.message }
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        'Self-update request failed'
+      return { success: false, message: msg }
+    }
   }
 }

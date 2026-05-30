@@ -230,6 +230,32 @@ async function handleSyncAll(): Promise<void> {
 }
 
 // =============================================================================
+// SLM Self-Update (#9073)
+// =============================================================================
+
+const selfUpdating = ref(false)
+
+async function handleSelfUpdate(): Promise<void> {
+  selfUpdating.value = true
+  codeSync.clearError()
+  successMessage.value = null
+
+  const result = await codeSync.selfUpdate()
+  selfUpdating.value = false
+
+  if (result.success) {
+    slmRestartPending.value = true
+    if (slmRefreshTimer) clearTimeout(slmRefreshTimer)
+    slmRefreshTimer = setTimeout(async () => {
+      slmRestartPending.value = false
+      await handleRefresh()
+    }, 35000)
+  } else {
+    codeSync.setError(result.message || 'Self-update failed')
+  }
+}
+
+// =============================================================================
 // Role-Based Sync Methods (Issue #779)
 // =============================================================================
 
@@ -445,6 +471,27 @@ onUnmounted(() => {
             />
           </svg>
           {{ isPulling ? 'Pulling...' : 'Pull from Source' }}
+        </button>
+        <button
+          @click="handleSelfUpdate"
+          :disabled="selfUpdating || slmRestartPending"
+          class="btn btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Sync code from source and restart this SLM server"
+        >
+          <svg
+            :class="['w-4 h-4', selfUpdating ? 'animate-spin' : '']"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+            />
+          </svg>
+          {{ selfUpdating ? 'Updating...' : 'Update This Server' }}
         </button>
         <button
           @click="handleRefresh"
