@@ -1,4 +1,4 @@
-import type { Meta } from '@storybook/html'
+import type { Meta } from '@storybook/vue3'
 import { AutobotWidget } from './AutobotWidget'
 
 if (!customElements.get('autobot-widget')) {

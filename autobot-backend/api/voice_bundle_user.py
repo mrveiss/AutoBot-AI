@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from api.redis_mcp.rbac import VALID_BUNDLES
-from auth_middleware import get_auth_middleware, get_current_user
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.audit.unified_audit import AuditCategory, AuditEvent, emit
