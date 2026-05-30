@@ -21,6 +21,7 @@ REQUIRED_ENV_VARS = [
     "AUTOBOT_EMBEDDING_MODEL",
 ]
 
+
 def validate_env_file(env_path: str) -> tuple[bool, str]:
     """Check if .env file is readable."""
     try:
@@ -33,6 +34,7 @@ def validate_env_file(env_path: str) -> tuple[bool, str]:
     except Exception as e:
         return False, f"Error checking .env: {e}"
 
+
 def validate_env_vars() -> tuple[bool, list[str]]:
     """Check if all required env vars are set."""
     missing = []
@@ -40,6 +42,7 @@ def validate_env_vars() -> tuple[bool, list[str]]:
         if not os.environ.get(var):
             missing.append(var)
     return len(missing) == 0, missing
+
 
 def main():
     env_path = os.environ.get("AUTOBOT_ENV_PATH", ".env")
@@ -61,6 +64,7 @@ def main():
 
     print(f"✓ Backend startup validation passed ({len(REQUIRED_ENV_VARS)} vars)", file=sys.stderr)
     sys.exit(0)
+
 
 if __name__ == "__main__":
     main()
