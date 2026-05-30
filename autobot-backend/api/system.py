@@ -319,9 +319,15 @@ async def get_system_health(
             # Phase 1 failures kill the process before it can serve requests, so
             # app_state is unreachable. Fall back to the disk file written by
             # lifespan.py before re-raising.
+            # GH#9071: offload pathlib I/O to a thread so we don't block the event loop.
             try:
-                if _STARTUP_ERROR_FILE.exists():
-                    data = json.loads(_STARTUP_ERROR_FILE.read_text(encoding="utf-8"))
+                def _read_startup_error_file():
+                    if not _STARTUP_ERROR_FILE.exists():
+                        return None
+                    return json.loads(_STARTUP_ERROR_FILE.read_text(encoding="utf-8"))
+
+                data = await asyncio.to_thread(_read_startup_error_file)
+                if data:
                     startup_error = data.get("error_type")
             except Exception:
                 pass

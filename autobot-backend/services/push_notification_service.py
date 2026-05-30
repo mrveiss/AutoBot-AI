@@ -173,14 +173,21 @@ def register_celery_task_success_hook() -> None:
             return
 
         task_name = getattr(sender, "name", str(sender))
+        # GH#9091: asyncio.run() raises RuntimeError when the Celery worker already
+        # has a running event loop (gevent/eventlet mode).  Create a fresh loop
+        # instead so we're never subject to the "already running" constraint.
         try:
-            asyncio.run(
-                send_push_notification(
-                    user_id=str(user_id),
-                    title="Task complete",
-                    body=f"{task_name} finished successfully.",
-                    url="/",
+            loop = asyncio.new_event_loop()
+            try:
+                loop.run_until_complete(
+                    send_push_notification(
+                        user_id=str(user_id),
+                        title="Task complete",
+                        body=f"{task_name} finished successfully.",
+                        url="/",
+                    )
                 )
-            )
+            finally:
+                loop.close()
         except Exception:
             logger.debug("Push notification dispatch failed after task %s", task_name, exc_info=True)
