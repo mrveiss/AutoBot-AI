@@ -382,6 +382,51 @@ class SessionShareRequest(BaseModel):
     knowledge_facts: list[str] | None = Field(None, description="Specific fact IDs to share (all if omitted)")
 
 
+# ---------------------------------------------------------------------------
+# Shared link schemas (GH#8996)
+# ---------------------------------------------------------------------------
+
+
+class SharedLinkCreateRequest(BaseModel):
+    """Request to create a public shared link for a chat session."""
+
+    password: str | None = Field(None, min_length=1, max_length=128, description="Optional access password")
+    expires_in_seconds: int | None = Field(None, ge=60, description="Link TTL in seconds; omit for no expiry")
+
+
+class SharedLinkData(BaseModel):
+    """Response payload after creating a shared link."""
+
+    token: str
+    session_id: str
+    has_password: bool
+    expires_at: datetime | None
+    created_at: datetime
+
+
+class SharedLinkAccessRequest(BaseModel):
+    """Request body for accessing a password-protected shared link."""
+
+    password: str | None = Field(None, description="Password for protected links")
+
+
+class SharedMessageItem(BaseModel):
+    """A single message in a shared conversation view."""
+
+    role: str
+    content: str
+    created_at: datetime | None = None
+
+
+class SharedLinkSessionData(BaseModel):
+    """Public read-only view of a shared conversation."""
+
+    session_id: str
+    title: str | None = None
+    messages: list[SharedMessageItem]
+    has_password: bool
+
+
 class ChatResetRequest(BaseModel):
     """Request model for chat reset"""
 

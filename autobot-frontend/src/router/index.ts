@@ -63,6 +63,19 @@ export const routes: RouteRecordRaw[] = [
       isPublic: true
     }
   },
+  // GH#8996: public shared conversation view (no auth required)
+  {
+    path: '/shared/:token',
+    name: 'shared-chat',
+    component: () => import('@/views/SharedChatView.vue'),
+    meta: {
+      title: 'Shared Conversation',
+      hideInNav: true,
+      hideFooter: true,
+      requiresAuth: false,
+      isPublic: true
+    }
+  },
   {
     path: '/dashboard',
     redirect: '/home'
