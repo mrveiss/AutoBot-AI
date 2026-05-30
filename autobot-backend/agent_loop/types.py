@@ -311,6 +311,9 @@ class ToolExecutionRef:
     iteration: int
     call_hash: str
 
+    def to_dict(self) -> dict:
+        return {"tool_name": self.tool_name, "iteration": self.iteration, "call_hash": self.call_hash}
+
 
 @dataclass
 class Assertion:
@@ -334,11 +337,10 @@ class Assertion:
             "key": self.key,
             "value": self.value,
             "confidence": self.confidence,
-            "sources": [
-                {"tool_name": s.tool_name, "iteration": s.iteration, "call_hash": s.call_hash} for s in self.sources
-            ],
+            "sources": [s.to_dict() for s in self.sources],
             "confirmed_at": self.confirmed_at.isoformat(),
             "refuted_at": self.refuted_at.isoformat() if self.refuted_at else None,
+            "refutation_source": self.refutation_source.to_dict() if self.refutation_source else None,
             "is_active": self.is_active,
         }
 
