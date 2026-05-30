@@ -3,7 +3,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Project CRUD routes for the transcriber module."""
-from fastapi import APIRouter, Depends, HTTPException, Response, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, Request
 
 from transcriber.database import Database
 from transcriber.deps import get_db
@@ -27,8 +27,13 @@ async def create_project(body: ProjectCreate, request: Request, db: Database = D
 
 
 @router.get("/projects", response_model=list[ProjectOut])
-async def list_projects(request: Request, db: Database = Depends(get_db)):
-    rows = await db.list_projects(user_id=_user_id(request))
+async def list_projects(
+    request: Request,
+    db: Database = Depends(get_db),
+    limit: int = Query(200, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+):
+    rows = await db.list_projects(user_id=_user_id(request), limit=limit, offset=offset)
     return [ProjectOut(**r) for r in rows]
 
 
@@ -44,7 +49,10 @@ async def get_project(project_id: int, db: Database = Depends(get_db)):
 async def update_project(project_id: int, body: ProjectUpdate, db: Database = Depends(get_db)):
     if not await db.get_project(project_id):
         raise HTTPException(404, "Project not found")
-    await db.update_project(project_id, body.name, body.description)
+    try:
+        await db.update_project(project_id, body.name, body.description)
+    except KeyError:
+        raise HTTPException(404, "Project not found")
     return ProjectOut(**await db.get_project(project_id))
 
 
@@ -52,5 +60,8 @@ async def update_project(project_id: int, body: ProjectUpdate, db: Database = De
 async def delete_project(project_id: int, db: Database = Depends(get_db)):
     if not await db.get_project(project_id):
         raise HTTPException(404, "Project not found")
-    await db.delete_project(project_id)
+    try:
+        await db.delete_project(project_id)
+    except KeyError:
+        raise HTTPException(404, "Project not found")
     return Response(status_code=204)
