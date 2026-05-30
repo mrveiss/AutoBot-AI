@@ -676,6 +676,10 @@
       "statusSkipped": "Skipped (optional)",
       "manageInSecrets": "Manage all secrets in Settings"
     },
+    "presets": {
+      "title": "Slash Presets",
+      "description": "Create reusable slash commands that expand into full prompts in the chat input. Type / followed by the preset name to trigger them."
+    },
     "appearanceDesc": "Customize the look and feel of your workspace",
     "voiceDesc": "Configure text-to-speech voice and voice profiles",
     "languageDesc": "Choose your preferred language for the interface and AI responses",
