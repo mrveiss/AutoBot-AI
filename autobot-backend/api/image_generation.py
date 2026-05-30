@@ -19,13 +19,13 @@ import logging
 import os
 from typing import Any, Dict, List, Optional
 
-logger = logging.getLogger(__name__)
-
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["image-generation", "media"])
 
@@ -75,7 +75,9 @@ class ProvidersResponse(BaseModel):
 
 
 @router.get("/providers", response_model=ProvidersResponse)
-@with_error_handling(category=ErrorCategory.SERVER_ERROR, operation="list_image_providers", error_code_prefix="IMAGE_GEN")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR, operation="list_image_providers", error_code_prefix="IMAGE_GEN"
+)
 async def list_providers(current_user=Depends(get_current_user)):
     """Return which image providers have API keys configured."""
     providers = [
