@@ -1073,6 +1073,29 @@ async def sync_node(
     return await _execute_node_playbook(executor, node, node_id, request, progress_callback, db)
 
 
+async def _ansible_self_update(node_id: str) -> None:
+    """Run update-all-nodes.yml against this machine to update all deployed roles (#9073).
+
+    Covers every role Ansible knows about (backend, frontend, shared, agent,
+    plugins, npu-worker, browser-worker, etc.) — not just the SLM components.
+    Fire-and-forget: the SLM service restarts mid-run so this coroutine dies;
+    callers must poll health rather than await a result.
+    """
+    executor = get_playbook_executor()
+    limit = ["localhost", node_id]
+    try:
+        result = await executor.execute_playbook(
+            playbook_name="update-all-nodes.yml",
+            limit=limit,
+        )
+        if not result["success"]:
+            logger.error("Ansible full-machine update failed for %s: %s", node_id, result["output"][:500])
+        else:
+            logger.info("Ansible full-machine update complete for %s", node_id)
+    except Exception as exc:
+        logger.error("Ansible full-machine update error for %s: %s", node_id, exc)
+
+
 @router.post("/self-update", response_model=SelfUpdateResponse)
 async def self_update(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -1100,12 +1123,12 @@ async def self_update(
             detail=f"No node found with IP {slm_own_ip} — ensure this server is registered",
         )
 
-    logger.info("SLM self-update via Ansible: queuing for node %s", slm_node.node_id)
-    asyncio.create_task(_sync_slm_from_code_source(slm_node.node_id))
+    logger.info("Full machine update via Ansible: queuing for node %s", slm_node.node_id)
+    asyncio.create_task(_ansible_self_update(slm_node.node_id))
 
     return SelfUpdateResponse(
         success=True,
-        message="SLM update queued: syncing from code source + restarting services. Check backend health in ~30s.",
+        message="Full update queued: Ansible will update all roles on this machine and restart services. Check backend health in ~60s.",
         node_id=slm_node.node_id,
     )
 

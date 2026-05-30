@@ -249,7 +249,7 @@ async function handleSelfUpdate(): Promise<void> {
     slmRefreshTimer = setTimeout(async () => {
       slmRestartPending.value = false
       await handleRefresh()
-    }, 35000)
+    }, 65000)
   } else {
     codeSync.setError(result.message || 'Self-update failed')
   }
