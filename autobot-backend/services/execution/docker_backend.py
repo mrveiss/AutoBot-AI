@@ -472,9 +472,7 @@ class DockerBackend(ExecutionBackend):
             raise KeyError(f"Snapshot '{snapshot_id}' not found")
 
         if record.user_id and caller_user_id != record.user_id and caller_user_id != _SYSTEM_CALLER:
-            raise PermissionError(
-                f"User '{caller_user_id}' is not authorised to restore snapshot '{snapshot_id}'"
-            )
+            raise PermissionError(f"User '{caller_user_id}' is not authorised to restore snapshot '{snapshot_id}'")
 
         try:
             container = await asyncio.to_thread(
@@ -522,9 +520,7 @@ class DockerBackend(ExecutionBackend):
             return False
 
         if record.user_id and caller_user_id != record.user_id and caller_user_id != _SYSTEM_CALLER:
-            raise PermissionError(
-                f"User '{caller_user_id}' is not authorised to delete snapshot '{snapshot_id}'"
-            )
+            raise PermissionError(f"User '{caller_user_id}' is not authorised to delete snapshot '{snapshot_id}'")
 
         try:
             await asyncio.to_thread(self.client.images.remove, record.image_name, force=True)

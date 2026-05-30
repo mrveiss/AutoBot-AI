@@ -59,7 +59,7 @@ _NON_CONFIG_INFIXES = (":history", ":job:current", ":schedule:", "scheduler:")
 
 def _is_config_key(key_str: str) -> bool:
     prefix = "connector:"
-    stripped = key_str[len(prefix):]
+    stripped = key_str[len(prefix) :]
     return not any(infix in stripped for infix in _NON_CONFIG_INFIXES)
 
 
@@ -85,7 +85,7 @@ async def _migrate(dry_run: bool) -> None:
                 continue
             data = json.loads(raw.decode("utf-8") if isinstance(raw, bytes) else raw)
 
-            connector_id = data.get("connector_id", key[len("connector:"):])
+            connector_id = data.get("connector_id", key[len("connector:") :])
 
             if data.get("secret_id"):
                 logger.info("Skipping %s — secret_id already set", connector_id)
@@ -128,9 +128,7 @@ async def _migrate(dry_run: bool) -> None:
             data["config"] = safe_config
             data["secret_id"] = secret_id
 
-            await asyncio.to_thread(
-                redis.set, key, json.dumps(data, ensure_ascii=False)
-            )
+            await asyncio.to_thread(redis.set, key, json.dumps(data, ensure_ascii=False))
             logger.info("Migrated %s → secret_id=%s", connector_id, secret_id)
             migrated += 1
 
