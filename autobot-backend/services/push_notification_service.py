@@ -106,9 +106,7 @@ async def send_push_notification(
             elif 200 <= response.status_code < 300:
                 dispatched += 1
             else:
-                logger.warning(
-                    "Push delivery failed for user %s: HTTP %d", user_id, response.status_code
-                )
+                logger.warning("Push delivery failed for user %s: HTTP %d", user_id, response.status_code)
         except WebPushException as exc:
             logger.warning("WebPushException for user %s endpoint: %s", user_id, exc)
         except Exception:
@@ -131,14 +129,9 @@ async def _get_subscriptions(user_id: str) -> list[dict]:
 
         factory = get_async_session_factory()
         async with factory() as session:
-            result = await session.execute(
-                select(PushSubscription).where(PushSubscription.user_id == user_id)
-            )
+            result = await session.execute(select(PushSubscription).where(PushSubscription.user_id == user_id))
             rows = result.scalars().all()
-            return [
-                {"endpoint": r.endpoint, "p256dh": r.p256dh, "auth": r.auth}
-                for r in rows
-            ]
+            return [{"endpoint": r.endpoint, "p256dh": r.p256dh, "auth": r.auth} for r in rows]
     except Exception:
         logger.exception("Failed to load push subscriptions for user %s", user_id)
         return []
@@ -154,9 +147,7 @@ async def _remove_stale_subscriptions(endpoints: list[str]) -> None:
 
         factory = get_async_session_factory()
         async with factory() as session:
-            await session.execute(
-                delete(PushSubscription).where(PushSubscription.endpoint.in_(endpoints))
-            )
+            await session.execute(delete(PushSubscription).where(PushSubscription.endpoint.in_(endpoints)))
             await session.commit()
             logger.info("Removed %d stale push subscription(s)", len(endpoints))
     except Exception:

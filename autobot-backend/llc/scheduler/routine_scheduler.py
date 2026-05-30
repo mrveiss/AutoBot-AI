@@ -251,9 +251,7 @@ class RoutineScheduler:
 
                 factory = get_async_session_factory()
                 session = factory()
-                result = await session.execute(
-                    select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id))
-                )
+                result = await session.execute(select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)))
                 work_item = result.scalar_one_or_none()
                 if work_item:
                     company_id = str(work_item.company_id)

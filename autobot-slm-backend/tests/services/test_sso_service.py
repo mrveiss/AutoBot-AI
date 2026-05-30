@@ -44,12 +44,7 @@ class _BaseService:
 _base_mod.BaseService = _BaseService  # type: ignore[attr-defined]
 sys.modules["user_management.services.base_service"] = _base_mod
 
-_SSO_PY = (
-    Path(__file__).parent.parent.parent
-    / "user_management"
-    / "services"
-    / "sso_service.py"
-)
+_SSO_PY = Path(__file__).parent.parent.parent / "user_management" / "services" / "sso_service.py"
 _spec = importlib.util.spec_from_file_location("_sso_service_under_test", _SSO_PY)
 _sso_mod = importlib.util.module_from_spec(_spec)  # type: ignore[arg-type]
 _spec.loader.exec_module(_sso_mod)  # type: ignore[union-attr]
@@ -113,9 +108,7 @@ class TestGenerateOauthState:
         with patch.object(_sso_mod, "get_redis_client", return_value=redis):
             state = await service._generate_oauth_state(_PROVIDER_ID)
 
-        redis.set.assert_awaited_once_with(
-            f"sso:state:{state}", str(_PROVIDER_ID), ex=600
-        )
+        redis.set.assert_awaited_once_with(f"sso:state:{state}", str(_PROVIDER_ID), ex=600)
 
     @pytest.mark.asyncio
     async def test_returns_token_even_when_redis_unavailable(self):

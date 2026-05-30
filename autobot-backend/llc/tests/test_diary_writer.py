@@ -412,7 +412,9 @@ async def test_write_from_run_enforces_write_guard_on_ancestor_work_item() -> No
     company_id = "child-company-id"
     work_item_id = "work-item-id"
 
-    with patch.object(writer, "_check_write_guard", new=AsyncMock(side_effect=HTTPException(status_code=403, detail="Forbidden"))):
+    with patch.object(
+        writer, "_check_write_guard", new=AsyncMock(side_effect=HTTPException(status_code=403, detail="Forbidden"))
+    ):
         with pytest.raises(HTTPException) as exc_info:
             await writer.write_from_run(
                 run_id="run-1",

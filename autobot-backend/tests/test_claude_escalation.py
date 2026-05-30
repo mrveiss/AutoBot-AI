@@ -84,9 +84,7 @@ async def test_low_complexity_no_escalation(router):
 
     with patch("llm_shared.tiered_routing.complexity_router.ssot_config") as mock_cfg:
         mock_cfg.llm = mock_llm_config
-        with patch(
-            "llm_shared.provider_registry.get_provider_registry"
-        ) as mock_registry_fn:
+        with patch("llm_shared.provider_registry.get_provider_registry") as mock_registry_fn:
             mock_registry = MagicMock()
             mock_registry_fn.return_value = mock_registry
             result = await router.route_with_escalation(request)
@@ -120,9 +118,7 @@ async def test_high_complexity_escalation_disabled(router):
 
     with patch("llm_shared.tiered_routing.complexity_router.ssot_config") as mock_cfg:
         mock_cfg.llm = mock_llm_config
-        with patch(
-            "llm_shared.provider_registry.get_provider_registry"
-        ) as mock_registry_fn:
+        with patch("llm_shared.provider_registry.get_provider_registry") as mock_registry_fn:
             mock_registry = MagicMock()
             mock_registry_fn.return_value = mock_registry
             result = await router.route_with_escalation(request)
@@ -149,9 +145,7 @@ async def test_claude_error_falls_through(router):
 
     with patch("llm_shared.tiered_routing.complexity_router.ssot_config") as mock_cfg:
         mock_cfg.llm = mock_llm_config
-        with patch(
-            "llm_shared.provider_registry.get_provider_registry"
-        ) as mock_registry_fn:
+        with patch("llm_shared.provider_registry.get_provider_registry") as mock_registry_fn:
             mock_registry = MagicMock()
             mock_registry.get_provider = AsyncMock(return_value=mock_claude)
             mock_registry_fn.return_value = mock_registry
@@ -178,9 +172,7 @@ async def test_claude_exception_falls_through(router):
 
     with patch("llm_shared.tiered_routing.complexity_router.ssot_config") as mock_cfg:
         mock_cfg.llm = mock_llm_config
-        with patch(
-            "llm_shared.provider_registry.get_provider_registry"
-        ) as mock_registry_fn:
+        with patch("llm_shared.provider_registry.get_provider_registry") as mock_registry_fn:
             mock_registry = MagicMock()
             mock_registry.get_provider = AsyncMock(return_value=mock_claude)
             mock_registry_fn.return_value = mock_registry
@@ -233,9 +225,7 @@ async def test_escalation_no_prompt_cache_without_system(router):
 
     with patch("llm_shared.tiered_routing.complexity_router.ssot_config") as mock_cfg:
         mock_cfg.llm = mock_llm_config
-        with patch(
-            "llm_shared.provider_registry.get_provider_registry"
-        ) as mock_registry_fn:
+        with patch("llm_shared.provider_registry.get_provider_registry") as mock_registry_fn:
             mock_registry = MagicMock()
             mock_registry.get_provider = AsyncMock(return_value=mock_claude)
             mock_registry_fn.return_value = mock_registry
@@ -261,9 +251,7 @@ async def test_provider_unavailable_falls_through(router):
 
     with patch("llm_shared.tiered_routing.complexity_router.ssot_config") as mock_cfg:
         mock_cfg.llm = mock_llm_config
-        with patch(
-            "llm_shared.provider_registry.get_provider_registry"
-        ) as mock_registry_fn:
+        with patch("llm_shared.provider_registry.get_provider_registry") as mock_registry_fn:
             mock_registry = MagicMock()
             mock_registry.get_provider = AsyncMock(return_value=None)
             mock_registry_fn.return_value = mock_registry
