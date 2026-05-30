@@ -60,7 +60,7 @@ class ConnectorCredentialStore:
         name = f"connector:{connector_id}:auth"
         secret_type = _AUTH_TYPE_TO_SECRET_TYPE.get(auth_cls.__name__, "connector_api_key")
 
-        result = await asyncio.get_event_loop().run_in_executor(
+        result = await asyncio.get_running_loop().run_in_executor(
             None,
             lambda: self._svc.create_secret(
                 name=name,
@@ -84,7 +84,7 @@ class ConnectorCredentialStore:
         Raises PermissionError when owner_id does not match the stored secret.
         Raises LookupError when secret_id is not found or has expired.
         """
-        secret = await asyncio.get_event_loop().run_in_executor(
+        secret = await asyncio.get_running_loop().run_in_executor(
             None,
             lambda: self._svc.get_secret(
                 secret_id=secret_id,
@@ -109,7 +109,7 @@ class ConnectorCredentialStore:
         owner_id: str,
     ) -> None:
         """Replace the stored secret value with new_credentials in-place."""
-        existing = await asyncio.get_event_loop().run_in_executor(
+        existing = await asyncio.get_running_loop().run_in_executor(
             None,
             lambda: self._svc.get_secret(secret_id=secret_id, include_value=True),
         )
@@ -123,7 +123,7 @@ class ConnectorCredentialStore:
         current_creds.update(new_credentials)
         new_value = json.dumps(current_creds, ensure_ascii=False)
 
-        await asyncio.get_event_loop().run_in_executor(
+        await asyncio.get_running_loop().run_in_executor(
             None,
             lambda: self._svc.update_secret(
                 secret_id=secret_id,
@@ -134,7 +134,7 @@ class ConnectorCredentialStore:
 
     async def revoke(self, secret_id: str, owner_id: str) -> None:
         """Delete the secret. Called on connector delete."""
-        await asyncio.get_event_loop().run_in_executor(
+        await asyncio.get_running_loop().run_in_executor(
             None,
             lambda: self._svc.delete_secret(
                 secret_id=secret_id,
