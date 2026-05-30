@@ -46,6 +46,9 @@ static/js/
 autobot-vue/dist/
 autobot-vue/.vite/
 
+# Embed widget build output (vite.embed.config.ts → dist-embed/)
+autobot-frontend/dist-embed/
+
 # === APPLICATION DATA ===
 # CRITICAL: Ignore data directory contents EXCEPT configuration files
 # User data and runtime files should NEVER be committed to git

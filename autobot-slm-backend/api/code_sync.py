@@ -1127,7 +1127,10 @@ async def self_update(
 
     return SelfUpdateResponse(
         success=True,
-        message="Full update queued: Ansible will update all roles on this machine and restart services. Check backend health in ~60s.",
+        message=(
+            "Full update queued: Ansible will update all roles on this machine"
+            " and restart services. Check backend health in ~60s."
+        ),
         node_id=slm_node.node_id,
     )
 

@@ -8,13 +8,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from knowledge.connectors.credential_store import ConnectorCredentialStore, reset_credential_store
 from autobot_shared.auth.connector_auth import (
     ApiKeyAuth,
     BasicAuth,
     BearerAuth,
     OAuthRefreshAuth,
 )
+from knowledge.connectors.credential_store import ConnectorCredentialStore, reset_credential_store
 
 # ---------------------------------------------------------------------------
 # Helpers

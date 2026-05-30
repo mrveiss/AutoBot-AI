@@ -9,7 +9,6 @@ delivery and offline conversation sync.
 """
 
 import uuid
-from datetime import datetime
 from enum import Enum
 
 from sqlalchemy import Column, DateTime, String

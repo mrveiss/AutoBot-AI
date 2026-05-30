@@ -235,9 +235,7 @@ class SLMAgent:
         """
         return [{"port": p.port, "process": p.process, "pid": p.pid} for p in get_listening_ports()]
 
-    def _build_heartbeat_payload(
-        self, health: dict, os_info: str, code_version: str | None
-    ) -> dict:
+    def _build_heartbeat_payload(self, health: dict, os_info: str, code_version: str | None) -> dict:
         """
         Build the complete heartbeat payload.
 
@@ -326,8 +324,7 @@ class SLMAgent:
         conn = sqlite3.connect(self.buffer_db)
         try:
             cursor = conn.execute(
-                "SELECT id, event_type, data FROM event_buffer"
-                " WHERE synced = 0 ORDER BY id LIMIT 100"
+                "SELECT id, event_type, data FROM event_buffer" " WHERE synced = 0 ORDER BY id LIMIT 100"
             )
             events = cursor.fetchall()
 

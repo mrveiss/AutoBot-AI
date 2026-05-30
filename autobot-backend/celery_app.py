@@ -23,6 +23,7 @@ from config.manager import get_config_manager
 
 # Use singleton config instance for extended config values
 config = get_config_manager()
+logger = _get_logger(__name__)
 
 # Build Redis URLs from SSOT configuration (loads directly from .env)
 # DB numbers come from redis-databases.yaml via DATABASE_MAPPING (#2670)

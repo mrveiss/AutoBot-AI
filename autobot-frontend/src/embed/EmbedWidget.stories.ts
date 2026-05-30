@@ -1,4 +1,5 @@
-import type { Meta } from '@storybook/html'
+import type { Meta } from '@storybook/vue3'
+import { getBackendUrl } from '@/config/ssot-config'
 import { AutobotWidget } from './AutobotWidget'
 
 if (!customElements.get('autobot-widget')) {
@@ -19,7 +20,7 @@ const meta = {
     buttonLabel:  { control: 'text' },
   },
   args: {
-    apiUrl: 'http://localhost:8001',
+    apiUrl: getBackendUrl(),
     orgId: 'demo',
     theme: 'light',
     position: 'bottom-right',

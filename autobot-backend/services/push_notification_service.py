@@ -14,7 +14,6 @@ import functools
 import json
 import os
 import threading
-import uuid
 from typing import Optional
 
 from autobot_shared.logging_manager import get_logger
@@ -123,7 +122,6 @@ async def _get_subscriptions(user_id: str) -> list[dict]:
     """Fetch all push subscriptions for user_id from the database."""
     try:
         from sqlalchemy import select
-        from sqlalchemy.ext.asyncio import AsyncSession
 
         from models.push_subscription import PushSubscription
         from user_management.database import get_async_session_factory

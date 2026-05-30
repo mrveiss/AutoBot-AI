@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from api.redis_mcp.rbac import VALID_BUNDLES
-from auth_middleware import get_auth_middleware, get_current_user
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.audit.unified_audit import AuditCategory, AuditEvent, emit
@@ -171,8 +171,9 @@ async def get_user_bundle(
         raise_auth_error("AUTH_0003", "Cannot access other user's bundle assignment")
 
     try:
-        from user_management.database import get_async_session  # noqa: PLC0415
         from sqlalchemy import text  # noqa: PLC0415
+
+        from user_management.database import get_async_session  # noqa: PLC0415
 
         async with get_async_session() as session:
             row = await session.execute(
@@ -230,8 +231,9 @@ async def set_user_bundle(
     stored_bundle_name: Optional[str] = None
 
     try:
-        from user_management.database import get_async_session  # noqa: PLC0415
         from sqlalchemy import text  # noqa: PLC0415
+
+        from user_management.database import get_async_session  # noqa: PLC0415
 
         async with get_async_session() as session:
             if body.bundle_name is None:

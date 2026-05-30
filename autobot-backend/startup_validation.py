@@ -31,12 +31,12 @@ def _load_required_vars() -> list[str]:
     # Fallback: vars that Ansible always emits from backend.env.j2 (no | default() guard).
     # Keep this list in sync with backend.env.j2 and the Ansible manifest task.
     return [
-        "AUTOBOT_REDIS_URL",          # redis://host:port — composed by Ansible from backend_redis_host/port
-        "AUTOBOT_AI_STACK_HOST",      # required Ansible inventory var (backend_ai_stack_host)
-        "AUTOBOT_CHROMADB_HOST",      # required Ansible inventory var (backend_chromadb_host)
-        "AUTOBOT_JWT_SECRET",         # required Ansible inventory var (backend_jwt_secret)
+        "AUTOBOT_REDIS_URL",  # redis://host:port — composed by Ansible from backend_redis_host/port
+        "AUTOBOT_AI_STACK_HOST",  # required Ansible inventory var (backend_ai_stack_host)
+        "AUTOBOT_CHROMADB_HOST",  # required Ansible inventory var (backend_chromadb_host)
+        "AUTOBOT_JWT_SECRET",  # required Ansible inventory var (backend_jwt_secret)
         "AUTOBOT_DEFAULT_LLM_MODEL",  # required Ansible inventory var (backend_llm_model)
-        "AUTOBOT_EMBEDDING_MODEL",    # light-processing model tier — emitted from backend_light_model
+        "AUTOBOT_EMBEDDING_MODEL",  # light-processing model tier — emitted from backend_light_model
     ]
 
 

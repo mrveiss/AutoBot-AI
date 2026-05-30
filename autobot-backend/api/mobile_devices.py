@@ -14,8 +14,6 @@ Device tokens expire after 90 days of inactivity; the GET list endpoint
 prunes them automatically.
 """
 
-import hashlib
-import hmac
 import secrets
 import uuid
 from datetime import timedelta

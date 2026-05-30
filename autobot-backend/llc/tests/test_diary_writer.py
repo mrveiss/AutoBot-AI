@@ -453,9 +453,8 @@ async def test_write_from_run_skips_guard_when_no_company_id() -> None:
 @pytest.mark.asyncio
 async def test_check_write_guard_queries_work_item_company() -> None:
     """Verify _check_write_guard() fetches work item and calls assert_not_writing_to_ancestor_kb()."""
-    from unittest.mock import AsyncMock, MagicMock, patch
-
     import uuid
+    from unittest.mock import AsyncMock, MagicMock, patch
 
     writer = AgentDiaryKbWriter()
     mock_session = AsyncMock()
