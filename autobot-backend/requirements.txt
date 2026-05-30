@@ -67,6 +67,9 @@ PyYAML>=6.0.3            # SKILL.md frontmatter parsing (Phase 3 sync engine)
 # Community growth skill (Issue #1161)
 praw>=7.8.1             # Reddit OAuth API for CommunityGrowthSkill
 
+# Web push notifications (GH#4459)
+pywebpush>=2.0.0        # VAPID/RFC8291 browser push delivery
+
 # NLP / Neural Mesh RAG (Issue #1994)
 spacy>=3.8.13                  # Issue #2025: NLP entity extraction
 scikit-learn>=1.8.0           # Issue #2027: RAPTOR clustering
