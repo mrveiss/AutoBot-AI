@@ -30,7 +30,9 @@ class SessionsResource:
         raw = await self._c.get(f"/chat/sessions/{session_id}")
         return DataResponse[SessionMessages].model_validate(raw)
 
-    async def create(self, title: str | None = None, metadata: dict[str, Any] | None = None) -> DataResponse[SessionCreate]:
+    async def create(
+        self, title: str | None = None, metadata: dict[str, Any] | None = None
+    ) -> DataResponse[SessionCreate]:
         body: dict[str, Any] = {}
         if title:
             body["title"] = title
