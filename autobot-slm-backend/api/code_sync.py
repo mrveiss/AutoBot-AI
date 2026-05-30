@@ -1055,16 +1055,15 @@ async def sync_node(
     is_slm_server = bool(slm_own_ip) and node.ip_address == slm_own_ip
 
     if is_slm_server and request.restart:
-        # SLM server cannot self-sync via the Ansible playbook because
-        # ansible.posix.synchronize runs rsync FROM the controller (SLM server),
-        # but the source path ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source} only exists on the dev  # noqa
-        # machine. Instead, pull code FROM the code source node directly (#913).
-        logger.info("SLM self-sync: pulling from code source (fire-and-forget)")
-        asyncio.create_task(_sync_slm_from_code_source(node_id))
+        # Use Ansible to update all deployed roles on this machine (#9073).
+        # Covers backend, frontend, shared, agent, plugins, workers, etc.
+        logger.info("SLM self-update via Ansible: queuing (fire-and-forget)")
+        asyncio.create_task(_ansible_self_update(node_id))
         return NodeSyncResponse(
             success=True,
             message=(
-                "SLM update queued: pulling from code source + restarting services. " "Check backend health in ~30s."
+                "SLM update queued: Ansible will update all roles on this machine and restart services. "
+                "Check backend health in ~60s."
             ),
             node_id=node_id,
         )
@@ -1196,7 +1195,7 @@ async def _sync_slm_self_node(executor, job: FleetSyncJob, slm_self_node: NodeSy
         await _update_job_status_db(job.job_id, status=pre_status, completed_at=datetime.now(timezone.utc))
         # Fire-and-forget — restart kills this process,
         # but all nodes are already done and persisted.
-        await _sync_slm_from_code_source(slm_self_node.node_id)
+        await _ansible_self_update(slm_self_node.node_id)
         slm_self_node.status = "success"
         slm_self_node.completed_at = datetime.now(timezone.utc)
     else:

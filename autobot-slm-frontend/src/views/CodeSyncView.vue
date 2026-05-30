@@ -150,14 +150,14 @@ async function handleSyncNode(node: PendingNode): Promise<void> {
     // Issue #1231: SLM self-sync is fire-and-forget — backend returns
     // before the background task completes and restarts the service.
     // Show a banner and auto-refresh after the restart window.
-    const isSLMSelfSync = result.message?.includes('SLM update queued')
+    const isSLMSelfSync = result.message?.includes('update queued')
     if (isSLMSelfSync) {
       slmRestartPending.value = true
       if (slmRefreshTimer) clearTimeout(slmRefreshTimer)
       slmRefreshTimer = setTimeout(async () => {
         slmRestartPending.value = false
         await handleRefresh()
-      }, 35000)
+      }, 65000)
     }
 
     logger.info('Node sync completed:', node.node_id)
