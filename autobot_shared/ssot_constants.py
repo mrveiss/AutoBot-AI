@@ -400,6 +400,7 @@ class RedisKeyConstants:
     SYSTEM_KNOWLEDGE_FILE_STATES: str = f"{NAMESPACE}:system_knowledge:file_states"
     WORKFLOW_CLASSIFICATION_RULES: str = f"{NAMESPACE}:workflow:classification:rules"
     CHAT_RECENT: str = "chat:recent"
+    CHAT_FOLDERS: str = "chat:folders:{username}"
     LLM_MODELS_CACHE: str = "llm_models"
 
 

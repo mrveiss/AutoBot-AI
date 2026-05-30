@@ -614,6 +614,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ("api.agent_diary", "/agent-diary", ["agents"], "agent_diary"),
     # Partially wired or legacy feature routers
     ("api.chat_sessions", "", ["chat-sessions"], "chat_sessions"),
+    # GH#8987: conversation folders and collections
+    ("api.chat_folders", "", ["chat-folders"], "chat_folders"),
     # Issue #5061: First-run onboarding presets + doctor
     ("api.onboarding", "/onboarding", ["onboarding"], "onboarding"),
     # NOTE (#4203): api.diagnostics removed — already registered in monitoring_routers.py
