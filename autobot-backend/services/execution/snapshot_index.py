@@ -12,7 +12,7 @@ import json
 import os
 import threading
 import uuid
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from dataclasses import fields as dataclass_fields
 from datetime import datetime
 from pathlib import Path
@@ -57,12 +57,8 @@ class SnapshotRecord:
     image_name: str
     created_at: str
     size_bytes: int = 0
-    labels: Dict[str, str] = None
+    labels: Dict[str, str] = field(default_factory=dict)
     user_id: str = ""
-
-    def __post_init__(self) -> None:
-        if self.labels is None:
-            self.labels = {}
 
     def to_dict(self) -> Dict:
         return asdict(self)

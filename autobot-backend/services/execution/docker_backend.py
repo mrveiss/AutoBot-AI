@@ -52,6 +52,8 @@ logger = get_logger(__name__)
 
 _DEFAULT_POOL_SIZE = 3
 
+_SYSTEM_CALLER = "__system__"
+
 
 class DockerBackend(ExecutionBackend):
     """Execute tasks in Docker containers (Issue #4343).
@@ -447,13 +449,14 @@ class DockerBackend(ExecutionBackend):
         )
         return record
 
-    async def restore(self, snapshot_id: str, caller_user_id: str | None = None) -> str:
+    async def restore(self, snapshot_id: str, caller_user_id: str) -> str:
         """Start a new detached container from a previously saved snapshot.
 
         Args:
             snapshot_id: ID returned by a prior ``snapshot()`` call.
             caller_user_id: ID of the user requesting restore.  When the snapshot has a
                 non-empty ``user_id``, the caller must match it (GH#8968).
+                Pass ``_SYSTEM_CALLER`` for admin/system operations that bypass ownership.
 
         Returns:
             The new container ID.
@@ -467,7 +470,7 @@ class DockerBackend(ExecutionBackend):
         if record is None:
             raise KeyError(f"Snapshot '{snapshot_id}' not found")
 
-        if record.user_id and caller_user_id != record.user_id:
+        if record.user_id and caller_user_id != record.user_id and caller_user_id != _SYSTEM_CALLER:
             raise PermissionError(
                 f"User '{caller_user_id}' is not authorised to restore snapshot '{snapshot_id}'"
             )
@@ -498,13 +501,14 @@ class DockerBackend(ExecutionBackend):
         )
         return container.id
 
-    async def delete_snapshot(self, snapshot_id: str, caller_user_id: str | None = None) -> bool:
+    async def delete_snapshot(self, snapshot_id: str, caller_user_id: str) -> bool:
         """Remove the snapshot image and its index entry.
 
         Args:
             snapshot_id: ID returned by a prior ``snapshot()`` call.
             caller_user_id: ID of the user requesting deletion.  When the snapshot has a
                 non-empty ``user_id``, the caller must match it (GH#8968).
+                Pass ``_SYSTEM_CALLER`` for admin/system operations that bypass ownership.
 
         Returns:
             True if the snapshot was found and removed; False if not found.
@@ -516,7 +520,7 @@ class DockerBackend(ExecutionBackend):
         if record is None:
             return False
 
-        if record.user_id and caller_user_id != record.user_id:
+        if record.user_id and caller_user_id != record.user_id and caller_user_id != _SYSTEM_CALLER:
             raise PermissionError(
                 f"User '{caller_user_id}' is not authorised to delete snapshot '{snapshot_id}'"
             )

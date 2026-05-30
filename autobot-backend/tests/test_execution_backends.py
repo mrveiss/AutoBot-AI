@@ -651,7 +651,7 @@ class TestDockerBackendSnapshot:
         mock_new_container.id = "new-cont-id-123"
         mock_client.containers.run.return_value = mock_new_container
 
-        new_id = await backend.restore("snap-001")
+        new_id = await backend.restore("snap-001", caller_user_id="__system__")
 
         assert new_id == "new-cont-id-123"
         mock_client.containers.run.assert_called_once_with(
@@ -675,7 +675,7 @@ class TestDockerBackendSnapshot:
             backend.client = mock_client
 
         with pytest.raises(KeyError, match="not found"):
-            await backend.restore("nonexistent-snap")
+            await backend.restore("nonexistent-snap", caller_user_id="__system__")
 
     @pytest.mark.asyncio
     async def test_delete_snapshot_removes_record(self, tmp_path):
@@ -690,14 +690,14 @@ class TestDockerBackendSnapshot:
         record = await backend.snapshot("cont-del", session_id="s")
         assert idx.get(record.snapshot_id) is not None
 
-        deleted = await backend.delete_snapshot(record.snapshot_id)
+        deleted = await backend.delete_snapshot(record.snapshot_id, caller_user_id="__system__")
         assert deleted is True
         assert idx.get(record.snapshot_id) is None
 
     @pytest.mark.asyncio
     async def test_delete_nonexistent_snapshot_returns_false(self, tmp_path):
         backend, _, _ = self._make_backend(tmp_path)
-        result = await backend.delete_snapshot("ghost-snap")
+        result = await backend.delete_snapshot("ghost-snap", caller_user_id="__system__")
         assert result is False
 
     # ------------------------------------------------------------------
@@ -836,6 +836,38 @@ class TestDockerBackendSnapshot:
         deleted = await backend.delete_snapshot(record.snapshot_id, caller_user_id="user-alice")
         assert deleted is True
         assert idx.get(record.snapshot_id) is None
+
+    @pytest.mark.asyncio
+    async def test_system_caller_bypasses_ownership_on_restore(self, tmp_path):
+        """_SYSTEM_CALLER can restore any snapshot regardless of user_id."""
+        from services.execution.docker_backend import _SYSTEM_CALLER
+        from services.execution.snapshot_index import SnapshotIndex, SnapshotRecord
+
+        idx = SnapshotIndex(storage_path=tmp_path)
+        idx.add(
+            SnapshotRecord(
+                snapshot_id="sys-snap",
+                session_id="s",
+                container_id="c",
+                image_name="autobot-snapshot-sys-snap:latest",
+                created_at="2025-01-01T00:00:00",
+                user_id="user-alice",
+            )
+        )
+        mock_client = MagicMock()
+        mock_client.ping.return_value = True
+        with patch("services.execution.docker_backend.docker") as mock_docker:
+            mock_docker.from_env.return_value = mock_client
+            mock_docker.errors.DockerException = Exception
+            backend = DockerBackend(snapshot_index=idx)
+            backend.client = mock_client
+
+        mock_new_container = MagicMock()
+        mock_new_container.id = "sys-restored-id"
+        mock_client.containers.run.return_value = mock_new_container
+
+        new_id = await backend.restore("sys-snap", caller_user_id=_SYSTEM_CALLER)
+        assert new_id == "sys-restored-id"
 
     @pytest.mark.asyncio
     async def test_get_snapshots_for_session(self, tmp_path):
