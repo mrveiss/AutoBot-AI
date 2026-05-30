@@ -15,6 +15,7 @@ Packages:
 - web_crawler — WebCrawlerConnector (Playwright-based)
 - database   — DatabaseConnector (SQLAlchemy)
 - external_adapter — ExternalConnectorAdapter (subprocess/stdout JSON protocol)
+- gitlab      — GitLabConnector (GitLab v4 API) / GiteaConnector (Gitea + Forgejo v1 API)
 - scheduler  — ConnectorScheduler (asyncio task-based)
 
 Example usage::
@@ -40,6 +41,7 @@ Example usage::
 import knowledge.connectors.database  # noqa: F401
 import knowledge.connectors.external_adapter  # noqa: F401
 import knowledge.connectors.file_server  # noqa: F401
+import knowledge.connectors.gitlab  # noqa: F401
 import knowledge.connectors.notion  # noqa: F401
 import knowledge.connectors.web_crawler  # noqa: F401
 from knowledge.connectors.base import AbstractConnector
