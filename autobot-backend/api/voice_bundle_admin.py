@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from api.redis_mcp.rbac import VALID_BUNDLES
+from api.voice_bundle_user import _count_tools_for_bundle
 from auth_middleware import get_auth_middleware, get_current_user
 from autobot_shared.logging_manager import get_logger
 from services.event_log import EventType, emit
@@ -66,20 +67,6 @@ class BundleAssignRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # GET /voice/realtime/bundle/me
 # ---------------------------------------------------------------------------
-
-_BUNDLE_TOOL_COUNTS: dict[str, int] = {
-    "voice_safe": 0,  # computed lazily below
-    "voice_extended": 0,
-    "voice_admin": 0,
-}
-
-
-async def _count_tools_for_bundle(bundle: str, is_admin: bool) -> int:
-    """Return the number of tools available in this bundle."""
-    from api.redis_mcp.rbac import TOOL_ACCESS_MATRIX, filter_tools_for_bundle  # noqa: PLC0415
-
-    all_tools = list(TOOL_ACCESS_MATRIX.keys())
-    return len(filter_tools_for_bundle(all_tools, bundle=bundle, is_admin=is_admin))
 
 
 @bundle_me_router.get("/realtime/bundle/me", response_model=BundleMeResponse)
