@@ -17,6 +17,7 @@ import re
 from typing import TYPE_CHECKING, Any
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc
 
 from agent_loop.types import (
@@ -29,6 +30,34 @@ if TYPE_CHECKING:
     from agent_loop.types import TaskContext
 
 logger = get_logger(__name__)
+
+_DEFAULT_CONTRADICTION_SURFACE_THRESHOLD = 0.3
+
+
+def _resolve_contradiction_surface_threshold() -> float:
+    raw = config.misc.contradiction_surface_threshold
+    if not raw:
+        return _DEFAULT_CONTRADICTION_SURFACE_THRESHOLD
+    try:
+        value = float(raw)
+    except ValueError:
+        logger.warning(
+            "AUTOBOT_CONTRADICTION_SURFACE_THRESHOLD=%r is not a float; falling back to %.1f",
+            raw,
+            _DEFAULT_CONTRADICTION_SURFACE_THRESHOLD,
+        )
+        return _DEFAULT_CONTRADICTION_SURFACE_THRESHOLD
+    if not 0.0 < value < 1.0:
+        logger.warning(
+            "AUTOBOT_CONTRADICTION_SURFACE_THRESHOLD=%.3f must be in (0, 1); falling back to %.1f",
+            value,
+            _DEFAULT_CONTRADICTION_SURFACE_THRESHOLD,
+        )
+        return _DEFAULT_CONTRADICTION_SURFACE_THRESHOLD
+    return value
+
+
+_CONTRADICTION_SURFACE_THRESHOLD = _resolve_contradiction_surface_threshold()
 
 
 def _slugify(text: str) -> str:
@@ -149,8 +178,6 @@ class BeliefState:
 class BeliefStateUpdater:
     """Update TaskContext.assertions from raw tool output."""
 
-    CONTRADICTION_SURFACE_THRESHOLD = 0.3
-
     def update(
         self,
         ctx: "TaskContext",
@@ -170,6 +197,12 @@ class BeliefStateUpdater:
             return []
 
         extracted: list[tuple[str, Any, float]] = extractor.extract(tool_output)
+        logger.debug(
+            "belief_update tool=%s iter=%d extracted=%d assertions",
+            tool_name,
+            iteration,
+            len(extracted),
+        )
         ref = ToolExecutionRef(tool_name=tool_name, iteration=iteration, call_hash=call_hash)
         new_contradictions: list[ContradictionRecord] = []
 
@@ -184,20 +217,31 @@ class BeliefStateUpdater:
                     sources=[ref],
                     confirmed_at=now_utc(),
                 )
+                logger.debug("belief insert key=%s value=%r conf=%.2f", key, value, confidence)
             elif existing.value == value:
                 # Reconfirm: update confidence and append source
+                old_conf = existing.confidence
                 existing.confidence = max(existing.confidence, confidence)
                 existing.sources.append(ref)
                 existing.confirmed_at = now_utc()
+                logger.debug("belief reconfirm key=%s conf=%.2f->%.2f", key, old_conf, existing.confidence)
             else:
                 # Contradiction
                 confidence_delta = abs(confidence - existing.confidence)
-                if confidence_delta >= self.CONTRADICTION_SURFACE_THRESHOLD:
+                if confidence_delta >= _CONTRADICTION_SURFACE_THRESHOLD:
                     resolution = "surfaced_to_think"
                 elif confidence >= existing.confidence:
                     resolution = "updated"
                 else:
                     resolution = "suppressed"
+
+                _log = logger.warning if resolution == "surfaced_to_think" else logger.debug
+                _log(
+                    "belief contradiction key=%s delta=%.2f resolution=%s",
+                    key,
+                    confidence_delta,
+                    resolution,
+                )
 
                 record = ContradictionRecord(
                     key=key,
@@ -231,4 +275,10 @@ class BeliefStateUpdater:
                     )
                 # "suppressed" → keep existing, do not update
 
+        logger.debug(
+            "belief_update done tool=%s iter=%d contradictions=%d",
+            tool_name,
+            iteration,
+            len(new_contradictions),
+        )
         return new_contradictions
