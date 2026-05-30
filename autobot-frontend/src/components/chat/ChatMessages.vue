@@ -137,6 +137,12 @@
           :step="message.metadata.step as any"
         />
 
+        <!-- GH#9015: AI-generated image message -->
+        <ImageCell
+          v-else-if="(message.type === 'image' || message.metadata?.display_type === 'image') && message.metadata?.image_payload"
+          :rich-payload="(message.metadata.image_payload as Record<string, unknown>)"
+        />
+
         <!-- Message Content -->
         <div v-else class="message-content" :class="getContentClass(message)">
           <!-- Streaming content with typing indicator -->
@@ -532,6 +538,7 @@ import BaseModal from '@/components/ui/BaseModal.vue'
 import OverseerPlanMessage from '@/components/chat/OverseerPlanMessage.vue'
 import OverseerStepMessage from '@/components/chat/OverseerStepMessage.vue'
 import CitationsDisplay from '@/components/chat/CitationsDisplay.vue'
+import ImageCell from '@/components/artifact-cells/ImageCell.vue'
 import { formatFileSize, formatTime } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { useCommandApproval } from '@/composables/useCommandApproval'

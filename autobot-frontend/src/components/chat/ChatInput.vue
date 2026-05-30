@@ -186,6 +186,19 @@
               <Icon :name="isVoiceRecording ? 'stop' : 'microphone'" />
             </BaseButton>
 
+            <!-- GH#9015: Image Generation Button -->
+            <BaseButton
+              variant="ghost"
+              size="xs"
+              @click="showImageGenModal = true"
+              class="action-btn"
+              :disabled="isDisabled || imageGenerating"
+              :aria-label="$t('chat.input.generateImage', 'Generate image')"
+              :title="$t('chat.input.generateImage', 'Generate image')"
+            >
+              <Icon :name="imageGenerating ? 'spinner' : 'image'" />
+            </BaseButton>
+
             <!-- Emoji Button -->
             <BaseButton
               variant="ghost"
@@ -322,6 +335,59 @@
       v-model="showPresetsModal"
       @close="showPresetsModal = false"
     />
+
+    <!-- GH#9015: Image Generation Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showImageGenModal"
+        class="image-gen-overlay"
+        @click.self="showImageGenModal = false"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Generate image"
+      >
+        <div class="image-gen-dialog">
+          <h3 class="image-gen-title">
+            <Icon name="image" />
+            {{ $t('chat.input.generateImageTitle', 'Generate Image') }}
+          </h3>
+          <label class="image-gen-label" for="image-gen-prompt">
+            {{ $t('chat.input.imagePromptLabel', 'Describe the image') }}
+          </label>
+          <textarea
+            id="image-gen-prompt"
+            v-model="imagePrompt"
+            class="image-gen-prompt"
+            :placeholder="$t('chat.input.imagePromptPlaceholder', 'A futuristic city at sunset with neon lights...')"
+            rows="3"
+            autofocus
+            @keydown.ctrl.enter="submitImageGeneration"
+          />
+          <div class="image-gen-provider">
+            <label class="image-gen-label">{{ $t('chat.input.imageProvider', 'Provider') }}</label>
+            <div class="provider-options">
+              <label v-for="p in (['dalle', 'flux', 'stable_diffusion'] as const)" :key="p" class="provider-option">
+                <input type="radio" :value="p" v-model="imageProvider" />
+                <span>{{ { dalle: 'DALL·E 3', flux: 'Flux', stable_diffusion: 'Stable Diffusion' }[p] }}</span>
+              </label>
+            </div>
+          </div>
+          <div class="image-gen-actions">
+            <button class="image-gen-cancel" @click="showImageGenModal = false">
+              {{ $t('common.cancel', 'Cancel') }}
+            </button>
+            <button
+              class="image-gen-submit"
+              @click="submitImageGeneration"
+              :disabled="!imagePrompt.trim() || imageGenerating"
+            >
+              <Icon :name="imageGenerating ? 'spinner' : 'magic'" />
+              {{ imageGenerating ? $t('chat.input.generating', 'Generating…') : $t('chat.input.generate', 'Generate') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -345,6 +411,7 @@ import type { MultiModalResponse } from '@/utils/VisionMultimodalApiClient'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { useSlashCommands } from '@/composables/useSlashCommands'
 import type { SlashCommandPreset } from '@/types/api'
+import { useImageGeneration } from '@/composables/useImageGeneration'
 
 const { t } = useI18n()
 const logger = createLogger('ChatInput')
@@ -421,6 +488,39 @@ const typingDebounceTimer = ref<number | null>(null)
 // Constants
 const maxCharacters = 4000
 const maxFileSize = 10 * 1024 * 1024 // 10MB
+
+// GH#9015: Image generation
+const { generating: imageGenerating, generateImage } = useImageGeneration()
+const showImageGenModal = ref(false)
+const imagePrompt = ref('')
+const imageProvider = ref<'dalle' | 'flux' | 'stable_diffusion'>('dalle')
+
+const submitImageGeneration = async () => {
+  if (!imagePrompt.value.trim()) return
+  showImageGenModal.value = false
+  const result = await generateImage({ prompt: imagePrompt.value.trim(), provider: imageProvider.value })
+  imagePrompt.value = ''
+  if (result) {
+    store.addMessage({
+      content: result.success ? '' : (result.error ?? 'Image generation failed'),
+      sender: 'assistant',
+      status: 'sent',
+      type: 'image',
+      metadata: result.success
+        ? {
+            display_type: 'image',
+            image_payload: {
+              images: result.images,
+              provider: result.provider,
+              model: result.model,
+              prompt: result.prompt,
+              size: result.size,
+            },
+          }
+        : {},
+    })
+  }
+}
 
 // Issue #1569: Quick actions visibility toggle with localStorage persistence
 const showQuickActions = ref(localStorage.getItem('autobot_showQuickActions') !== 'false')
@@ -1300,4 +1400,118 @@ onUnmounted(() => {
 }
 
 /* Focus states for accessibility handled by BaseButton */
+
+/* GH#9015: Image generation modal */
+.image-gen-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.image-gen-dialog {
+  background: var(--color-surface, #fff);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+.image-gen-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text, #111827);
+  margin: 0;
+}
+
+.image-gen-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-muted, #6b7280);
+}
+
+.image-gen-prompt {
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  resize: none;
+  font-family: inherit;
+  color: var(--color-text, #111827);
+  background: var(--color-surface, #fff);
+}
+
+.image-gen-prompt:focus {
+  outline: 2px solid var(--color-primary, #3b82f6);
+  outline-offset: 1px;
+}
+
+.provider-options {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.25rem;
+}
+
+.provider-option {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  color: var(--color-text, #111827);
+}
+
+.image-gen-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.image-gen-cancel {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 0.5rem;
+  background: transparent;
+  font-size: 0.875rem;
+  cursor: pointer;
+  color: var(--color-text-muted, #6b7280);
+}
+
+.image-gen-submit {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 1.25rem;
+  background: var(--color-primary, #3b82f6);
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.image-gen-submit:hover:not(:disabled) {
+  background: var(--color-primary-dark, #2563eb);
+}
+
+.image-gen-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 </style>
