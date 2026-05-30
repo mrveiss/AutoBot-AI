@@ -838,7 +838,7 @@ class ToolHandlerMixin:
     def _init_terminal_tool(self):
         """Initialize terminal tool for command execution."""
         try:
-            import backend.api.agent_terminal as agent_terminal_api
+            import api.agent_terminal as agent_terminal_api
 
             from tools.terminal_tool import TerminalTool
 
