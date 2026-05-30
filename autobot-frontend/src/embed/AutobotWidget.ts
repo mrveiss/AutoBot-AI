@@ -94,6 +94,9 @@ export class AutobotWidget extends HTMLElement {
   }
 
   private _mount(): void {
+    // Clear any existing nodes to prevent accumulation on re-mount (GH#9046)
+    while (this._shadow.firstChild) this._shadow.removeChild(this._shadow.firstChild)
+
     // Inject styles into shadow root
     const style = document.createElement('style')
     style.textContent = WIDGET_STYLES
@@ -262,7 +265,7 @@ const EmbedChatApp = defineComponent({
     }
   },
   render() {
-    const { config, open, input, messages, loading, cssVars, toggleOpen, sendMessage, onKeydown } = this
+    const { config, open, input, messages, loading, errorMsg, cssVars, toggleOpen, sendMessage, onKeydown } = this
 
     const posClass = config.position === 'bottom-left' ? 'ab-pos-left' : 'ab-pos-right'
 
@@ -321,6 +324,11 @@ const EmbedChatApp = defineComponent({
                     ])
                   )
             ),
+
+            // Error banner — only rendered when errorMsg is non-empty (GH#9067)
+            errorMsg
+              ? h('p', { class: 'ab-error', role: 'alert' }, errorMsg)
+              : null,
 
             // Input row
             h('div', { class: 'ab-input-row' }, [
