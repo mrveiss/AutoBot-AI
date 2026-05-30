@@ -15,6 +15,7 @@ Cloud API providers:
     CustomOpenAIProvider   — Any OpenAI-compatible endpoint
     OpenRouterProvider     — OpenRouter multi-provider gateway (#4341)
     NousPortalProvider     — Nous Research curated open-source models (#4341)
+    VertexAIProvider       — Google Cloud Vertex AI (Gemini + Claude on Vertex, GH#9009)
 
 Local/self-hosted providers:
     OllamaProvider         — Registry-facing Ollama (delegates to inner ollama.py)
@@ -47,6 +48,7 @@ from .ollama_provider import OllamaProvider  # registry-facing
 from .openai import OpenAIProvider
 from .openrouter import OpenRouterProvider
 from .transformers_provider import TransformersProvider
+from .vertexai import VERTEX_MODELS, VertexAIProvider
 from .vllm import RECOMMENDED_MODELS, VLLMModelManager, VLLMProvider
 from .vllm_base import VLLMBaseProvider
 
@@ -61,6 +63,8 @@ __all__ = [
     "OpenRouterProvider",
     "NousPortalProvider",
     "NOUS_MODELS",
+    "VertexAIProvider",
+    "VERTEX_MODELS",
     # Local/self-hosted
     "OllamaProvider",
     "VLLMBaseProvider",

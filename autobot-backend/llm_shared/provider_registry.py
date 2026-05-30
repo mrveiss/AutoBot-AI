@@ -448,6 +448,7 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
     from llm_shared.providers.nous_portal import NousPortalProvider
     from llm_shared.providers.openai import OpenAIProvider
     from llm_shared.providers.openrouter import OpenRouterProvider
+    from llm_shared.providers.vertexai import VertexAIProvider
     from llm_shared.providers.vllm_base import VLLMBaseProvider
 
     fallback: List[str] = []
@@ -567,6 +568,25 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
             logger.debug("vLLM provider not registered: %s", exc)
     else:
         logger.debug("VLLM_MODEL not set — vLLM provider not registered")
+
+    # Vertex AI — registered when GCP project is configured (GH#9009)
+    vertex_project = config.vertex_ai_project
+    if vertex_project:
+        try:
+            vertex_provider = VertexAIProvider(
+                settings={
+                    "project": vertex_project,
+                    "location": config.vertex_ai_location,
+                    "service_account_json": config.vertex_ai_service_account_json,
+                    "default_model": config.vertex_ai_default_model,
+                }
+            )
+            registry.register(vertex_provider)
+            fallback.append(vertex_provider.provider_name)
+        except Exception as exc:
+            logger.debug("Vertex AI provider not registered: %s", exc)
+    else:
+        logger.debug("VERTEX_AI_PROJECT not set — Vertex AI provider not registered")
 
     registry.set_fallback_chain(fallback)
     logger.info(
