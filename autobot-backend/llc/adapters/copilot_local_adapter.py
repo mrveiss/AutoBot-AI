@@ -103,7 +103,7 @@ class CopilotLocalAdapter:
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdout=out_fh,
-                    stderr=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.DEVNULL,
                     env=env,
                     cwd=workspace_dir or None,
                 )
@@ -124,7 +124,7 @@ class CopilotLocalAdapter:
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdout=out_fh,
-                    stderr=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.DEVNULL,
                     env=env,
                 )
         finally:
