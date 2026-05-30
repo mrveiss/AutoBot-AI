@@ -417,7 +417,7 @@ async def create_connector(request: CreateConnectorRequest):
             try:
                 await get_credential_store().revoke(secret_id, owner_id)
             except Exception as exc:
-                logger.warning("Failed to revoke secret %s after failed test: %s", secret_id, exc)
+                logger.warning("Failed to revoke credential after failed test: %s", exc)
         raise HTTPException(
             status_code=400,
             detail="Connection test failed — verify connector config and target availability",
@@ -576,7 +576,7 @@ async def delete_connector(connector_id: str):
         try:
             await get_credential_store().revoke(cfg.secret_id, owner_id)
         except Exception as exc:
-            logger.warning("Failed to revoke secret %s for connector %s: %s", cfg.secret_id, connector_id, exc)
+            logger.warning("Failed to revoke credential for connector %s: %s", connector_id, exc)
 
     scheduler = get_connector_scheduler()
     await scheduler.stop(connector_id)
