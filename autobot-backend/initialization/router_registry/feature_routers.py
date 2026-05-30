@@ -640,6 +640,16 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["mobile-devices", "push-notifications"],
         "mobile_devices",
     ),
+    # GH#9044: Transcriber module — project + recording CRUD under /api/transcriber
+    # Guarded by TRANSCRIBER_ENABLED env var (defaults to true).
+    # The combined router in transcriber_extension carries its own /api/transcriber
+    # prefix so we use "" here to avoid a double-prefix.
+    (
+        "extensions.builtin.transcriber_extension",
+        "",
+        ["transcriber"],
+        "transcriber",
+    ),
 ]
 
 
