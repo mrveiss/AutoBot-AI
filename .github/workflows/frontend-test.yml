@@ -232,11 +232,13 @@ jobs:
           fi
 
           if [ -d "test-artifacts" ]; then
-            echo "## Available Artifacts:" >> "$GITHUB_STEP_SUMMARY"
-            find test-artifacts -type d -name "*results*" | while read -r dir; do
-              echo "- $(basename "$dir")" >> "$GITHUB_STEP_SUMMARY"
-            done
-            echo "" >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "## Available Artifacts:"
+              find test-artifacts -type d -name "*results*" | while read -r dir; do
+                echo "- $(basename "$dir")"
+              done
+              echo ""
+            } >> "$GITHUB_STEP_SUMMARY"
           fi
 
           {
