@@ -18,6 +18,7 @@ from api.redis_mcp.rbac import VALID_BUNDLES
 from auth_middleware import get_auth_middleware, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from services.audit.unified_audit import AuditCategory, AuditEvent, emit
 from utils.catalog_http_exceptions import raise_auth_error
 
 logger = get_logger(__name__)
@@ -221,8 +222,6 @@ async def set_user_bundle(
 
     current_user_id = _get_user_id(current_user)
 
-    from services.audit.unified_audit import AuditCategory, AuditEvent, emit  # noqa: PLC0415
-
     _audit_meta = {
         "target_user_id": user_id,
         "bundle_name": body.bundle_name,
@@ -267,7 +266,7 @@ async def set_user_bundle(
                 resource_type="user_voice_bundle",
                 resource_id=user_id,
                 outcome="success",
-                metadata=_audit_meta,
+                metadata={**_audit_meta, "stored_bundle_name": stored_bundle_name},
             )
         )
     except Exception as exc:

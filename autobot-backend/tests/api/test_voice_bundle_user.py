@@ -177,10 +177,13 @@ class TestSetUserBundle:
 
         with (
             patch("user_management.database.get_async_session") as mock_session_ctx,
-            patch("services.audit.unified_audit.emit") as mock_emit,
+            patch("api.voice_bundle_user.emit") as mock_emit,
         ):
             mock_session = AsyncMock(spec=AsyncSession)
             mock_session_ctx.return_value.__aenter__.return_value = mock_session
+            mock_result = MagicMock()
+            mock_result.fetchone.return_value = ("voice_safe",)
+            mock_session.execute.return_value = mock_result
 
             response = client.put(
                 "/api/voice/users/bob/bundle",
@@ -200,10 +203,13 @@ class TestSetUserBundle:
 
         with (
             patch("user_management.database.get_async_session") as mock_session_ctx,
-            patch("services.audit.unified_audit.emit") as mock_emit,
+            patch("api.voice_bundle_user.emit") as mock_emit,
         ):
             mock_session = AsyncMock(spec=AsyncSession)
             mock_session_ctx.return_value.__aenter__.return_value = mock_session
+            mock_result = MagicMock()
+            mock_result.fetchone.return_value = None
+            mock_session.execute.return_value = mock_result
 
             response = client.put(
                 "/api/voice/users/alice/bundle",
@@ -214,7 +220,6 @@ class TestSetUserBundle:
         data = response.json()
         assert data["user_id"] == "alice"
         assert data["bundle_name"] is None
-        mock_session.execute.assert_called_once()
         mock_emit.assert_called_once()
 
     def test_invalid_bundle_name(self):
@@ -243,10 +248,13 @@ class TestSetUserBundle:
 
         with (
             patch("user_management.database.get_async_session") as mock_session_ctx,
-            patch("services.audit.unified_audit.emit") as mock_emit,
+            patch("api.voice_bundle_user.emit") as mock_emit,
         ):
             mock_session = AsyncMock(spec=AsyncSession)
             mock_session_ctx.return_value.__aenter__.return_value = mock_session
+            mock_result = MagicMock()
+            mock_result.fetchone.return_value = ("voice_admin",)
+            mock_session.execute.return_value = mock_result
 
             response = client.put(
                 "/api/voice/users/bob/bundle",
