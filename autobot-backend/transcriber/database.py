@@ -63,7 +63,6 @@ CREATE TABLE IF NOT EXISTS kb_pushes (
     pushed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     pushed_by TEXT NOT NULL
 );
-PRAGMA foreign_keys = ON;
 """
 
 
