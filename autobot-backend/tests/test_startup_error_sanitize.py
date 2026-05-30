@@ -19,7 +19,6 @@ import types
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-
 # ---------------------------------------------------------------------------
 # Minimal stubs so api/system.py and initialization/lifespan.py import cleanly
 # without the full application dependency graph.
