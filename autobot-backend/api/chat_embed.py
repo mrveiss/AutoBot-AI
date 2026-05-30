@@ -46,9 +46,7 @@ async def _stream_embed(llm_service: Any, message: str):
                 data = json.dumps({"content": chunk.get("content", "")})
                 yield f"data: {data}\n\n"
         else:
-            response = await llm_service.chat(
-                messages=[{"role": "user", "content": message}]
-            )
+            response = await llm_service.chat(messages=[{"role": "user", "content": message}])
             content = response.content if not response.error else "Sorry, something went wrong."
             data = json.dumps({"content": content})
             yield f"data: {data}\n\n"
@@ -94,9 +92,7 @@ async def embed_message(
         )
 
     try:
-        response = await llm_service.chat(
-            messages=[{"role": "user", "content": message}]
-        )
+        response = await llm_service.chat(messages=[{"role": "user", "content": message}])
         content = response.content if not response.error else "Sorry, something went wrong. Please try again."
     except Exception as exc:
         logger.error("embed message error: %s", exc)
