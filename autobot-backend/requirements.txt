@@ -1,5 +1,8 @@
 -e ../autobot_shared
 
+# File system watching (DocumentationWatcherService + KBFolderWatcherService GH#9000)
+watchdog>=6.0.0
+
 # Core
 apscheduler>=3.10.4             # Issue #6590: hourly LLM key rotation job
 croniter>=2.0.0                 # GH#9027: required by LLC RoutineScheduler and routines API

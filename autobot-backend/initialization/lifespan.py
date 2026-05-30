@@ -623,6 +623,30 @@ async def _init_documentation_watcher():
         logger.warning("Documentation watcher failed: %s", watcher_error)
 
 
+async def _init_kb_folder_watcher():
+    """
+    Initialize KB folder watcher for auto-ingestion of new files (NON-CRITICAL).
+
+    GH#9000: Starts watchdog-based monitor on configured paths (AUTOBOT_KB_WATCH_PATHS).
+    No-ops silently when no watch paths are configured or watchdog is unavailable.
+    """
+    logger.info("✅ [ 85%] KB Folder Watcher: Initializing...")
+    try:
+        from services.kb_folder_watcher import start_kb_folder_watcher
+
+        success = await start_kb_folder_watcher()
+
+        if success:
+            logger.info("✅ [ 85%] KB Folder Watcher: Started")
+        else:
+            logger.info("✅ [ 85%] KB Folder Watcher: Not started (no watch paths configured)")
+
+    except ImportError as import_error:
+        logger.debug("KB folder watcher not available: %s", import_error)
+    except Exception as watcher_error:
+        logger.warning("KB folder watcher failed to start: %s", watcher_error)
+
+
 async def _run_background_doc_indexing():
     """Background task for documentation indexing (#1385, #1390).
 
@@ -1607,6 +1631,7 @@ async def initialize_background_services(app: FastAPI):
         await _init_slm_client()
         await _init_background_llm_sync(app)
         await _init_documentation_watcher()
+        await _init_kb_folder_watcher()
         await _start_doc_sync_queue_worker(app)
         await _auto_index_documentation()
         await _init_log_forwarding()
@@ -1699,6 +1724,14 @@ async def cleanup_services(app: FastAPI):
             from services.documentation_watcher import stop_documentation_watcher
 
             await stop_documentation_watcher()
+        except ImportError:
+            pass  # Watcher not available
+
+        # GH#9000: Stop KB folder watcher
+        try:
+            from services.kb_folder_watcher import stop_kb_folder_watcher
+
+            await stop_kb_folder_watcher()
         except ImportError:
             pass  # Watcher not available
 

@@ -64,6 +64,11 @@ from knowledge.schemas.documents import (
     DocsStatsResponse,
     DocsWatcherControlResponse,
     DocsWatcherStatusResponse,
+    KBFolderWatcherAddPathRequest,
+    KBFolderWatcherControlResponse,
+    KBFolderWatcherPathResponse,
+    KBFolderWatcherRemovePathRequest,
+    KBFolderWatcherStatusResponse,
 )
 from knowledge.schemas.facts import (
     AddFactResponse,
@@ -2854,6 +2859,115 @@ async def control_documentation_watcher(
             "success": False,
             "message": "Documentation watcher not available",
         }
+
+
+# ===== KB FOLDER WATCHER (GH#9000) =====
+# Admin endpoints for managing the KB auto-ingestion folder watcher.
+
+
+@router.get("/folder-watcher/status", response_model=KBFolderWatcherStatusResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_kb_folder_watcher_status",
+    error_code_prefix="KNOWLEDGE",
+)
+async def get_kb_folder_watcher_status(
+    admin_check: bool = Depends(check_admin_permission),
+) -> KBFolderWatcherStatusResponse:
+    """Get KB folder watcher status and statistics."""
+    try:
+        from services.kb_folder_watcher import get_kb_folder_watcher
+
+        watcher = get_kb_folder_watcher()
+        return {"success": True, "watcher": watcher.get_stats()}
+    except ImportError:
+        return {"success": True, "watcher": {"is_running": False, "message": "KB folder watcher not available"}}
+
+
+@router.post("/folder-watcher/control", response_model=KBFolderWatcherControlResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="control_kb_folder_watcher",
+    error_code_prefix="KNOWLEDGE",
+)
+async def control_kb_folder_watcher(
+    admin_check: bool = Depends(check_admin_permission),
+    action: str = Query(..., description="start | stop | status"),
+) -> KBFolderWatcherControlResponse:
+    """Control KB folder watcher (start/stop/status)."""
+    try:
+        from services.kb_folder_watcher import (
+            get_kb_folder_watcher,
+            start_kb_folder_watcher,
+            stop_kb_folder_watcher,
+        )
+
+        if action == "start":
+            success = await start_kb_folder_watcher()
+            return {"success": success, "message": "Watcher started" if success else "Failed to start watcher"}
+
+        if action == "stop":
+            await stop_kb_folder_watcher()
+            return {"success": True, "message": "Watcher stopped"}
+
+        if action == "status":
+            watcher = get_kb_folder_watcher()
+            return {"success": True, "watcher": watcher.get_stats()}
+
+        return {"success": False, "message": f"Unknown action: {action}"}
+
+    except ImportError:
+        return {"success": False, "message": "KB folder watcher not available"}
+
+
+@router.post("/folder-watcher/paths", response_model=KBFolderWatcherPathResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="add_kb_folder_watch_path",
+    error_code_prefix="KNOWLEDGE",
+)
+async def add_kb_folder_watch_path(
+    admin_check: bool = Depends(check_admin_permission),
+    request: KBFolderWatcherAddPathRequest = None,
+) -> KBFolderWatcherPathResponse:
+    """Add a directory to the KB folder watch list."""
+    try:
+        from services.kb_folder_watcher import get_kb_folder_watcher
+
+        watcher = get_kb_folder_watcher()
+        added = watcher.add_watch_path(request.path)
+        stats = watcher.get_stats()
+        if added:
+            return {"success": True, "message": f"Path added: {request.path}", "watch_paths": stats["watch_paths"]}
+        return {"success": False, "message": f"Path not added (already watched or invalid): {request.path}", "watch_paths": stats["watch_paths"]}
+
+    except ImportError:
+        return {"success": False, "message": "KB folder watcher not available", "watch_paths": []}
+
+
+@router.delete("/folder-watcher/paths", response_model=KBFolderWatcherPathResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="remove_kb_folder_watch_path",
+    error_code_prefix="KNOWLEDGE",
+)
+async def remove_kb_folder_watch_path(
+    admin_check: bool = Depends(check_admin_permission),
+    request: KBFolderWatcherRemovePathRequest = None,
+) -> KBFolderWatcherPathResponse:
+    """Remove a directory from the KB folder watch list."""
+    try:
+        from services.kb_folder_watcher import get_kb_folder_watcher
+
+        watcher = get_kb_folder_watcher()
+        removed = watcher.remove_watch_path(request.path)
+        stats = watcher.get_stats()
+        if removed:
+            return {"success": True, "message": f"Path removed: {request.path}", "watch_paths": stats["watch_paths"]}
+        return {"success": False, "message": f"Path not found in watch list: {request.path}", "watch_paths": stats["watch_paths"]}
+
+    except ImportError:
+        return {"success": False, "message": "KB folder watcher not available", "watch_paths": []}
 
 
 # ===== PER-ORG LLM + EMBEDDING MODEL CONFIG (Issue #4451) =====

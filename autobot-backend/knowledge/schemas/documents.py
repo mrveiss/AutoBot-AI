@@ -138,3 +138,49 @@ class DocsWatcherControlResponse(BaseModel):
     success: bool = False
     message: str | None = None
     watcher: Dict[str, Any] | None = None
+
+
+# ---------------------------------------------------------------------------
+# KB Folder Watcher schemas (GH#9000)
+# ---------------------------------------------------------------------------
+
+
+class KBFolderWatcherStatusResponse(BaseModel):
+    """Shape of ``GET /api/knowledge_base/folder-watcher/status``."""
+
+    model_config = ConfigDict(extra="allow")
+
+    success: bool = True
+    watcher: Dict[str, Any] = Field(default_factory=dict)
+
+
+class KBFolderWatcherControlResponse(BaseModel):
+    """Shape of ``POST /api/knowledge_base/folder-watcher/control``."""
+
+    model_config = ConfigDict(extra="allow")
+
+    success: bool = False
+    message: str | None = None
+    watcher: Dict[str, Any] | None = None
+
+
+class KBFolderWatcherAddPathRequest(BaseModel):
+    """Request body for ``POST /api/knowledge_base/folder-watcher/paths``."""
+
+    path: str
+
+
+class KBFolderWatcherRemovePathRequest(BaseModel):
+    """Request body for ``DELETE /api/knowledge_base/folder-watcher/paths``."""
+
+    path: str
+
+
+class KBFolderWatcherPathResponse(BaseModel):
+    """Response for add/remove path operations."""
+
+    model_config = ConfigDict(extra="allow")
+
+    success: bool
+    message: str
+    watch_paths: List[str] = Field(default_factory=list)
