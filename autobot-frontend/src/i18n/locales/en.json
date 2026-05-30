@@ -7363,7 +7363,8 @@
     "llcPortability": "Portability",
     "settingsAndTools": "Settings & Tools",
     "adminPanel": "Admin Panel",
-    "documents": "AI Documents"
+    "documents": "AI Documents",
+    "transcriber": "Transcriber"
   },
   "reasoningTrace": {
     "title": "Reasoning trace",
