@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "run-p \"build-only {@}\" --",
+    "build:embed": "vite build --config vite.embed.config.ts && node scripts/embed-sri.mjs",
     "build-with-typecheck": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
     "test": "vitest",
