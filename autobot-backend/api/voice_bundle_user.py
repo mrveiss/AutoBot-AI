@@ -224,9 +224,11 @@ async def set_user_bundle(
 
     _audit_meta = {
         "target_user_id": user_id,
-        "bundle_name": body.bundle_name,
+        "requested_bundle_name": body.bundle_name,
         "assignment_action": "clear" if body.bundle_name is None else "assign",
     }
+
+    stored_bundle_name: Optional[str] = None
 
     try:
         from user_management.database import get_async_session  # noqa: PLC0415
@@ -257,32 +259,36 @@ async def set_user_bundle(
                 {"uid": user_id},
             )
             result = row.fetchone()
-            stored_bundle_name: Optional[str] = result[0] if result else None
-        emit(
-            AuditEvent(
-                category=AuditCategory.SECURITY,
-                action="voice_bundle_assignment_changed",
-                actor_id=str(current_user_id),
-                resource_type="user_voice_bundle",
-                resource_id=user_id,
-                outcome="success",
-                metadata={**_audit_meta, "stored_bundle_name": stored_bundle_name},
-            )
-        )
+            stored_bundle_name = result[0] if result else None
     except Exception as exc:
-        emit(
-            AuditEvent(
-                category=AuditCategory.SECURITY,
-                action="voice_bundle_assignment_changed",
-                actor_id=str(current_user_id),
-                resource_type="user_voice_bundle",
-                resource_id=user_id,
-                outcome="failure",
-                metadata={**_audit_meta, "error": str(exc)},
+        try:
+            emit(
+                AuditEvent(
+                    category=AuditCategory.SECURITY,
+                    action="voice_bundle_assignment_changed",
+                    actor_id=str(current_user_id),
+                    resource_type="user_voice_bundle",
+                    resource_id=user_id,
+                    outcome="failure",
+                    metadata={**_audit_meta, "error": str(exc)},
+                )
             )
-        )
+        except Exception:
+            logger.warning("set_user_bundle: failed to emit failure audit", exc_info=True)
         logger.error("set_user_bundle: DB error: %s", exc)
         raise HTTPException(status_code=500, detail="Database error") from exc
+
+    emit(
+        AuditEvent(
+            category=AuditCategory.SECURITY,
+            action="voice_bundle_assignment_changed",
+            actor_id=str(current_user_id),
+            resource_type="user_voice_bundle",
+            resource_id=user_id,
+            outcome="success",
+            metadata={**_audit_meta, "bundle_name": stored_bundle_name},
+        )
+    )
 
     logger.info(
         "voice_bundle user_id=%s target=%s bundle=%s",
