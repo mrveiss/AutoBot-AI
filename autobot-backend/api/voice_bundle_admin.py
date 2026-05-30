@@ -14,6 +14,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from api.redis_mcp.rbac import VALID_BUNDLES
 from auth_middleware import get_auth_middleware, get_current_user
 from autobot_shared.logging_manager import get_logger
 from services.event_log import EventType, emit
@@ -65,8 +66,6 @@ class BundleAssignRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # GET /voice/realtime/bundle/me
 # ---------------------------------------------------------------------------
-
-VALID_BUNDLES = {"voice_safe", "voice_extended", "voice_admin"}
 
 _BUNDLE_TOOL_COUNTS: dict[str, int] = {
     "voice_safe": 0,  # computed lazily below

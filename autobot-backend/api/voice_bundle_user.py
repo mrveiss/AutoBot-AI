@@ -14,6 +14,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from api.redis_mcp.rbac import VALID_BUNDLES
 from auth_middleware import get_auth_middleware, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -54,8 +55,6 @@ class BundleAssignRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-
-VALID_BUNDLES = {"voice_safe", "voice_extended", "voice_admin"}
 
 BUNDLE_DEFINITIONS: dict[str, dict[str, str]] = {
     "voice_safe": {
@@ -222,6 +221,14 @@ async def set_user_bundle(
 
     current_user_id = _get_user_id(current_user)
 
+    from services.audit.unified_audit import AuditCategory, AuditEvent, emit  # noqa: PLC0415
+
+    _audit_meta = {
+        "target_user_id": user_id,
+        "bundle_name": body.bundle_name,
+        "assignment_action": "clear" if body.bundle_name is None else "assign",
+    }
+
     try:
         from user_management.database import get_async_session  # noqa: PLC0415
         from sqlalchemy import text  # noqa: PLC0415
@@ -252,26 +259,31 @@ async def set_user_bundle(
             )
             result = row.fetchone()
             stored_bundle_name: Optional[str] = result[0] if result else None
+        emit(
+            AuditEvent(
+                category=AuditCategory.SECURITY,
+                action="voice_bundle_assignment_changed",
+                actor_id=str(current_user_id),
+                resource_type="user_voice_bundle",
+                resource_id=user_id,
+                outcome="success",
+                metadata=_audit_meta,
+            )
+        )
     except Exception as exc:
+        emit(
+            AuditEvent(
+                category=AuditCategory.SECURITY,
+                action="voice_bundle_assignment_changed",
+                actor_id=str(current_user_id),
+                resource_type="user_voice_bundle",
+                resource_id=user_id,
+                outcome="failure",
+                metadata={**_audit_meta, "error": str(exc)},
+            )
+        )
         logger.error("set_user_bundle: DB error: %s", exc)
         raise HTTPException(status_code=500, detail="Database error") from exc
-
-    from services.audit.unified_audit import AuditCategory, AuditEvent, emit  # noqa: PLC0415
-
-    emit(
-        AuditEvent(
-            category=AuditCategory.SECURITY,
-            action="voice_bundle_assignment_changed",
-            actor_id=str(current_user_id),
-            resource_type="user_voice_bundle",
-            resource_id=user_id,
-            metadata={
-                "target_user_id": user_id,
-                "bundle_name": stored_bundle_name,
-                "assignment_action": "clear" if stored_bundle_name is None else "assign",
-            },
-        )
-    )
 
     logger.info(
         "voice_bundle user_id=%s target=%s bundle=%s",

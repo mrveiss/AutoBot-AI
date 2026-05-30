@@ -192,6 +192,7 @@ class TestSetUserBundle:
         assert data["user_id"] == "bob"
         assert data["bundle_name"] == "voice_safe"
         mock_session.commit.assert_called_once()
+        mock_emit.assert_called_once()
 
     def test_admin_clears_bundle_for_user(self):
         """Admin can clear a user's bundle assignment."""
@@ -213,6 +214,7 @@ class TestSetUserBundle:
         assert data["user_id"] == "alice"
         assert data["bundle_name"] is None
         mock_session.execute.assert_called_once()
+        mock_emit.assert_called_once()
 
     def test_invalid_bundle_name(self):
         """Admin assigning invalid bundle name fails with 422."""
@@ -252,3 +254,4 @@ class TestSetUserBundle:
         assert response.status_code == 200
         data = response.json()
         assert data["bundle_name"] == "voice_admin"
+        mock_emit.assert_called_once()
