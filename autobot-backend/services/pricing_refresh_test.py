@@ -69,6 +69,28 @@ async def test_openai_source_returns_models():
     assert all(v.provider == "openai" for v in result.values())
 
 
+@pytest.mark.asyncio
+async def test_google_source_returns_models():
+    from llm_shared.pricing.google_source import GooglePricingSource
+
+    src = GooglePricingSource()
+    result = await src.fetch()
+    assert len(result) > 0
+    assert all(isinstance(v, ModelPricing) for v in result.values())
+    assert all(v.provider == "google" for v in result.values())
+
+
+@pytest.mark.asyncio
+async def test_deepseek_source_returns_models():
+    from llm_shared.pricing.deepseek_source import DeepSeekPricingSource
+
+    src = DeepSeekPricingSource()
+    result = await src.fetch()
+    assert len(result) > 0
+    assert all(isinstance(v, ModelPricing) for v in result.values())
+    assert all(v.provider == "deepseek" for v in result.values())
+
+
 # ---------------------------------------------------------------------------
 # PricingRedisStore
 # ---------------------------------------------------------------------------
@@ -168,9 +190,10 @@ async def test_refresh_writes_new_pricing_to_redis():
         summary = await _refresh_all()
 
     assert "anthropic" in summary
+    assert "deepseek" in summary
+    assert "google" in summary
     assert "openai" in summary
-    assert summary["anthropic"]["success"] is True
-    assert summary["openai"]["success"] is True
+    assert all(summary[p]["success"] is True for p in ["anthropic", "deepseek", "google", "openai"])
     assert len(captured_writes) > 0
 
 
