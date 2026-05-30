@@ -89,3 +89,7 @@ jsonschema>=4.26.0      # Issue #7405: JSON Schema validation for /knowledge/ext
 # opencv-python>=4.8.0   # Frame extraction for video pipeline
 # transformers>=4.30.0   # Whisper transcription for audio pipeline
 # librosa>=0.10.0        # Audio decoding (used with transformers)
+
+# Optional LLM tracing integrations (GH#9012) — backend starts without them when env vars are absent
+# langfuse>=2.0.0        # Set LANGFUSE_HOST + LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY to activate
+# langsmith>=0.1.0       # Set LANGSMITH_API_KEY to activate
