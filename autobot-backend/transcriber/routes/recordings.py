@@ -34,7 +34,8 @@ async def upload_recording(
     file: UploadFile = File(...),
     db: Database = Depends(get_db),
 ):
-    if not await db.get_project(project_id):
+    project = await db.get_project(project_id)
+    if not project or project["user_id"] != _user_id(request):
         raise HTTPException(404, "Project not found")
     ext = Path(file.filename or "").suffix.lower()
     if ext not in _ALLOWED_EXTENSIONS:
@@ -52,25 +53,26 @@ async def upload_recording(
 
 
 @router.get("/projects/{project_id}/recordings", response_model=list[RecordingOut])
-async def list_recordings(project_id: int, db: Database = Depends(get_db)):
-    if not await db.get_project(project_id):
+async def list_recordings(project_id: int, request: Request, db: Database = Depends(get_db)):
+    project = await db.get_project(project_id)
+    if not project or project["user_id"] != _user_id(request):
         raise HTTPException(404, "Project not found")
     rows = await db.list_recordings(project_id)
     return [RecordingOut(**r) for r in rows]
 
 
 @router.get("/recordings/{recording_id}", response_model=RecordingOut)
-async def get_recording(recording_id: int, db: Database = Depends(get_db)):
+async def get_recording(recording_id: int, request: Request, db: Database = Depends(get_db)):
     rec = await db.get_recording(recording_id)
-    if not rec:
+    if not rec or rec["user_id"] != _user_id(request):
         raise HTTPException(404, "Recording not found")
     return RecordingOut(**rec)
 
 
 @router.delete("/recordings/{recording_id}", status_code=204)
-async def delete_recording(recording_id: int, db: Database = Depends(get_db)):
+async def delete_recording(recording_id: int, request: Request, db: Database = Depends(get_db)):
     rec = await db.get_recording(recording_id)
-    if not rec:
+    if not rec or rec["user_id"] != _user_id(request):
         raise HTTPException(404, "Recording not found")
     filepath = Path(rec["filepath"])
     if filepath.exists():
