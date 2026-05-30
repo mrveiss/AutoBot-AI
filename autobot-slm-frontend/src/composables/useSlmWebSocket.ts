@@ -23,7 +23,12 @@ const logger = createLogger('SlmWebSocket')
 // but skip when it's a full URL (fleet: http://<slm-host>:8000)
 const config = getConfig()
 const apiPrefix = config.apiBaseUrl.startsWith('/') ? config.apiBaseUrl : ''
-const WS_URL = `${config.wsBaseUrl}${apiPrefix}/api/ws/events`
+const WS_BASE = `${config.wsBaseUrl}${apiPrefix}/api/ws/events`
+
+function buildWsUrl(): string {
+  const token = sessionStorage.getItem('slm_access_token')
+  return token ? `${WS_BASE}?token=${encodeURIComponent(token)}` : WS_BASE
+}
 
 // --- Module-level singleton state ---
 const socket = ref<WebSocket | null>(null)
@@ -105,7 +110,7 @@ function doConnect(): void {
   }
 
   try {
-    socket.value = new WebSocket(WS_URL)
+    socket.value = new WebSocket(buildWsUrl())
   } catch {
     // SecurityError when mixed content is blocked (ws:// from https:// page)
     connected.value = false

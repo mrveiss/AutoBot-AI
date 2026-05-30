@@ -37,12 +37,14 @@ async def _authenticate_websocket_token(websocket: WebSocket) -> dict | None:
     """
     token = websocket.query_params.get("token")
     if not token:
+        await websocket.accept()
         await websocket.close(code=4001, reason="Authentication required")
         logger.warning("WebSocket connection rejected: missing token")
         return None
 
     payload = auth_service.decode_token(token)
     if not payload:
+        await websocket.accept()
         await websocket.close(code=4001, reason="Invalid or expired token")
         logger.warning("WebSocket connection rejected: invalid token")
         return None
