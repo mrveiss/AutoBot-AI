@@ -77,13 +77,22 @@ BUNDLE_DEFINITIONS: dict[str, dict[str, str]] = {
 # Helpers
 # ---------------------------------------------------------------------------
 
+_tool_count_cache: dict[tuple[str, bool], int] = {}
+
 
 async def _count_tools_for_bundle(bundle: str, is_admin: bool) -> int:
-    """Return the number of tools available in this bundle."""
-    from api.redis_mcp.rbac import TOOL_ACCESS_MATRIX, filter_tools_for_bundle  # noqa: PLC0415
+    """Return the number of tools available in this bundle (cached per bundle+role)."""
+    key = (bundle, is_admin)
+    if key not in _tool_count_cache:
+        from api.redis_mcp.rbac import TOOL_ACCESS_MATRIX, filter_tools_for_bundle  # noqa: PLC0415
 
-    all_tools = list(TOOL_ACCESS_MATRIX.keys())
-    return len(filter_tools_for_bundle(all_tools, bundle=bundle, is_admin=is_admin))
+        all_tools = list(TOOL_ACCESS_MATRIX.keys())
+        _tool_count_cache[key] = len(filter_tools_for_bundle(all_tools, bundle=bundle, is_admin=is_admin))
+    return _tool_count_cache[key]
+
+
+def _is_admin(user: dict) -> bool:
+    return user.get("role") == "admin"
 
 
 def _get_user_id(user: dict) -> str:
@@ -94,8 +103,7 @@ def _get_user_id(user: dict) -> str:
 def _check_self_or_admin(request: Request, current_user: dict, target_user_id: str) -> bool:
     """Verify user can access target_user_id (self or admin)."""
     current_user_id = _get_user_id(current_user)
-    is_admin = current_user.get("role") == "admin"
-    return current_user_id == target_user_id or is_admin
+    return current_user_id == target_user_id or _is_admin(current_user)
 
 
 # ---------------------------------------------------------------------------
@@ -117,7 +125,7 @@ async def list_voice_bundles(
     Filters bundles based on user role (admins see all, users see allowed).
     Results are sorted by bundle name for deterministic ordering.
     """
-    is_admin = current_user.get("role", "user") == "admin"
+    is_admin = _is_admin(current_user)
 
     result = []
     for bundle_name in sorted(VALID_BUNDLES):
@@ -203,8 +211,7 @@ async def set_user_bundle(
     self-service is explicitly prohibited to prevent privilege escalation
     (GH#8969).
     """
-    is_admin = current_user.get("role") == "admin"
-    if not is_admin:
+    if not _is_admin(current_user):
         raise_auth_error("AUTH_0003", "Only admins may assign voice bundles")
 
     if body.bundle_name is not None and body.bundle_name not in VALID_BUNDLES:
