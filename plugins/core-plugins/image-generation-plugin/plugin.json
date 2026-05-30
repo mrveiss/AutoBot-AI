@@ -1,0 +1,76 @@
+{
+  "name": "image-generation-plugin",
+  "version": "1.0.0",
+  "display_name": "Image Generation Plugin",
+  "description": "Adds image generation to chat and agent workflows via DALL-E 3, Flux, and Stable Diffusion. Registers the generate_image tool callable from LLC agent tasks.",
+  "author": "mrveiss",
+  "entry_point": "plugins.core_plugins.image_generation_plugin.main",
+  "dependencies": [],
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "default_provider": {
+        "type": "string",
+        "enum": ["dalle", "flux", "stable_diffusion"],
+        "default": "dalle",
+        "description": "Default provider used when none is specified in the tool call"
+      },
+      "dalle_model": {
+        "type": "string",
+        "enum": ["dall-e-3", "dall-e-2"],
+        "default": "dall-e-3",
+        "description": "DALL-E model version"
+      },
+      "default_size": {
+        "type": "string",
+        "default": "1024x1024",
+        "description": "Default image size (provider-specific values apply)"
+      },
+      "dalle_quality": {
+        "type": "string",
+        "enum": ["standard", "hd"],
+        "default": "standard",
+        "description": "DALL-E 3 image quality"
+      }
+    }
+  },
+  "hooks": [],
+  "required_env": [
+    {
+      "name": "OPENAI_API_KEY",
+      "secret": true,
+      "required": false,
+      "description": "OpenAI API key for DALL-E image generation",
+      "docs_url": "https://platform.openai.com/api-keys",
+      "obtain_steps": [
+        "Go to https://platform.openai.com/api-keys",
+        "Create a new API key",
+        "Set OPENAI_API_KEY to the generated key"
+      ]
+    },
+    {
+      "name": "FLUX_API_KEY",
+      "secret": true,
+      "required": false,
+      "description": "BFL API key for Flux image generation (api.bfl.ml)",
+      "docs_url": "https://api.bfl.ml",
+      "obtain_steps": [
+        "Go to https://api.bfl.ml",
+        "Sign up and obtain an API key",
+        "Set FLUX_API_KEY to the generated key"
+      ]
+    },
+    {
+      "name": "STABILITY_API_KEY",
+      "secret": true,
+      "required": false,
+      "description": "Stability AI API key for Stable Diffusion image generation",
+      "docs_url": "https://platform.stability.ai/account/keys",
+      "obtain_steps": [
+        "Go to https://platform.stability.ai/account/keys",
+        "Create an API key",
+        "Set STABILITY_API_KEY to the generated key"
+      ]
+    }
+  ]
+}

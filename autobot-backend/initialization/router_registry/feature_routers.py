@@ -209,6 +209,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ),
     ("api.playwright", "/playwright", ["playwright"], "playwright"),
     ("api.vision", "/vision", ["vision", "gui-automation"], "vision"),
+    # GH#9015: Image generation — DALL-E 3, Flux, Stable Diffusion
+    (
+        "api.image_generation",
+        "/image-generation",
+        ["image-generation", "media"],
+        "image_generation",
+    ),
     (
         "api.web_research_settings",
         "/web-research-settings",
