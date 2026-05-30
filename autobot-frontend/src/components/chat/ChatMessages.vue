@@ -1242,9 +1242,8 @@ onMounted(async () => {
 /* THOUGHT MESSAGES - Purple theme for AI reasoning */
 .message-wrapper.type-thought {
   background: var(--color-info-bg);
-  border-color: rgba(139, 92, 246, 0.3);
+  border-color: rgba(139, 92, 246, 0.5);
   color: var(--text-secondary);
-  border-left: 4px solid var(--color-purple-500);
 }
 
 .message-wrapper.type-thought .message-avatar {
@@ -1276,9 +1275,8 @@ onMounted(async () => {
 /* PLANNING MESSAGES - Indigo theme for task planning */
 .message-wrapper.type-planning {
   background: var(--color-info-bg);
-  border-color: rgba(99, 102, 241, 0.3);
+  border-color: rgba(99, 102, 241, 0.5);
   color: var(--text-secondary);
-  border-left: 4px solid var(--color-indigo-500);
 }
 
 .message-wrapper.type-planning .message-avatar {
@@ -1310,9 +1308,8 @@ onMounted(async () => {
 /* DEBUG MESSAGES - Orange/Amber theme for debug output */
 .message-wrapper.type-debug {
   background: var(--color-warning-bg);
-  border-color: rgba(245, 158, 11, 0.3);
+  border-color: rgba(245, 158, 11, 0.5);
   color: var(--text-secondary);
-  border-left: 4px solid var(--color-amber-500);
 }
 
 .message-wrapper.type-debug .message-avatar {
@@ -1339,7 +1336,6 @@ onMounted(async () => {
 /* UTILITY MESSAGES - Neutral theme-aware for tool/utility output */
 .message-wrapper.type-utility {
   @apply bg-autobot-bg-tertiary border-autobot-border text-autobot-text-primary;
-  border-left: 4px solid var(--border-strong);
 }
 
 .message-wrapper.type-utility .message-avatar {
@@ -1357,9 +1353,8 @@ onMounted(async () => {
 /* SOURCES MESSAGES - Info-tinted theme-aware for source references */
 .message-wrapper.type-sources {
   background: var(--color-info-bg);
-  border-color: var(--color-info-bg-hover);
+  border-color: rgba(59, 130, 246, 0.4);
   color: var(--text-primary);
-  border-left: 4px solid var(--color-info);
 }
 
 .message-wrapper.type-sources .message-avatar {
@@ -1377,9 +1372,8 @@ onMounted(async () => {
 /* JSON MESSAGES - Primary-tinted theme-aware for structured data */
 .message-wrapper.type-json {
   background: var(--color-primary-bg);
-  border-color: var(--color-primary-bg-hover);
+  border-color: rgba(59, 130, 246, 0.4);
   color: var(--text-primary);
-  border-left: 4px solid var(--color-primary);
 }
 
 .message-wrapper.type-json .message-avatar {
@@ -1392,8 +1386,8 @@ onMounted(async () => {
 
 /* TERMINAL OUTPUT MESSAGES - Always-dark (intentional terminal aesthetic) */
 .message-wrapper.type-terminal_output {
-  @apply bg-gray-900 border-gray-700 text-gray-100;
-  border-left: 4px solid var(--color-success);
+  @apply bg-gray-900 text-gray-100;
+  border-color: rgba(16, 185, 129, 0.5);
 }
 
 .message-wrapper.type-terminal_output .message-avatar {
@@ -1420,9 +1414,8 @@ onMounted(async () => {
 /* COMMAND APPROVAL REQUEST - Warning theme-aware */
 .message-wrapper.type-command_approval_request {
   background: var(--color-warning-bg);
-  border-color: var(--color-warning-border);
+  border-color: rgba(245, 158, 11, 0.5);
   color: var(--text-primary);
-  border-left: 4px solid var(--color-warning);
 }
 
 .message-wrapper.type-command_approval_request .message-avatar {

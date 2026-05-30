@@ -84,14 +84,14 @@ onMounted(async () => {
 <template>
   <main
     id="main-content"
-    class="min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4"
+    class="min-h-screen bg-slate-900 flex items-center justify-center p-4"
     aria-label="Login page"
   >
     <div class="w-full max-w-md">
       <!-- Logo/Header -->
       <div class="text-center mb-8">
         <div
-          class="inline-flex items-center justify-center w-16 h-16 rounded-xl bg-linear-to-br from-primary-500 to-primary-600 shadow-lg mb-4"
+          class="inline-flex items-center justify-center w-16 h-16 rounded-xl bg-primary-600 shadow-lg mb-4"
           aria-hidden="true"
         >
           <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -103,7 +103,7 @@ onMounted(async () => {
       </div>
 
       <!-- Login Form -->
-      <div class="bg-white rounded-2xl shadow-xl p-8">
+      <div class="bg-white rounded-xl shadow-lg p-8">
         <!-- Standard Login Form -->
         <form
           v-if="!authStore.mfaPending"
@@ -188,7 +188,7 @@ onMounted(async () => {
           <button
             type="submit"
             :disabled="authStore.loading"
-            class="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-linear-to-r from-primary-600 to-primary-700 text-white font-medium rounded-lg hover:from-primary-700 hover:to-primary-800 focus:ring-4 focus:ring-primary-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            class="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 focus:ring-4 focus:ring-primary-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg v-if="authStore.loading" class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24" aria-hidden="true">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -231,7 +231,7 @@ onMounted(async () => {
           <button
             @click="handleMFAVerify"
             :disabled="authStore.loading || mfaCode.length < 6"
-            class="w-full py-2.5 px-4 bg-linear-to-r from-primary-600 to-primary-700 text-white font-medium rounded-lg hover:from-primary-700 hover:to-primary-800 disabled:opacity-50"
+            class="w-full py-2.5 px-4 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
           >
             {{ authStore.loading ? 'Verifying...' : 'Verify' }}
           </button>
