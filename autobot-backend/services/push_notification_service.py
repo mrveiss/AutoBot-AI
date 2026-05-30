@@ -9,6 +9,8 @@ Generate a new pair once with ``generate_vapid_keys()`` and persist the output
 to your .env file.
 """
 
+import asyncio
+import functools
 import json
 import os
 import uuid
@@ -18,10 +20,12 @@ from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
-# Module-level constants resolved from env vars (CLAUDE.md TTL pattern).
+# Module-level constants resolved from env vars (CLAUDE.md TTL pattern / #6743).
 _VAPID_PUBLIC_KEY: str = os.environ.get("VAPID_PUBLIC_KEY", "")
 _VAPID_PRIVATE_KEY: str = os.environ.get("VAPID_PRIVATE_KEY", "")
 _VAPID_CLAIMS_SUB: str = os.environ.get("VAPID_CLAIMS_SUB", "mailto:admin@autobot.local")
+_PUSH_NOTIFICATION_TTL: int = int(os.environ.get("AUTOBOT_PUSH_NOTIFICATION_TTL", "86400"))
+logger.debug("Push notification TTL: %ds (AUTOBOT_PUSH_NOTIFICATION_TTL)", _PUSH_NOTIFICATION_TTL)
 
 
 def generate_vapid_keys() -> dict:
@@ -53,7 +57,7 @@ async def send_push_notification(
     body: str,
     url: str = "/",
     *,
-    ttl: int = 86400,
+    ttl: int = _PUSH_NOTIFICATION_TTL,
 ) -> int:
     """Send a web push notification to all subscriptions for user_id.
 
@@ -87,16 +91,19 @@ async def send_push_notification(
                     "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]},
                 }
             )
-            response = pusher.send(
-                data=payload.encode("utf-8"),
-                vapid_private_key=_VAPID_PRIVATE_KEY,
-                vapid_claims=claims,
-                ttl=ttl,
-                content_encoding="aes128gcm",
+            response = await asyncio.to_thread(
+                functools.partial(
+                    pusher.send,
+                    data=payload.encode("utf-8"),
+                    vapid_private_key=_VAPID_PRIVATE_KEY,
+                    vapid_claims=claims,
+                    ttl=ttl,
+                    content_encoding="aes128gcm",
+                )
             )
             if response.status_code == 410:
                 stale_endpoints.append(sub["endpoint"])
-            elif 200 <= response.status_code < 300 or response.status_code == 201:
+            elif 200 <= response.status_code < 300:
                 dispatched += 1
             else:
                 logger.warning(
@@ -120,7 +127,7 @@ async def _get_subscriptions(user_id: str) -> list[dict]:
         from sqlalchemy.ext.asyncio import AsyncSession
 
         from models.push_subscription import PushSubscription
-        from user_management.database import get_async_engine, get_async_session_factory
+        from user_management.database import get_async_session_factory
 
         factory = get_async_session_factory()
         async with factory() as session:
@@ -175,11 +182,8 @@ def register_celery_task_success_hook() -> None:
             return
 
         task_name = getattr(sender, "name", str(sender))
-        import asyncio
-
-        loop = asyncio.new_event_loop()
         try:
-            loop.run_until_complete(
+            asyncio.run(
                 send_push_notification(
                     user_id=str(user_id),
                     title="Task complete",
@@ -189,5 +193,3 @@ def register_celery_task_success_hook() -> None:
             )
         except Exception:
             logger.debug("Push notification dispatch failed after task %s", task_name, exc_info=True)
-        finally:
-            loop.close()

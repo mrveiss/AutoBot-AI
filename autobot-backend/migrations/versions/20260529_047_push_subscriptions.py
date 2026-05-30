@@ -34,4 +34,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_index("ix_push_subscriptions_user_id", table_name="push_subscriptions")
     op.drop_table("push_subscriptions")

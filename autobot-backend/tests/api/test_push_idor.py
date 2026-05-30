@@ -103,6 +103,75 @@ async def test_unsubscribe_ignores_user_id_in_request_body():
 
 
 @pytest.mark.asyncio
+async def test_subscribe_endpoint_hijacking_returns_409():
+    """Verify subscribe returns 409 when endpoint is already owned by a different user (IDOR fix).
+
+    Attack: User B submits User A's push endpoint URL without any user_id in body.
+    The previous upsert silently overwrote user_id — now it must raise 409.
+    """
+    body = SubscribeRequest(
+        endpoint="https://example.com/user_a_endpoint",
+        p256dh="attacker_dh_key",
+        auth="attacker_auth_key",
+        # No user_id in body — attacker registers normally, using their own JWT
+    )
+    current_user = {"user_id": "user_b_attacker"}
+    session = AsyncMock(spec=AsyncSession)
+
+    # Simulate: endpoint already owned by user_a
+    existing = MagicMock()
+    existing.user_id = "user_a_victim"
+    mock_query = AsyncMock()
+    mock_query.scalar_one_or_none.return_value = existing
+    session.execute.return_value = mock_query
+
+    with pytest.raises(HTTPException) as exc_info:
+        await subscribe(body, current_user, session)
+
+    assert exc_info.value.status_code == 409
+    assert "different user" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_subscribe_own_endpoint_refresh_succeeds():
+    """Verify the owner can refresh (update keys for) their own subscription."""
+    body = SubscribeRequest(
+        endpoint="https://example.com/user_a_endpoint",
+        p256dh="new_dh_key",
+        auth="new_auth_key",
+    )
+    current_user = {"user_id": "user_a"}
+    session = AsyncMock(spec=AsyncSession)
+
+    existing = MagicMock()
+    existing.user_id = "user_a"
+    mock_query = AsyncMock()
+    mock_query.scalar_one_or_none.return_value = existing
+    session.execute.return_value = mock_query
+
+    result = await subscribe(body, current_user, session)
+
+    assert result == {"status": "subscribed"}
+    assert existing.p256dh == "new_dh_key"
+    assert existing.auth == "new_auth_key"
+
+
+@pytest.mark.asyncio
+async def test_subscribe_rejects_non_https_endpoint():
+    """Verify subscribe endpoint rejects non-HTTPS endpoints (SSRF prevention)."""
+    import pytest as _pytest
+    from pydantic import ValidationError
+
+    with _pytest.raises(ValidationError) as exc_info:
+        SubscribeRequest(
+            endpoint="http://internal-service.local/push",  # HTTP, not HTTPS
+            p256dh="dh_key",
+            auth="auth_key",
+        )
+    assert "https" in str(exc_info.value).lower()
+
+
+@pytest.mark.asyncio
 async def test_subscribe_requires_authentication():
     """Verify subscribe endpoint requires valid authentication."""
     body = SubscribeRequest(

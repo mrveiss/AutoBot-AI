@@ -12,9 +12,10 @@ Endpoints:
 
 import uuid
 from typing import Dict
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, field_validator
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,6 +38,20 @@ class SubscribeRequest(BaseModel):
     # Subscriptions are ALWAYS bound to the authenticated user.
     # If user_id is provided, it will be silently ignored (fail-closed).
     user_id: str | None = None
+
+    @field_validator("endpoint")
+    @classmethod
+    def validate_endpoint_https(cls, v: str) -> str:
+        """Reject non-HTTPS endpoints to prevent SSRF via arbitrary URL registration."""
+        try:
+            parsed = urlparse(v)
+        except Exception as exc:
+            raise ValueError(f"Invalid endpoint URL: {exc}") from exc
+        if parsed.scheme != "https":
+            raise ValueError("Push endpoint must use https:// scheme")
+        if not parsed.netloc:
+            raise ValueError("Push endpoint must include a valid host")
+        return v
 
 
 class UnsubscribeRequest(BaseModel):
@@ -90,16 +105,25 @@ async def subscribe(
             body.user_id, user_id, body.endpoint[:50],
         )
 
-    # Upsert: if endpoint already exists, update keys in place.
+    # Upsert: if endpoint already exists, update keys in place — but only for the owner.
     result = await session.execute(
         select(PushSubscription).where(PushSubscription.endpoint == body.endpoint)
     )
     existing = result.scalar_one_or_none()
 
     if existing:
+        # GH#8967 / IDOR: reject if a different user owns this endpoint.
+        if existing.user_id != str(user_id):
+            logger.warning(
+                "SECURITY: push subscribe endpoint conflict — requester=%s, owner=%s, endpoint=%s",
+                user_id, existing.user_id, body.endpoint[:50],
+            )
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Endpoint is registered to a different user",
+            )
         existing.p256dh = body.p256dh
         existing.auth = body.auth
-        existing.user_id = str(user_id)
     else:
         session.add(
             PushSubscription(

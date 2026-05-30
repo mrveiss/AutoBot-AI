@@ -5,7 +5,7 @@
 
 import uuid
 
-from sqlalchemy import Column, DateTime, String, Text, func
+from sqlalchemy import Column, String, Text
 
 from user_management.models.base import Base
 
@@ -20,7 +20,7 @@ class PushSubscription(Base):
     endpoint = Column(Text(), nullable=False, unique=True)
     p256dh = Column(Text(), nullable=False)
     auth = Column(Text(), nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    # created_at / updated_at are injected by Base via mapped_column — do not redeclare
 
     def __repr__(self) -> str:
         return f"<PushSubscription user_id={self.user_id!r} endpoint={self.endpoint[:40]!r}...>"

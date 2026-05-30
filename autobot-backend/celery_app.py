@@ -231,5 +231,7 @@ try:
     from services.push_notification_service import register_celery_task_success_hook
 
     register_celery_task_success_hook()
+except ImportError:
+    pass  # pywebpush not installed — push notifications disabled
 except Exception:
-    pass  # pywebpush absent or push service not configured — non-fatal
+    logger.warning("Push notification hook registration failed (GH#4459)", exc_info=True)
