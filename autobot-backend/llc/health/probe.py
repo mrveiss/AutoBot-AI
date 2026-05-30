@@ -46,6 +46,15 @@ try:
 except ImportError:
     _get_lm = None
 
+try:
+    from autobot_shared.singleton_factory import lazy_singleton as _lazy_singleton_sc
+
+    from ..scheduler.session_checkpointer import SessionCheckpointer as _SessionCheckpointer
+
+    _get_sc = _lazy_singleton_sc(_SessionCheckpointer)
+except ImportError:
+    _get_sc = None
+
 logger = logging.getLogger(__name__)
 
 _PROBE_NAME = KnownProbes.LLC
@@ -93,9 +102,12 @@ async def _collect_metrics() -> dict:
 
     scheduler = get_heartbeat_scheduler()
     liveness_monitor = _get_liveness_monitor()
+    session_checkpointer = _get_session_checkpointer()
 
     heartbeat_scheduler_running = _is_scheduler_running(scheduler)
     liveness_monitor_running = _is_liveness_monitor_running(liveness_monitor)
+    session_checkpointer_running = _is_session_checkpointer_running(session_checkpointer)
+    session_recovery_available = await _session_recovery_available()
     scheduler_last_tick_age_seconds = await _scheduler_tick_age()
     agents_overdue_degraded, agents_overdue_critical = await _count_overdue_agents()
     budget_warning_companies, budget_exhausted_companies = await _budget_counts()
@@ -105,6 +117,8 @@ async def _collect_metrics() -> dict:
     return {
         "heartbeat_scheduler_running": heartbeat_scheduler_running,
         "liveness_monitor_running": liveness_monitor_running,
+        "session_checkpointer_running": session_checkpointer_running,
+        "session_recovery_available": session_recovery_available,
         "scheduler_last_tick_age_seconds": scheduler_last_tick_age_seconds,
         "agents_overdue_degraded": agents_overdue_degraded,
         "agents_overdue_critical": agents_overdue_critical,
@@ -126,6 +140,7 @@ def _compute_status(metrics: dict) -> str:
         metrics["agents_overdue_degraded"] > 0
         or metrics["budget_exhausted_companies"] > 0
         or not metrics["liveness_monitor_running"]
+        or not metrics["session_checkpointer_running"]
         or metrics["pending_approvals_critical"] > 0
         or metrics["budget_warning_companies"] > 0
         or metrics.get("agents_missing_instructions", 0) > 0
@@ -151,6 +166,33 @@ def _get_liveness_monitor() -> object | None:
 
 def _is_liveness_monitor_running(monitor: object | None) -> bool:
     return monitor is not None and bool(getattr(monitor, "is_running", False))
+
+
+def _get_session_checkpointer() -> object | None:
+    """Return the singleton SessionCheckpointer if it exists, else None."""
+    if _get_sc is None:
+        return None
+    try:
+        return _get_sc()
+    except Exception:
+        return None
+
+
+def _is_session_checkpointer_running(checkpointer: object | None) -> bool:
+    return checkpointer is not None and bool(getattr(checkpointer, "is_running", False))
+
+
+async def _session_recovery_available() -> bool:
+    """Return True if at least one ``llc:session:checkpoint:*`` key exists in Redis."""
+    redis = await get_async_redis_client()
+    if redis is None:
+        return False
+    try:
+        cursor, keys = await redis.scan(cursor=0, match="llc:session:checkpoint:*", count=1)
+        return len(keys) > 0
+    except Exception:
+        logger.debug("_session_recovery_available check failed", exc_info=True)
+        return False
 
 
 async def _scheduler_tick_age() -> float | None:

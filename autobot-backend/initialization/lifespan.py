@@ -1476,6 +1476,33 @@ async def _init_budget_watchdog(app: FastAPI) -> None:
         app.state.llc_budget_watchdog = None
 
 
+async def _recover_agent_sessions(app: FastAPI) -> None:
+    """Re-queue runs that were interrupted by a previous server crash (GH#9026)."""
+    logger.info("LLC SessionCheckpointer: recovering incomplete runs...")
+    try:
+        from llc.scheduler.session_checkpointer import recover_incomplete_runs
+
+        await recover_incomplete_runs()
+        logger.info("LLC SessionCheckpointer: recovery complete")
+    except Exception as exc:
+        logger.warning("LLC session recovery failed (non-fatal): %s", exc)
+
+
+async def _init_session_checkpointer(app: FastAPI) -> None:
+    """Start LLC SessionCheckpointer for periodic session state persistence (GH#9026)."""
+    logger.info("LLC SessionCheckpointer: Starting...")
+    try:
+        from llc.scheduler.session_checkpointer import SessionCheckpointer
+
+        checkpointer = SessionCheckpointer()
+        checkpointer.start()
+        app.state.llc_session_checkpointer = checkpointer
+        logger.info("LLC SessionCheckpointer: Started")
+    except Exception as exc:
+        logger.warning("LLC session checkpointer startup failed (non-fatal): %s", exc)
+        app.state.llc_session_checkpointer = None
+
+
 async def _start_llc_notification_router(app: FastAPI) -> None:
     """Start the LLC notification router background task (GH#8255).
 
@@ -1583,10 +1610,12 @@ async def initialize_background_services(app: FastAPI):
         await _start_doc_sync_queue_worker(app)
         await _auto_index_documentation()
         await _init_log_forwarding()
+        await _recover_agent_sessions(app)
         await _init_heartbeat_scheduler(app)
         await _init_llc_routine_scheduler(app)
         await _init_liveness_monitor(app)
         await _init_budget_watchdog(app)
+        await _init_session_checkpointer(app)
         await _init_llc_outbound_sync(app)
         await _start_connector_scheduler()
         await _init_trigger_service(app)
@@ -1713,6 +1742,10 @@ async def cleanup_services(app: FastAPI):
         if hasattr(app.state, "llc_budget_watchdog") and app.state.llc_budget_watchdog:
             app.state.llc_budget_watchdog.stop()
             logger.info("✅ LLC budget watchdog stopped")
+        # GH#9026: Stop LLC session checkpointer
+        if hasattr(app.state, "llc_session_checkpointer") and app.state.llc_session_checkpointer:
+            app.state.llc_session_checkpointer.stop()
+            logger.info("✅ LLC session checkpointer stopped")
 
         # GH#8257: Stop LLC outbound sync service
         if hasattr(app.state, "llc_outbound_sync") and app.state.llc_outbound_sync:

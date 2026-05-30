@@ -134,10 +134,7 @@ class BeliefState:
             lines.append("")
             lines.append("## Recent Contradictions (agent should verify)")
             for c in recent:
-                lines.append(
-                    f"- `{c.key}`: previously {c.prior_value!r}, "
-                    f"now {c.new_value!r} — treat as uncertain"
-                )
+                lines.append(f"- `{c.key}`: previously {c.prior_value!r}, " f"now {c.new_value!r} — treat as uncertain")
 
         return "\n".join(lines)
 

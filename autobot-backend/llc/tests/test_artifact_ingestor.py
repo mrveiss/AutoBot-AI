@@ -317,9 +317,7 @@ async def test_ingest_skips_guard_when_no_company_id(ingestor, mock_session):
         mock_collection = AsyncMock()
         mock_client.get_or_create_collection.return_value = mock_collection
 
-        with patch(
-            "utils.async_chromadb_client.get_async_chromadb_client", new=AsyncMock(return_value=mock_client)
-        ):
+        with patch("utils.async_chromadb_client.get_async_chromadb_client", new=AsyncMock(return_value=mock_client)):
             result = await ingestor.ingest(
                 mock_session,
                 work_product_id=str(product_id),

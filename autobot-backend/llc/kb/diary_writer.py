@@ -137,9 +137,7 @@ class AgentDiaryKbWriter:
 
         from ..models.work_item import LLCWorkItem
 
-        result = await session.execute(
-            select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id))
-        )
+        result = await session.execute(select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)))
         work_item = result.scalar_one_or_none()
         if work_item:
             await assert_not_writing_to_ancestor_kb(

@@ -120,6 +120,7 @@ class LLCRunStatus(str, Enum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    INTERRUPTED = "interrupted"
     TIMEOUT = "timeout"
     CANCELLED = "cancelled"
     RATE_LIMITED = "rate_limited"
@@ -131,8 +132,6 @@ class HeartbeatInvocationSource(str, Enum):
     SCHEDULER = "scheduler"
     MANUAL = "manual"
     CALLBACK = "callback"
-
-
 
 
 class ContextMode(str, Enum):

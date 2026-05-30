@@ -252,6 +252,7 @@ class TestInvoke:
             captured_kwargs.append(dict(kwargs))
             if call_count == 1:
                 import errno as _errno
+
                 raise FileNotFoundError(_errno.ENOENT, "No such file or directory", "/deleted/worktree")
             return fake_proc
 

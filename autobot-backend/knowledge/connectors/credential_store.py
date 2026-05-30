@@ -97,9 +97,7 @@ class ConnectorCredentialStore:
 
         stored_owner = secret.get("created_by") or ""
         if stored_owner and stored_owner != owner_id:
-            raise PermissionError(
-                f"owner_id mismatch for secret {secret_id!r}: expected {stored_owner!r}"
-            )
+            raise PermissionError(f"owner_id mismatch for secret {secret_id!r}: expected {stored_owner!r}")
 
         creds = json.loads(secret["value"])
         return {**sanitized_config, **creds}
@@ -119,9 +117,7 @@ class ConnectorCredentialStore:
             raise LookupError(f"Credential secret {secret_id!r} not found or expired")
         stored_owner = existing.get("created_by") or ""
         if stored_owner and stored_owner != owner_id:
-            raise PermissionError(
-                f"owner_id mismatch for secret {secret_id!r}: expected {stored_owner!r}"
-            )
+            raise PermissionError(f"owner_id mismatch for secret {secret_id!r}: expected {stored_owner!r}")
 
         current_creds = json.loads(existing["value"])
         current_creds.update(new_credentials)
@@ -154,9 +150,7 @@ class ConnectorCredentialStore:
     def _sensitive_fields(auth_cls: type) -> frozenset:
         fields = getattr(auth_cls, "__sensitive_fields__", None)
         if fields is None:
-            raise ValueError(
-                f"{auth_cls.__name__} has no __sensitive_fields__ — cannot separate credentials"
-            )
+            raise ValueError(f"{auth_cls.__name__} has no __sensitive_fields__ — cannot separate credentials")
         return fields
 
 

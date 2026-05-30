@@ -24,7 +24,6 @@ from api.voice_bundle_user import (
 )
 from auth_middleware import get_current_user
 
-
 # Test users
 _USER_ALICE = {"user_id": "alice", "username": "alice", "role": "user"}
 _USER_BOB = {"user_id": "bob", "username": "bob", "role": "user"}
@@ -176,9 +175,10 @@ class TestSetUserBundle:
         """Admin can assign a bundle to any user."""
         client = _make_client(_ADMIN)
 
-        with patch("user_management.database.get_async_session") as mock_session_ctx, patch(
-            "services.audit.unified_audit.emit"
-        ) as mock_emit:
+        with (
+            patch("user_management.database.get_async_session") as mock_session_ctx,
+            patch("services.audit.unified_audit.emit") as mock_emit,
+        ):
             mock_session = AsyncMock(spec=AsyncSession)
             mock_session_ctx.return_value.__aenter__.return_value = mock_session
 
@@ -198,9 +198,10 @@ class TestSetUserBundle:
         """Admin can clear a user's bundle assignment."""
         client = _make_client(_ADMIN)
 
-        with patch("user_management.database.get_async_session") as mock_session_ctx, patch(
-            "services.audit.unified_audit.emit"
-        ) as mock_emit:
+        with (
+            patch("user_management.database.get_async_session") as mock_session_ctx,
+            patch("services.audit.unified_audit.emit") as mock_emit,
+        ):
             mock_session = AsyncMock(spec=AsyncSession)
             mock_session_ctx.return_value.__aenter__.return_value = mock_session
 
@@ -240,9 +241,10 @@ class TestSetUserBundle:
         """Admin can assign voice_admin bundle."""
         client = _make_client(_ADMIN)
 
-        with patch("user_management.database.get_async_session") as mock_session_ctx, patch(
-            "services.audit.unified_audit.emit"
-        ) as mock_emit:
+        with (
+            patch("user_management.database.get_async_session") as mock_session_ctx,
+            patch("services.audit.unified_audit.emit") as mock_emit,
+        ):
             mock_session = AsyncMock(spec=AsyncSession)
             mock_session_ctx.return_value.__aenter__.return_value = mock_session
 
