@@ -2702,6 +2702,7 @@ before summarizing.
 
         Issue #620: Extracted from _execute_llm_workflow to reduce function length.
         Issue #715: Registers user message in history before building context.
+        Issue MVA-1992: Determine lightweight_mode from complexity tier.
 
         Returns:
             Dictionary with LLM parameters. Issue #620.
@@ -2713,8 +2714,30 @@ before summarizing.
         language = context.get("language") if context else None
         if language:
             session.metadata["language"] = language
+
+        # Issue MVA-1992: Determine if query is simple tier for lightweight mode
+        lightweight_mode = False
+        try:
+            from llm_shared.tiered_routing.complexity_router import ComplexityRouter
+            from llm_shared.tiered_routing.tier_config import TierConfig
+
+            tier_config = TierConfig.from_config()
+            if tier_config.enabled:
+                router = ComplexityRouter(config=tier_config)
+                # Build minimal message list for complexity scoring
+                messages = [{"role": "user", "content": message}]
+                _, complexity_result = router.route(messages)
+                # Set lightweight_mode for simple tier (score below threshold)
+                lightweight_mode = complexity_result.tier == "simple"
+                if lightweight_mode:
+                    logger.info("[MVA-1992] Lightweight mode enabled (tier=%s, score=%.1f)",
+                               complexity_result.tier, complexity_result.score)
+        except Exception as e:
+            logger.warning("[MVA-1992] Complexity routing failed, defaulting to full mode: %s", e)
+
         llm_params = await self._prepare_llm_request_params(
-            session, message, use_knowledge=use_knowledge, language=language
+            session, message, use_knowledge=use_knowledge, language=language,
+            lightweight_mode=lightweight_mode
         )
 
         logger.info(

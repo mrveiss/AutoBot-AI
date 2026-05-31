@@ -168,6 +168,7 @@ class LLMRequest:
     request_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     tools: List["ToolDefinition"] | None = None
     tool_choice: str | None = None  # "auto" | "none" | specific tool name
+    lightweight_mode: bool = False  # Skip tools/RAG/memory for trivial queries
 
 
 __all__ = [
