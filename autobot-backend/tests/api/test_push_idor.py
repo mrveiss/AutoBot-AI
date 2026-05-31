@@ -3,7 +3,6 @@
 # Author: mrveiss
 """Tests for push subscription IDOR vulnerability fix (GH#8967)."""
 
-import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -87,7 +86,7 @@ async def test_unsubscribe_ignores_user_id_in_request_body():
     session.execute.return_value = mock_query
 
     with patch("api.push.logger") as mock_logger:
-        result = await unsubscribe(body, current_user, session)
+        await unsubscribe(body, current_user, session)
 
         # Verify IDOR attempt was logged
         mock_logger.warning.assert_called_once()

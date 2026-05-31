@@ -403,7 +403,7 @@ async def test_on_run_complete_swallows_writer_exception() -> None:
 @pytest.mark.asyncio
 async def test_write_from_run_enforces_write_guard_on_ancestor_work_item() -> None:
     """Verify write_from_run() raises HTTPException(403) if requester writes to ancestor's work item."""
-    from unittest.mock import AsyncMock, MagicMock, patch
+    from unittest.mock import AsyncMock, patch
 
     from fastapi import HTTPException
 

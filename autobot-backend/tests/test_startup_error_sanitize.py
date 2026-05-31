@@ -214,7 +214,7 @@ class TestStartupErrorLifespanConstant:
         stubs["fastapi"] = MagicMock()
         with patch.dict(sys.modules, stubs):
             # Force re-import so our stubs take effect
-            import importlib
+            pass
 
             if "initialization.lifespan" in sys.modules:
                 del sys.modules["initialization.lifespan"]
