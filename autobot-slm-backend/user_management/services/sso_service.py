@@ -79,9 +79,7 @@ class SSOService(BaseService):
         provider.config = await secrets_mgr.store_secrets(provider.id, data.config)
         await self.session.flush()
 
-        logger.info(
-            "Created SSO provider: %s (%s)", provider.name, provider.provider_type
-        )
+        logger.info("Created SSO provider: %s (%s)", provider.name, provider.provider_type)
         return provider
 
     async def list_providers(
@@ -90,9 +88,7 @@ class SSOService(BaseService):
         """List SSO providers with optional filtering."""
         query = select(SSOProvider)
         if org_id is not None:
-            query = query.where(
-                (SSOProvider.org_id == org_id) | (SSOProvider.org_id.is_(None))
-            )
+            query = query.where((SSOProvider.org_id == org_id) | (SSOProvider.org_id.is_(None)))
         if active_only:
             query = query.where(SSOProvider.is_active.is_(True))
         result = await self.session.execute(query)
@@ -101,17 +97,13 @@ class SSOService(BaseService):
 
     async def get_provider(self, provider_id: uuid.UUID) -> SSOProvider:
         """Get SSO provider by ID."""
-        result = await self.session.execute(
-            select(SSOProvider).where(SSOProvider.id == provider_id)
-        )
+        result = await self.session.execute(select(SSOProvider).where(SSOProvider.id == provider_id))
         provider = result.scalar_one_or_none()
         if not provider:
             raise SSOProviderNotFoundError(f"SSO provider {provider_id} not found")
         return provider
 
-    async def update_provider(
-        self, provider_id: uuid.UUID, data: SSOProviderUpdate
-    ) -> SSOProvider:
+    async def update_provider(self, provider_id: uuid.UUID, data: SSOProviderUpdate) -> SSOProvider:
         """Update an existing SSO provider with secure credential handling."""
         provider = await self.get_provider(provider_id)
         update_data = data.model_dump(exclude_unset=True)
@@ -120,9 +112,7 @@ class SSOService(BaseService):
         if "config" in update_data:
             secrets_mgr = SSOSecretsManager(self.session)
             # Update secrets and get sanitized config
-            sanitized_config = await secrets_mgr.store_secrets(
-                provider_id, update_data["config"]
-            )
+            sanitized_config = await secrets_mgr.store_secrets(provider_id, update_data["config"])
             update_data["config"] = sanitized_config
 
         for field, value in update_data.items():
@@ -166,9 +156,7 @@ class SSOService(BaseService):
 
             # Retrieve bind_password from SystemSecret storage
             secrets_mgr = SSOSecretsManager(self.session)
-            bind_password = await secrets_mgr.retrieve_secret(
-                provider.id, "bind_password"
-            )
+            bind_password = await secrets_mgr.retrieve_secret(provider.id, "bind_password")
 
             if not bind_password:
                 return {"success": False, "message": "LDAP bind_password not found"}
@@ -211,18 +199,14 @@ class SSOService(BaseService):
         client_secret = await secrets_mgr.retrieve_secret(provider.id, "client_secret")
 
         if not client_secret:
-            raise SSOServiceError(
-                f"OAuth client_secret not found for provider {provider.id}"
-            )
+            raise SSOServiceError(f"OAuth client_secret not found for provider {provider.id}")
 
         return AsyncOAuth2Client(
             client_id=client_id,
             client_secret=client_secret,
         )
 
-    async def _get_oauth_authorize_url(
-        self, provider: SSOProvider, callback_url: str
-    ) -> tuple[str, str]:
+    async def _get_oauth_authorize_url(self, provider: SSOProvider, callback_url: str) -> tuple[str, str]:
         """Generate OAuth2 authorization URL."""
         client = await self._build_oauth_client(provider)
         state = await self._generate_oauth_state(provider.id)
@@ -236,9 +220,7 @@ class SSOService(BaseService):
         )
         return url, state
 
-    async def _exchange_oauth_code(
-        self, provider: SSOProvider, code: str, callback_url: str
-    ) -> dict[str, Any]:
+    async def _exchange_oauth_code(self, provider: SSOProvider, code: str, callback_url: str) -> dict[str, Any]:
         """Exchange OAuth2 authorization code for access token."""
         client = await self._build_oauth_client(provider)
         token_url = provider.config.get("token_url")
@@ -249,9 +231,7 @@ class SSOService(BaseService):
         )
         return token
 
-    async def _get_oauth_userinfo(
-        self, provider: SSOProvider, token: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def _get_oauth_userinfo(self, provider: SSOProvider, token: dict[str, Any]) -> dict[str, Any]:
         """Fetch user info from OAuth2 provider."""
         client = await self._build_oauth_client(provider)
         userinfo_url = provider.config.get("userinfo_url")
@@ -260,18 +240,14 @@ class SSOService(BaseService):
         response.raise_for_status()
         return response.json()
 
-    async def initiate_oauth_login(
-        self, provider_id: uuid.UUID, callback_url: str
-    ) -> tuple[str, str]:
+    async def initiate_oauth_login(self, provider_id: uuid.UUID, callback_url: str) -> tuple[str, str]:
         """Initiate OAuth2 login flow."""
         provider = await self.get_provider(provider_id)
         if not provider.is_active:
             raise SSOAuthenticationError(f"SSO provider {provider.name} is disabled")
         return await self._get_oauth_authorize_url(provider, callback_url)
 
-    async def complete_oauth_login(
-        self, provider_id: uuid.UUID, code: str, state: str, callback_url: str
-    ) -> User:
+    async def complete_oauth_login(self, provider_id: uuid.UUID, code: str, state: str, callback_url: str) -> User:
         """Complete OAuth2 login flow and return authenticated user."""
         provider_id = await self._validate_oauth_state(state)
         provider = await self.get_provider(provider_id)
@@ -281,15 +257,11 @@ class SSOService(BaseService):
         user_data = self._extract_oauth_user_data(userinfo, provider)
         return await self._find_or_provision_user(provider, external_id, user_data)
 
-    def _extract_oauth_user_data(
-        self, userinfo: dict[str, Any], provider: SSOProvider
-    ) -> dict[str, Any]:
+    def _extract_oauth_user_data(self, userinfo: dict[str, Any], provider: SSOProvider) -> dict[str, Any]:
         """Extract user data from OAuth2 userinfo."""
         email = userinfo.get("email")
         name = userinfo.get("name") or userinfo.get("display_name")
-        username = (
-            userinfo.get("preferred_username") or email.split("@")[0] if email else None
-        )
+        username = userinfo.get("preferred_username") or email.split("@")[0] if email else None
         return {
             "email": email,
             "display_name": name,
@@ -297,9 +269,7 @@ class SSOService(BaseService):
             "avatar_url": userinfo.get("picture"),
         }
 
-    def _build_ldap_connection(
-        self, provider: SSOProvider, username: str, password: str
-    ) -> Any:
+    def _build_ldap_connection(self, provider: SSOProvider, username: str, password: str) -> Any:
         """Create LDAP connection."""
         from autobot_shared.security.input_sanitizer import sanitize_ldap_dn
 
@@ -308,24 +278,18 @@ class SSOService(BaseService):
         server_uri = provider.config.get("server_uri")
         use_ssl = provider.config.get("use_ssl", True)
         server = Server(server_uri, use_ssl=use_ssl, get_info=ALL)
-        user_dn_template = provider.config.get(
-            "user_dn_template", "uid={},ou=users,dc=example,dc=com"
-        )
+        user_dn_template = provider.config.get("user_dn_template", "uid={},ou=users,dc=example,dc=com")
         safe_username = sanitize_ldap_dn(username)
         user_dn = user_dn_template.format(safe_username)
         return Connection(server, user_dn, password)
 
-    def _search_ldap_user(
-        self, conn: Any, provider: SSOProvider, username: str
-    ) -> dict[str, Any] | None:
+    def _search_ldap_user(self, conn: Any, provider: SSOProvider, username: str) -> dict[str, Any] | None:
         """Search for user in LDAP directory."""
         from autobot_shared.security.input_sanitizer import sanitize_ldap_filter
 
         base_dn = provider.config.get("base_dn", "dc=example,dc=com")
         safe_username = sanitize_ldap_filter(username)
-        search_filter = provider.config.get("search_filter", "(uid={})").format(
-            safe_username
-        )
+        search_filter = provider.config.get("search_filter", "(uid={})").format(safe_username)
         conn.search(  # codeql[py/ldap-injection] safe_username is RFC-4515-escaped by sanitize_ldap_filter above
             base_dn, search_filter, search_scope=SUBTREE
         )
@@ -333,9 +297,7 @@ class SSOService(BaseService):
             return conn.entries[0].entry_attributes_as_dict
         return None
 
-    def _extract_ldap_user_data(
-        self, entry: dict[str, Any], provider: SSOProvider
-    ) -> dict[str, Any]:
+    def _extract_ldap_user_data(self, entry: dict[str, Any], provider: SSOProvider) -> dict[str, Any]:
         """Extract user data from LDAP entry."""
         attr_map = provider.config.get("attribute_mapping", {})
         email = entry.get(attr_map.get("email", "mail"), [None])[0]
@@ -346,9 +308,7 @@ class SSOService(BaseService):
             "username": entry.get(attr_map.get("username", "uid"), [None])[0],
         }
 
-    async def authenticate_ldap(
-        self, provider_id: uuid.UUID, username: str, password: str
-    ) -> User:
+    async def authenticate_ldap(self, provider_id: uuid.UUID, username: str, password: str) -> User:
         """Authenticate user via LDAP."""
         provider = await self.get_provider(provider_id)
         if not provider.is_active:
@@ -391,9 +351,7 @@ class SSOService(BaseService):
         saml_config.load(config_dict)
         return Saml2Client(config=saml_config)
 
-    async def _generate_saml_authn_request(
-        self, provider: SSOProvider
-    ) -> tuple[str, str]:
+    async def _generate_saml_authn_request(self, provider: SSOProvider) -> tuple[str, str]:
         """Generate SAML AuthnRequest; relay state stored in Redis with 10-min TTL."""
         client = self._build_saml_client(provider)
         relay_state = secrets.token_urlsafe(32)
@@ -404,9 +362,7 @@ class SSOService(BaseService):
         redirect_url = dict(info["headers"])["Location"]
         return redirect_url, relay_state
 
-    def _extract_saml_user_data(
-        self, authn_response: Any, provider: SSOProvider
-    ) -> dict[str, Any]:
+    def _extract_saml_user_data(self, authn_response: Any, provider: SSOProvider) -> dict[str, Any]:
         """Extract user data from SAML assertion."""
         attrs = authn_response.ava
         attr_map = provider.config.get("attribute_mapping", {})
@@ -415,9 +371,7 @@ class SSOService(BaseService):
         username = attrs.get(attr_map.get("username", "uid"), [None])[0]
         return {"email": email, "display_name": display_name, "username": username}
 
-    async def complete_saml_login(
-        self, provider_id: uuid.UUID, saml_response: str
-    ) -> User:
+    async def complete_saml_login(self, provider_id: uuid.UUID, saml_response: str) -> User:
         """Complete SAML login flow."""
         provider = await self.get_provider(provider_id)
         if not provider.is_active:
@@ -428,9 +382,7 @@ class SSOService(BaseService):
         user_data = self._extract_saml_user_data(authn_response, provider)
         return await self._find_or_provision_user(provider, external_id, user_data)
 
-    async def _find_existing_sso_link(
-        self, provider_id: uuid.UUID, external_id: str
-    ) -> UserSSOLink | None:
+    async def _find_existing_sso_link(self, provider_id: uuid.UUID, external_id: str) -> UserSSOLink | None:
         """Find existing SSO link."""
         result = await self.session.execute(
             select(UserSSOLink).where(
@@ -445,9 +397,7 @@ class SSOService(BaseService):
         result = await self.session.execute(select(User).where(User.email == email))
         return result.scalar_one_or_none()
 
-    async def _create_sso_user(
-        self, provider: SSOProvider, user_data: dict[str, Any]
-    ) -> User:
+    async def _create_sso_user(self, provider: SSOProvider, user_data: dict[str, Any]) -> User:
         """Create new user from SSO authentication."""
         user = User(
             email=user_data["email"],
@@ -481,27 +431,19 @@ class SSOService(BaseService):
         )
         self.session.add(link)
         await self.session.flush()
-        logger.info(
-            "Created SSO link for user %s with provider %s", user.id, provider.id
-        )
+        logger.info("Created SSO link for user %s with provider %s", user.id, provider.id)
         return link
 
-    async def _find_or_provision_user(
-        self, provider: SSOProvider, external_id: str, user_data: dict[str, Any]
-    ) -> User:
+    async def _find_or_provision_user(self, provider: SSOProvider, external_id: str, user_data: dict[str, Any]) -> User:
         """Find existing user or provision new one via JIT."""
         link = await self._find_existing_sso_link(provider.id, external_id)
         if link:
             link.record_login()
             await self.session.flush()
-            result = await self.session.execute(
-                select(User).where(User.id == link.user_id)
-            )
+            result = await self.session.execute(select(User).where(User.id == link.user_id))
             return result.scalar_one()
         if not provider.allow_user_creation:
-            raise SSOAuthenticationError(
-                "User not found and auto-provisioning is disabled"
-            )
+            raise SSOAuthenticationError("User not found and auto-provisioning is disabled")
         email = user_data.get("email")
         if not email:
             raise SSOAuthenticationError("Email not provided by SSO provider")

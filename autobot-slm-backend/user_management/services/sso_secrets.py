@@ -57,9 +57,7 @@ class SSOSecretsManager:
                 secret_key = self._get_secret_key(provider_id, field)
 
                 # Check if secret already exists
-                result = await self.session.execute(
-                    select(SystemSecret).where(SystemSecret.key == secret_key)
-                )
+                result = await self.session.execute(select(SystemSecret).where(SystemSecret.key == secret_key))
                 existing = result.scalar_one_or_none()
 
                 if existing:
@@ -96,9 +94,7 @@ class SSOSecretsManager:
         """
         secret_key = self._get_secret_key(provider_id, field)
 
-        result = await self.session.execute(
-            select(SystemSecret).where(SystemSecret.key == secret_key)
-        )
+        result = await self.session.execute(select(SystemSecret).where(SystemSecret.key == secret_key))
         secret = result.scalar_one_or_none()
 
         if not secret:
@@ -121,9 +117,7 @@ class SSOSecretsManager:
         for field in self.SENSITIVE_FIELDS:
             secret_key = self._get_secret_key(provider_id, field)
 
-            result = await self.session.execute(
-                select(SystemSecret).where(SystemSecret.key == secret_key)
-            )
+            result = await self.session.execute(select(SystemSecret).where(SystemSecret.key == secret_key))
             secret = result.scalar_one_or_none()
 
             if secret:
@@ -142,9 +136,7 @@ class SSOSecretsManager:
         """
         return any(field in config for field in self.SENSITIVE_FIELDS)
 
-    async def migrate_plaintext_to_secrets(
-        self, provider_id: uuid.UUID, config: dict
-    ) -> dict:
+    async def migrate_plaintext_to_secrets(self, provider_id: uuid.UUID, config: dict) -> dict:
         """
         Migrate plaintext secrets in config to SystemSecret storage.
 
@@ -158,7 +150,5 @@ class SSOSecretsManager:
         if not await self.has_plaintext_secrets(config):
             return config
 
-        logger.info(
-            "Migrating plaintext secrets to SystemSecret for provider %s", provider_id
-        )
+        logger.info("Migrating plaintext secrets to SystemSecret for provider %s", provider_id)
         return await self.store_secrets(provider_id, config)
