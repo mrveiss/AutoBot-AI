@@ -385,6 +385,10 @@ class PathConstants:
 
 PATH = PathConstants()
 
+# GH#8947: Disk-persisted Phase 1 error file written by lifespan.py before
+# process exit. /run/autobot/ is created by Ansible and owned by autobot user.
+STARTUP_ERROR_FILE = Path("/run/autobot/startup-error.json")
+
 
 # ============================================================================
 # REDIS CONSTANTS
