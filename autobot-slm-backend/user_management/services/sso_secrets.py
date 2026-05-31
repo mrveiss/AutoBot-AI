@@ -63,7 +63,7 @@ class SSOSecretsManager:
                 if existing:
                     # Update existing secret
                     existing.encrypted_value = encrypt_data(value)
-                    logger.info("Updated SSO secret: %s", secret_key)
+                    logger.info("Updated SSO secret for field: %s", field)
                 else:
                     # Create new secret
                     secret = SystemSecret(
@@ -73,7 +73,7 @@ class SSOSecretsManager:
                         description=f"SSO {field} for provider {provider_id}",
                     )
                     self.session.add(secret)
-                    logger.info("Created SSO secret: %s", secret_key)
+                    logger.info("Created SSO secret for field: %s", field)
 
                 # Replace with reference in config
                 sanitized_config[f"{field}_ref"] = secret_key
@@ -98,13 +98,13 @@ class SSOSecretsManager:
         secret = result.scalar_one_or_none()
 
         if not secret:
-            logger.warning("SSO secret not found: %s", secret_key)
+            logger.warning("SSO secret not found for field: %s", field)
             return None
 
         try:
             return decrypt_data(secret.encrypted_value)
         except Exception as e:
-            logger.error("Failed to decrypt SSO secret %s: %s", secret_key, e)
+            logger.error("Failed to decrypt SSO secret for field %s: %s", field, type(e).__name__)
             raise ValueError(f"Failed to decrypt secret {field}") from e
 
     async def delete_secrets(self, provider_id: uuid.UUID) -> None:
@@ -122,7 +122,7 @@ class SSOSecretsManager:
 
             if secret:
                 await self.session.delete(secret)
-                logger.info("Deleted SSO secret: %s", secret_key)
+                logger.info("Deleted SSO secret for field: %s", field)
 
     async def has_plaintext_secrets(self, config: dict) -> bool:
         """
