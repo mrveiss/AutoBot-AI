@@ -166,9 +166,7 @@ class VertexAIProvider(BaseProvider):
         try:
             from anthropic import AsyncAnthropicVertex  # type: ignore[import]
         except ImportError as exc:
-            raise ImportError(
-                "anthropic[vertex] not installed. Run: pip install 'anthropic[vertex]'"
-            ) from exc
+            raise ImportError("anthropic[vertex] not installed. Run: pip install 'anthropic[vertex]'") from exc
 
         project = self._resolve_project()
         location = self._resolve_location()

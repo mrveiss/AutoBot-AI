@@ -69,7 +69,7 @@ export class AutobotWidget extends HTMLElement {
     this._app = null
   }
 
-  attributeChangedCallback(name: string, _old: string | null, next: string | null): void {
+  attributeChangedCallback(_name: string, _old: string | null, _next: string | null): void {
     this._readAttributes()
     // If already mounted, re-mount with updated config
     if (this._app) {
