@@ -19,8 +19,8 @@ def upgrade() -> None:
     op.create_table(
         "chat_shared_links",
         sa.Column("id", sa.Uuid(as_uuid=True), primary_key=True),
-        sa.Column("session_id", sa.String(128), nullable=False, index=True),
-        sa.Column("token", sa.String(64), nullable=False, unique=True),
+        sa.Column("session_id", sa.String(128), nullable=False),
+        sa.Column("token", sa.String(64), nullable=False),
         sa.Column("password_hash", sa.Text, nullable=True),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_by", sa.String(128), nullable=False),
