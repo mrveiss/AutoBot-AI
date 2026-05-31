@@ -434,7 +434,7 @@ class VertexAIProvider(BaseProvider):
     async def is_available(self) -> bool:
         """Return True when the vertexai SDK can be imported and a project is configured."""
         try:
-            import vertexai  # type: ignore[import] noqa: F401
+            import vertexai  # type: ignore[import]  # noqa: F401
         except ImportError:
             return False
         project = self._resolve_project()
