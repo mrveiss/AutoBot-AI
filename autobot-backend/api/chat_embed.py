@@ -11,12 +11,21 @@ no auth.
 
 Endpoints:
     POST /api/chats/embed/message  — send a message, receive JSON reply
+
+Config:
+    AUTOBOT_EMBED_ALLOWED_ORIGINS — comma-separated list of allowed request
+        origins, e.g. "https://example.com,https://app.acme.io".
+        When set to "*" (the default) all origins are permitted (backward
+        compatible open mode).  When any specific origins are listed only
+        those origins may call the embed endpoint; requests from other
+        origins receive 403 (GH#9117).
 """
 
 import json
+import os
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
@@ -25,6 +34,53 @@ from autobot_shared.logging_manager import get_logger
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["chat", "embed"])
+
+# ---------------------------------------------------------------------------
+# Origin allowlist (GH#9117)
+# ---------------------------------------------------------------------------
+_EMBED_ALLOWED_ORIGINS_ENV = "AUTOBOT_EMBED_ALLOWED_ORIGINS"
+_EMBED_ALLOWED_ORIGINS_RAW: str = os.environ.get(_EMBED_ALLOWED_ORIGINS_ENV, "*").strip()
+
+# When the env var is "*" (default) enforcement is disabled for backward compat.
+_EMBED_ORIGIN_ENFORCEMENT_ENABLED: bool = _EMBED_ALLOWED_ORIGINS_RAW != "*"
+_EMBED_ALLOWED_ORIGINS: frozenset[str] = (
+    frozenset(o.strip() for o in _EMBED_ALLOWED_ORIGINS_RAW.split(",") if o.strip())
+    if _EMBED_ORIGIN_ENFORCEMENT_ENABLED
+    else frozenset()
+)
+
+if _EMBED_ORIGIN_ENFORCEMENT_ENABLED:
+    logger.info(
+        "Embed origin allowlist active (%d entries): %s",
+        len(_EMBED_ALLOWED_ORIGINS),
+        ", ".join(sorted(_EMBED_ALLOWED_ORIGINS)),
+    )
+else:
+    logger.info("Embed origin allowlist: open (*) — set %s to restrict", _EMBED_ALLOWED_ORIGINS_ENV)
+
+
+def _check_embed_origin(request: Request) -> str | None:
+    """Return the validated origin string, or None when enforcement is off.
+
+    Raises JSONResponse (403) when enforcement is active and the request
+    origin is not in the allowlist.
+    """
+    if not _EMBED_ORIGIN_ENFORCEMENT_ENABLED:
+        return None
+    origin = request.headers.get("origin", "")
+    if not origin or origin not in _EMBED_ALLOWED_ORIGINS:
+        logger.warning("embed: blocked request from disallowed origin %r", origin or "(none)")
+        raise HTTPException(status_code=403, detail="Origin not allowed")
+    return origin
+
+
+def _origin_forbidden() -> JSONResponse:
+    return JSONResponse({"detail": "Origin not allowed"}, status_code=403)
+
+
+def _acao_header(origin: str | None) -> str:
+    """Return the Access-Control-Allow-Origin header value for a response."""
+    return origin if origin else "*"
 
 
 class EmbedMessageRequest(BaseModel):
@@ -70,8 +126,12 @@ async def embed_message(
     - anything else (default) → JSON ``{"content": "..."}``
 
     No authentication required — the endpoint is designed for unauthenticated
-    embed contexts.  Rate-limiting is delegated to the upstream reverse proxy.
+    embed contexts.  Origin enforcement via AUTOBOT_EMBED_ALLOWED_ORIGINS
+    (GH#9117).
     """
+    origin = _check_embed_origin(request)
+    acao = _acao_header(origin)
+
     accept = request.headers.get("accept", "")
     message = body.message.strip()
     if not message:
@@ -86,7 +146,7 @@ async def embed_message(
             headers={
                 "Cache-Control": "no-cache",
                 "Connection": "keep-alive",
-                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Origin": acao,
                 "Access-Control-Allow-Headers": "Content-Type, X-Org-Id",
             },
         )
@@ -100,17 +160,25 @@ async def embed_message(
 
     return JSONResponse(
         {"content": content},
-        headers={"Access-Control-Allow-Origin": "*"},
+        headers={"Access-Control-Allow-Origin": acao},
     )
 
 
 @router.options("/chats/embed/message")
-async def embed_message_preflight() -> JSONResponse:
-    """CORS preflight for embed widget cross-origin requests."""
+async def embed_message_preflight(request: Request) -> JSONResponse:
+    """CORS preflight for embed widget cross-origin requests (GH#9117)."""
+    if _EMBED_ORIGIN_ENFORCEMENT_ENABLED:
+        origin = request.headers.get("origin", "")
+        if not origin or origin not in _EMBED_ALLOWED_ORIGINS:
+            return _origin_forbidden()
+        acao = origin
+    else:
+        acao = "*"
+
     return JSONResponse(
         {},
         headers={
-            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Origin": acao,
             "Access-Control-Allow-Methods": "POST, OPTIONS",
             "Access-Control-Allow-Headers": "Content-Type, X-Org-Id",
         },
