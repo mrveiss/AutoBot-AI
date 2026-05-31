@@ -25,7 +25,7 @@ import json
 import os
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
@@ -70,7 +70,7 @@ def _check_embed_origin(request: Request) -> str | None:
     origin = request.headers.get("origin", "")
     if not origin or origin not in _EMBED_ALLOWED_ORIGINS:
         logger.warning("embed: blocked request from disallowed origin %r", origin or "(none)")
-        raise _origin_forbidden()
+        raise HTTPException(status_code=403, detail="Origin not allowed")
     return origin
 
 
