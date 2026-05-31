@@ -254,9 +254,7 @@ async def load_plugin(
     # Auto-grant only for official plugins from core-plugins directory
     auto_grant = manifest.trust_tier == TrustTier.OFFICIAL
     plugin_config = config.config if config else {}
-    plugin = await loader.load_plugin(
-        manifest, plugin_config, grant_capabilities=auto_grant
-    )
+    plugin = await loader.load_plugin(manifest, plugin_config, grant_capabilities=auto_grant)
 
     if not plugin:
         raise HTTPException(
