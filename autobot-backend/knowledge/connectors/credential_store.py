@@ -10,6 +10,7 @@ Bridges ConnectorConfig ↔ SecretsService so that sensitive auth fields
 
 import asyncio
 import json
+
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 
