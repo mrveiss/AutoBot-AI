@@ -12,11 +12,8 @@
    * COLOR SYSTEM
    * ============================================ */
 
-  /* Primary Colors - Teal for technical aesthetic */
-  --color-primary: #0d9488;
-  --color-primary-hover: #0f766e;
-  --color-primary-light: #5eead4;
-  --color-primary-dark: #115e59;
+  /* Primary Colors - Defined in design-tokens.css (electric blue by default)
+   * Accent color variants below override via [data-accent-color] attribute */
 
   /* Secondary Colors */
   --color-secondary: #64748b;
