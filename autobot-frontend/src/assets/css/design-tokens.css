@@ -577,3 +577,208 @@
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
+
+/* ============================================
+ * OKLCH COLOR OVERRIDES (CSS Level 4)
+ * Hex values above are fallbacks for Safari < 16.4.
+ * The @supports gate prevents invalid computed values in legacy browsers.
+ * GH#9014 Phase 2 — design-tokens.css migration
+ * ============================================ */
+
+@supports (color: oklch(0 0 0)) {
+  :root {
+    /* Primary Brand Colors */
+    --color-primary: oklch(62.3% 0.188 259.8);
+    --color-primary-hover: oklch(54.6% 0.215 262.9);
+    --color-primary-active: oklch(48.8% 0.217 264.4);
+    --color-primary-light: oklch(80.9% 0.096 251.8);
+    --color-primary-dark: oklch(48.8% 0.217 264.4);
+    --color-primary-bg: oklch(62.3% 0.188 259.8 / 0.1);
+    --color-primary-bg-hover: oklch(62.3% 0.188 259.8 / 0.15);
+
+    /* Text on colored backgrounds */
+    --text-on-primary: oklch(100% 0 0);
+    --text-on-success: oklch(100% 0 0);
+    --text-on-warning: oklch(0% 0 0);
+    --text-on-error: oklch(100% 0 0);
+
+    /* Secondary Colors */
+    --color-secondary: oklch(55.4% 0.041 257.4);
+    --color-secondary-hover: oklch(44.6% 0.037 257.3);
+    --color-secondary-active: oklch(37.2% 0.039 257.3);
+    --color-secondary-light: oklch(71.1% 0.035 256.8);
+
+    /* Status - Success */
+    --color-success: oklch(69.6% 0.149 162.5);
+    --color-success-hover: oklch(59.6% 0.127 163.2);
+    --color-success-light: oklch(77.3% 0.154 163.2);
+    --color-success-dark: oklch(50.8% 0.105 165.6);
+    --color-success-bg: oklch(69.6% 0.149 162.5 / 0.1);
+    --color-success-bg-hover: oklch(69.6% 0.149 162.5 / 0.2);
+    --color-success-border: oklch(69.6% 0.149 162.5 / 0.3);
+
+    /* Status - Warning */
+    --color-warning: oklch(76.9% 0.165 70.1);
+    --color-warning-hover: oklch(66.6% 0.157 58.3);
+    --color-warning-light: oklch(83.7% 0.164 84.4);
+    --color-warning-dark: oklch(55.5% 0.146 49.0);
+    --color-warning-bg: oklch(76.9% 0.165 70.1 / 0.1);
+    --color-warning-bg-hover: oklch(76.9% 0.165 70.1 / 0.2);
+    --color-warning-border: oklch(76.9% 0.165 70.1 / 0.3);
+
+    /* Status - Error */
+    --color-error: oklch(63.7% 0.208 25.3);
+    --color-error-hover: oklch(57.7% 0.215 27.3);
+    --color-error-light: oklch(71.1% 0.166 22.2);
+    --color-error-dark: oklch(50.5% 0.191 27.5);
+    --color-error-bg: oklch(63.7% 0.208 25.3 / 0.1);
+    --color-error-bg-hover: oklch(63.7% 0.208 25.3 / 0.2);
+    --color-error-border: oklch(63.7% 0.208 25.3 / 0.3);
+
+    /* Info Colors */
+    --color-info: oklch(62.3% 0.188 259.8);
+    --color-info-hover: oklch(54.6% 0.215 262.9);
+    --color-info-light: oklch(71.4% 0.143 254.6);
+    --color-info-dark: oklch(48.8% 0.217 264.4);
+    --color-info-bg: oklch(62.3% 0.188 259.8 / 0.1);
+    --color-info-bg-hover: oklch(62.3% 0.188 259.8 / 0.2);
+
+    /* Danger Colors */
+    --color-danger: oklch(57.7% 0.215 27.3);
+    --color-danger-hover: oklch(50.5% 0.191 27.5);
+    --color-danger-light: oklch(71.1% 0.166 22.2);
+    --color-danger-dark: oklch(44.4% 0.161 26.9);
+    --color-danger-bg: oklch(57.7% 0.215 27.3 / 0.1);
+    --color-danger-alpha-10: oklch(57.7% 0.215 27.3 / 0.1);
+
+    /* Purple/Violet Colors */
+    --color-purple: oklch(55.8% 0.253 302.3);
+    --color-purple-hover: oklch(54.1% 0.247 293.0);
+    --color-purple-light: oklch(62.7% 0.233 303.9);
+    --color-purple-dark: oklch(43.8% 0.198 303.7);
+
+    /* Alpha variants for semantic colors */
+    --color-primary-alpha-10: oklch(58.5% 0.204 277.1 / 0.1);
+    --color-success-alpha-10: oklch(69.6% 0.149 162.5 / 0.1);
+    --color-warning-alpha-10: oklch(76.9% 0.165 70.1 / 0.1);
+    --color-error-alpha-10: oklch(63.7% 0.208 25.3 / 0.1);
+
+    /* Background Colors */
+    --bg-primary: oklch(20.8% 0.040 265.8);
+    --bg-secondary: oklch(27.9% 0.037 260.0);
+    --bg-tertiary: oklch(37.2% 0.039 257.3);
+    --bg-elevated: oklch(27.9% 0.037 260.0);
+    --bg-surface: oklch(22.8% 0.038 282.9);
+    --bg-card: oklch(27.9% 0.037 260.0);
+    --bg-input: oklch(27.9% 0.037 260.0);
+    --bg-hover: oklch(100% 0 0 / 0.05);
+    --bg-active: oklch(100% 0 0 / 0.1);
+    --bg-overlay: oklch(0% 0 0 / 0.5);
+    --overlay-backdrop: oklch(0% 0 0 / 0.8);
+
+    /* Semi-transparent backgrounds */
+    --bg-secondary-alpha: oklch(27.9% 0.037 260.0 / 0.5);
+    --bg-tertiary-alpha: oklch(37.2% 0.039 257.3 / 0.5);
+    --bg-overlay-light: oklch(100% 0 0 / 0.2);
+    --bg-overlay-medium: oklch(100% 0 0 / 0.3);
+    --bg-dark: oklch(0% 0 0);
+
+    /* Border colors */
+    --border-light: oklch(94.2% 0.005 247.9);
+    --border-primary: oklch(32.1% 0 0);
+    --border-secondary: oklch(37.3% 0.031 259.7);
+
+    /* Text Colors */
+    --text-primary: oklch(92.9% 0.013 255.5);
+    --text-secondary: oklch(71.1% 0.035 256.8);
+    --text-tertiary: oklch(55.4% 0.041 257.4);
+    --text-muted: oklch(44.6% 0.037 257.3);
+    --text-inverse: oklch(20.8% 0.040 265.8);
+    --text-link: oklch(62.3% 0.188 259.8);
+    --text-link-hover: oklch(71.4% 0.143 254.6);
+
+    /* Border tokens */
+    --border-default: oklch(44.6% 0.037 257.3);
+    --border-subtle: oklch(44.6% 0.037 257.3 / 0.5);
+    --border-strong: oklch(55.4% 0.041 257.4);
+    --border-emphasis: oklch(71.1% 0.035 256.8);
+
+    /* Chart - Primary palette */
+    --chart-blue: oklch(62.3% 0.188 259.8);
+    --chart-green: oklch(72.3% 0.192 149.6);
+    --chart-yellow: oklch(76.9% 0.165 70.1);
+    --chart-red: oklch(63.7% 0.208 25.3);
+    --chart-purple: oklch(60.6% 0.219 292.7);
+    --chart-cyan: oklch(71.5% 0.126 215.2);
+    --chart-pink: oklch(65.6% 0.212 354.3);
+    --chart-orange: oklch(70.5% 0.187 47.6);
+    --chart-indigo: oklch(58.5% 0.204 277.1);
+    --chart-teal: oklch(70.4% 0.123 182.5);
+
+    /* Chart - Light shades */
+    --chart-blue-light: oklch(71.4% 0.143 254.6);
+    --chart-green-light: oklch(80.0% 0.182 151.7);
+    --chart-yellow-light: oklch(83.7% 0.164 84.4);
+    --chart-red-light: oklch(71.1% 0.166 22.2);
+    --chart-purple-light: oklch(70.9% 0.159 293.5);
+    --chart-cyan-light: oklch(79.7% 0.134 211.5);
+    --chart-pink-light: oklch(72.5% 0.175 349.8);
+    --chart-orange-light: oklch(75.8% 0.159 55.9);
+
+    /* Chart - Semi-transparent backgrounds */
+    --chart-blue-bg: oklch(62.3% 0.188 259.8 / 0.2);
+    --chart-purple-bg: oklch(60.6% 0.219 292.7 / 0.2);
+    --chart-green-bg: oklch(72.3% 0.192 149.6 / 0.2);
+    --chart-red-bg: oklch(63.7% 0.208 25.3 / 0.2);
+    --chart-orange-bg: oklch(70.5% 0.187 47.6 / 0.2);
+    --chart-yellow-bg: oklch(79.5% 0.162 86.0 / 0.2);
+
+    /* Chart grid and misc */
+    --chart-grid: oklch(71.1% 0.035 256.8 / 0.1);
+
+    /* Code Syntax Highlighting */
+    --code-bg: oklch(17.6% 0.014 258.4);
+    --code-text: oklch(85.7% 0.014 248.0);
+    --code-keyword: oklch(73.4% 0.163 25.8);
+    --code-string: oklch(85.6% 0.077 244.1);
+    --code-number: oklch(78.6% 0.115 246.7);
+    --code-comment: oklch(66.2% 0.018 250.9);
+    --code-function: oklch(80.1% 0.128 305.9);
+    --code-variable: oklch(79.9% 0.141 60.1);
+    --code-operator: oklch(73.4% 0.163 25.8);
+    --code-class: oklch(84.2% 0.164 145.8);
+    --code-tag: oklch(84.2% 0.164 145.8);
+    --code-attribute: oklch(78.6% 0.115 246.7);
+
+    /* Colored shadows */
+    --shadow-primary: 0 4px 14px 0 oklch(58.5% 0.204 277.1 / 0.3);
+    --shadow-purple-sm: 0 2px 4px oklch(55.8% 0.253 302.3 / 0.2);
+    --shadow-purple-md: 0 4px 8px oklch(55.8% 0.253 302.3 / 0.3);
+
+    /* Focus ring shadows */
+    --shadow-focus: 0 0 0 3px oklch(62.3% 0.188 259.8 / 0.1);
+    --shadow-focus-error: 0 0 0 3px oklch(63.7% 0.208 25.3 / 0.1);
+    --shadow-focus-success: 0 0 0 3px oklch(69.6% 0.149 162.5 / 0.1);
+
+    /* Extended chart palette */
+    --chart-brown: oklch(47.3% 0.125 46.2);
+    --chart-indigo-dark: oklch(45.7% 0.215 277.0);
+    --chart-indigo-light: oklch(68.0% 0.158 276.9);
+    --chart-lime: oklch(76.8% 0.204 130.8);
+    --chart-lime-light: oklch(84.9% 0.207 128.8);
+    --chart-light-green: oklch(80.0% 0.182 151.7);
+    --chart-light-green-bg: oklch(80.0% 0.182 151.7 / 0.2);
+    --chart-purple-dark: oklch(49.1% 0.241 292.6);
+
+    /* Legacy alpha backgrounds */
+    --bg-primary-alpha: oklch(20.8% 0.040 265.8 / 0.5);
+    --bg-primary-transparent: oklch(20.8% 0.040 265.8 / 0.8);
+    --bg-primary-transparent-hover: oklch(20.8% 0.040 265.8 / 0.9);
+    --bg-tertiary-transparent: oklch(37.2% 0.039 257.3 / 0.7);
+
+    /* Canvas — agent draft cell ownership tokens */
+    --color-agent-draft-border: oklch(62.3% 0.188 259.8);
+    --color-agent-draft-bg: oklch(97.0% 0.014 254.6);
+    --color-user-edit-cursor: oklch(59.6% 0.127 163.2);
+  }
+}
