@@ -166,9 +166,7 @@ class VertexAIProvider(BaseProvider):
         try:
             from anthropic import AsyncAnthropicVertex  # type: ignore[import]
         except ImportError as exc:
-            raise ImportError(
-                "anthropic[vertex] not installed. Run: pip install 'anthropic[vertex]'"
-            ) from exc
+            raise ImportError("anthropic[vertex] not installed. Run: pip install 'anthropic[vertex]'") from exc
 
         project = self._resolve_project()
         location = self._resolve_location()
@@ -436,7 +434,7 @@ class VertexAIProvider(BaseProvider):
     async def is_available(self) -> bool:
         """Return True when the vertexai SDK can be imported and a project is configured."""
         try:
-            import vertexai  # type: ignore[import] noqa: F401
+            import vertexai  # type: ignore[import]  # noqa: F401
         except ImportError:
             return False
         project = self._resolve_project()

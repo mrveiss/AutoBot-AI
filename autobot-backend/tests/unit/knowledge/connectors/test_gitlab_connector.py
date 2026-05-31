@@ -17,13 +17,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from knowledge.connectors.gitlab import (
-    GitLabConnector,
     GiteaConnector,
+    GitLabConnector,
     _is_text_file,
     _issue_to_text,
 )
 from knowledge.connectors.models import ConnectorConfig
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -130,8 +129,14 @@ def test_issue_to_text_basic():
 
 
 def test_issue_to_text_pr_flag():
-    issue = {"iid": 5, "title": "Add feature", "state": "merged",
-             "author": {"username": "bob"}, "created_at": "", "updated_at": ""}
+    issue = {
+        "iid": 5,
+        "title": "Add feature",
+        "state": "merged",
+        "author": {"username": "bob"},
+        "created_at": "",
+        "updated_at": "",
+    }
     text = _issue_to_text(issue, is_pr=True)
     assert "Merge Request" in text
 
@@ -171,14 +176,26 @@ async def test_gitlab_discover_sources_issues_and_mrs():
     connector = GitLabConnector(_gl_config())
 
     issues_page = [
-        {"iid": 1, "title": "Bug", "state": "opened",
-         "author": {"username": "u"}, "created_at": "2026-01-01T00:00:00Z",
-         "updated_at": "2026-01-02T00:00:00Z", "web_url": "https://gl/p/1"},
+        {
+            "iid": 1,
+            "title": "Bug",
+            "state": "opened",
+            "author": {"username": "u"},
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-02T00:00:00Z",
+            "web_url": "https://gl/p/1",
+        },
     ]
     mrs_page = [
-        {"iid": 2, "title": "Feature", "state": "merged",
-         "author": {"username": "v"}, "created_at": "2026-01-01T00:00:00Z",
-         "updated_at": "2026-01-03T00:00:00Z", "web_url": "https://gl/p/2"},
+        {
+            "iid": 2,
+            "title": "Feature",
+            "state": "merged",
+            "author": {"username": "v"},
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-03T00:00:00Z",
+            "web_url": "https://gl/p/2",
+        },
     ]
 
     async def fake_gl_get(path: str) -> Dict[str, Any]:
@@ -200,12 +217,18 @@ async def test_gitlab_detect_changes_full_sync():
 
     async def fake_gl_get(path: str) -> Dict[str, Any]:
         if "merge_requests" in path:
-            return {"status_code": 200, "body": [
-                {"iid": 10, "title": "MR", "updated_at": "2026-02-01T00:00:00Z"},
-            ]}
-        return {"status_code": 200, "body": [
-            {"iid": 5, "title": "Issue", "updated_at": "2026-01-15T00:00:00Z"},
-        ]}
+            return {
+                "status_code": 200,
+                "body": [
+                    {"iid": 10, "title": "MR", "updated_at": "2026-02-01T00:00:00Z"},
+                ],
+            }
+        return {
+            "status_code": 200,
+            "body": [
+                {"iid": 5, "title": "Issue", "updated_at": "2026-01-15T00:00:00Z"},
+            ],
+        }
 
     with (
         patch.object(connector, "_gl_get", side_effect=fake_gl_get),
@@ -347,14 +370,26 @@ async def test_gitea_discover_sources():
     connector = GiteaConnector(_gitea_config())
 
     issues = [
-        {"number": 1, "title": "Bug", "state": "open",
-         "updated_at": "2026-01-01T00:00:00Z", "html_url": "https://gitea/alice/my-repo/issues/1",
-         "user": {"login": "alice"}, "created_at": "2026-01-01T00:00:00Z"},
+        {
+            "number": 1,
+            "title": "Bug",
+            "state": "open",
+            "updated_at": "2026-01-01T00:00:00Z",
+            "html_url": "https://gitea/alice/my-repo/issues/1",
+            "user": {"login": "alice"},
+            "created_at": "2026-01-01T00:00:00Z",
+        },
     ]
     prs = [
-        {"number": 2, "title": "PR title", "state": "open",
-         "updated_at": "2026-01-01T00:00:00Z", "html_url": "https://gitea/alice/my-repo/pulls/2",
-         "user": {"login": "alice"}, "created_at": "2026-01-01T00:00:00Z"},
+        {
+            "number": 2,
+            "title": "PR title",
+            "state": "open",
+            "updated_at": "2026-01-01T00:00:00Z",
+            "html_url": "https://gitea/alice/my-repo/pulls/2",
+            "user": {"login": "alice"},
+            "created_at": "2026-01-01T00:00:00Z",
+        },
     ]
 
     async def fake_gitea_get(path: str) -> Dict[str, Any]:

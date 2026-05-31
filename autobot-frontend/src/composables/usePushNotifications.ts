@@ -101,7 +101,7 @@ export function usePushNotifications() {
       }
 
       const reg = await navigator.serviceWorker.ready
-      const [vapidPublicKey] = await Promise.all([_getVapidPublicKey()])
+      const vapidPublicKey = await _getVapidPublicKey()
       const applicationServerKey = _urlBase64ToUint8Array(vapidPublicKey)
 
       const subscription = await reg.pushManager.subscribe({

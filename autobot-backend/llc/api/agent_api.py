@@ -293,12 +293,12 @@ class AgentWikiEntryOut(BaseModel):
 async def agent_list_wiki(namespace: Optional[str] = None, request: Request = None) -> Dict[str, Any]:
     """List this agent's own wiki entries."""
     agent_id, company_id = _agent_context(request)
+    import uuid as _uuid
+
     from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
 
     from ..services.agent_wiki_service import AgentWikiService
-
-    import uuid as _uuid
 
     factory = get_async_session_factory()
     async with factory() as session:
@@ -316,12 +316,12 @@ async def agent_list_wiki(namespace: Optional[str] = None, request: Request = No
 async def agent_create_wiki_entry(body: AgentWikiEntryIn, request: Request = None) -> Dict[str, Any]:
     """Create a wiki entry scoped to this agent."""
     agent_id, company_id = _agent_context(request)
+    import uuid as _uuid
+
     from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
 
     from ..services.agent_wiki_service import AgentWikiService
-
-    import uuid as _uuid
 
     factory = get_async_session_factory()
     async with factory() as session:
