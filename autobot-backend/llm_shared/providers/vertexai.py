@@ -60,7 +60,7 @@ _VERTEX_CLAUDE_MODELS = [
     "claude-3-opus@20240229",
 ]
 
-_VERTEX_MODELS = _VERTEX_GEMINI_MODELS + _VERTEX_CLAUDE_MODELS
+VERTEX_MODELS = _VERTEX_GEMINI_MODELS + _VERTEX_CLAUDE_MODELS
 
 
 def _is_claude_model(model: str) -> bool:
@@ -444,12 +444,12 @@ class VertexAIProvider(BaseProvider):
         return True
 
     async def list_models(self) -> List[str]:
-        return list(_VERTEX_MODELS)
+        return list(VERTEX_MODELS)
 
 
 __all__ = [
     "VertexAIProvider",
-    "_VERTEX_MODELS",
+    "VERTEX_MODELS",
     "_VERTEX_GEMINI_MODELS",
     "_VERTEX_CLAUDE_MODELS",
 ]
