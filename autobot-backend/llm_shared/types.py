@@ -37,6 +37,7 @@ class ProviderType(Enum):
     PROCESS = "process"  # Issue #1403
     LAYER_INFERENCE = "layer_inference"  # Issue #3104
     GROQ = "groq"  # Issue #4096
+    VERTEX_AI = "vertexai"  # GH#9009
 
 
 class LLMType(Enum):
