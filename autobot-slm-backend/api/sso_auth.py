@@ -83,7 +83,9 @@ async def initiate_sso_login(
                 detail="LDAP login requires POST to /auth/sso/ldap/login",
             )
 
-        redirect_url, state = await sso_service.initiate_oauth_login(provider_id, callback_url)
+        redirect_url, state = await sso_service.initiate_oauth_login(
+            provider_id, callback_url
+        )
 
         return SSOLoginInitResponse(
             provider_id=provider.id,
@@ -110,17 +112,16 @@ async def oauth_callback(
     request: Request,
     code: str = Query(...),
     state: str = Query(...),
-    provider_id: uuid.UUID = Query(...),
     db: AsyncSession = Depends(get_slm_db),
 ) -> RedirectResponse:
     """Handle OAuth2 callback."""
-    logger.info("Processing OAuth2 callback for provider: %s", provider_id)
+    logger.info("Processing OAuth2 callback")
     context = TenantContext(is_platform_admin=False)
     sso_service = SSOService(db, context)
 
     try:
         callback_url = _build_callback_url(request)
-        user = await sso_service.complete_oauth_login(provider_id, code, state, callback_url)
+        user = await sso_service.complete_oauth_login(code, state, callback_url)
 
         # Convert User ORM object to dict-like structure for auth_service
         user_dict = type(
@@ -128,7 +129,11 @@ async def oauth_callback(
             (),
             {
                 "username": user.username,
-                "is_admin": (user.is_platform_admin if hasattr(user, "is_platform_admin") else False),
+                "is_admin": (
+                    user.is_platform_admin
+                    if hasattr(user, "is_platform_admin")
+                    else False
+                ),
             },
         )()
 
@@ -168,7 +173,11 @@ async def ldap_login(
             (),
             {
                 "username": user.username,
-                "is_admin": (user.is_platform_admin if hasattr(user, "is_platform_admin") else False),
+                "is_admin": (
+                    user.is_platform_admin
+                    if hasattr(user, "is_platform_admin")
+                    else False
+                ),
             },
         )()
 
@@ -218,7 +227,11 @@ async def saml_callback(
             (),
             {
                 "username": user.username,
-                "is_admin": (user.is_platform_admin if hasattr(user, "is_platform_admin") else False),
+                "is_admin": (
+                    user.is_platform_admin
+                    if hasattr(user, "is_platform_admin")
+                    else False
+                ),
             },
         )()
 
