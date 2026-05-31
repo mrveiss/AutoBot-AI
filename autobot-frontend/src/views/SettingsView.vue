@@ -81,6 +81,13 @@ Issue #753: User preference management interface
           <Icon name="bookmark" />
           {{ $t('settings.presets.title') }}
         </button>
+        <button
+          @click="activeTab = 'notifications'"
+          :class="['settings-tab', { active: activeTab === 'notifications' }]"
+        >
+          <Icon name="bell" />
+          Notifications
+        </button>
       </div>
 
       <!-- Tab Content -->
@@ -242,6 +249,20 @@ Issue #753: User preference management interface
             <PresetsSettingsPanel />
           </div>
         </section>
+
+        <!-- GH#4459: Web push notification toggle -->
+        <section v-if="activeTab === 'notifications'" class="settings-section">
+          <div class="section-header">
+            <h2 class="section-title">
+              <Icon name="bell" />
+              Notifications
+            </h2>
+            <p class="section-description">Manage browser push notifications for this device.</p>
+          </div>
+          <div class="section-content">
+            <PushNotificationSettingsPanel />
+          </div>
+        </section>
       </div>
 
     <ApiKeySetupWizard v-model="showApiKeyWizard" @saved="onApiKeysSaved" />
@@ -258,6 +279,7 @@ import ApiKeySetupWizard from '@/components/settings/ApiKeySetupWizard.vue'
 import ConnectionSettingsPanel from '@/components/desktop/ConnectionSettingsPanel.vue'
 import FeatureFlagsSettingsPanel from '@/components/settings/FeatureFlagsSettingsPanel.vue'
 import PresetsSettingsPanel from '@/components/settings/PresetsSettingsPanel.vue'
+import PushNotificationSettingsPanel from '@/components/settings/PushNotificationSettingsPanel.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -271,7 +293,7 @@ const { showToast } = useNotificationBus()
 
 logger.debug('Settings view initialized')
 
-type PreferenceTab = 'appearance' | 'language' | 'voice' | 'webresearch' | 'apikeys' | 'connection' | 'featureflags' | 'presets'
+type PreferenceTab = 'appearance' | 'language' | 'voice' | 'webresearch' | 'apikeys' | 'connection' | 'featureflags' | 'presets' | 'notifications'
 const activeTab = ref<PreferenceTab>('appearance')
 const showApiKeyWizard = ref(false)
 
