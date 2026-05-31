@@ -252,15 +252,17 @@ class GitLabConnector(AbstractConnector):
             if not _is_text_file(path):
                 continue
             sid = self._source_id(project_id, "file", path)
-            sources.append(SourceInfo(
-                source_id=sid,
-                name=path,
-                path="%s/-/blob/HEAD/%s" % (self._base_url, path),
-                content_type="text/plain",
-                size_bytes=0,
-                last_modified=now_utc(),
-                metadata={"project_id": project_id, "file_path": path},
-            ))
+            sources.append(
+                SourceInfo(
+                    source_id=sid,
+                    name=path,
+                    path="%s/-/blob/HEAD/%s" % (self._base_url, path),
+                    content_type="text/plain",
+                    size_bytes=0,
+                    last_modified=now_utc(),
+                    metadata={"project_id": project_id, "file_path": path},
+                )
+            )
         return sources
 
     def _issue_source_info(self, project_id: str, item: Dict[str, Any], kind: str) -> SourceInfo:
@@ -321,17 +323,17 @@ class GitLabConnector(AbstractConnector):
             sid = self._source_id(project_id, "file", path)
             stored_ts = await _load_ts(self.config.connector_id, sid)
             change_type = "added" if stored_ts is None else "modified"
-            changes.append(ChangeInfo(
-                source_id=sid,
-                change_type=change_type,
-                timestamp=now_utc(),
-                details={"path": path},
-            ))
+            changes.append(
+                ChangeInfo(
+                    source_id=sid,
+                    change_type=change_type,
+                    timestamp=now_utc(),
+                    details={"path": path},
+                )
+            )
         return changes
 
-    async def _classify(
-        self, source_id: str, updated_at: str, since: Optional[datetime]
-    ) -> Optional[ChangeInfo]:
+    async def _classify(self, source_id: str, updated_at: str, since: Optional[datetime]) -> Optional[ChangeInfo]:
         if since is None:
             return ChangeInfo(
                 source_id=source_id,
@@ -407,9 +409,7 @@ class GitLabConnector(AbstractConnector):
 
     async def _fetch_file(self, project_id: str, file_path: str, source_id: str) -> Optional[ContentResult]:
         encoded = quote(file_path, safe="")
-        result = await self._gl_get(
-            "/projects/%s/repository/files/%s/raw?ref=HEAD" % (project_id, encoded)
-        )
+        result = await self._gl_get("/projects/%s/repository/files/%s/raw?ref=HEAD" % (project_id, encoded))
         if result.get("status_code") != 200:
             self.logger.error("GitLab fetch file %s: HTTP %s", file_path, result.get("status_code"))
             return None
@@ -460,9 +460,7 @@ class GitLabConnector(AbstractConnector):
         page = 1
         while True:
             result = await self.fetch_with_retry(
-                lambda p=path, pg=page, s=sep: self._gl_get(
-                    "%s%sper_page=%d&page=%d" % (p, s, self._per_page, pg)
-                )
+                lambda p=path, pg=page, s=sep: self._gl_get("%s%sper_page=%d&page=%d" % (p, s, self._per_page, pg))
             )
             if result.get("status_code") != 200:
                 break
@@ -476,9 +474,7 @@ class GitLabConnector(AbstractConnector):
         return items
 
     def _source_id(self, project_id: str, kind: str, ref: str) -> str:
-        return "gitlab:%s:project:%s:%s:%s" % (
-            self.config.connector_id, project_id, kind, ref
-        )
+        return "gitlab:%s:project:%s:%s:%s" % (self.config.connector_id, project_id, kind, ref)
 
 
 # ---------------------------------------------------------------------------
@@ -487,6 +483,7 @@ class GitLabConnector(AbstractConnector):
 
 
 @ConnectorRegistry.register("gitea")
+@ConnectorRegistry.register("forgejo")
 class GiteaConnector(AbstractConnector):
     """Knowledge connector for Gitea and Forgejo instances.
 
@@ -603,20 +600,20 @@ class GiteaConnector(AbstractConnector):
             if not _is_text_file(path):
                 continue
             sid = self._source_id(owner, repo, "file", path)
-            sources.append(SourceInfo(
-                source_id=sid,
-                name=path,
-                path="%s/%s/%s/raw/branch/HEAD/%s" % (self._base_url, owner, repo, path),
-                content_type="text/plain",
-                size_bytes=item.get("size", 0),
-                last_modified=now_utc(),
-                metadata={"owner": owner, "repo": repo, "file_path": path},
-            ))
+            sources.append(
+                SourceInfo(
+                    source_id=sid,
+                    name=path,
+                    path="%s/%s/%s/raw/branch/HEAD/%s" % (self._base_url, owner, repo, path),
+                    content_type="text/plain",
+                    size_bytes=item.get("size", 0),
+                    last_modified=now_utc(),
+                    metadata={"owner": owner, "repo": repo, "file_path": path},
+                )
+            )
         return sources
 
-    def _item_source_info(
-        self, owner: str, repo: str, item: Dict[str, Any], kind: str
-    ) -> SourceInfo:
+    def _item_source_info(self, owner: str, repo: str, item: Dict[str, Any], kind: str) -> SourceInfo:
         number = str(item.get("number", ""))
         sid = self._source_id(owner, repo, kind, number)
         updated_raw = item.get("updated_at", "")
@@ -638,22 +635,23 @@ class GiteaConnector(AbstractConnector):
     # Change detection
     # ------------------------------------------------------------------
 
-    async def _changed_issues(
-        self, owner: str, repo: str, since: Optional[datetime]
-    ) -> List[ChangeInfo]:
+    async def _changed_issues(self, owner: str, repo: str, since: Optional[datetime]) -> List[ChangeInfo]:
         params = "type=issues&limit=%d" % self._per_page
         if since:
             params += "&since=%s" % since.isoformat()
         items = await self._paginate("/repos/%s/%s/issues?%s" % (owner, repo, params))
-        return [c for c in [
-            await self._classify(self._source_id(owner, repo, "issue", str(i.get("number", ""))),
-                                 i.get("updated_at", ""), since)
-            for i in items
-        ] if c is not None]
+        return [
+            c
+            for c in [
+                await self._classify(
+                    self._source_id(owner, repo, "issue", str(i.get("number", ""))), i.get("updated_at", ""), since
+                )
+                for i in items
+            ]
+            if c is not None
+        ]
 
-    async def _changed_prs(
-        self, owner: str, repo: str, since: Optional[datetime]
-    ) -> List[ChangeInfo]:
+    async def _changed_prs(self, owner: str, repo: str, since: Optional[datetime]) -> List[ChangeInfo]:
         items = await self._paginate("/repos/%s/%s/pulls" % (owner, repo))
         changes = []
         for item in items:
@@ -666,9 +664,7 @@ class GiteaConnector(AbstractConnector):
                 changes.append(change)
         return changes
 
-    async def _changed_files(
-        self, owner: str, repo: str, since: Optional[datetime]
-    ) -> List[ChangeInfo]:
+    async def _changed_files(self, owner: str, repo: str, since: Optional[datetime]) -> List[ChangeInfo]:
         items = await self._paginate("/repos/%s/%s/git/trees/HEAD?recursive=true" % (owner, repo))
         tree = items[0].get("tree", []) if items else []
         changes = []
@@ -681,17 +677,17 @@ class GiteaConnector(AbstractConnector):
             sid = self._source_id(owner, repo, "file", path)
             stored = await _load_ts(self.config.connector_id, sid)
             change_type = "added" if stored is None else "modified"
-            changes.append(ChangeInfo(
-                source_id=sid,
-                change_type=change_type,
-                timestamp=now_utc(),
-                details={"path": path},
-            ))
+            changes.append(
+                ChangeInfo(
+                    source_id=sid,
+                    change_type=change_type,
+                    timestamp=now_utc(),
+                    details={"path": path},
+                )
+            )
         return changes
 
-    async def _classify(
-        self, source_id: str, updated_at: str, since: Optional[datetime]
-    ) -> Optional[ChangeInfo]:
+    async def _classify(self, source_id: str, updated_at: str, since: Optional[datetime]) -> Optional[ChangeInfo]:
         if since is None:
             return ChangeInfo(
                 source_id=source_id,
@@ -715,9 +711,7 @@ class GiteaConnector(AbstractConnector):
     # Content fetch
     # ------------------------------------------------------------------
 
-    async def _fetch_issue(
-        self, owner: str, repo: str, number: str, source_id: str
-    ) -> Optional[ContentResult]:
+    async def _fetch_issue(self, owner: str, repo: str, number: str, source_id: str) -> Optional[ContentResult]:
         result = await self._gitea_get("/repos/%s/%s/issues/%s" % (owner, repo, number))
         if result.get("status_code") != 200:
             self.logger.error("Gitea fetch issue %s/%s#%s: HTTP %s", owner, repo, number, result.get("status_code"))
@@ -743,9 +737,7 @@ class GiteaConnector(AbstractConnector):
             },
         )
 
-    async def _fetch_pr(
-        self, owner: str, repo: str, number: str, source_id: str
-    ) -> Optional[ContentResult]:
+    async def _fetch_pr(self, owner: str, repo: str, number: str, source_id: str) -> Optional[ContentResult]:
         result = await self._gitea_get("/repos/%s/%s/pulls/%s" % (owner, repo, number))
         if result.get("status_code") != 200:
             self.logger.error("Gitea fetch PR %s/%s#%s: HTTP %s", owner, repo, number, result.get("status_code"))
@@ -771,9 +763,7 @@ class GiteaConnector(AbstractConnector):
             },
         )
 
-    async def _fetch_file(
-        self, owner: str, repo: str, file_path: str, source_id: str
-    ) -> Optional[ContentResult]:
+    async def _fetch_file(self, owner: str, repo: str, file_path: str, source_id: str) -> Optional[ContentResult]:
         result = await self._gitea_get("/repos/%s/%s/raw/%s" % (owner, repo, quote(file_path, safe="/")))
         if result.get("status_code") != 200:
             self.logger.error("Gitea fetch file %s: HTTP %s", file_path, result.get("status_code"))
@@ -826,9 +816,7 @@ class GiteaConnector(AbstractConnector):
         page = 1
         while True:
             result = await self.fetch_with_retry(
-                lambda p=path, pg=page, s=sep: self._gitea_get(
-                    "%s%slimit=%d&page=%d" % (p, s, self._per_page, pg)
-                )
+                lambda p=path, pg=page, s=sep: self._gitea_get("%s%slimit=%d&page=%d" % (p, s, self._per_page, pg))
             )
             if result.get("status_code") != 200:
                 break
@@ -845,9 +833,7 @@ class GiteaConnector(AbstractConnector):
         return items
 
     def _source_id(self, owner: str, repo: str, kind: str, ref: str) -> str:
-        return "gitea:%s:repo:%s:%s:%s:%s" % (
-            self.config.connector_id, owner, repo, kind, ref
-        )
+        return "gitea:%s:repo:%s:%s:%s:%s" % (self.config.connector_id, owner, repo, kind, ref)
 
 
 # ---------------------------------------------------------------------------
@@ -856,14 +842,45 @@ class GiteaConnector(AbstractConnector):
 
 
 _TEXT_EXTENSIONS = {
-    ".md", ".rst", ".txt", ".py", ".js", ".ts", ".go", ".rb", ".java",
-    ".c", ".cpp", ".h", ".hpp", ".cs", ".php", ".sh", ".yaml", ".yml",
-    ".json", ".toml", ".ini", ".cfg", ".conf", ".html", ".htm", ".xml",
-    ".csv", ".sql", ".kt", ".swift", ".rs", ".scala", ".ex", ".exs",
+    ".md",
+    ".rst",
+    ".txt",
+    ".py",
+    ".js",
+    ".ts",
+    ".go",
+    ".rb",
+    ".java",
+    ".c",
+    ".cpp",
+    ".h",
+    ".hpp",
+    ".cs",
+    ".php",
+    ".sh",
+    ".yaml",
+    ".yml",
+    ".json",
+    ".toml",
+    ".ini",
+    ".cfg",
+    ".conf",
+    ".html",
+    ".htm",
+    ".xml",
+    ".csv",
+    ".sql",
+    ".kt",
+    ".swift",
+    ".rs",
+    ".scala",
+    ".ex",
+    ".exs",
 }
 
 
 def _is_text_file(path: str) -> bool:
     import os
+
     _, ext = os.path.splitext(path.lower())
     return ext in _TEXT_EXTENSIONS
