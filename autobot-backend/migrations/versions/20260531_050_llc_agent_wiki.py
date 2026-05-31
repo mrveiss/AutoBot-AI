@@ -1,7 +1,7 @@
 """Add llc_agent_wiki_entries table for per-agent knowledge vault (GH#9021).
 
-Revision ID: 20260530_049
-Revises: 20260530_048
+Revision ID: 20260531_050
+Revises: 20260531_049
 """
 
 from typing import Sequence, Union
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import UUID
 
-revision: str = "20260530_049"
-down_revision: Union[str, None] = "20260530_048"
+revision: str = "20260531_050"
+down_revision: Union[str, None] = "20260531_049"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
