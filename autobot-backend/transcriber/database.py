@@ -9,7 +9,12 @@ from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
-_SCHEMA = """
+# Each tuple is (version, sql). Append new entries; never reorder or delete.
+# Migration 1 uses CREATE TABLE IF NOT EXISTS so it is safe to run against an
+# existing pre-migration database — tables already present are left untouched
+# and the version row is inserted, bringing the DB under version-tracked control.
+_MIGRATIONS: list[tuple[int, str]] = [
+    (1, """
 CREATE TABLE IF NOT EXISTS projects (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -65,7 +70,8 @@ CREATE TABLE IF NOT EXISTS kb_pushes (
     pushed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     pushed_by TEXT NOT NULL
 );
-"""
+"""),
+]
 
 
 class Database:
@@ -83,12 +89,33 @@ class Database:
             return  # already connected — idempotent
         self._conn = await aiosqlite.connect(self._path)
         self._conn.row_factory = aiosqlite.Row
-        await self._conn.executescript(_SCHEMA)
         await self._conn.execute("PRAGMA foreign_keys = ON")
+        await self._run_migrations()
         logger.info("Transcriber DB connected: %s", self._path)
 
+    async def _run_migrations(self) -> None:
+        await self._db().execute(
+            "CREATE TABLE IF NOT EXISTS _schema_migrations "
+            "(version INTEGER PRIMARY KEY, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+        )
+        await self._db().commit()
+        cur = await self._db().execute(
+            "SELECT COALESCE(MAX(version), 0) FROM _schema_migrations"
+        )
+        row = await cur.fetchone()
+        current: int = row[0]
+        for version, sql in _MIGRATIONS:
+            if version <= current:
+                continue
+            await self._db().executescript(sql)
+            await self._db().execute(
+                "INSERT INTO _schema_migrations (version) VALUES (?)", (version,)
+            )
+            await self._db().commit()
+            logger.info("Transcriber DB: applied migration %d", version)
+
     async def close(self) -> None:
-        if self._conn:
+        if self._conn is not None:
             await self._conn.close()
             self._conn = None
 
@@ -107,22 +134,29 @@ class Database:
         row = await cur.fetchone()
         return dict(row) if row else None
 
-    async def list_projects(self, user_id: str) -> list[dict]:
+    async def list_projects(
+        self, user_id: str, *, limit: int = 200, offset: int = 0
+    ) -> list[dict]:
         cur = await self._db().execute(
-            "SELECT * FROM projects WHERE user_id=? ORDER BY created_at DESC", (user_id,)
+            "SELECT * FROM projects WHERE user_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (user_id, limit, offset),
         )
         return [dict(r) for r in await cur.fetchall()]
 
     async def update_project(self, project_id: int, name: str, description: str) -> None:
-        await self._db().execute(
+        cur = await self._db().execute(
             "UPDATE projects SET name=?, description=? WHERE id=?",
             (name, description, project_id),
         )
         await self._db().commit()
+        if cur.rowcount == 0:
+            raise KeyError(f"no project with id={project_id}")
 
     async def delete_project(self, project_id: int) -> None:
-        await self._db().execute("DELETE FROM projects WHERE id=?", (project_id,))
+        cur = await self._db().execute("DELETE FROM projects WHERE id=?", (project_id,))
         await self._db().commit()
+        if cur.rowcount == 0:
+            raise KeyError(f"no project with id={project_id}")
 
     # ── Recordings ────────────────────────────────────────────────────────────
 
@@ -143,10 +177,12 @@ class Database:
         row = await cur.fetchone()
         return dict(row) if row else None
 
-    async def list_recordings(self, project_id: int) -> list[dict]:
+    async def list_recordings(
+        self, project_id: int, *, limit: int = 200, offset: int = 0
+    ) -> list[dict]:
         cur = await self._db().execute(
-            "SELECT * FROM recordings WHERE project_id=? ORDER BY uploaded_at DESC",
-            (project_id,),
+            "SELECT * FROM recordings WHERE project_id=? ORDER BY uploaded_at DESC LIMIT ? OFFSET ?",
+            (project_id, limit, offset),
         )
         return [dict(r) for r in await cur.fetchall()]
 
@@ -162,7 +198,7 @@ class Database:
         failure_stage: str | None = None,
         failure_reason: str | None = None,
     ) -> None:
-        await self._db().execute(
+        cur = await self._db().execute(
             """UPDATE recordings SET status=?,
                engine_used=COALESCE(?,engine_used),
                language_detected=COALESCE(?,language_detected),
@@ -177,10 +213,14 @@ class Database:
             ),
         )
         await self._db().commit()
+        if cur.rowcount == 0:
+            raise KeyError(f"no recording with id={recording_id}")
 
     async def delete_recording(self, recording_id: int) -> None:
-        await self._db().execute("DELETE FROM recordings WHERE id=?", (recording_id,))
+        cur = await self._db().execute("DELETE FROM recordings WHERE id=?", (recording_id,))
         await self._db().commit()
+        if cur.rowcount == 0:
+            raise KeyError(f"no recording with id={recording_id}")
 
     # ── Speakers ──────────────────────────────────────────────────────────────
 
@@ -194,17 +234,22 @@ class Database:
         await self._db().commit()
         return cur.lastrowid
 
-    async def list_speakers(self, recording_id: int) -> list[dict]:
+    async def list_speakers(
+        self, recording_id: int, *, limit: int = 200, offset: int = 0
+    ) -> list[dict]:
         cur = await self._db().execute(
-            "SELECT * FROM speakers WHERE recording_id=? ORDER BY id", (recording_id,)
+            "SELECT * FROM speakers WHERE recording_id=? ORDER BY id LIMIT ? OFFSET ?",
+            (recording_id, limit, offset),
         )
         return [dict(r) for r in await cur.fetchall()]
 
     async def update_speaker(self, speaker_id: int, display_name: str) -> None:
-        await self._db().execute(
+        cur = await self._db().execute(
             "UPDATE speakers SET display_name=? WHERE id=?", (display_name, speaker_id)
         )
         await self._db().commit()
+        if cur.rowcount == 0:
+            raise KeyError(f"no speaker with id={speaker_id}")
 
     # ── Segments ──────────────────────────────────────────────────────────────
 
@@ -226,17 +271,22 @@ class Database:
         await self._db().commit()
         return cur.lastrowid
 
-    async def list_segments(self, recording_id: int) -> list[dict]:
+    async def list_segments(
+        self, recording_id: int, *, limit: int = 200, offset: int = 0
+    ) -> list[dict]:
         cur = await self._db().execute(
-            "SELECT * FROM segments WHERE recording_id=? ORDER BY start_time", (recording_id,)
+            "SELECT * FROM segments WHERE recording_id=? ORDER BY start_time LIMIT ? OFFSET ?",
+            (recording_id, limit, offset),
         )
         return [dict(r) for r in await cur.fetchall()]
 
     async def update_segment_text(self, segment_id: int, text: str) -> None:
-        await self._db().execute(
+        cur = await self._db().execute(
             "UPDATE segments SET text=?, is_edited=1 WHERE id=?", (text, segment_id)
         )
         await self._db().commit()
+        if cur.rowcount == 0:
+            raise KeyError(f"no segment with id={segment_id}")
 
     # ── Notes ─────────────────────────────────────────────────────────────────
 
@@ -253,19 +303,28 @@ class Database:
         row = await cur.fetchone()
         return dict(row) if row else None
 
-    async def list_notes(self, recording_id: int) -> list[dict]:
+    async def list_notes(
+        self, recording_id: int, *, limit: int = 200, offset: int = 0
+    ) -> list[dict]:
         cur = await self._db().execute(
-            "SELECT * FROM notes WHERE recording_id=? ORDER BY created_at", (recording_id,)
+            "SELECT * FROM notes WHERE recording_id=? ORDER BY created_at LIMIT ? OFFSET ?",
+            (recording_id, limit, offset),
         )
         return [dict(r) for r in await cur.fetchall()]
 
     async def update_note(self, note_id: int, content: str) -> None:
-        await self._db().execute("UPDATE notes SET content=? WHERE id=?", (content, note_id))
+        cur = await self._db().execute(
+            "UPDATE notes SET content=? WHERE id=?", (content, note_id)
+        )
         await self._db().commit()
+        if cur.rowcount == 0:
+            raise KeyError(f"no note with id={note_id}")
 
     async def delete_note(self, note_id: int) -> None:
-        await self._db().execute("DELETE FROM notes WHERE id=?", (note_id,))
+        cur = await self._db().execute("DELETE FROM notes WHERE id=?", (note_id,))
         await self._db().commit()
+        if cur.rowcount == 0:
+            raise KeyError(f"no note with id={note_id}")
 
     # ── KB Pushes ─────────────────────────────────────────────────────────────
 
