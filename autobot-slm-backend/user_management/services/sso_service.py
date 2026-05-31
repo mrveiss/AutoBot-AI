@@ -20,6 +20,7 @@ from user_management.models.sso import SSOProvider, SSOProviderType, UserSSOLink
 from user_management.models.user import User
 from user_management.schemas.sso import SSOProviderCreate, SSOProviderUpdate
 from user_management.services.base_service import BaseService
+from user_management.services.sso_secrets import SSOSecretsManager
 
 # Optional imports for SSO providers
 try:
@@ -57,11 +58,12 @@ class SSOService(BaseService):
     """SSO provider management and authentication service."""
 
     async def create_provider(self, data: SSOProviderCreate) -> SSOProvider:
-        """Create a new SSO provider."""
+        """Create a new SSO provider with encrypted credential storage."""
+        # Create provider with placeholder ID for secret key generation
         provider = SSOProvider(
             provider_type=data.provider_type,
             name=data.name,
-            config=data.config,
+            config={},  # Will be populated after secrets extraction
             org_id=data.org_id,
             is_active=data.is_active,
             is_social=data.is_social,
@@ -71,6 +73,12 @@ class SSOService(BaseService):
         )
         self.session.add(provider)
         await self.session.flush()
+
+        # Store sensitive secrets separately and sanitize config
+        secrets_mgr = SSOSecretsManager(self.session)
+        provider.config = await secrets_mgr.store_secrets(provider.id, data.config)
+        await self.session.flush()
+
         logger.info(
             "Created SSO provider: %s (%s)", provider.name, provider.provider_type
         )
@@ -104,9 +112,19 @@ class SSOService(BaseService):
     async def update_provider(
         self, provider_id: uuid.UUID, data: SSOProviderUpdate
     ) -> SSOProvider:
-        """Update an existing SSO provider."""
+        """Update an existing SSO provider with secure credential handling."""
         provider = await self.get_provider(provider_id)
         update_data = data.model_dump(exclude_unset=True)
+
+        # Handle config updates specially to extract/update secrets
+        if "config" in update_data:
+            secrets_mgr = SSOSecretsManager(self.session)
+            # Update secrets and get sanitized config
+            sanitized_config = await secrets_mgr.store_secrets(
+                provider_id, update_data["config"]
+            )
+            update_data["config"] = sanitized_config
+
         for field, value in update_data.items():
             setattr(provider, field, value)
         await self.session.flush()
@@ -114,8 +132,13 @@ class SSOService(BaseService):
         return provider
 
     async def delete_provider(self, provider_id: uuid.UUID) -> None:
-        """Delete an SSO provider."""
+        """Delete an SSO provider and its encrypted secrets."""
         provider = await self.get_provider(provider_id)
+
+        # Delete associated secrets first
+        secrets_mgr = SSOSecretsManager(self.session)
+        await secrets_mgr.delete_secrets(provider_id)
+
         await self.session.delete(provider)
         await self.session.flush()
         logger.info("Deleted SSO provider: %s", provider_id)
@@ -134,13 +157,22 @@ class SSOService(BaseService):
         }
 
     async def _test_ldap_connection(self, provider: SSOProvider) -> dict[str, Any]:
-        """Test LDAP/AD connection."""
+        """Test LDAP/AD connection with encrypted credentials."""
         if Server is None:
             return {"success": False, "message": "ldap3 library not installed"}
         try:
             server_uri = provider.config.get("server_uri")
             bind_dn = provider.config.get("bind_dn")
-            bind_password = provider.config.get("bind_password")
+
+            # Retrieve bind_password from SystemSecret storage
+            secrets_mgr = SSOSecretsManager(self.session)
+            bind_password = await secrets_mgr.retrieve_secret(
+                provider.id, "bind_password"
+            )
+
+            if not bind_password:
+                return {"success": False, "message": "LDAP bind_password not found"}
+
             server = Server(server_uri, get_info=ALL)
             conn = Connection(server, bind_dn, bind_password, auto_bind=True)
             conn.unbind()
@@ -167,12 +199,22 @@ class SSOService(BaseService):
             return uuid.UUID(provider_id_str)
         raise SSOAuthenticationError("Redis unavailable for state validation")
 
-    def _build_oauth_client(self, provider: SSOProvider) -> Any:
-        """Build OAuth2 client from provider config."""
+    async def _build_oauth_client(self, provider: SSOProvider) -> Any:
+        """Build OAuth2 client from provider config with decrypted credentials."""
         if AsyncOAuth2Client is None:
             raise SSOServiceError("authlib library not installed")
+
         client_id = provider.config.get("client_id")
-        client_secret = provider.config.get("client_secret")
+
+        # Retrieve client_secret from SystemSecret storage
+        secrets_mgr = SSOSecretsManager(self.session)
+        client_secret = await secrets_mgr.retrieve_secret(provider.id, "client_secret")
+
+        if not client_secret:
+            raise SSOServiceError(
+                f"OAuth client_secret not found for provider {provider.id}"
+            )
+
         return AsyncOAuth2Client(
             client_id=client_id,
             client_secret=client_secret,
@@ -182,7 +224,7 @@ class SSOService(BaseService):
         self, provider: SSOProvider, callback_url: str
     ) -> tuple[str, str]:
         """Generate OAuth2 authorization URL."""
-        client = self._build_oauth_client(provider)
+        client = await self._build_oauth_client(provider)
         state = await self._generate_oauth_state(provider.id)
         authorize_url = provider.config.get("authorize_url")
         scope = provider.config.get("scope", "openid email profile")
@@ -198,7 +240,7 @@ class SSOService(BaseService):
         self, provider: SSOProvider, code: str, callback_url: str
     ) -> dict[str, Any]:
         """Exchange OAuth2 authorization code for access token."""
-        client = self._build_oauth_client(provider)
+        client = await self._build_oauth_client(provider)
         token_url = provider.config.get("token_url")
         token = await client.fetch_token(
             token_url,
@@ -211,7 +253,7 @@ class SSOService(BaseService):
         self, provider: SSOProvider, token: dict[str, Any]
     ) -> dict[str, Any]:
         """Fetch user info from OAuth2 provider."""
-        client = self._build_oauth_client(provider)
+        client = await self._build_oauth_client(provider)
         userinfo_url = provider.config.get("userinfo_url")
         client.token = token
         response = await client.get(userinfo_url)
@@ -228,7 +270,7 @@ class SSOService(BaseService):
         return await self._get_oauth_authorize_url(provider, callback_url)
 
     async def complete_oauth_login(
-        self, code: str, state: str, callback_url: str
+        self, provider_id: uuid.UUID, code: str, state: str, callback_url: str
     ) -> User:
         """Complete OAuth2 login flow and return authenticated user."""
         provider_id = await self._validate_oauth_state(state)
