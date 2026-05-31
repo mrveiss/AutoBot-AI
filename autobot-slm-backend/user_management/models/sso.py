@@ -31,6 +31,7 @@ class SSOProviderType(str, Enum):
     # Enterprise SSO
     LDAP = "ldap"
     ACTIVE_DIRECTORY = "active_directory"
+    OKTA = "okta"
     SAML = "saml"
     MICROSOFT_ENTRA = "microsoft_entra"
     GOOGLE_WORKSPACE = "google_workspace"
