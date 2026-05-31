@@ -21,6 +21,10 @@ from pydantic import BaseModel, Field, field_validator
 from .capabilities import Capability, TrustTier
 
 
+class PluginLoadError(Exception):
+    """Raised when a plugin fails to load or initialize."""
+
+
 class PluginManifest(BaseModel):
     """Plugin manifest loaded from plugin.json.
 
@@ -67,6 +71,7 @@ class PluginManifest(BaseModel):
     def validate_name(cls, v: str) -> str:
         """Validate plugin name follows kebab-case convention."""
         import re
+
         if not re.match(r"^[a-z0-9][a-z0-9_-]{0,62}$", v):
             raise ValueError(
                 "Plugin name must be lowercase alphanumeric with dashes/underscores, "
