@@ -173,7 +173,10 @@
                   />
                 </svg>
               </div>
-              <span :class="['status-badge', `status-${plugin.status}`]">{{ plugin.status }}</span>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <TrustTierBadge v-if="plugin.trust_tier" :tier="plugin.trust_tier" />
+                <span :class="['status-badge', `status-${plugin.status}`]">{{ plugin.status }}</span>
+              </div>
             </div>
 
             <div class="card-body">
@@ -288,7 +291,10 @@
                   />
                 </svg>
               </div>
-              <span class="status-badge status-unloaded">{{ $t('views.plugins.available') }}</span>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <TrustTierBadge v-if="manifest.trust_tier" :tier="manifest.trust_tier" />
+                <span class="status-badge status-unloaded">{{ $t('views.plugins.available') }}</span>
+              </div>
             </div>
 
             <div class="card-body">
@@ -355,6 +361,10 @@
             <dt>{{ $t('views.plugins.name') }}</dt><dd>{{ selectedPlugin.name }}</dd>
             <dt>{{ $t('views.plugins.version') }}</dt><dd>{{ selectedPlugin.version }}</dd>
             <dt>{{ $t('views.plugins.author') }}</dt><dd>{{ selectedPlugin.author }}</dd>
+            <dt v-if="selectedPlugin.trust_tier">{{ $t('views.plugins.trustTier') }}</dt>
+            <dd v-if="selectedPlugin.trust_tier">
+              <TrustTierBadge :tier="selectedPlugin.trust_tier" />
+            </dd>
             <dt>{{ $t('views.plugins.status') }}</dt>
             <dd>
               <span :class="['status-badge', `status-${selectedPlugin.status}`]">
@@ -445,6 +455,7 @@ import { usePlugins, type PluginInfo, type PluginManifest } from '@/composables/
 import PluginInstallModal from '@/components/plugins/PluginInstallModal.vue'
 import CapabilityApprovalDialog from '@/components/plugins/CapabilityApprovalDialog.vue'
 import CapabilityAuditLog from '@/components/plugins/CapabilityAuditLog.vue'
+import TrustTierBadge from '@/components/plugins/TrustTierBadge.vue'
 
 const { t } = useI18n()
 const route = useRoute()
