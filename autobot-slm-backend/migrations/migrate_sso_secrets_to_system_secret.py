@@ -40,9 +40,7 @@ def migrate(db_url: str) -> None:
 
         migrated_count = 0
         for provider_id, config_json in providers:
-            config = (
-                json.loads(config_json) if isinstance(config_json, str) else config_json
-            )
+            config = json.loads(config_json) if isinstance(config_json, str) else config_json
 
             secrets_to_migrate = {}
             updated_config = config.copy()
