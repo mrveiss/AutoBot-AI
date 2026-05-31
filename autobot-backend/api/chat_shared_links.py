@@ -14,7 +14,9 @@ Authenticated (owner-only) routes:
   GET    /chat/sessions/{session_id}/share-links          — list active links for a session
 
 Config:
-  AUTOBOT_SHARED_LINK_DEFAULT_TTL — default TTL in seconds (0 = no expiry, default: 0)
+  AUTOBOT_SHARED_LINK_DEFAULT_TTL    — default TTL in seconds (0 = no expiry, default: 0)
+  AUTOBOT_SHARED_LINK_ACCESS_RPM     — max password attempts per minute per IP (default: 10)
+  AUTOBOT_SHARED_LINK_ACCESS_RPH     — max password attempts per hour per IP (default: 100)
 """
 
 import os
@@ -38,6 +40,8 @@ from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.proxy_utils import get_client_ip
+from autobot_shared.rate_limiter import RateLimiter
 from autobot_shared.time_utils import now_utc
 from models.chat_shared_link import ChatSharedLink
 from security.session_ownership import SessionOwnershipValidator
@@ -55,6 +59,22 @@ if _DEFAULT_TTL_SECONDS > 0:
     logger.info("Shared link default TTL: %ds (from %s)", _DEFAULT_TTL_SECONDS, _DEFAULT_TTL_ENV)
 else:
     logger.info("Shared link default TTL: none (links never expire unless requested)")
+
+# Rate limiter for the unauthenticated /access endpoint — brute-force guard (GH#9127).
+# Keyed per client IP, sliding-window via Redis.
+_ACCESS_RPM: int = int(os.environ.get("AUTOBOT_SHARED_LINK_ACCESS_RPM", "10"))
+_ACCESS_RPH: int = int(os.environ.get("AUTOBOT_SHARED_LINK_ACCESS_RPH", "100"))
+_access_limiter = RateLimiter(
+    scope_prefix="shared_link_access",
+    default_tier="anonymous",
+    requests_per_minute=_ACCESS_RPM,
+    requests_per_hour=_ACCESS_RPH,
+)
+logger.info(
+    "Shared link access rate limit: %d/min %d/hr per IP (AUTOBOT_SHARED_LINK_ACCESS_RPM/RPH)",
+    _ACCESS_RPM,
+    _ACCESS_RPH,
+)
 
 _TOKEN_BYTES = 24  # 32-char URL-safe base64 token
 
@@ -299,7 +319,17 @@ async def access_shared_session(
     request: Request,
     db: AsyncSession = Depends(get_db_session),
 ) -> Dict[str, Any]:
-    """Verify password and return conversation content (GH#8996)."""
+    """Verify password and return conversation content (GH#8996, rate-limited GH#9127)."""
+    client_ip = get_client_ip(request) or "unknown"
+    allowed = await _access_limiter.acquire(client_ip)
+    if not allowed:
+        retry_after = await _access_limiter.get_retry_after_seconds(client_ip)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many access attempts. Please try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     link = await _resolve_link(token, db)
 
     if link.has_password:
