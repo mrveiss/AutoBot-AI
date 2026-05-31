@@ -13,7 +13,7 @@ Issue #9049 - Plugin capability manifest system.
 from __future__ import annotations
 
 import logging
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
@@ -118,7 +118,6 @@ class BasePlugin(ABC):
         Called once when the plugin is first loaded. Override to set up
         persistent resources.
         """
-        pass
 
     async def shutdown(self) -> None:
         """Clean up plugin resources.
@@ -126,7 +125,6 @@ class BasePlugin(ABC):
         Called when the plugin is unloaded or the system shuts down.
         Override to close connections, flush caches, etc.
         """
-        pass
 
     async def enable(self) -> None:
         """Enable the plugin.
