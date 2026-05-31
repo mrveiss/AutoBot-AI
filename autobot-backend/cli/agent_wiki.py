@@ -30,9 +30,9 @@ def _get_company_id(args: argparse.Namespace) -> uuid.UUID:
 
 
 async def _list(args: argparse.Namespace) -> None:
-    from user_management.database import get_async_session_factory
-
     from autobot_backend.llc.services.agent_wiki_service import AgentWikiService
+
+    from user_management.database import get_async_session_factory
 
     company_id = _get_company_id(args)
     factory = get_async_session_factory()
@@ -49,9 +49,9 @@ async def _list(args: argparse.Namespace) -> None:
 
 
 async def _create(args: argparse.Namespace) -> None:
-    from user_management.database import get_async_session_factory
-
     from autobot_backend.llc.services.agent_wiki_service import AgentWikiService
+
+    from user_management.database import get_async_session_factory
 
     company_id = _get_company_id(args)
     factory = get_async_session_factory()
@@ -71,9 +71,9 @@ async def _create(args: argparse.Namespace) -> None:
 
 
 async def _delete(args: argparse.Namespace) -> None:
-    from user_management.database import get_async_session_factory
-
     from autobot_backend.llc.services.agent_wiki_service import AgentWikiService
+
+    from user_management.database import get_async_session_factory
 
     company_id = _get_company_id(args)
     factory = get_async_session_factory()
@@ -89,9 +89,9 @@ async def _delete(args: argparse.Namespace) -> None:
 
 
 async def _context(args: argparse.Namespace) -> None:
-    from user_management.database import get_async_session_factory
-
     from autobot_backend.llc.services.agent_wiki_service import AgentWikiService
+
+    from user_management.database import get_async_session_factory
 
     company_id = _get_company_id(args)
     factory = get_async_session_factory()

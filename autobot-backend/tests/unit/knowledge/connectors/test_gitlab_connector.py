@@ -17,8 +17,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from knowledge.connectors.gitlab import (
-    GitLabConnector,
     GiteaConnector,
+    GitLabConnector,
     _is_text_file,
     _issue_to_text,
 )
