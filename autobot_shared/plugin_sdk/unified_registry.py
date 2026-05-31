@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 import threading
 
-from plugin_sdk.manifest_contract import ManifestContract
+from .manifest_contract import ManifestContract
 
 logger = logging.getLogger(__name__)
 
