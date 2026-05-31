@@ -109,6 +109,23 @@
           </svg>
           {{ $t('views.plugins.marketplace') }}
         </router-link>
+        <!-- Issue #9049: Capability audit log tab -->
+        <button
+          v-if="!isMarketplaceActive"
+          class="tab-btn"
+          :class="{ active: activeTab === 'audit' }"
+          @click="activeTab = 'audit'"
+        >
+          <svg class="tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+            />
+          </svg>
+          {{ $t('views.plugins.auditLog') }}
+        </button>
       </div>
 
       <!-- Installed Tab -->
@@ -389,7 +406,21 @@
           </div>
         </div>
       </div>
+
+      <!-- Audit Log Tab -->
+      <div v-if="!isMarketplaceActive && activeTab === 'audit'">
+        <CapabilityAuditLog />
+      </div>
     </div>
+
+    <!-- Capability Approval Dialog — Issue #9049 -->
+    <CapabilityApprovalDialog
+      v-if="pendingPluginName"
+      :plugin-name="pendingPluginName"
+      :open="approvalDialogOpen"
+      @approved="handleApprovalComplete"
+      @close="handleApprovalClose"
+    />
 
     <!-- Install plugin modal — Issue #6464 -->
     <PluginInstallModal
@@ -412,6 +443,8 @@ import { useInitialFocus } from '@/composables/useInitialFocus'
 import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
 import { usePlugins, type PluginInfo, type PluginManifest } from '@/composables/usePlugins'
 import PluginInstallModal from '@/components/plugins/PluginInstallModal.vue'
+import CapabilityApprovalDialog from '@/components/plugins/CapabilityApprovalDialog.vue'
+import CapabilityAuditLog from '@/components/plugins/CapabilityAuditLog.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -431,10 +464,13 @@ const {
   disablePlugin,
   getPluginConfig,
   updatePluginConfig,
+  getCapabilities,
 } = usePlugins()
 
-const activeTab = ref<'installed' | 'discover'>('installed')
+const activeTab = ref<'installed' | 'discover' | 'audit'>('installed')
 const installModalOpen = ref(false)
+const approvalDialogOpen = ref(false)
+const pendingPluginName = ref<string | null>(null)
 
 async function onPluginInstalled(): Promise<void> {
   await listPlugins()
@@ -479,12 +515,47 @@ async function switchToDiscover() {
 async function handleLoad(name: string) {
   actionLoading.value[name] = true
   try {
+    // Check if plugin has pending capability approvals
+    const capabilityInfo = await getCapabilities(name)
+
+    if (capabilityInfo && capabilityInfo.pending_approval.length > 0 && capabilityInfo.trust_tier !== 'official') {
+      // Non-official plugin with pending approvals - show approval dialog
+      pendingPluginName.value = name
+      approvalDialogOpen.value = true
+      actionLoading.value[name] = false
+      return
+    }
+
+    // Official plugin or no pending approvals - proceed with load
     await loadPlugin(name)
     await discoverPlugins()
     activeTab.value = 'installed'
   } finally {
     actionLoading.value[name] = false
   }
+}
+
+async function handleApprovalComplete() {
+  if (!pendingPluginName.value) return
+
+  const name = pendingPluginName.value
+  actionLoading.value[name] = true
+  try {
+    await loadPlugin(name)
+    await discoverPlugins()
+    activeTab.value = 'installed'
+  } finally {
+    actionLoading.value[name] = false
+    pendingPluginName.value = null
+  }
+}
+
+function handleApprovalClose() {
+  if (pendingPluginName.value) {
+    actionLoading.value[pendingPluginName.value] = false
+  }
+  approvalDialogOpen.value = false
+  pendingPluginName.value = null
 }
 
 async function handleUnload(name: string) {
