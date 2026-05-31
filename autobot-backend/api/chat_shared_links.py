@@ -95,7 +95,7 @@ async def create_shared_link(
     user_id = current_user.get("user_id") or current_user.get("username", "")
 
     owner = await validator.get_session_owner(session_id)
-    if owner is not None and owner != user_id:
+    if owner is None or owner != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not the session owner")
 
     password_hash: str | None = None
@@ -201,7 +201,7 @@ async def list_shared_links(
     user_id = current_user.get("user_id") or current_user.get("username", "")
 
     owner = await validator.get_session_owner(session_id)
-    if owner is not None and owner != user_id:
+    if owner is None or owner != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not the session owner")
 
     result = await db.execute(
