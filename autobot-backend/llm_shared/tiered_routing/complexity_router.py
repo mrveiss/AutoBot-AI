@@ -89,6 +89,9 @@ class ComplexityRouter:
                 input_tokens=result.input_tokens,
             )
             selected_model = self.config.models.long_context
+        # GH#9050: Trivial tier for ultra-simple queries
+        elif result.is_trivial and self.config.models.trivial:
+            selected_model = self.config.models.trivial
         elif result.is_simple:
             selected_model = self.config.models.simple
         else:
@@ -213,6 +216,8 @@ class ComplexityRouter:
         self._metrics = TierMetrics()
 
     def get_model_for_tier(self, tier: str) -> str:
+        if tier == "trivial":
+            return self.config.models.trivial
         if tier == "simple":
             return self.config.models.simple
         if tier == "complex":
