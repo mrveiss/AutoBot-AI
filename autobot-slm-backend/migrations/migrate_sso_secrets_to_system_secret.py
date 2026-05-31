@@ -78,7 +78,8 @@ def migrate(db_url: str) -> None:
                             # Create new
                             cursor.execute(
                                 """
-                                INSERT INTO system_secrets (key, encrypted_value, category, description, created_at, updated_at)
+                                INSERT INTO system_secrets
+                                (key, encrypted_value, category, description, created_at, updated_at)
                                 VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                                 """,
                                 (
