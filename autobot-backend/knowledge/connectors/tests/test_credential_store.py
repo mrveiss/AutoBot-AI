@@ -4,7 +4,7 @@
 """Unit and integration tests for ConnectorCredentialStore (ADR-007 / GH#9019)."""
 
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -14,7 +14,7 @@ from autobot_shared.auth.connector_auth import (
     BearerAuth,
     OAuthRefreshAuth,
 )
-from knowledge.connectors.credential_store import ConnectorCredentialStore, reset_credential_store
+from knowledge.connectors.credential_store import ConnectorCredentialStore
 
 # ---------------------------------------------------------------------------
 # Helpers

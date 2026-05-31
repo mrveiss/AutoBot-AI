@@ -18,9 +18,6 @@ from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.voice_bundle_user import (
-    BundleAssignRequest,
-    BundleInfo,
-    UserBundleResponse,
     _check_self_or_admin,
     _get_user_id,
     _is_admin,
