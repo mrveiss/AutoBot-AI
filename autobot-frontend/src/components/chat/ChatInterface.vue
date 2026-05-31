@@ -49,6 +49,7 @@
           :session-info="sessionInfo"
           :connection-status="connectionStatus"
           :is-connected="isConnected"
+          :context-window-props="contextWindowProps"
           @export-session="exportSession"
           @clear-session="clearSession"
           @toggle-mobile-sidebar="showMobileSidebar = !showMobileSidebar"
@@ -308,6 +309,8 @@ import { useReasoningTrace } from '@/composables/useReasoningTrace'
 import { useToolApproval, type PendingToolApproval } from '@/composables/useToolApproval'
 // Issue #4414: multi-model comparison
 import MultiModelChat from './MultiModelChat.vue'
+// GH#8990: context window usage indicator
+import { useContextWindow } from '@/composables/chat/useContextWindow'
 
 // i18n
 const { t } = useI18n()
@@ -327,6 +330,20 @@ const {
   isActive: cotIsActive,
   clear: cotClear,
 } = useReasoningTrace(store.currentSessionId)
+
+// GH#8990: context window usage indicator
+const _ctxWindow = useContextWindow(
+  computed(() => store.currentSession?.messages ?? []),
+  computed(() => store.settings.model),
+)
+const contextWindowProps = computed(() => ({
+  tokensUsed: _ctxWindow.tokensUsed.value,
+  contextWindow: _ctxWindow.contextWindow.value,
+  usagePercent: _ctxWindow.usagePercent.value,
+  isWarning: _ctxWindow.isWarning.value,
+  isCritical: _ctxWindow.isCritical.value,
+  hasData: _ctxWindow.hasData.value,
+}))
 
 // Issue #4952: agent-loop tool approval via POST /api/agent-terminal/tools/approve/{id}
 const {
