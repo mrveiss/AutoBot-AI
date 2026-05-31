@@ -69,6 +69,7 @@
     "pinia-plugin-persistedstate": "^4.7.1",
     "three": "^0.184.0",
     "three-spritetext": "^1.10.0",
+    "vega": "^5.30.0",
     "vega-embed": "^7.1.0",
     "vue": "^3.5.34",
     "vue-i18n": "^11.3.1",
