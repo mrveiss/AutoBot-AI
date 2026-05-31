@@ -306,9 +306,7 @@ async def agent_list_wiki(namespace: Optional[str] = None, request: Request = No
         entries = await svc.list_entries(session, agent_id, _uuid.UUID(company_id), namespace)
     return {
         "entries": [
-            AgentWikiEntryOut(
-                id=str(e.id), namespace=e.namespace, key=e.key, title=e.title, body=e.body
-            )
+            AgentWikiEntryOut(id=str(e.id), namespace=e.namespace, key=e.key, title=e.title, body=e.body)
             for e in entries
         ]
     }

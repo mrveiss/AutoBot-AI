@@ -54,6 +54,4 @@ class LLCAgentWikiEntry(LLCBase):
         onupdate=datetime.utcnow,
     )
 
-    __table_args__ = (
-        sa.UniqueConstraint("agent_id", "namespace", "key", name="uq_agent_wiki_agent_ns_key"),
-    )
+    __table_args__ = (sa.UniqueConstraint("agent_id", "namespace", "key", name="uq_agent_wiki_agent_ns_key"),)
