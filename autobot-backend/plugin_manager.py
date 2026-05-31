@@ -531,7 +531,6 @@ async def get_plugin_capabilities(
 
     Issue #9049.
     """
-    loader = get_plugin_loader()
     registry = PluginRegistry()
     checker = CapabilityChecker()
 
@@ -571,7 +570,6 @@ async def approve_plugin_capabilities(
 
     Issue #9049.
     """
-    loader = get_plugin_loader()
     registry = PluginRegistry()
     checker = CapabilityChecker()
 
