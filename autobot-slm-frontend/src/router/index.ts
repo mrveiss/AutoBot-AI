@@ -257,6 +257,13 @@ const router = createRouter({
           component: () => import('@/views/settings/admin/LLMSettings.vue'),
           meta: { title: 'LLM Configuration', parent: 'settings', admin: true }
         },
+        {
+          // MVA-1735: SSO/OIDC provider configuration
+          path: 'admin/sso',
+          name: 'settings-admin-sso',
+          component: () => import('@/views/settings/admin/SSOSettings.vue'),
+          meta: { title: 'SSO / OIDC', parent: 'settings', admin: true }
+        },
       ]
     },
     {
