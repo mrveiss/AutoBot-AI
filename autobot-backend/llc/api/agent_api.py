@@ -270,4 +270,75 @@ async def search_peer_agents(
         raise HTTPException(status_code=500, detail=f"Peer search failed: {str(e)}")
 
 
+# ── Agent-facing wiki routes (GH#9021) ─────────────────────────────────────
+# Agents can read and write their own wiki entries via LLC bearer token.
+
+
+class AgentWikiEntryIn(BaseModel):
+    namespace: str = "general"
+    key: str
+    title: str
+    body: str = ""
+
+
+class AgentWikiEntryOut(BaseModel):
+    id: str
+    namespace: str
+    key: str
+    title: str
+    body: str
+
+
+@router.get("/wiki/entries")
+async def agent_list_wiki(namespace: Optional[str] = None, request: Request = None) -> Dict[str, Any]:
+    """List this agent's own wiki entries."""
+    agent_id, company_id = _agent_context(request)
+    from autobot_shared.singleton_factory import lazy_singleton
+    from user_management.database import get_async_session_factory
+
+    from ..services.agent_wiki_service import AgentWikiService
+
+    import uuid as _uuid
+
+    factory = get_async_session_factory()
+    async with factory() as session:
+        svc = lazy_singleton(AgentWikiService)()
+        entries = await svc.list_entries(session, agent_id, _uuid.UUID(company_id), namespace)
+    return {
+        "entries": [
+            AgentWikiEntryOut(id=str(e.id), namespace=e.namespace, key=e.key, title=e.title, body=e.body)
+            for e in entries
+        ]
+    }
+
+
+@router.post("/wiki/entries", status_code=201)
+async def agent_create_wiki_entry(body: AgentWikiEntryIn, request: Request = None) -> Dict[str, Any]:
+    """Create a wiki entry scoped to this agent."""
+    agent_id, company_id = _agent_context(request)
+    from autobot_shared.singleton_factory import lazy_singleton
+    from user_management.database import get_async_session_factory
+
+    from ..services.agent_wiki_service import AgentWikiService
+
+    import uuid as _uuid
+
+    factory = get_async_session_factory()
+    async with factory() as session:
+        svc = lazy_singleton(AgentWikiService)()
+        entry = await svc.create_entry(
+            session,
+            agent_id=agent_id,
+            company_id=_uuid.UUID(company_id),
+            namespace=body.namespace,
+            key=body.key,
+            title=body.title,
+            body=body.body,
+        )
+        await session.commit()
+    return AgentWikiEntryOut(
+        id=str(entry.id), namespace=entry.namespace, key=entry.key, title=entry.title, body=entry.body
+    ).model_dump()
+
+
 __all__ = ["router"]

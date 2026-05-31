@@ -136,6 +136,9 @@ class HeartbeatContextBuilder:
         # Step 2: Fetch similar completed items from DB (sequential — session safety).
         past_work = await self._get_similar_completed_items(session, project_id, query_text, max_results=3)
 
+        # Step 2b: Fetch agent wiki entries (DB, sequential — session safety; GH#9021).
+        agent_wiki_md = await self._get_agent_wiki(session, agent_id, work_item.company_id)
+
         # Step 3: Parallel RAG queries — no session needed after this point (GH#8566).
         company_task = (
             self.inheritance_resolver.search_with_collections(
@@ -207,6 +210,7 @@ class HeartbeatContextBuilder:
             "company_context": company_ctx,
             "project_context": project_ctx,
             "agent_memory": agent_mem,
+            "agent_wiki": agent_wiki_md,
             "similar_past_work": past_work,
             "api_base": "http://localhost:8001/api",
             "agent_api_key": "<injected-at-runtime>",
@@ -260,6 +264,22 @@ class HeartbeatContextBuilder:
             "chunks": getattr(result, "chunks", []),
             "sources": getattr(result, "sources", []),
         }
+
+    async def _get_agent_wiki(
+        self,
+        session: AsyncSession,
+        agent_id: str,
+        company_id,
+    ) -> str:
+        """Return wiki entries for this agent as a Markdown string (GH#9021)."""
+        try:
+            from ..services.agent_wiki_service import AgentWikiService
+
+            svc = AgentWikiService()
+            return await svc.get_wiki_context(session, agent_id, company_id)
+        except Exception as e:
+            logger.warning("Failed to fetch agent wiki for %s: %s", agent_id, e)
+            return ""
 
     async def _get_similar_completed_items(
         self,
