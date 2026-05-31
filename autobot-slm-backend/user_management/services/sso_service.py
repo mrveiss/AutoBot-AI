@@ -110,9 +110,7 @@ class SSOService(BaseService):
         provider.config = await secrets_mgr.store_secrets(provider.id, data.config)
         await self.session.flush()
 
-        logger.info(
-            "Created SSO provider: %s (%s)", provider.name, provider.provider_type
-        )
+        logger.info("Created SSO provider: %s (%s)", provider.name, provider.provider_type)
         return provider
 
     async def list_providers(
@@ -136,9 +134,7 @@ class SSOService(BaseService):
             raise SSOProviderNotFoundError(f"SSO provider {provider_id} not found")
         return provider
 
-    async def update_provider(
-        self, provider_id: uuid.UUID, data: SSOProviderUpdate
-    ) -> SSOProvider:
+    async def update_provider(self, provider_id: uuid.UUID, data: SSOProviderUpdate) -> SSOProvider:
         """Update an existing SSO provider with secure credential handling."""
         provider = await self.get_provider(provider_id)
         update_data = data.model_dump(exclude_unset=True)
@@ -147,9 +143,7 @@ class SSOService(BaseService):
         if "config" in update_data:
             secrets_mgr = SSOSecretsManager(self.session)
             # Update secrets and get sanitized config
-            sanitized_config = await secrets_mgr.store_secrets(
-                provider_id, update_data["config"]
-            )
+            sanitized_config = await secrets_mgr.store_secrets(provider_id, update_data["config"])
             update_data["config"] = sanitized_config
 
         for field, value in update_data.items():
@@ -193,9 +187,7 @@ class SSOService(BaseService):
 
             # Retrieve bind_password from SystemSecret storage
             secrets_mgr = SSOSecretsManager(self.session)
-            bind_password = await secrets_mgr.retrieve_secret(
-                provider.id, "bind_password"
-            )
+            bind_password = await secrets_mgr.retrieve_secret(provider.id, "bind_password")
 
             if not bind_password:
                 return {"success": False, "message": "LDAP bind_password not found"}
@@ -238,9 +230,7 @@ class SSOService(BaseService):
         client_secret = await secrets_mgr.retrieve_secret(provider.id, "client_secret")
 
         if not client_secret:
-            raise SSOServiceError(
-                f"OAuth client_secret not found for provider {provider.id}"
-            )
+            raise SSOServiceError(f"OAuth client_secret not found for provider {provider.id}")
 
         return AsyncOAuth2Client(
             client_id=client_id,
