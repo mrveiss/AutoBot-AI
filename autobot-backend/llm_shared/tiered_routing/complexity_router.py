@@ -164,7 +164,7 @@ class ComplexityRouter:
             if claude is None:
                 logger.warning("ComplexityRouter: Anthropic provider not available; falling through")
                 return None
-            response = await claude._chat_completion_impl(escalation_request)
+            response = await claude.chat_completion(escalation_request)
             if response.error:
                 logger.warning(
                     "ComplexityRouter: Claude escalation returned error=%s; falling through",
