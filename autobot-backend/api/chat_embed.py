@@ -91,7 +91,11 @@ async def _get_llm_service(request: Request) -> Any:
     from services.llm_service import LLMService
     from utils.lazy_singleton import lazy_init_singleton
 
-    return lazy_init_singleton(request.app.state, "llm_service", LLMService)
+    llm_service = lazy_init_singleton(request.app.state, "llm_service", LLMService)
+    if llm_service is None:
+        logger.error("LLMService initialization failed for embed endpoint")
+        raise HTTPException(status_code=503, detail="LLM service unavailable")
+    return llm_service
 
 
 async def _stream_embed(llm_service: Any, message: str):
