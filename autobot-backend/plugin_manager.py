@@ -23,6 +23,7 @@ from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
 from plugin_install import install_from_git, install_from_zip
 from plugin_sdk.base import PluginRegistry
+from plugin_sdk.capabilities import Capability, CapabilityChecker, TrustTier
 from plugin_sdk.loader import PluginLoader
 
 logger = get_logger(__name__)
@@ -96,6 +97,46 @@ class PluginEnvStatusResponse(BaseModel):
 
     plugin_name: str
     env_vars: Dict[str, PluginEnvStatusEntry]
+
+
+class PluginCapabilitiesResponse(BaseModel):
+    """Response for GET /plugins/{plugin_name}/capabilities.
+
+    Shows required capabilities and current approval status.
+    Issue #9049.
+    """
+
+    plugin_name: str
+    trust_tier: str
+    required_capabilities: List[str]
+    granted_capabilities: List[str]
+    pending_approval: List[str]
+
+
+class ApproveCapabilitiesRequest(BaseModel):
+    """Request to approve plugin capabilities.
+
+    Issue #9049.
+    """
+
+    capabilities: List[str] = Field(
+        ...,
+        description="List of capability strings to approve (e.g. ['kb:read', 'llm:call'])",
+    )
+
+
+class CapabilityAuditEntry(BaseModel):
+    """Single capability audit log entry.
+
+    Issue #9049.
+    """
+
+    timestamp: str
+    plugin_name: str
+    capability: str
+    granted: bool
+    operation: str
+    metadata: str
 
 
 @router.post(
@@ -208,9 +249,14 @@ async def load_plugin(
             detail=f"Plugin not found: {plugin_name}",
         )
 
-    # Load plugin
+    # Load plugin without auto-granting capabilities (Issue #9049)
+    # Operator must explicitly approve capabilities via /approve-capabilities
+    # Auto-grant only for official plugins from core-plugins directory
+    auto_grant = manifest.trust_tier == TrustTier.OFFICIAL
     plugin_config = config.config if config else {}
-    plugin = await loader.load_plugin(manifest, plugin_config)
+    plugin = await loader.load_plugin(
+        manifest, plugin_config, grant_capabilities=auto_grant
+    )
 
     if not plugin:
         raise HTTPException(
@@ -471,6 +517,139 @@ async def get_plugin_env_status(
         plugin_name=plugin_name,
         env_vars={k: PluginEnvStatusEntry(**v) for k, v in status_data.items()},
     )
+
+
+@router.get("/plugins/{plugin_name}/capabilities")
+@with_error_handling(error_code_prefix="PLUGIN_CAPABILITIES_GET")
+async def get_plugin_capabilities(
+    plugin_name: str,
+    admin_check: bool = Depends(check_admin_permission),
+) -> PluginCapabilitiesResponse:
+    """
+    Get plugin capability requirements and approval status.
+
+    Returns what capabilities the plugin requires vs. what has been granted.
+    Used by frontend to show permission approval dialog.
+
+    Issue #9049.
+    """
+    loader = get_plugin_loader()
+    registry = PluginRegistry()
+    checker = CapabilityChecker()
+
+    plugin = registry.get_plugin(plugin_name)
+    if not plugin:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Plugin not found: {plugin_name}",
+        )
+
+    manifest = plugin.manifest
+    required = [cap.value for cap in manifest.capabilities]
+    granted = [cap.value for cap in checker.get_granted_capabilities(plugin_name)]
+    pending = [cap for cap in required if cap not in granted]
+
+    return PluginCapabilitiesResponse(
+        plugin_name=plugin_name,
+        trust_tier=manifest.trust_tier.value,
+        required_capabilities=required,
+        granted_capabilities=granted,
+        pending_approval=pending,
+    )
+
+
+@router.post("/plugins/{plugin_name}/approve-capabilities")
+@with_error_handling(error_code_prefix="PLUGIN_CAPABILITIES_APPROVE")
+async def approve_plugin_capabilities(
+    plugin_name: str,
+    request: ApproveCapabilitiesRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, str]:
+    """
+    Approve capabilities for a plugin.
+
+    Operator explicitly grants permissions after reviewing capability requirements.
+    This is the manual approval flow (vs. auto-approve for official plugins).
+
+    Issue #9049.
+    """
+    loader = get_plugin_loader()
+    registry = PluginRegistry()
+    checker = CapabilityChecker()
+
+    plugin = registry.get_plugin(plugin_name)
+    if not plugin:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Plugin not found: {plugin_name}",
+        )
+
+    # Validate requested capabilities
+    try:
+        capabilities = [Capability(cap) for cap in request.capabilities]
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid capability: {exc}",
+        ) from exc
+
+    # Grant capabilities
+    checker.grant_capabilities(plugin_name, capabilities)
+
+    return {
+        "status": "success",
+        "message": f"Granted {len(capabilities)} capabilities to plugin {plugin_name}",
+        "granted": [cap.value for cap in capabilities],
+    }
+
+
+@router.get("/plugins/audit")
+@with_error_handling(error_code_prefix="PLUGIN_AUDIT_GET")
+async def get_capability_audit_log(
+    limit: int = 100,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, List[CapabilityAuditEntry]]:
+    """
+    Fetch capability audit log from Redis.
+
+    Returns recent capability usage attempts (both granted and denied).
+    Used by operators to monitor plugin behavior and detect violations.
+
+    Issue #9049.
+
+    Args:
+        limit: Maximum number of audit entries to return (default 100)
+
+    Returns:
+        List of audit entries ordered by timestamp descending
+    """
+    redis = await get_async_redis_client(database="main")
+    if redis is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Redis unavailable",
+        )
+
+    # Fetch from Redis stream
+    entries = await redis.xrevrange(
+        "plugin:capability:audit",
+        count=min(limit, 1000),  # Cap at 1000
+    )
+
+    audit_entries = []
+    for entry_id, data in entries:
+        audit_entries.append(
+            CapabilityAuditEntry(
+                timestamp=data.get(b"timestamp", b"").decode("utf-8"),
+                plugin_name=data.get(b"plugin_name", b"").decode("utf-8"),
+                capability=data.get(b"capability", b"").decode("utf-8"),
+                granted=data.get(b"granted", b"false").decode("utf-8") == "true",
+                operation=data.get(b"operation", b"").decode("utf-8"),
+                metadata=data.get(b"metadata", b"").decode("utf-8"),
+            )
+        )
+
+    return {"entries": audit_entries, "total": len(audit_entries)}
 
 
 async def _save_plugin_config(plugin_name: str, config: Dict) -> None:
