@@ -177,6 +177,22 @@ class BeliefState:
 class BeliefStateUpdater:
     """Update TaskContext.assertions from raw tool output."""
 
+    CONTRADICTION_SURFACE_THRESHOLD = _CONTRADICTION_SURFACE_THRESHOLD
+
+    def _resolve_contradiction_surface(self, prior_confidence: float, new_confidence: float) -> str:
+        """Determine contradiction resolution strategy based on confidence delta.
+
+        Returns one of "surfaced_to_think", "updated", or "suppressed".
+        A large delta (>= threshold) surfaces the contradiction for agent review;
+        otherwise the higher-confidence value wins or the new value is suppressed.
+        """
+        delta = abs(new_confidence - prior_confidence)
+        if delta >= self.CONTRADICTION_SURFACE_THRESHOLD:
+            return "surfaced_to_think"
+        if new_confidence >= prior_confidence:
+            return "updated"
+        return "suppressed"
+
     def update(
         self,
         ctx: "TaskContext",
@@ -227,12 +243,7 @@ class BeliefStateUpdater:
             else:
                 # Contradiction
                 confidence_delta = abs(confidence - existing.confidence)
-                if confidence_delta >= _CONTRADICTION_SURFACE_THRESHOLD:
-                    resolution = "surfaced_to_think"
-                elif confidence >= existing.confidence:
-                    resolution = "updated"
-                else:
-                    resolution = "suppressed"
+                resolution = self._resolve_contradiction_surface(existing.confidence, confidence)
 
                 _log = logger.warning if resolution == "surfaced_to_think" else logger.debug
                 _log(
