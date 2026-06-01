@@ -16,14 +16,13 @@ All operations use Microsoft Graph API v1.0 endpoints.
 
 import re
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from typing import Any, Dict, List
 from urllib.parse import quote
 
 import aiohttp
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.time_utils import now_utc
 from integrations.base import (
     BaseIntegration,
     IntegrationAction,
@@ -65,28 +64,22 @@ def _validate_graph_id(value: str, name: str = "ID") -> str:
 
 
 def _validate_datetime_iso(value: str, name: str = "datetime") -> str:
-    """Validate and canonicalize ISO-8601 datetime string to UTC.
+    """Validate and canonicalize ISO-8601 datetime string.
 
     Prevents OData filter injection by parsing and reformatting datetime values.
-    Ensures all datetimes are normalized to UTC for correct cross-timezone comparison.
 
     Args:
         value: ISO-8601 datetime string
         name: Human-readable name for error messages
 
     Returns:
-        Canonical ISO-8601 string in UTC (+00:00 timezone)
+        Canonical ISO-8601 string
 
     Raises:
         ValueError: If datetime format is invalid
     """
     try:
         dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        # Normalize to UTC if timezone-aware, tag as UTC if naive
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        else:
-            dt = dt.astimezone(timezone.utc)
         return dt.isoformat()
     except (ValueError, AttributeError) as exc:
         raise ValueError(f"{name} must be valid ISO-8601 format") from exc
@@ -311,10 +304,7 @@ class Microsoft365Integration(BaseIntegration):
     # Calendar operations
 
     async def _list_calendar_events(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """List calendar events within a time range.
-
-        Defaults to next 7 days if no time range provided (MVA-2203).
-        """
+        """List calendar events within a time range."""
         calendar_id = params.get("calendar_id", "primary")
         start_dt = params.get("start")
         end_dt = params.get("end")
@@ -325,13 +315,9 @@ class Microsoft365Integration(BaseIntegration):
             safe_calendar_id = _validate_graph_id(calendar_id, "calendar_id")
             url = f"{self.graph_url}/me/calendars/{safe_calendar_id}/events"
 
-        # Default to next 7 days if no time range provided (MVA-2203)
+        # Apply time filters if provided - use validated datetime strings
         query_params = {}
-        if start_dt or end_dt:
-            if not start_dt:
-                start_dt = now_utc().isoformat()
-            if not end_dt:
-                end_dt = (now_utc() + timedelta(days=7)).isoformat()
+        if start_dt and end_dt:
             safe_start = _validate_datetime_iso(start_dt, "start")
             safe_end = _validate_datetime_iso(end_dt, "end")
             query_params["$filter"] = f"start/dateTime ge '{safe_start}' and end/dateTime le '{safe_end}'"
@@ -340,25 +326,18 @@ class Microsoft365Integration(BaseIntegration):
         return result.get("body", {})
 
     async def _create_calendar_event(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Create a new calendar event.
-
-        Normalizes datetimes to UTC for correct cross-timezone handling (MVA-2203).
-        """
+        """Create a new calendar event."""
         url = f"{self.graph_url}/me/calendar/events"
-
-        # Normalize datetimes to UTC (MVA-2203)
-        safe_start = _validate_datetime_iso(params["start"], "start")
-        safe_end = _validate_datetime_iso(params["end"], "end")
 
         event_data = {
             "subject": params["subject"],
             "start": {
-                "dateTime": safe_start,
-                "timeZone": "UTC",
+                "dateTime": params["start"],
+                "timeZone": params.get("timezone", "UTC"),
             },
             "end": {
-                "dateTime": safe_end,
-                "timeZone": "UTC",
+                "dateTime": params["end"],
+                "timeZone": params.get("timezone", "UTC"),
             },
         }
 
@@ -398,24 +377,17 @@ class Microsoft365Integration(BaseIntegration):
         return {"success": result.get("status_code") == 204}
 
     async def _check_availability(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Check availability for attendees in a time range.
-
-        Normalizes datetimes to UTC for correct cross-timezone comparison (MVA-2203).
-        """
+        """Check availability for attendees in a time range."""
         url = f"{self.graph_url}/me/calendar/getSchedule"
-
-        # Normalize datetimes to UTC (MVA-2203)
-        safe_start = _validate_datetime_iso(params["start"], "start")
-        safe_end = _validate_datetime_iso(params["end"], "end")
 
         schedule_data = {
             "schedules": params["attendees"],
             "startTime": {
-                "dateTime": safe_start,
+                "dateTime": params["start"],
                 "timeZone": "UTC",
             },
             "endTime": {
-                "dateTime": safe_end,
+                "dateTime": params["end"],
                 "timeZone": "UTC",
             },
             "availabilityViewInterval": params.get("interval", 30),
@@ -546,20 +518,13 @@ class Microsoft365Integration(BaseIntegration):
         return result.get("body", {})
 
     async def _create_teams_meeting(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Create an online Teams meeting.
-
-        Normalizes datetimes to UTC for correct cross-timezone handling (MVA-2203).
-        """
+        """Create an online Teams meeting."""
         url = f"{self.graph_url}/me/onlineMeetings"
-
-        # Normalize datetimes to UTC (MVA-2203)
-        safe_start = _validate_datetime_iso(params["start"], "start")
-        safe_end = _validate_datetime_iso(params["end"], "end")
 
         meeting_data = {
             "subject": params["subject"],
-            "startDateTime": safe_start,
-            "endDateTime": safe_end,
+            "startDateTime": params["start"],
+            "endDateTime": params["end"],
             "participants": {
                 "attendees": [
                     {
