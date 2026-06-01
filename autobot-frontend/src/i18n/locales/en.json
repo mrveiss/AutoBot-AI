@@ -1324,6 +1324,8 @@
         "evolutionAria": "Evolution analytics",
         "audit": "Audit",
         "auditAria": "Audit logs",
+        "devTools": "Dev Tools",
+        "devToolsAria": "Developer tools and utilities",
         "usage": "Usage",
         "usageAria": "Usage & Costs",
         "operations": "Operations",

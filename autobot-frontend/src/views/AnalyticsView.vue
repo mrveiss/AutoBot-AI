@@ -64,10 +64,10 @@
             :class="{ 'nav-tab-active': isDevToolsActive }"
             role="tab"
             :aria-selected="isDevToolsActive"
-            aria-label="Dev Tools"
+            :aria-label="$t('analytics.views.tabs.devToolsAria')"
           >
             <Icon name="bolt" class="tab-icon" aria-hidden="true" />
-            <span>Dev Tools</span>
+            <span>{{ $t('analytics.views.tabs.devTools') }}</span>
           </router-link>
           <!-- Issue #4465: Usage & Costs moved from standalone nav into analytics tab -->
           <router-link
