@@ -8,9 +8,11 @@ template library. All ChromaDB operations target the ``platform:template_kb``
 collection.
 """
 
+import json
 import logging
 import re
 import uuid
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import sqlalchemy as sa
@@ -35,6 +37,7 @@ logger = logging.getLogger(__name__)
 _PLATFORM_TEMPLATE_COLLECTION = "platform:template_kb"
 _SECRET_PLACEHOLDER_RE = re.compile(r"\{\{([A-Z0-9_]+)\}\}")
 _TEMPLATE_SEARCH_LIMIT = 10
+_BUILT_IN_TEMPLATES_DIR = Path(__file__).parent.parent / "built_in_templates"
 
 
 class TemplateNotFoundError(Exception):
@@ -51,6 +54,10 @@ class TemplateSecretPlaceholderError(Exception):
 
 class TemplateAccessError(Exception):
     """Raised when a company requests a private template it does not own."""
+
+
+class BuiltInTemplateNotFoundError(Exception):
+    """Raised when a built-in template key does not exist."""
 
 
 class TemplateService:
@@ -229,6 +236,34 @@ class TemplateService:
     async def search(self, query: str) -> List[TemplateSearchResult]:
         """Semantic search over platform:template_kb ChromaDB collection."""
         return await _search_template_kb(query)
+
+    # ------------------------------------------------------------------
+    # Built-in Templates (GH#9042)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def list_built_in_templates() -> List[Dict[str, Any]]:
+        """List all built-in company templates from disk (GH#9042).
+
+        Returns list of template metadata (name, description, category, tags).
+        Does not require a database session.
+        """
+        return _load_all_built_in_templates()
+
+    @staticmethod
+    def get_built_in_template(template_key: str) -> Dict[str, Any]:
+        """Fetch a specific built-in template by key (GH#9042).
+
+        Args:
+            template_key: Filename without extension (e.g., 'software-team')
+
+        Returns:
+            Full template JSON including metadata, variables, agents, goals, etc.
+
+        Raises:
+            BuiltInTemplateNotFoundError: If template_key does not exist
+        """
+        return _load_built_in_template(template_key)
 
 
 # ------------------------------------------------------------------
@@ -525,3 +560,77 @@ def _build_embed_text(
     if tags:
         parts.append(f"Tags: {', '.join(tags)}")
     return "\n".join(parts)
+
+
+# ------------------------------------------------------------------
+# Built-in template loaders (GH#9042)
+# ------------------------------------------------------------------
+
+
+def _load_all_built_in_templates() -> List[Dict[str, Any]]:
+    """Load metadata for all built-in templates from disk.
+
+    Returns list of template metadata (does not include full template_json).
+    """
+    templates = []
+    if not _BUILT_IN_TEMPLATES_DIR.exists():
+        logger.warning("Built-in templates directory not found: %s", _BUILT_IN_TEMPLATES_DIR)
+        return templates
+
+    for template_file in sorted(_BUILT_IN_TEMPLATES_DIR.glob("*.json")):
+        try:
+            with open(template_file, encoding="utf-8") as f:
+                data = json.load(f)
+                metadata = data.get("metadata", {})
+                templates.append(
+                    {
+                        "key": template_file.stem,
+                        "name": metadata.get("name", template_file.stem),
+                        "description": metadata.get("description"),
+                        "category": metadata.get("category", "company"),
+                        "version": metadata.get("version", "1.0"),
+                        "tags": metadata.get("tags", []),
+                    }
+                )
+        except Exception:
+            logger.exception("Failed to load built-in template: %s", template_file)
+            continue
+
+    return templates
+
+
+def _load_built_in_template(template_key: str) -> Dict[str, Any]:
+    """Load a specific built-in template by key.
+
+    Args:
+        template_key: Filename without extension (e.g., 'software-team')
+
+    Returns:
+        Full template JSON
+
+    Raises:
+        BuiltInTemplateNotFoundError: If template does not exist or key is invalid
+    """
+    # Validate template_key against strict allowlist to prevent path traversal
+    if not re.fullmatch(r"[a-z0-9_-]+", template_key):
+        raise BuiltInTemplateNotFoundError(
+            f"Invalid template key '{template_key}' — must contain only lowercase letters, numbers, hyphens, and underscores"
+        )
+
+    template_path = _BUILT_IN_TEMPLATES_DIR / f"{template_key}.json"
+
+    # Verify resolved path is within the built-in templates directory
+    resolved_path = template_path.resolve()
+    base_path = _BUILT_IN_TEMPLATES_DIR.resolve()
+    if base_path not in resolved_path.parents and resolved_path != base_path:
+        raise BuiltInTemplateNotFoundError(f"Template path outside allowed directory: {template_key}")
+
+    if not resolved_path.exists():
+        raise BuiltInTemplateNotFoundError(f"Built-in template '{template_key}' not found")
+
+    try:
+        with open(resolved_path, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as exc:
+        logger.exception("Failed to load built-in template: %s", resolved_path)
+        raise BuiltInTemplateNotFoundError(f"Failed to load template '{template_key}'") from exc
