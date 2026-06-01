@@ -24,7 +24,6 @@ import time
 from typing import Any, AsyncIterator, Dict, List
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config
 from llm_shared.models import LLMRequest, LLMResponse, ToolCall
 from llm_shared.types import ProviderType
 
@@ -534,7 +533,7 @@ class BedrockProvider(BaseProvider):
     async def is_available(self) -> bool:
         """Return True if Bedrock credentials are configured and the service is reachable."""
         try:
-            client = self._ensure_runtime_client()
+            self._ensure_runtime_client()  # Verify runtime client can be created
             # Simple health check - list foundation models (no cost)
             import boto3
 

@@ -5,13 +5,12 @@
 Tests for WhatsApp Business API Integration (Issue #9007)
 """
 
-import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
 from integrations.base import IntegrationConfig, IntegrationStatus
-from integrations.whatsapp_integration import WhatsAppIntegration, WhatsAppOptInStatus
+from integrations.whatsapp_integration import WhatsAppIntegration
 
 
 @pytest.fixture
