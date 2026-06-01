@@ -144,12 +144,8 @@ async def telegram_webhook(
 
         request_secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
         if request_secret != stored_secret:
-            logger.warning(
-                "Telegram webhook authentication failed - invalid secret token"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden"
-            )
+            logger.warning("Telegram webhook authentication failed - invalid secret token")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
         # Extract message from update
         message = update.get("message")
