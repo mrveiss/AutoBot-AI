@@ -5,16 +5,19 @@
  *
  * useTheme.ts - Theme Management Composable
  * Issue #704: CSS Design System - Centralized Theming & SSOT Styles
+ * Issue #8988: User-Selectable Theme System - Custom Accent Colors
  *
  * Provides reactive theme switching capabilities with:
  * - Dark/Light/System theme modes
+ * - Custom accent color presets
  * - LocalStorage persistence
  * - System preference detection
  * - Instant theme switching (<100ms)
  *
  * Usage:
- *   const { theme, setTheme, isDark, toggleTheme } = useTheme()
+ *   const { theme, accentColor, setTheme, setAccentColor, isDark, toggleTheme } = useTheme()
  *   setTheme('dark')  // or 'light', 'system'
+ *   setAccentColor('green')  // or 'purple', 'orange', etc.
  */
 
 import { ref, computed, onMounted, getCurrentInstance } from 'vue'
@@ -22,14 +25,20 @@ import { ref, computed, onMounted, getCurrentInstance } from 'vue'
 /** Available theme options */
 export type Theme = 'dark' | 'light' | 'system'
 
-/** Storage key for persisting theme preference */
-const STORAGE_KEY = 'autobot-theme'
+/** Available accent color options */
+export type AccentColor = 'blue' | 'green' | 'purple' | 'orange' | 'pink' | 'teal' | 'indigo' | 'red'
 
-/** Default theme when no preference is set */
+/** Storage keys for persisting preferences */
+const THEME_STORAGE_KEY = 'autobot-theme'
+const ACCENT_STORAGE_KEY = 'autobot-accent-color'
+
+/** Default values when no preference is set */
 const DEFAULT_THEME: Theme = 'dark'
+const DEFAULT_ACCENT: AccentColor = 'blue'
 
-/** Global reactive theme state (singleton pattern) */
+/** Global reactive state (singleton pattern) */
 const currentTheme = ref<Theme>(DEFAULT_THEME)
+const currentAccent = ref<AccentColor>(DEFAULT_ACCENT)
 
 /** Track if theme has been initialized */
 let isInitialized = false
@@ -56,11 +65,29 @@ function applyTheme(theme: Theme): void {
 }
 
 /**
+ * Applies the accent color to the document root element
+ */
+function applyAccentColor(accent: AccentColor): void {
+  document.documentElement.setAttribute('data-accent', accent)
+}
+
+/**
  * Saves theme preference to localStorage
  */
 function saveTheme(theme: Theme): void {
   try {
-    localStorage.setItem(STORAGE_KEY, theme)
+    localStorage.setItem(THEME_STORAGE_KEY, theme)
+  } catch {
+    // localStorage may be unavailable in some contexts
+  }
+}
+
+/**
+ * Saves accent color preference to localStorage
+ */
+function saveAccentColor(accent: AccentColor): void {
+  try {
+    localStorage.setItem(ACCENT_STORAGE_KEY, accent)
   } catch {
     // localStorage may be unavailable in some contexts
   }
@@ -71,7 +98,7 @@ function saveTheme(theme: Theme): void {
  */
 function loadTheme(): Theme {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY) as Theme | null
+    const stored = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null
     if (stored && ['dark', 'light', 'system'].includes(stored)) {
       return stored
     }
@@ -82,6 +109,22 @@ function loadTheme(): Theme {
 }
 
 /**
+ * Loads accent color preference from localStorage
+ */
+function loadAccentColor(): AccentColor {
+  try {
+    const stored = localStorage.getItem(ACCENT_STORAGE_KEY) as AccentColor | null
+    const validAccents: AccentColor[] = ['blue', 'green', 'purple', 'orange', 'pink', 'teal', 'indigo', 'red']
+    if (stored && validAccents.includes(stored)) {
+      return stored
+    }
+  } catch {
+    // localStorage may be unavailable
+  }
+  return DEFAULT_ACCENT
+}
+
+/**
  * Theme management composable
  *
  * @example
@@ -89,13 +132,23 @@ function loadTheme(): Theme {
  * <script setup lang="ts">
  * import { useTheme } from '@/composables/useTheme'
  *
- * const { theme, setTheme, isDark, toggleTheme, availableThemes } = useTheme()
+ * const {
+ *   theme, accentColor,
+ *   setTheme, setAccentColor,
+ *   isDark, toggleTheme,
+ *   availableThemes, availableAccents
+ * } = useTheme()
  * </script>
  *
  * <template>
  *   <select v-model="theme" @change="setTheme(theme)">
  *     <option v-for="t in availableThemes" :key="t" :value="t">{{ t }}</option>
  *   </select>
+ *
+ *   <select v-model="accentColor" @change="setAccentColor(accentColor)">
+ *     <option v-for="c in availableAccents" :key="c" :value="c">{{ c }}</option>
+ *   </select>
+ *
  *   <button @click="toggleTheme">Toggle Dark/Light</button>
  * </template>
  * ```
@@ -110,12 +163,16 @@ export function useTheme() {
   function initTheme(): void {
     if (isInitialized) return
 
-    // Load saved preference
+    // Load saved preferences
     const savedTheme = loadTheme()
+    const savedAccent = loadAccentColor()
+
     currentTheme.value = savedTheme
+    currentAccent.value = savedAccent
 
     // Apply immediately to prevent flash
     applyTheme(savedTheme)
+    applyAccentColor(savedAccent)
 
     // Listen for system preference changes
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
@@ -136,6 +193,16 @@ export function useTheme() {
     currentTheme.value = theme
     saveTheme(theme)
     applyTheme(theme)
+  }
+
+  /**
+   * Set the accent color
+   * @param accent - Accent color to apply
+   */
+  function setAccentColor(accent: AccentColor): void {
+    currentAccent.value = accent
+    saveAccentColor(accent)
+    applyAccentColor(accent)
   }
 
   /**
@@ -174,12 +241,54 @@ export function useTheme() {
   const availableThemes: Theme[] = ['dark', 'light', 'system']
 
   /**
+   * Available accent color options for UI dropdowns
+   */
+  const availableAccents: AccentColor[] = [
+    'blue',
+    'green',
+    'purple',
+    'orange',
+    'pink',
+    'teal',
+    'indigo',
+    'red',
+  ]
+
+  /**
    * Theme labels for UI display
    */
   const themeLabels: Record<Theme, string> = {
     dark: 'Dark',
     light: 'Light',
     system: 'System',
+  }
+
+  /**
+   * Accent color labels for UI display
+   */
+  const accentLabels: Record<AccentColor, string> = {
+    blue: 'Blue',
+    green: 'Green',
+    purple: 'Purple',
+    orange: 'Orange',
+    pink: 'Pink',
+    teal: 'Teal',
+    indigo: 'Indigo',
+    red: 'Red',
+  }
+
+  /**
+   * Accent color descriptions
+   */
+  const accentDescriptions: Record<AccentColor, string> = {
+    blue: 'Electric Blue — Technical Precision',
+    green: 'Emerald — Growth & Success',
+    purple: 'Violet — Creative & Premium',
+    orange: 'Amber — Energy & Innovation',
+    pink: 'Rose — Friendly & Approachable',
+    teal: 'Cyan — Modern & Professional',
+    indigo: 'Deep Blue — Trust & Stability',
+    red: 'Crimson — Bold & Urgent',
   }
 
   // Initialize on mount if in browser context
@@ -198,8 +307,14 @@ export function useTheme() {
     /** Current theme setting (reactive) */
     theme: currentTheme,
 
+    /** Current accent color setting (reactive) */
+    accentColor: currentAccent,
+
     /** Set the theme */
     setTheme,
+
+    /** Set the accent color */
+    setAccentColor,
 
     /** Toggle between dark and light */
     toggleTheme,
@@ -219,8 +334,17 @@ export function useTheme() {
     /** Available theme options */
     availableThemes,
 
+    /** Available accent color options */
+    availableAccents,
+
     /** Theme display labels */
     themeLabels,
+
+    /** Accent color display labels */
+    accentLabels,
+
+    /** Accent color descriptions */
+    accentDescriptions,
   }
 }
 
@@ -232,8 +356,13 @@ export function initializeTheme(): void {
   if (typeof document === 'undefined') return
 
   const savedTheme = loadTheme()
+  const savedAccent = loadAccentColor()
+
   applyTheme(savedTheme)
+  applyAccentColor(savedAccent)
+
   currentTheme.value = savedTheme
+  currentAccent.value = savedAccent
   isInitialized = true
 }
 
