@@ -57,7 +57,9 @@ class SessionTokenTracker:
         if self.redis is None:
             self.redis = await get_async_redis_client()
         if self.redis is None:
-            logger.warning("SessionTokenTracker: Redis unavailable, token tracking disabled")
+            logger.warning(
+                "SessionTokenTracker: Redis unavailable, token tracking disabled"
+            )
         return self.redis
 
     async def add_message_tokens(
@@ -166,22 +168,20 @@ class ConversationSummarizer:
         summary = await summarizer.summarize_messages(messages, model="gpt-4")
     """
 
-    _SUMMARIZATION_PROMPT = (
-        "Compress the following conversation segment preserving all decisions, "
-        "facts, and action items.\n"
-        "The summary should be compact but complete enough that someone reading "
-        "it later can understand what was discussed and decided.\n"
-        "Focus on:\n"
-        "- Key decisions made\n"
-        "- Important facts mentioned\n"
-        "- Action items or tasks identified\n"
-        "- Critical context needed for future messages\n"
-        "\n"
-        "Original conversation:\n"
-        "{conversation}\n"
-        "\n"
-        "Provide a concise summary in 2-3 paragraphs:"
-    )
+    _SUMMARIZATION_PROMPT = """Compress the following conversation segment preserving all decisions, facts, and action \
+items.
+The summary should be compact but complete enough that someone reading it later can understand what was discussed \
+and decided.
+Focus on:
+- Key decisions made
+- Important facts mentioned
+- Action items or tasks identified
+- Critical context needed for future messages
+
+Original conversation:
+{conversation}
+
+Provide a concise summary in 2-3 paragraphs:"""
 
     async def summarize_messages(
         self,
@@ -396,7 +396,9 @@ class ContextOverflowProtection:
             return ""
 
         # Generate summary
-        summary = await self.summarizer.summarize_messages(messages_to_summarize, model_name)
+        summary = await self.summarizer.summarize_messages(
+            messages_to_summarize, model_name
+        )
 
         # Reset token tracker (conversation now starts from summary)
         await self.tracker.reset_session(session_id)
@@ -406,7 +408,9 @@ class ContextOverflowProtection:
             # Estimate tokens (rough approximation)
             text = msg.get("text", "")
             estimated_tokens = len(text) // 4
-            await self.tracker.add_message_tokens(session_id, prompt_tokens=estimated_tokens)
+            await self.tracker.add_message_tokens(
+                session_id, prompt_tokens=estimated_tokens
+            )
 
         return summary
 

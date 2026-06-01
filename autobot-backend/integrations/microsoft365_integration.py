@@ -23,7 +23,6 @@ from urllib.parse import quote
 import aiohttp
 
 from autobot_shared.logging_manager import get_logger
-
 from integrations.base import (
     BaseIntegration,
     IntegrationAction,
@@ -162,7 +161,11 @@ class Microsoft365Integration(BaseIntegration):
                 name="list_calendar_events",
                 description="List calendar events for a time range",
                 method="GET",
-                parameters={"start": "datetime", "end": "datetime", "calendar_id": "str (optional)"},
+                parameters={
+                    "start": "datetime",
+                    "end": "datetime",
+                    "calendar_id": "str (optional)",
+                },
             ),
             IntegrationAction(
                 name="create_calendar_event",
@@ -192,7 +195,11 @@ class Microsoft365Integration(BaseIntegration):
                 name="check_availability",
                 description="Check availability for scheduling",
                 method="POST",
-                parameters={"attendees": "list[str]", "start": "datetime", "end": "datetime"},
+                parameters={
+                    "attendees": "list[str]",
+                    "start": "datetime",
+                    "end": "datetime",
+                },
             ),
             # Outlook email actions
             IntegrationAction(
@@ -254,7 +261,11 @@ class Microsoft365Integration(BaseIntegration):
                 name="get_channel_messages",
                 description="Get messages from a Teams channel",
                 method="GET",
-                parameters={"team_id": "str", "channel_id": "str", "limit": "int (optional)"},
+                parameters={
+                    "team_id": "str",
+                    "channel_id": "str",
+                    "limit": "int (optional)",
+                },
             ),
             IntegrationAction(
                 name="create_teams_meeting",
@@ -269,7 +280,9 @@ class Microsoft365Integration(BaseIntegration):
             ),
         ]
 
-    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute_action(
+        self, action: str, params: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Execute a named Microsoft 365 action."""
         action_map = {
             # Calendar
@@ -321,7 +334,9 @@ class Microsoft365Integration(BaseIntegration):
         if start_dt and end_dt:
             safe_start = _validate_datetime_iso(start_dt, "start")
             safe_end = _validate_datetime_iso(end_dt, "end")
-            query_params["$filter"] = f"start/dateTime ge '{safe_start}' and end/dateTime le '{safe_end}'"
+            query_params["$filter"] = (
+                f"start/dateTime ge '{safe_start}' and end/dateTime le '{safe_end}'"
+            )
 
         result = await self._make_graph_request("GET", url, params=query_params)
         return result.get("body", {})
@@ -425,12 +440,16 @@ class Microsoft365Integration(BaseIntegration):
                     "contentType": params.get("body_type", "HTML"),
                     "content": params["body"],
                 },
-                "toRecipients": [{"emailAddress": {"address": addr}} for addr in params["to"]],
+                "toRecipients": [
+                    {"emailAddress": {"address": addr}} for addr in params["to"]
+                ],
             }
         }
 
         if "cc" in params:
-            message_data["message"]["ccRecipients"] = [{"emailAddress": {"address": addr}} for addr in params["cc"]]
+            message_data["message"]["ccRecipients"] = [
+                {"emailAddress": {"address": addr}} for addr in params["cc"]
+            ]
 
         if "attachments" in params:
             message_data["message"]["attachments"] = params["attachments"]
@@ -482,7 +501,9 @@ class Microsoft365Integration(BaseIntegration):
         """Send a message to a Teams channel."""
         safe_team_id = _validate_graph_id(params["team_id"], "team_id")
         safe_channel_id = _validate_graph_id(params["channel_id"], "channel_id")
-        url = f"{self.graph_url}/teams/{safe_team_id}/channels/{safe_channel_id}/messages"
+        url = (
+            f"{self.graph_url}/teams/{safe_team_id}/channels/{safe_channel_id}/messages"
+        )
 
         message_data = {
             "body": {
@@ -512,7 +533,9 @@ class Microsoft365Integration(BaseIntegration):
         safe_channel_id = _validate_graph_id(params["channel_id"], "channel_id")
         limit = params.get("limit", 50)
 
-        url = f"{self.graph_url}/teams/{safe_team_id}/channels/{safe_channel_id}/messages"
+        url = (
+            f"{self.graph_url}/teams/{safe_team_id}/channels/{safe_channel_id}/messages"
+        )
         query_params = {"$top": min(limit, 50)}  # Teams messages limited to 50
 
         result = await self._make_graph_request("GET", url, params=query_params)
@@ -582,7 +605,9 @@ class Microsoft365Integration(BaseIntegration):
 
                     # Log errors
                     if status_code >= 400:
-                        error_msg = body.get("error", {}).get("message", "Unknown error")
+                        error_msg = body.get("error", {}).get(
+                            "message", "Unknown error"
+                        )
                         self.logger.warning(
                             "Graph API request to %s failed: HTTP %d - %s",
                             url,
@@ -593,7 +618,11 @@ class Microsoft365Integration(BaseIntegration):
                     return {
                         "status_code": status_code,
                         "body": body,
-                        "error": body.get("error", {}).get("message") if status_code >= 400 else None,
+                        "error": (
+                            body.get("error", {}).get("message")
+                            if status_code >= 400
+                            else None
+                        ),
                     }
 
         except aiohttp.ClientError as exc:

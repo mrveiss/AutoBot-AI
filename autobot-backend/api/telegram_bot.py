@@ -144,8 +144,12 @@ async def telegram_webhook(
 
         request_secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
         if request_secret != stored_secret:
-            logger.warning("Telegram webhook authentication failed - invalid secret token")
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+            logger.warning(
+                "Telegram webhook authentication failed - invalid secret token"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden"
+            )
 
         # Extract message from update
         message = update.get("message")
@@ -172,7 +176,7 @@ async def telegram_webhook(
 
     except HTTPException:
         raise
-    except Exception as exc:
+    except Exception:
         logger.exception("Failed to process Telegram webhook update")
         # Return 200 to prevent Telegram from retrying, no error details to client
         return JSONResponse({"status": "ok"})
@@ -319,6 +323,6 @@ async def send_telegram_response(
             reply_to_message_id=message_id,
         )
         logger.info(f"Sent response to Telegram chat {chat_id}")
-    except Exception as exc:
+    except Exception:
         logger.exception("Failed to send Telegram response")
         raise
