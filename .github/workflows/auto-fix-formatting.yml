@@ -67,12 +67,15 @@ jobs:
           if git diff --staged --quiet; then
             echo "No formatting changes needed"
           else
-            git commit -m "Auto-fix: code formatting
+            git commit -m "$(cat <<'EOF'
+          Auto-fix: code formatting
 
-Applied Black, isort, and autoflake to match code-quality checks.
-Triggered by workflow auto-fix-formatting.yml.
+          Applied Black, isort, and autoflake to match code-quality checks.
+          Triggered by workflow auto-fix-formatting.yml.
 
-Co-Authored-By: Paperclip <noreply@paperclip.ing>"
+          Co-Authored-By: Paperclip <noreply@paperclip.ing>
+          EOF
+          )"
             git push
             echo "✅ Formatting fixes committed and pushed"
           fi
