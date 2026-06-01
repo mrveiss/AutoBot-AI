@@ -1,10 +1,19 @@
 <!-- AutoBot - AI-Powered Automation Platform -->
 <!-- Copyright (c) 2025 mrveiss -->
 <script setup lang="ts">
-// Layout shell — full sidebar implemented in Plan 4
+import { useRouter } from 'vue-router'
+const router = useRouter()
 </script>
+
 <template>
   <div class="transcriber-layout">
-    <RouterView />
+    <aside class="transcriber-sidebar">
+      <RouterLink :to="{ name: 'transcriber-projects' }" class="sidebar-link">
+        Projects
+      </RouterLink>
+    </aside>
+    <main class="transcriber-content">
+      <RouterView />
+    </main>
   </div>
 </template>
