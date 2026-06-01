@@ -11,6 +11,17 @@
  * - Session-level host persistence
  * - API for agents to request host selection
  *
+ * ⚠️ DISTINCT FROM useHostInventory (GH#9063 audit):
+ * - useHostSelection: User-configured SSH targets from secrets.env
+ *   → Data source: main backend /api/infrastructure/hosts (user secrets)
+ *   → Used by: agent SSH actions, terminal selector, ui/HostSelector
+ *
+ * - useHostInventory: Ansible-managed fleet nodes
+ *   → Data source: SLM backend /api/nodes (Ansible inventory, provisioning)
+ *   → Used by: admin dashboard (HostsView.vue) for fleet management
+ *
+ * These serve DIFFERENT purposes and MUST remain separate composables.
+ *
  * fetchWithAuth replaced with useFetchEndpoint (Pattern A) for both
  * loadHosts and loadTerminalHosts (Issue #6089).
  */
