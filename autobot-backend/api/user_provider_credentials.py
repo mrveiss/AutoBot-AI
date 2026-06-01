@@ -67,7 +67,7 @@ def _redact_api_key(api_key: str) -> str:
     status_code=status.HTTP_201_CREATED,
 )
 @with_error_handling(
-    category=ErrorCategory.SECRETS,
+    category=ErrorCategory.AUTHENTICATION,
     operation="create_user_provider_credential",
 )
 async def create_or_update_credential(
@@ -153,7 +153,7 @@ async def create_or_update_credential(
     response_model=ProviderCredentialsListResponse,
 )
 @with_error_handling(
-    category=ErrorCategory.SECRETS,
+    category=ErrorCategory.AUTHENTICATION,
     operation="list_user_provider_credentials",
 )
 async def list_credentials(
@@ -206,7 +206,7 @@ async def list_credentials(
     status_code=status.HTTP_204_NO_CONTENT,
 )
 @with_error_handling(
-    category=ErrorCategory.SECRETS,
+    category=ErrorCategory.AUTHENTICATION,
     operation="delete_user_provider_credential",
 )
 async def delete_credential(
