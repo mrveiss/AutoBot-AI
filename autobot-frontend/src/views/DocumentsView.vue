@@ -97,6 +97,24 @@
         @refined="onDocumentRefined"
         @error="onEditorError"
       />
+
+      <!-- Transcriber Projects Section -->
+      <section v-if="transcriberProjects.length" class="documents-section">
+        <div class="section-header">
+          <h3>Transcriber Projects</h3>
+          <RouterLink :to="{ name: 'transcriber-projects' }" class="btn-link btn-sm">View all</RouterLink>
+        </div>
+        <div class="projects-mini-grid">
+          <RouterLink
+            v-for="p in transcriberProjects"
+            :key="p.id"
+            :to="{ name: 'transcriber-project-detail', params: { projectId: p.id } }"
+            class="mini-card"
+          >
+            🎙 {{ p.name }}
+          </RouterLink>
+        </div>
+      </section>
     </div>
 
     <!-- Delete confirmation dialog -->
@@ -151,6 +169,8 @@ import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useInitialFocus } from '@/composables/useInitialFocus'
 import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
+import { useTranscriberApi } from '@/composables/transcriber/useTranscriberApi'
+import type { Project } from '@/composables/transcriber/useTranscriberApi'
 
 const logger = createLogger('DocumentsView')
 
@@ -170,12 +190,22 @@ const { focusFirst: focusDeleteFirst } = useInitialFocus(deleteDialogRef)
 watch(isDeleteDialogOpen, (open) => { if (open) focusDeleteFirst() }, { immediate: true })
 const errorMessage = ref<string | null>(null)
 
+// Transcriber integration
+const transcriberProjects = ref<Project[]>([])
+
 // ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------
 
 onMounted(async () => {
   await loadPage()
+  // Load transcriber projects if available
+  try {
+    const api = useTranscriberApi()
+    transcriberProjects.value = (await api.listProjects()).slice(0, 4)
+  } catch {
+    // Transcriber may be disabled
+  }
 })
 
 // ---------------------------------------------------------------------------
