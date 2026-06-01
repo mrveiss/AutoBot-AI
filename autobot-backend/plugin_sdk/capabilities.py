@@ -215,7 +215,7 @@ class CapabilityChecker:
 
             await redis.xadd(
                 "plugin:capability:audit",
-                audit_entry,
+                audit_entry,  # type: ignore[arg-type]
                 maxlen=10000,  # Keep last 10k audit entries
             )
 
