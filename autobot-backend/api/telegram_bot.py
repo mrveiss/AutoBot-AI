@@ -14,8 +14,8 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
+from api.schemas_chat import ChatMessage
 from api.schemas_system import (
-    TelegramWebhookUpdate,
     TelegramBotConfigRequest,
     TelegramBotConfigResponse,
 )
@@ -23,7 +23,6 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.gateway.gateway_manager import GatewayManager
-from services.gateway.adapters import NormalizedResponse
 from services.telegram_bot_service import (
     TelegramBotService,
     save_telegram_bot_token,
@@ -31,14 +30,83 @@ from services.telegram_bot_service import (
     save_telegram_webhook_secret,
     get_telegram_webhook_secret,
 )
-from utils.chat_utils import generate_message_id, generate_request_id
+from utils.chat_utils import generate_request_id
 
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["telegram-bot"])
 
-# Initialize gateway manager for message normalization
+# Module-level gateway manager — shared, stateless
 gateway_manager = GatewayManager()
+
+
+def _get_chat_session_id(chat_id: str) -> str:
+    """Return a stable session ID for a Telegram chat."""
+    return f"telegram_{chat_id}"
+
+
+async def _route_to_chat_and_reply(request: Request, unified_message: Any) -> None:
+    """
+    Route a normalized Telegram message to AutoBot chat service and send the reply.
+
+    Uses request.app.state to access chat_history_manager and llm_service,
+    matching the same pattern as api/chat.py.
+
+    Args:
+        request: FastAPI request (provides access to app.state services)
+        unified_message: Normalized message from TelegramAdapter
+    """
+    from api.chat import process_chat_message
+    from utils.chat_utils import get_chat_history_manager
+    from utils.lazy_singleton import lazy_init_singleton
+
+    session_id = _get_chat_session_id(unified_message.channel_id)
+    request_id = generate_request_id()
+
+    # Build ChatMessage from normalized Telegram message
+    chat_message = ChatMessage(
+        content=unified_message.message,
+        role="user",
+        session_id=session_id,
+        metadata={
+            "platform": "telegram",
+            "telegram_user_id": unified_message.user_id,
+            "telegram_chat_id": unified_message.channel_id,
+            **unified_message.metadata,
+        },
+    )
+
+    # Get services from app state (same pattern as chat.py)
+    chat_history_manager = get_chat_history_manager(request)
+
+    from services.llm_service import LLMService
+    llm_service = lazy_init_singleton(request.app.state, "llm_service", LLMService)
+    memory_interface = getattr(request.app.state, "memory_interface", None)
+
+    # Generate AI response
+    response_data = await process_chat_message(
+        message=chat_message,
+        chat_history_manager=chat_history_manager,
+        llm_service=llm_service,
+        memory_interface=memory_interface,
+        knowledge_base=None,
+        config={},
+        request_id=request_id,
+        author_id=unified_message.user_id,
+    )
+
+    # Send response back to Telegram
+    reply_message_id = unified_message.metadata.get("message_id")
+    await send_telegram_response(
+        chat_id=unified_message.channel_id,
+        response_text=response_data.content,
+        message_id=reply_message_id,
+    )
+    logger.info(
+        "Sent Telegram reply to chat %s (session %s)",
+        unified_message.channel_id,
+        session_id,
+    )
 
 
 @router.post("/telegram/webhook")
@@ -91,29 +159,13 @@ async def telegram_webhook(
         # Normalize message via TelegramAdapter
         unified_message = await gateway_manager.normalize_message(raw_message)
         logger.info(
-            f"Received Telegram message from user {unified_message.user_id} "
-            f"in chat {unified_message.channel_id}"
+            "Received Telegram message from user %s in chat %s",
+            unified_message.user_id,
+            unified_message.channel_id,
         )
 
-        # TODO: Route to AutoBot chat service
-        # This will be implemented when chat service integration is ready
-        # For now, just acknowledge receipt
-
-        # Example of what the full integration would look like:
-        # chat_response = await send_to_chat_service(
-        #     user_id=unified_message.user_id,
-        #     message=unified_message.message,
-        #     platform="telegram",
-        #     channel_id=unified_message.channel_id,
-        #     metadata=unified_message.metadata,
-        # )
-        #
-        # # Send response back to Telegram
-        # await send_telegram_response(
-        #     chat_id=unified_message.channel_id,
-        #     response_text=chat_response.text,
-        #     message_id=unified_message.metadata.get("message_id"),
-        # )
+        # Route to AutoBot chat service
+        await _route_to_chat_and_reply(request, unified_message)
 
         return JSONResponse({"status": "ok"})
 
