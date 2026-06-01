@@ -9,6 +9,7 @@ have been moved from ``llm_providers/`` into this package.
 
 Cloud API providers:
     AnthropicProvider      — Anthropic Claude (with OTel tracing restored, #697)
+    BedrockProvider        — AWS Bedrock (Claude, Llama, Mistral, Titan, Nova, GH#9010)
     OpenAIProvider         — OpenAI GPT/o1 (OTel tracing, circuit breaker)
     GroqProvider           — Groq ultra-low-latency inference
     HuggingFaceProvider    — HuggingFace Inference API
@@ -34,6 +35,7 @@ Legacy shared infra (retained from #3185):
 
 # Cloud API providers (Phase 2 — moved from llm_providers/)
 from .anthropic import AnthropicProvider
+from .bedrock import BEDROCK_MODELS, BedrockProvider
 
 # Utilities
 from .chat_template_loader import DEFAULT_TEMPLATE, render_chat_template
@@ -55,6 +57,8 @@ from .vllm_base import VLLMBaseProvider
 __all__ = [
     # Cloud API providers
     "AnthropicProvider",
+    "BedrockProvider",
+    "BEDROCK_MODELS",
     "OpenAIProvider",
     "GroqProvider",
     "GROQ_MODELS",
