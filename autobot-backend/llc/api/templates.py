@@ -162,8 +162,6 @@ async def get_built_in_template(template_key: str) -> Dict:
     Returns:
         Full template JSON including metadata, variables, agents, goals, work_items, kb_collections
     """
-    from typing import Dict
-
     try:
         return TemplateService.get_built_in_template(template_key)
     except BuiltInTemplateNotFoundError as exc:

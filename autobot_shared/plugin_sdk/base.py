@@ -9,6 +9,7 @@ and plugin registry for managing plugin lifecycle.
 
 Issue #730 - Plugin SDK for extensible tool architecture.
 Issue #6971 - PluginLoadError for declarative required_env validation.
+Issue #9049 - Plugin capability manifest system.
 """
 
 from __future__ import annotations
@@ -20,6 +21,8 @@ from enum import Enum
 from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field, field_validator
+
+from .capabilities import Capability, TrustTier
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +92,7 @@ class PluginManifest(BaseModel):
     """
     Plugin manifest schema.
 
-    Defines plugin metadata, dependencies, and configuration.
+    Defines plugin metadata, dependencies, configuration, and capabilities.
     """
 
     name: str = Field(..., description="Unique plugin identifier")
@@ -105,6 +108,16 @@ class PluginManifest(BaseModel):
     required_env: List[RequiredEnvVar] = Field(
         default_factory=list,
         description="Environment variables this plugin needs at runtime",
+    )
+
+    # Capability declarations (Issue #9049)
+    capabilities: List[Capability] = Field(
+        default_factory=list,
+        description="Required capabilities (e.g. kb:read, llm:call, network:outbound)",
+    )
+    trust_tier: TrustTier = Field(
+        default=TrustTier.COMMUNITY,
+        description="Plugin trust level: official, verified, community, unverified",
     )
 
     @field_validator("version")
