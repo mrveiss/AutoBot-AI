@@ -5,6 +5,8 @@
   "description": "Adds image generation to chat and agent workflows via DALL-E 3, Flux, and Stable Diffusion. Registers the generate_image tool callable from LLC agent tasks.",
   "author": "mrveiss",
   "entry_point": "plugins.core_plugins.image_generation_plugin.main",
+  "capabilities": ["llm:call", "network:outbound", "system:env"],
+  "trust_tier": "official",
   "dependencies": [],
   "config_schema": {
     "type": "object",

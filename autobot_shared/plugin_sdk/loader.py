@@ -19,9 +19,9 @@ import os
 from pathlib import Path
 from typing import Dict, List, Tuple, Type
 
-from plugin_sdk.base import BasePlugin, PluginLoadError, PluginManifest, PluginRegistry, PluginStatus
-from plugin_sdk.hooks import validate_hook_names
-from plugin_sdk.unified_registry import get_unified_registry
+from .base import BasePlugin, PluginLoadError, PluginManifest, PluginRegistry, PluginStatus
+from .hooks import validate_hook_names
+from .unified_registry import get_unified_registry
 
 logger = logging.getLogger(__name__)
 
