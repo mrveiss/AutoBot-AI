@@ -30,16 +30,25 @@ _DATA_DIR = Path(os.getenv("TRANSCRIBER_DATA_DIR", "data/transcriber"))
 def get_transcriber_router() -> APIRouter:
     """Return a combined APIRouter with all transcriber sub-routers.
 
-    Both the projects and recordings sub-routers are included under the
-    shared /api/transcriber prefix so feature_routers.py can mount the
-    result at the top-level application with a single include_router call.
+    All transcriber sub-routers (projects, recordings, transcripts, export,
+    AI analysis, KB push) are included under the shared /api/transcriber
+    prefix so feature_routers.py can mount the result at the top-level
+    application with a single include_router call.
     """
     from transcriber.routes.projects import router as projects_router
     from transcriber.routes.recordings import router as recordings_router
+    from transcriber.routes.transcripts import router as transcripts_router
+    from transcriber.routes.export import router as export_router
+    from transcriber.routes.ai import router as ai_router
+    from transcriber.routes.kb import router as kb_router
 
     combined = APIRouter(prefix="/api/transcriber")
     combined.include_router(projects_router)
     combined.include_router(recordings_router)
+    combined.include_router(transcripts_router)
+    combined.include_router(export_router)
+    combined.include_router(ai_router)
+    combined.include_router(kb_router)
     return combined
 
 
