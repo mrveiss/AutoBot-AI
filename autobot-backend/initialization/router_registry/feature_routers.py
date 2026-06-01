@@ -655,6 +655,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ),
     # GH#4459: Web push notification endpoints (subscribe/unsubscribe/vapid-key)
     ("api.push", "/push", ["push", "notifications"], "push"),
+    # MVA-2176: Transcript AI analysis and KB integration
+    ("api.transcripts", "/transcripts", ["transcripts"], "transcripts"),
 ]
 
 
