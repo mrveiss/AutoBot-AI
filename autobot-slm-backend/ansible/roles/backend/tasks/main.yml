@@ -278,9 +278,7 @@
       AUTOBOT_REDIS_URL
       AUTOBOT_AI_STACK_HOST
       AUTOBOT_CHROMADB_HOST
-      AUTOBOT_JWT_SECRET
       AUTOBOT_DEFAULT_LLM_MODEL
-      AUTOBOT_EMBEDDING_MODEL
   tags: ['backend', 'deploy']
 
 - name: Sync backend config directory from code_source
