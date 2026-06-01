@@ -50,10 +50,9 @@ async def load_user_provider_credentials(
 
     if provider_names:
         # Filter by specific provider names
-        name_filters = [
-            Secret.name == f"provider_credential_{name}" for name in provider_names
-        ]
+        name_filters = [Secret.name == f"provider_credential_{name}" for name in provider_names]
         from sqlalchemy import or_
+
         stmt = stmt.where(or_(*name_filters))
 
     result = await db.execute(stmt)
@@ -66,9 +65,7 @@ async def load_user_provider_credentials(
     for secret in secrets:
         provider_name = secret.name.replace("provider_credential_", "")
         try:
-            decrypted = secrets_service.cipher.decrypt(
-                secret.encrypted_value.encode()
-            ).decode()
+            decrypted = secrets_service.cipher.decrypt(secret.encrypted_value.encode()).decode()
             credential_data = json.loads(decrypted)
             provider_credentials[provider_name] = credential_data
             logger.debug(

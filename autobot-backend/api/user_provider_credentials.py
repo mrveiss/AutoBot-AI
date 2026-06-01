@@ -91,9 +91,7 @@ async def create_or_update_credential(
 
     # Encrypt the credential data (stored as JSON)
     secrets_service = SecretsService()
-    encrypted_value = secrets_service.cipher.encrypt(
-        json.dumps(credential_data).encode()
-    ).decode()
+    encrypted_value = secrets_service.cipher.encrypt(json.dumps(credential_data).encode()).decode()
 
     # Check if credential already exists
     secret_name = f"provider_credential_{request.provider_name}"

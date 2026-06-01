@@ -45,9 +45,7 @@ from .base_provider import BaseProvider
 logger = get_logger(__name__)
 
 # Context variable for per-run credential overrides (GH#9037)
-_run_credentials: ContextVar[Optional["RunCredentialContext"]] = ContextVar(
-    "run_credentials", default=None
-)
+_run_credentials: ContextVar[Optional["RunCredentialContext"]] = ContextVar("run_credentials", default=None)
 
 # Cache health results for 30 s to avoid a health check on every request.
 _HEALTH_CACHE_TTL = 30.0

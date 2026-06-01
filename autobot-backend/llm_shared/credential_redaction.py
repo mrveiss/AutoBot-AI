@@ -142,10 +142,7 @@ class CredentialRedactionFilter:
             if isinstance(record.args, dict):
                 record.args = redact_dict(record.args)
             elif isinstance(record.args, (list, tuple)):
-                record.args = tuple(
-                    redact_dict(arg) if isinstance(arg, dict) else arg
-                    for arg in record.args
-                )
+                record.args = tuple(redact_dict(arg) if isinstance(arg, dict) else arg for arg in record.args)
 
         return True
 

@@ -45,9 +45,7 @@ async def test_context_var_isolation():
     """Test that credentials are isolated per async task."""
 
     async def task_a():
-        ctx_a = RunCredentialContext(
-            provider_credentials={"provider_a": {"api_key": "key_a"}}
-        )
+        ctx_a = RunCredentialContext(provider_credentials={"provider_a": {"api_key": "key_a"}})
         set_run_credentials(ctx_a)
         await asyncio.sleep(0.01)  # Let other task run
         retrieved = get_run_credentials()
@@ -55,9 +53,7 @@ async def test_context_var_isolation():
         assert retrieved.get_credentials("provider_a") == {"api_key": "key_a"}
 
     async def task_b():
-        ctx_b = RunCredentialContext(
-            provider_credentials={"provider_b": {"api_key": "key_b"}}
-        )
+        ctx_b = RunCredentialContext(provider_credentials={"provider_b": {"api_key": "key_b"}})
         set_run_credentials(ctx_b)
         await asyncio.sleep(0.01)
         retrieved = get_run_credentials()
