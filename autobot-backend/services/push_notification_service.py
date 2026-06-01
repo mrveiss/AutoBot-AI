@@ -36,8 +36,9 @@ def generate_vapid_keys() -> dict:
     GH#4459: py_vapid API uses save_key/save_public_key methods, not direct attributes.
     """
     try:
-        from py_vapid import Vapid01 as Vapid
         import tempfile
+
+        from py_vapid import Vapid01 as Vapid
     except ImportError as exc:
         raise RuntimeError("pywebpush not installed — run: pip install pywebpush") from exc
 

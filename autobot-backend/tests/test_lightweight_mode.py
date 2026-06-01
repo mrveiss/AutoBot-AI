@@ -7,8 +7,9 @@ Test lightweight mode bypasses middleware for trivial queries.
 Issue MVA-1992: Verify that trivial-tier queries skip RAG, memory, and tools.
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from llm_shared.models import LLMRequest
 from llm_shared.tiered_routing.complexity_router import ComplexityRouter

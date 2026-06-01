@@ -1599,7 +1599,11 @@ class ChatWorkflowManager(
     ):
         """Stream LLM response chunks. Issue #620. Issue MVA-1993: Includes lightweight_mode_used."""
         state = self._initialize_stream_state(
-            selected_model, terminal_session_id, used_knowledge, rag_citations, lightweight_mode_used=lightweight_mode_used
+            selected_model,
+            terminal_session_id,
+            used_knowledge,
+            rag_citations,
+            lightweight_mode_used=lightweight_mode_used,
         )
         llm_response, current_segment, current_message_type = state[:3]
         tool_call_completed, streaming_msg = state[3:]

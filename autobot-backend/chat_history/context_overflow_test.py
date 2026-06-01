@@ -3,13 +3,14 @@
 # Author: mrveiss
 """Tests for context overflow protection. Issue #9043."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from chat_history.context_overflow import (
-    SessionTokenTracker,
-    ConversationSummarizer,
     ContextOverflowProtection,
+    ConversationSummarizer,
+    SessionTokenTracker,
 )
 
 

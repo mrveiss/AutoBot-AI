@@ -442,6 +442,7 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
 
     from autobot_shared.ssot_config import get_config as get_ssot_config
     from llm_shared.providers.anthropic import AnthropicProvider
+    from llm_shared.providers.bedrock import BedrockProvider
     from llm_shared.providers.custom_openai import CustomOpenAIProvider
     from llm_shared.providers.groq import GroqProvider
     from llm_shared.providers.huggingface import HuggingFaceProvider
@@ -450,7 +451,6 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
     from llm_shared.providers.openrouter import OpenRouterProvider
     from llm_shared.providers.vertexai import VertexAIProvider
     from llm_shared.providers.vllm_base import VLLMBaseProvider
-    from llm_shared.providers.bedrock import BedrockProvider
 
     fallback: List[str] = []
 
