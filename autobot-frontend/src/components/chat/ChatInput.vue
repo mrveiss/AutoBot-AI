@@ -134,6 +134,33 @@
               <span class="toggle-label">{{ $t('chat.input.overseerLabel') }}</span>
             </label>
 
+            <!-- GH#8993: Thinking Mode Toggle -->
+            <label
+              class="thinking-toggle"
+              :class="{ 'active': thinkingEnabled }"
+              :title="thinkingEnabled ? $t('chat.input.thinkingOn', 'Extended thinking ON') : $t('chat.input.thinkingOff', 'Extended thinking OFF')"
+              @click.prevent="toggleThinking"
+            >
+              <span class="thinking-icon">🧠</span>
+              <span class="toggle-label">{{ thinkingEnabled ? $t('chat.input.thinkingOnLabel', 'Think') : $t('chat.input.thinkingOffLabel', 'Think') }}</span>
+            </label>
+
+            <!-- GH#8993: Budget Slider (only visible when thinking is ON) -->
+            <div v-if="thinkingEnabled" class="thinking-budget">
+              <label class="budget-label sr-only">{{ $t('chat.input.thinkingBudget', 'Thinking budget') }}</label>
+              <div class="budget-steps">
+                <button
+                  v-for="step in BUDGET_STEPS"
+                  :key="step"
+                  type="button"
+                  class="budget-step"
+                  :class="{ 'active': thinkingBudget === step }"
+                  @click="setThinkingBudget(step)"
+                  :title="`${BUDGET_STEP_LABELS[step]} tokens`"
+                >{{ BUDGET_STEP_LABELS[step] }}</button>
+              </div>
+            </div>
+
             <!-- Vertical Divider after toggles -->
             <div class="action-divider"></div>
 
@@ -412,6 +439,7 @@ import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { useSlashCommands } from '@/composables/useSlashCommands'
 import type { SlashCommandPreset } from '@/types/api'
 import { useImageGeneration } from '@/composables/useImageGeneration'
+import { useThinkingMode, BUDGET_STEPS, BUDGET_STEP_LABELS } from '@/composables/useThinkingMode'
 
 const { t } = useI18n()
 const logger = createLogger('ChatInput')
@@ -491,6 +519,9 @@ const maxFileSize = 10 * 1024 * 1024 // 10MB
 
 // GH#9015: Image generation
 const { generating: imageGenerating, generateImage } = useImageGeneration()
+
+// GH#8993: Thinking mode
+const { enabled: thinkingEnabled, budgetTokens: thinkingBudget, load: loadThinkingPrefs, toggle: toggleThinking, setBudget: setThinkingBudget } = useThinkingMode(() => store.currentSessionId)
 const showImageGenModal = ref(false)
 const imagePrompt = ref('')
 const imageProvider = ref<'dalle' | 'flux' | 'stable_diffusion'>('dalle')
@@ -689,7 +720,9 @@ const sendMessage = async () => {
           size: f.size,
           data: f // In real implementation, would upload file first
         })) : undefined,
-        use_knowledge: useKnowledge.value  // Issue #249: RAG toggle
+        use_knowledge: useKnowledge.value,  // Issue #249: RAG toggle
+        // GH#8993: extended thinking parameters
+        ...(thinkingEnabled.value ? { thinking_enabled: true, thinking_budget_tokens: thinkingBudget.value } : {}),
       })
     }
 
@@ -1104,6 +1137,9 @@ onMounted(() => {
 
   // GH#4449: preload presets for instant autocomplete
   fetchPresets()
+
+  // GH#8993: load thinking preferences for current session
+  loadThinkingPrefs()
 })
 
 onUnmounted(() => {
@@ -1251,6 +1287,48 @@ onUnmounted(() => {
 
 .overseer-toggle .toggle-label {
   @apply text-xs font-medium;
+}
+
+/* GH#8993: Thinking Mode Toggle */
+.thinking-toggle {
+  @apply flex items-center gap-1 px-2 py-1 rounded cursor-pointer transition-all duration-200 text-autobot-text-muted;
+}
+
+.thinking-toggle:hover {
+  @apply bg-autobot-bg-tertiary text-autobot-text-secondary;
+}
+
+.thinking-toggle.active {
+  @apply bg-amber-100 text-amber-700;
+}
+
+.thinking-toggle .thinking-icon {
+  @apply text-sm leading-none;
+}
+
+.thinking-toggle .toggle-label {
+  @apply text-xs font-medium;
+}
+
+/* GH#8993: Budget step selector */
+.thinking-budget {
+  @apply flex items-center;
+}
+
+.budget-steps {
+  @apply flex items-center gap-0.5;
+}
+
+.budget-step {
+  @apply px-1.5 py-0.5 text-xs rounded cursor-pointer transition-colors duration-150 text-autobot-text-muted border border-transparent;
+}
+
+.budget-step:hover {
+  @apply bg-autobot-bg-tertiary text-autobot-text-secondary;
+}
+
+.budget-step.active {
+  @apply bg-amber-100 text-amber-700 border-amber-300 font-medium;
 }
 
 .action-label {

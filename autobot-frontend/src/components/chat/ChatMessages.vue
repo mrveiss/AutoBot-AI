@@ -189,6 +189,10 @@
           <!-- Message Metadata -->
           <div v-if="message.metadata && shouldShowMetadata(message)" class="message-metadata">
             <div class="metadata-items">
+              <!-- GH#8993: Thinking used indicator -->
+              <span v-if="message.sender === 'assistant' && message.metadata.thinking_used" class="metadata-item thinking-used-badge">
+                🧠 {{ $t('chat.messages.thinkingUsed', 'Extended thinking') }}
+              </span>
               <span v-if="message.metadata.model" class="metadata-item">
                 <Icon name="robot" />
                 {{ message.metadata.model }}
@@ -1722,6 +1726,11 @@ onMounted(async () => {
 
 .metadata-item {
   @apply flex items-center gap-1;
+}
+
+/* GH#8993: Thinking used badge */
+.thinking-used-badge {
+  @apply bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded text-xs font-medium border border-amber-200;
 }
 
 .message-attachments {
