@@ -27,6 +27,7 @@ __all__ = [
     "GitHubIntegration",
     "IntegrationConfig",
     "IntegrationRateLimiter",
+    "Microsoft365Integration",
     "IntegrationStatus",
     "Microsoft365Integration",
     "NotionIntegration",
