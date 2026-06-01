@@ -31,7 +31,8 @@ async def test_kb_push_success():
         segment_text="This is a test transcript segment.",
         segment_start=10.5,
         segment_end=25.3,
-        metadata={"speaker": "John", "confidence": 0.95},
+        speaker="John",
+        confidence=0.95,
     )
 
     # Mock user
@@ -78,7 +79,6 @@ async def test_kb_push_without_timing():
 
     request = TranscriptKBPushRequest(
         segment_text="Segment without timing.",
-        metadata={},
     )
 
     mock_user = {"user_id": "test-user", "roles": ["user"]}
@@ -124,7 +124,8 @@ async def test_kb_push_failure():
         )
 
     assert response.success is False
-    assert "KB timeout" in response.message
+    # Security: Error message should be generic, not expose internal details
+    assert "failed" in response.message.lower()
 
 
 @pytest.mark.asyncio
@@ -149,7 +150,10 @@ async def test_kb_push_exception():
         )
 
     assert response.success is False
+    # Security: Error message should be generic
     assert "failed" in response.message.lower()
+    # Security: Should NOT expose internal exception details
+    assert "Database error" not in response.message
 
 
 def test_analysis_prompt_generation():
