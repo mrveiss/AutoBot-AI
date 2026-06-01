@@ -5,9 +5,16 @@
 /**
  * useHostSelector - Composable for the ui/HostSelector component
  *
- * GH#9063 consolidation: delegates host loading to useHostSelection
+ * ✅ GH#9063 consolidation COMPLETE: delegates host loading to useHostSelection
  * (same /api/infrastructure/hosts source) instead of making a separate
  * useFetchEndpoint call. Maps InfrastructureHost → SelectorHost shape.
+ *
+ * This composable is a THIN WRAPPER around useHostSelection that:
+ * - Provides the SelectorHost type shape for UI components
+ * - Applies client-side capability filtering
+ * - Maintains backward compatibility for components using the old API
+ *
+ * Data flow: useHostSelector → useHostSelection → /api/infrastructure/hosts
  *
  * Issue #6087
  */
