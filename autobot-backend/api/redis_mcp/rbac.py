@@ -187,7 +187,7 @@ async def resolve_bundle_for_user(user_id: str, role: str = "user") -> tuple[str
     """
     # 1. Check per-user DB override
     try:
-        from database.session import get_async_session  # noqa: PLC0415
+        from user_management.database import get_async_session  # noqa: PLC0415
         from sqlalchemy import text  # noqa: PLC0415
 
         async with get_async_session() as session:

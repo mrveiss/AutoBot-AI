@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from auth_middleware import get_auth_middleware, get_current_user
 from autobot_shared.logging_manager import get_logger
-from services.event_log import EventType, emit
+from services.audit.unified_audit import emit_compliance
 from utils.catalog_http_exceptions import raise_auth_error
 
 logger = get_logger(__name__)
@@ -118,7 +118,7 @@ async def get_user_bundle(
 ) -> BundleAssignmentResponse:
     """Return the explicit bundle assignment for a user (admin only)."""
     try:
-        from database.session import get_async_session  # noqa: PLC0415
+        from user_management.database import get_async_session  # noqa: PLC0415
         from sqlalchemy import text  # noqa: PLC0415
 
         async with get_async_session() as session:
@@ -157,7 +157,7 @@ async def set_user_bundle(
     admin_id = admin_user.get("user_id") or admin_user.get("sub") or admin_user.get("username") or "unknown"
 
     try:
-        from database.session import get_async_session  # noqa: PLC0415
+        from user_management.database import get_async_session  # noqa: PLC0415
         from sqlalchemy import text  # noqa: PLC0415
 
         async with get_async_session() as session:
@@ -186,9 +186,9 @@ async def set_user_bundle(
         raise HTTPException(status_code=500, detail="Database error") from exc
 
     # Audit log
-    emit(
-        EventType.CONFIG_CHANGED,
-        user_id=str(admin_id),
+    emit_compliance(
+        action="config.changed",
+        actor_id=str(admin_id),
         resource_type="user_voice_bundle",
         resource_id=user_id,
         metadata={

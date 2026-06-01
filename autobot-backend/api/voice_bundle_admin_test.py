@@ -24,7 +24,7 @@ async def test_resolve_bundle_user_override():
     mock_session.__aexit__ = AsyncMock(return_value=False)
     mock_session.execute = AsyncMock(return_value=mock_row)
 
-    with patch("database.session.get_async_session", return_value=mock_session):
+    with patch("user_management.database.get_async_session", return_value=mock_session):
         bundle, resolution = await resolve_bundle_for_user("user-123", role="user")
 
     assert bundle == "voice_extended"
@@ -43,7 +43,7 @@ async def test_resolve_bundle_role_default_admin():
     mock_session.__aexit__ = AsyncMock(return_value=False)
     mock_session.execute = AsyncMock(return_value=mock_row)
 
-    with patch("database.session.get_async_session", return_value=mock_session):
+    with patch("user_management.database.get_async_session", return_value=mock_session):
         bundle, resolution = await resolve_bundle_for_user("admin-1", role="admin")
 
     assert bundle == "voice_admin"
@@ -65,7 +65,7 @@ async def test_resolve_bundle_global_env_fallback():
     import os
 
     with (
-        patch("database.session.get_async_session", return_value=mock_session),
+        patch("user_management.database.get_async_session", return_value=mock_session),
         patch.dict(os.environ, {"AUTOBOT_VOICE_TOOLSETS": "voice_extended"}),
     ):
         bundle, resolution = await resolve_bundle_for_user("user-99", role="unknown_role")
@@ -79,7 +79,7 @@ async def test_resolve_bundle_db_failure_falls_through():
     """DB failure should not crash — falls through to role default."""
     from api.redis_mcp.rbac import resolve_bundle_for_user
 
-    with patch("database.session.get_async_session", side_effect=Exception("DB down")):
+    with patch("user_management.database.get_async_session", side_effect=Exception("DB down")):
         bundle, resolution = await resolve_bundle_for_user("user-42", role="user")
 
     assert bundle == "voice_safe"
@@ -97,21 +97,23 @@ async def test_set_user_bundle_invalid_bundle():
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
-    from api.voice_bundle_admin import bundle_admin_router
+    from api.voice_bundle_admin import _require_admin, bundle_admin_router
 
     app = FastAPI()
     app.include_router(bundle_admin_router)
 
+    # Override the dependency to return admin user
+    def mock_require_admin():
+        return {"username": "admin", "role": "admin"}
+
+    app.dependency_overrides[_require_admin] = mock_require_admin
+
     with TestClient(app) as client:
-        with patch(
-            "api.voice_bundle_admin._require_admin",
-            return_value={"username": "admin", "role": "admin"},
-        ):
-            resp = client.put(
-                "/admin/voice/bundle/user-abc",
-                json={"bundle_name": "voice_godmode"},
-                headers={"Authorization": "Bearer fake"},
-            )
+        resp = client.put(
+            "/admin/voice/bundle/user-abc",
+            json={"bundle_name": "voice_godmode"},
+            headers={"Authorization": "Bearer fake"},
+        )
     assert resp.status_code == 422
 
 
