@@ -439,11 +439,9 @@ async def resolve_drift(
     """
     Resync a single component from code_source/ to /opt/autobot/<component>/ (#7149).
 
-    Drives the same `_rsync_component_local()` used by SLM self-sync — pulls
-    files from the local code_source checkout and overwrites the deployed copy.
-    Used by the CodeSyncView "Resync from Source" button to clear drift in one
-    click (instead of forcing the user to find the SLM self-node and trigger a
-    full /nodes/{id}/sync).
+    Uses `_rsync_component_local()` to pull files from the local code_source
+    checkout and overwrite the deployed copy.  Used by the CodeSyncView
+    "Resync from Source" button to clear drift in one click.
 
     Body:
         component: Sub-directory under /opt/autobot/. Must be in ALLOWED_COMPONENTS.
