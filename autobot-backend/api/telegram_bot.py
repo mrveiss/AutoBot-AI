@@ -45,9 +45,7 @@ def _get_chat_session_id(chat_id: str) -> str:
     return f"telegram_{chat_id}"
 
 
-async def _handle_command(
-    command: str, args: list[str], chat_id: str, message_id: int
-) -> Optional[str]:
+async def _handle_command(command: str, args: list[str], chat_id: str, message_id: int) -> Optional[str]:
     """
     Handle Telegram bot commands (MVA-2075).
 
@@ -109,9 +107,7 @@ async def _route_to_chat_and_reply(request: Request, unified_message: Any) -> No
         args = unified_message.metadata.get("command_args", [])
         message_id = unified_message.metadata.get("message_id")
 
-        response_text = await _handle_command(
-            command, args, unified_message.channel_id, message_id
-        )
+        response_text = await _handle_command(command, args, unified_message.channel_id, message_id)
 
         if response_text:
             await send_telegram_response(
@@ -126,9 +122,7 @@ async def _route_to_chat_and_reply(request: Request, unified_message: Any) -> No
     if unified_message.metadata.get("has_file"):
         file_id = unified_message.metadata.get("file_id")
         file_type = unified_message.metadata.get("file_type")
-        logger.info(
-            f"Received {file_type} file from Telegram: {file_id} in chat {unified_message.channel_id}"
-        )
+        logger.info(f"Received {file_type} file from Telegram: {file_id} in chat {unified_message.channel_id}")
         # File metadata is already in metadata, can be processed by chat service
 
     from api.chat import process_chat_message
@@ -433,9 +427,7 @@ async def send_telegram_response(
                 reply_to_message_id=message_id,
             )
             if thread_id:
-                logger.info(
-                    f"Sent response to Telegram chat {chat_id} thread {thread_id}"
-                )
+                logger.info(f"Sent response to Telegram chat {chat_id} thread {thread_id}")
             else:
                 logger.info(f"Sent response to Telegram chat {chat_id}")
 
