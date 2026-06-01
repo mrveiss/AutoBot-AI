@@ -964,6 +964,13 @@ export const routes: RouteRecordRaw[] = [
     component: () => import('@/views/llc/SubCompanyTree.vue'),
     meta: { title: 'Company Hierarchy', requiresAuth: true, llcScope: true, hideInNav: true },
   },
+  // GH#9164: Company Creation Wizard with Template Browser
+  {
+    path: '/llc/companies/create',
+    name: 'llc-company-create',
+    component: () => import('@/views/llc/CompanyCreationWizard.vue'),
+    meta: { title: 'Create Company', requiresAuth: true, llcScope: true, hideInNav: true, hideFooter: true },
+  },
   // Issue #4465: Usage moved under /analytics/usage
   { path: '/usage', redirect: '/analytics/usage' },
   {
