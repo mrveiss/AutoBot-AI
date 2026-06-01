@@ -3,7 +3,7 @@
 # Author: mrveiss
 """Telegram Platform Adapter for Message Gateway"""
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from autobot_shared.logging_manager import get_logger
 

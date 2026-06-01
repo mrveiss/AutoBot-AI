@@ -243,7 +243,7 @@ async def telegram_webhook(
 
     except HTTPException:
         raise
-    except Exception as exc:
+    except Exception:
         logger.exception("Failed to process Telegram webhook update")
         # Return 200 to prevent Telegram from retrying, no error details to client
         return JSONResponse({"status": "ok"})
@@ -431,6 +431,6 @@ async def send_telegram_response(
             else:
                 logger.info(f"Sent response to Telegram chat {chat_id}")
 
-    except Exception as exc:
+    except Exception:
         logger.exception("Failed to send Telegram response")
         raise

@@ -8,7 +8,6 @@ Manages Telegram bot instance, sends messages via Bot API,
 handles webhook verification, and supports file/photo uploads.
 """
 
-import io
 from typing import Any, Dict, Optional
 
 import aiohttp
@@ -79,7 +78,7 @@ class TelegramBotService:
         if not self.bot_token or not self.base_url:
             raise ValueError("Telegram bot token not configured")
 
-        payload = {
+        payload: Dict[str, Any] = {
             "chat_id": chat_id,
             "text": text,
             "parse_mode": parse_mode,
