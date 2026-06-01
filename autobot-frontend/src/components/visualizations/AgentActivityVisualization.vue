@@ -68,6 +68,10 @@
             <Icon name="pause-circle" />
             <span>{{ t('visualizations.agentActivity.idle') }}</span>
           </div>
+          <div v-else-if="agent.status === 'abstained'" class="activity-abstained">
+            <Icon name="help-circle" />
+            <span>{{ t('visualizations.agentActivity.abstained') }}</span>
+          </div>
           <div v-else-if="agent.status === 'error'" class="activity-error">
             <Icon name="exclamation-triangle" />
             <span>{{ t('visualizations.agentActivity.error') }}</span>
@@ -581,7 +585,8 @@ defineExpose({
 }
 
 .activity-idle,
-.activity-error {
+.activity-error,
+.activity-abstained {
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
@@ -590,6 +595,10 @@ defineExpose({
 
 .activity-idle {
   color: var(--text-tertiary);
+}
+
+.activity-abstained {
+  color: oklch(0.5 0.15 85);
 }
 
 .activity-error {
