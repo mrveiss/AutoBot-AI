@@ -539,7 +539,7 @@ class ThinkingPreferences(BaseModel):
         10000,
         ge=1000,
         le=128000,
-        description="Default thinking budget in tokens (1k, 5k, 10k, max=63k)",
+        description="Default thinking budget in tokens (1k-128k)",
     )
 
 

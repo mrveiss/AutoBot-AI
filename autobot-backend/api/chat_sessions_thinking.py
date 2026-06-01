@@ -50,7 +50,6 @@ async def get_thinking_preferences(
         raise HTTPException(status_code=500, detail="Chat history manager not available")
 
     # Load session to get metadata
-    messages = await chat_history_manager.load_chat_history(session_id)
     session_data = await chat_history_manager.get_session(session_id)
 
     if not session_data:
