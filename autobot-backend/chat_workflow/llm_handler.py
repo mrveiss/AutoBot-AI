@@ -708,10 +708,12 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         message: str,
         use_knowledge: bool = True,
         language: str = None,
+        lightweight_mode: bool = False,
     ) -> Dict[str, Any]:
         """Prepare LLM request parameters including endpoint, model, and prompt.
 
         Issue #1325: Accepts language for system prompt resolution.
+        Issue MVA-1992: lightweight_mode bypasses RAG/memory for trivial queries.
         """
         selected_model = self._get_selected_model()
         # Issue #1214: Try SLM service discovery first (fleet-managed endpoint),
@@ -735,34 +737,37 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         # When TIERED_CONTEXT_ENABLED=true the TieredContextBuilder owns all
         # context prepending (L0 identity + L1 essential story + L2/L3 on-demand).
         # When false the pre-existing unconditional EssentialStory path is used.
-        try:
-            from chat_history.layers import TIERED_CONTEXT_ENABLED, TieredContextBuilder
+        # Issue MVA-1992: Skip memory graph lookup when lightweight_mode=True.
+        if not lightweight_mode:
+            try:
+                from chat_history.layers import TIERED_CONTEXT_ENABLED, TieredContextBuilder
 
-            if TIERED_CONTEXT_ENABLED:
-                tiered_ctx = await TieredContextBuilder().build(
-                    user_message=message,
-                    model_name=selected_model,
-                    session_id=session.session_id,
-                    memory_graph=getattr(self, "memory_graph", None),
-                    knowledge_service=self.knowledge_service if use_knowledge else None,
-                )
-                if tiered_ctx:
-                    system_prompt = tiered_ctx + "\n\n" + system_prompt
-            else:
-                # Issue #3787: legacy always-loaded compact memory summary.
-                from memory.essential_story import EssentialStoryGenerator
+                if TIERED_CONTEXT_ENABLED:
+                    tiered_ctx = await TieredContextBuilder().build(
+                        user_message=message,
+                        model_name=selected_model,
+                        session_id=session.session_id,
+                        memory_graph=getattr(self, "memory_graph", None),
+                        knowledge_service=self.knowledge_service if use_knowledge else None,
+                    )
+                    if tiered_ctx:
+                        system_prompt = tiered_ctx + "\n\n" + system_prompt
+                else:
+                    # Issue #3787: legacy always-loaded compact memory summary.
+                    from memory.essential_story import EssentialStoryGenerator
 
-                story = await EssentialStoryGenerator().generate(model_name=selected_model)
-                if story:
-                    system_prompt = story + "\n\n" + system_prompt
-        except Exception as _ctx_exc:
-            logger.warning("Context injection failed: %s", _ctx_exc)
+                    story = await EssentialStoryGenerator().generate(model_name=selected_model)
+                    if story:
+                        system_prompt = story + "\n\n" + system_prompt
+            except Exception as _ctx_exc:
+                logger.warning("Context injection failed: %s", _ctx_exc)
         system_prompt = await _emit_system_prompt_ready(system_prompt, session)
         conversation_context = self._build_conversation_context(session)
 
         # Knowledge retrieval for RAG
+        # Issue MVA-1992: Skip RAG when lightweight_mode=True
         knowledge_context, citations = "", []
-        if self.knowledge_service and use_knowledge:
+        if self.knowledge_service and use_knowledge and not lightweight_mode:
             knowledge_context, citations = await self._retrieve_knowledge_context(message, session)
             # Issue #3770: compress KB results when context exceeds model budget
             if knowledge_context and citations:
