@@ -134,6 +134,7 @@ class LLMResponse:
     provider_metadata: Dict[str, Any] | None = None
     hidden_params: Dict[str, Any] = field(default_factory=dict)
     tool_calls: List["ToolCall"] | None = None
+    lightweight_mode_used: bool = False  # MVA-1993: Set when trivial tier is used
 
 
 @dataclass

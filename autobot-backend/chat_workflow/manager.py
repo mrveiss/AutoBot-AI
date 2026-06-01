@@ -526,21 +526,26 @@ class ChatWorkflowManager(
         terminal_session_id: str,
         used_knowledge: bool,
         rag_citations: List[Dict[str, Any]],
+        lightweight_mode_used: bool = False,
     ) -> StreamingMessage:
         """
         Initialize a StreamingMessage with metadata.
 
         Issue #665: Extracted from _stream_llm_response to reduce function length.
+        Issue MVA-1993: Includes lightweight_mode_used in metadata for cost indicator.
         """
         streaming_msg = StreamingMessage(type=message_type)
-        streaming_msg.merge_metadata(
-            {
-                "model": selected_model,
-                "terminal_session_id": terminal_session_id,
-                "used_knowledge": used_knowledge,
-                "citations": self._build_source_list(used_knowledge, rag_citations, selected_model),
-            }
-        )
+        metadata = {
+            "model": selected_model,
+            "terminal_session_id": terminal_session_id,
+            "used_knowledge": used_knowledge,
+            "citations": self._build_source_list(used_knowledge, rag_citations, selected_model),
+        }
+        # MVA-1993: Add lightweight mode indicator from instance variable or parameter
+        lw_mode = lightweight_mode_used or getattr(self, "_current_lightweight_mode", False)
+        if lw_mode:
+            metadata["lightweight_mode_used"] = True
+        streaming_msg.merge_metadata(metadata)
         return streaming_msg
 
     def _process_chunk_and_detect_type(
@@ -586,11 +591,13 @@ class ChatWorkflowManager(
         terminal_session_id: str,
         used_knowledge: bool,
         rag_citations: List[Dict[str, Any]],
+        lightweight_mode_used: bool = False,
     ) -> tuple:
         """
         Apply type transition and create new StreamingMessage if needed.
 
         Issue #665: Extracted from _stream_llm_response to reduce function length.
+        Issue MVA-1993: Includes lightweight_mode_used for cost indicator.
 
         Returns:
             Tuple of (new_streaming_msg, new_segment_value, new_type, just_transitioned, transition_content)
@@ -603,6 +610,7 @@ class ChatWorkflowManager(
                 terminal_session_id,
                 used_knowledge,
                 rag_citations,
+                lightweight_mode_used=lightweight_mode_used,
             )
             return (streaming_msg, new_segment, new_type, True, new_segment)
         return (None, None, new_type, False, None)
@@ -872,10 +880,12 @@ class ChatWorkflowManager(
         terminal_session_id: str,
         used_knowledge: bool,
         rag_citations: List[Dict[str, Any]],
+        lightweight_mode_used: bool = False,
     ) -> tuple:
         """Initialize state for streaming LLM response.
 
         Issue #620.
+        Issue MVA-1993: Includes lightweight_mode_used for cost indicator.
         """
         streaming_msg = self._init_streaming_message(
             "response",
@@ -883,6 +893,7 @@ class ChatWorkflowManager(
             terminal_session_id,
             used_knowledge,
             rag_citations,
+            lightweight_mode_used=lightweight_mode_used,
         )
         return "", "", "response", False, streaming_msg
 
@@ -1584,9 +1595,12 @@ class ChatWorkflowManager(
         terminal_session_id: str,
         used_knowledge: bool,
         rag_citations: List[Dict[str, Any]],
+        lightweight_mode_used: bool = False,
     ):
-        """Stream LLM response chunks. Issue #620."""
-        state = self._initialize_stream_state(selected_model, terminal_session_id, used_knowledge, rag_citations)
+        """Stream LLM response chunks. Issue #620. Issue MVA-1993: Includes lightweight_mode_used."""
+        state = self._initialize_stream_state(
+            selected_model, terminal_session_id, used_knowledge, rag_citations, lightweight_mode_used=lightweight_mode_used
+        )
         llm_response, current_segment, current_message_type = state[:3]
         tool_call_completed, streaming_msg = state[3:]
 
@@ -2532,10 +2546,14 @@ before summarizing.
         Execute the multi-step LLM continuation loop.
 
         Issue #375: Uses LLMIterationContext to reduce parameter count from 10 to 1.
+        Issue MVA-1993: Sets lightweight_mode_used flag for response metadata.
         """
         import aiohttp
 
         from autobot_shared.http_client import get_http_client
+
+        # MVA-1993: Store lightweight_mode_used from context for response metadata
+        self._current_lightweight_mode = ctx.context.get("lightweight_mode_used", False)
 
         try:
             http_client = get_http_client()
@@ -2551,6 +2569,10 @@ before summarizing.
             error_msg = self._create_llm_error_message(error, ctx.workflow_messages)
             yield error_msg
             yield ([], [], error_msg)
+
+        finally:
+            # MVA-1993: Clean up temporary flag
+            self._current_lightweight_mode = False
 
     async def _persist_workflow_messages(
         self,
@@ -2747,6 +2769,8 @@ before summarizing.
             session, message, use_knowledge=use_knowledge, language=language,
             lightweight_mode=lightweight_mode
         )
+        # MVA-1993: Store lightweight_mode in params for response metadata
+        llm_params["lightweight_mode_used"] = lightweight_mode
 
         logger.info(
             "[ChatWorkflowManager] Initial prompt length: %d characters",
@@ -2780,10 +2804,16 @@ before summarizing.
 
         Issue #620: Extracted from _execute_llm_workflow to reduce function length.
         Issue #375: Uses context object to reduce parameter count.
+        Issue MVA-1993: Includes lightweight_mode_used in context for response metadata.
 
         Returns:
             Configured LLMIterationContext. Issue #620.
         """
+        # MVA-1993: Merge lightweight_mode_used into context
+        merged_context = {**(context or {})}
+        if "lightweight_mode_used" in llm_params:
+            merged_context["lightweight_mode_used"] = llm_params["lightweight_mode_used"]
+
         return LLMIterationContext(
             ollama_endpoint=llm_params["endpoint"],
             selected_model=llm_params["model"],
@@ -2795,7 +2825,7 @@ before summarizing.
             system_prompt=llm_params.get("system_prompt", ""),
             initial_prompt=llm_params["prompt"],
             message=message,
-            context=context or {},
+            context=merged_context,
         )
 
     async def _execute_llm_workflow(
