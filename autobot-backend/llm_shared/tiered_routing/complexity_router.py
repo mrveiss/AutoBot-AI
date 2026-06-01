@@ -92,10 +92,23 @@ class ComplexityRouter:
         # GH#9050: Trivial tier for ultra-simple queries
         elif result.is_trivial and self.config.models.trivial:
             selected_model = self.config.models.trivial
+            # Tier already matches "trivial" from scorer
         elif result.is_simple:
             selected_model = self.config.models.simple
+            # Tier already matches "simple" from scorer
         else:
             selected_model = self.config.models.complex
+            # MVA-2022: Update tier to match selected model.
+            # This handles cases where scorer assigned "trivial" or "simple"
+            # but we're routing to complex (e.g., trivial model not configured).
+            if result.tier != "complex":
+                result = ComplexityResult(
+                    score=result.score,
+                    factors=result.factors,
+                    tier="complex",
+                    reasoning=result.reasoning,
+                    input_tokens=result.input_tokens,
+                )
 
         self._metrics.record(result)
 

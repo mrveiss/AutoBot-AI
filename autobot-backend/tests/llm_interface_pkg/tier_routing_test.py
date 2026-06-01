@@ -51,16 +51,23 @@ _LONG_COMPLEX = [
 
 
 def _make_router(long_context_threshold: int = 16_000) -> ComplexityRouter:
-    cfg = TierConfig(
-        enabled=True,
-        complexity_threshold=3.0,
-        long_context_threshold=long_context_threshold,
-        models=TierModels(
+    # MVA-2022: Set trivial_threshold=0.0 to disable trivial tier for legacy tests.
+    # This maintains backward compatibility for tests written before GH#9050.
+    cfg_kwargs = {
+        "enabled": True,
+        "complexity_threshold": 3.0,
+        "long_context_threshold": long_context_threshold,
+        "models": TierModels(
             simple="cheap-model",
             complex="capable-model",
             long_context="long-model",
         ),
-    )
+    }
+    # Only set trivial_threshold if it exists (GH#9050+)
+    if hasattr(TierConfig, "trivial_threshold"):
+        cfg_kwargs["trivial_threshold"] = 0.0  # Disable trivial tier for these tests
+
+    cfg = TierConfig(**cfg_kwargs)
     return ComplexityRouter(cfg)
 
 
@@ -122,3 +129,43 @@ def test_tier_models_has_long_context_field():
     assert hasattr(models, "long_context")
     assert isinstance(models.long_context, str)
     assert models.long_context  # non-empty default
+
+
+# ─── MVA-2022: Tier mismatch fix ──────────────────────────────────────────────
+
+
+def test_trivial_without_model_configured_routes_to_complex_with_correct_tier():
+    """MVA-2022: When scorer assigns trivial but trivial model is not configured,
+    router should select complex model AND update tier to 'complex'.
+
+    Prevents metrics corruption from tier/model mismatch.
+    """
+    # hasattr guard: trivial tier only exists after GH#9050
+    if not hasattr(TierConfig, "trivial_threshold"):
+        return  # Skip on branches without trivial tier
+
+    cfg = TierConfig(
+        enabled=True,
+        complexity_threshold=3.0,
+        trivial_threshold=1.0,
+        long_context_threshold=16_000,
+        models=TierModels(
+            trivial="",  # NOT CONFIGURED - empty string
+            simple="cheap-model",
+            complex="capable-model",
+            long_context="long-model",
+        ),
+    )
+    router = ComplexityRouter(cfg)
+
+    # Ultra-simple query that would score < 1.0 → tier="trivial"
+    trivial_query = [{"role": "user", "content": "hi"}]
+    model, result = router.route(trivial_query)
+
+    # Without trivial model configured, should fall back to complex
+    assert model == "capable-model", f"expected complex model, got {model}"
+    # MVA-2022 FIX: tier must match the selected model
+    assert result.tier == "complex", (
+        f"Tier mismatch: selected complex model but tier is '{result.tier}'. "
+        "This causes metrics corruption."
+    )
