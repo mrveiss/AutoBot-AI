@@ -106,13 +106,26 @@
   "chat": {
     "contextWindow": {
       "ariaLabel": "{used} of {max} tokens used",
-      "tooltip": "{used} / {max} tokens used ({percent}% of context window)"
+      "tooltip": "{used} / {max} tokens used ({percent}% of context window)",
+      "warningToast": "Conversation approaching context limit ({percent}%). Older messages may be summarized.",
+      "compressedToast": "Context window optimized - older messages summarized",
+      "summaryTitle": "Context Summary",
+      "summaryToggle": "Show details"
     },
     "sendMessage": "Send a message...",
     "newChat": "New Chat",
     "clearChat": "Clear chat",
     "exportChat": "Export chat",
     "deleteChat": "Delete chat",
+    "openSettings": "Chat settings",
+    "settings": {
+      "title": "Chat Settings",
+      "contextOverflowLabel": "Context Overflow Protection",
+      "contextOverflowDescription": "Choose how to handle conversations approaching the context limit",
+      "contextOverflowAuto": "Auto-summarize",
+      "contextOverflowWarn": "Warn only",
+      "contextOverflowDisabled": "Disabled"
+    },
     "editName": "Edit Name",
     "copyMessage": "Copy message",
     "editMessage": "Edit message",

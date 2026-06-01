@@ -143,6 +143,23 @@
           :rich-payload="(message.metadata.image_payload as Record<string, unknown>)"
         />
 
+        <!-- MVA-2006: Context summary message -->
+        <div
+          v-else-if="message.type === 'summary' || message.metadata?.is_summary"
+          class="message-content summary-message"
+        >
+          <div class="summary-header">
+            <span class="summary-icon">📝</span>
+            <span class="summary-title">{{ $t('chat.contextWindow.summaryTitle') }}</span>
+          </div>
+          <details class="summary-details">
+            <summary class="summary-toggle">
+              {{ $t('chat.contextWindow.summaryToggle') }}
+            </summary>
+            <div class="summary-content message-text" v-html="formatMessageContent(message.content, message.id)"></div>
+          </details>
+        </div>
+
         <!-- Message Content -->
         <div v-else class="message-content" :class="getContentClass(message)">
           <!-- Streaming content with typing indicator -->
@@ -1234,6 +1251,50 @@ onMounted(async () => {
   @apply bg-autobot-bg-tertiary border-autobot-border mx-auto text-autobot-text-secondary;
   max-width: 70%;
   border-radius: var(--radius-xl);
+}
+
+/* MVA-2006: SUMMARY MESSAGES - Context compression indicator */
+.summary-message {
+  @apply bg-blue-50 border border-blue-200 rounded-lg p-3 mb-2;
+}
+
+.summary-header {
+  @apply flex items-center gap-2 font-semibold text-blue-900 mb-2;
+}
+
+.summary-icon {
+  @apply text-xl;
+}
+
+.summary-title {
+  @apply text-sm;
+}
+
+.summary-details {
+  @apply mt-2;
+}
+
+.summary-toggle {
+  @apply cursor-pointer text-sm text-blue-700 hover:text-blue-900 select-none;
+  list-style: none;
+}
+
+.summary-toggle::marker {
+  display: none;
+}
+
+.summary-toggle::before {
+  content: '▶ ';
+  display: inline-block;
+  transition: transform 0.2s;
+}
+
+.summary-details[open] .summary-toggle::before {
+  transform: rotate(90deg);
+}
+
+.summary-content {
+  @apply mt-2 pt-2 border-t border-blue-200 text-sm text-gray-700;
 }
 
 /* ============================================
