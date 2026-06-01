@@ -344,14 +344,25 @@ class TestSessionTTL:
 
     def test_env_var_overrides_ttl(self):
         import importlib
+        import sys
 
-        import services.voice_realtime_telemetry as mod
+        custom_days = 7  # 7 days
+        custom_ttl = custom_days * 24 * 3600
+        with patch.dict(os.environ, {"AUTOBOT_VOICE_REALTIME_SESSION_TTL_DAYS": str(custom_days)}):
+            # Must reload ssot_config first, then voice_realtime_telemetry
+            if "autobot_shared.ssot_config" in sys.modules:
+                importlib.reload(sys.modules["autobot_shared.ssot_config"])
+            import services.voice_realtime_telemetry as mod
 
-        custom_ttl = 7 * 24 * 3600  # 7 days
-        with patch.dict(os.environ, {"AUTOBOT_VOICE_REALTIME_SESSION_TTL": str(custom_ttl)}):
             importlib.reload(mod)
             assert mod._SESSION_TTL == custom_ttl
-        importlib.reload(mod)  # restore default for subsequent tests
+
+        # Restore defaults
+        if "autobot_shared.ssot_config" in sys.modules:
+            importlib.reload(sys.modules["autobot_shared.ssot_config"])
+        import services.voice_realtime_telemetry as mod
+
+        importlib.reload(mod)
 
     @pytest.mark.asyncio
     async def test_save_record_passes_ttl_to_redis(self):
