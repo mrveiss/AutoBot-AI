@@ -13,7 +13,7 @@ Route group: /llc/templates
 """
 
 import uuid
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -149,8 +149,6 @@ async def list_built_in_templates() -> List[Dict]:
     Returns template metadata only (name, description, category, tags).
     Does not require authentication or database access.
     """
-    from typing import Dict
-
     return TemplateService.list_built_in_templates()
 
 
@@ -164,8 +162,6 @@ async def get_built_in_template(template_key: str) -> Dict:
     Returns:
         Full template JSON including metadata, variables, agents, goals, work_items, kb_collections
     """
-    from typing import Dict
-
     try:
         return TemplateService.get_built_in_template(template_key)
     except BuiltInTemplateNotFoundError as exc:
