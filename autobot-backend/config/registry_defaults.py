@@ -14,8 +14,10 @@ Issue: #751 - Consolidate Common Utilities
 """
 
 from autobot_shared.ssot_config import (
+    CLASSIFICATION_MODEL,
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_LLM_MODEL,
+    TRIVIAL_MODEL,
     get_config,
 )
 
@@ -68,6 +70,12 @@ REGISTRY_DEFAULTS = {
     # LLM defaults — sourced from SSOT model constants
     "llm.default_model": DEFAULT_LLM_MODEL,
     "llm.embedding_model": DEFAULT_EMBEDDING_MODEL,
+    # Tiered routing configuration (GH#9050)
+    "llm.tiered_routing.enabled": "true",
+    "llm.tiered_routing.models.trivial": TRIVIAL_MODEL,
+    "llm.tiered_routing.models.simple": CLASSIFICATION_MODEL,
+    "llm.tiered_routing.models.complex": DEFAULT_LLM_MODEL,
+    "llm.tiered_routing.models.long_context": DEFAULT_LLM_MODEL,
     # Timeouts
     "timeout.http": "30",
     "timeout.redis": "5",

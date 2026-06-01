@@ -10,7 +10,7 @@ Issue #748: Tiered Model Distribution Implementation.
 from dataclasses import dataclass, field
 from typing import Dict
 
-from autobot_shared.ssot_config import CLASSIFICATION_MODEL, DEFAULT_LLM_MODEL
+from autobot_shared.ssot_config import CLASSIFICATION_MODEL, DEFAULT_LLM_MODEL, TRIVIAL_MODEL
 from config.registry import ConfigRegistry
 
 
@@ -27,7 +27,7 @@ class TierModels:
     transformer (complex) tier in that case.
     """
 
-    trivial: str = ""  # GH#9050: lightweight mode, empty means disabled
+    trivial: str = TRIVIAL_MODEL  # GH#9050: llama3.2:1b for lightweight inference
     simple: str = CLASSIFICATION_MODEL
     complex: str = DEFAULT_LLM_MODEL
     long_context: str = DEFAULT_LLM_MODEL
@@ -103,7 +103,7 @@ class TierConfig:
             long_context_threshold=int(tier_config.get("long_context_threshold", 16000)),
             ssm_output_token_threshold=int(tier_config.get("ssm_output_token_threshold", 2000)),
             models=TierModels(
-                trivial=models_config.get("trivial", ""),
+                trivial=models_config.get("trivial", TRIVIAL_MODEL),
                 simple=models_config.get("simple", CLASSIFICATION_MODEL),
                 complex=models_config.get("complex", DEFAULT_LLM_MODEL),
                 long_context=models_config.get("long_context", DEFAULT_LLM_MODEL),
