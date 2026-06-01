@@ -7,8 +7,6 @@ Tests for model fallback chain manager (GH#8998).
 
 import os
 
-import pytest
-
 from .fallback_chain import FallbackChain, FallbackChainManager, get_fallback_chain_manager
 
 

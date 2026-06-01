@@ -138,10 +138,13 @@ async def test_origin_allowlist_blocks_disallowed_origin(client, mock_redis):
     ):
         # Need to reload the module to pick up new env var
         import importlib
+
         import api.chat_embed
+
         importlib.reload(api.chat_embed)
 
         from api.chat_embed import router as reloaded_router
+
         app = FastAPI()
         app.include_router(reloaded_router, prefix="/api")
         test_client = TestClient(app)
@@ -168,10 +171,13 @@ async def test_origin_allowlist_allows_configured_origin(client, mock_redis):
     ):
         # Reload module to pick up env var
         import importlib
+
         import api.chat_embed
+
         importlib.reload(api.chat_embed)
 
         from api.chat_embed import router as reloaded_router
+
         app = FastAPI()
         app.include_router(reloaded_router, prefix="/api")
         test_client = TestClient(app)
@@ -242,13 +248,16 @@ async def test_xff_ignored_when_peer_not_trusted(client, mock_redis):
     ):
         # Reload module to pick up env var
         import importlib
+
         import api.chat_embed
+
         importlib.reload(api.chat_embed)
 
         # Request from untrusted IP with spoofed X-Forwarded-For
         # The rate limiter should use testclient's IP, not XFF value
-        from api.chat_embed import _get_client_ip
         from fastapi import Request
+
+        from api.chat_embed import _get_client_ip
 
         mock_request = MagicMock(spec=Request)
         mock_request.client = MagicMock()
@@ -270,11 +279,14 @@ async def test_xff_honored_when_peer_trusted(client, mock_redis):
     ):
         # Reload module to pick up env var
         import importlib
+
         import api.chat_embed
+
         importlib.reload(api.chat_embed)
 
-        from api.chat_embed import _get_client_ip
         from fastapi import Request
+
+        from api.chat_embed import _get_client_ip
 
         mock_request = MagicMock(spec=Request)
         mock_request.client = MagicMock()

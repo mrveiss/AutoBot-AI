@@ -14,7 +14,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from api.redis_mcp.rbac import VALID_BUNDLES
+from api.voice_bundle_constants import VALID_BUNDLES, BundleAssignRequest
 from api.voice_bundle_user import _count_tools_for_bundle
 from auth_middleware import get_auth_middleware, get_current_user
 from autobot_shared.logging_manager import get_logger
@@ -58,10 +58,6 @@ class BundleMeResponse(BaseModel):
 class BundleAssignmentResponse(BaseModel):
     user_id: str
     bundle_name: Optional[str]
-
-
-class BundleAssignRequest(BaseModel):
-    bundle_name: Optional[str] = None  # None = clear override
 
 
 # ---------------------------------------------------------------------------

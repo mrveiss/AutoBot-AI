@@ -614,7 +614,8 @@ def _load_built_in_template(template_key: str) -> Dict[str, Any]:
     # Validate template_key against strict allowlist to prevent path traversal
     if not re.fullmatch(r"[a-z0-9_-]+", template_key):
         raise BuiltInTemplateNotFoundError(
-            f"Invalid template key '{template_key}' — must contain only lowercase letters, numbers, hyphens, and underscores"
+            f"Invalid template key '{template_key}' — must contain only lowercase letters, "
+            f"numbers, hyphens, and underscores"
         )
 
     template_path = _BUILT_IN_TEMPLATES_DIR / f"{template_key}.json"
