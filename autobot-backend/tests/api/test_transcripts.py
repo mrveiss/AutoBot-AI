@@ -22,9 +22,7 @@ async def test_kb_push_success():
 
     # Mock KB
     mock_kb = AsyncMock()
-    mock_kb.add_document = AsyncMock(
-        return_value={"status": "success", "doc_id": "test-doc-123"}
-    )
+    mock_kb.add_document = AsyncMock(return_value={"status": "success", "doc_id": "test-doc-123"})
 
     # Mock request
     request = TranscriptKBPushRequest(
@@ -73,9 +71,7 @@ async def test_kb_push_without_timing():
     from api.transcripts import push_transcript_to_kb
 
     mock_kb = AsyncMock()
-    mock_kb.add_document = AsyncMock(
-        return_value={"status": "success", "doc_id": "test-doc-789"}
-    )
+    mock_kb.add_document = AsyncMock(return_value={"status": "success", "doc_id": "test-doc-789"})
 
     request = TranscriptKBPushRequest(
         segment_text="Segment without timing.",
@@ -106,9 +102,7 @@ async def test_kb_push_failure():
     from api.transcripts import push_transcript_to_kb
 
     mock_kb = AsyncMock()
-    mock_kb.add_document = AsyncMock(
-        return_value={"status": "error", "message": "KB timeout"}
-    )
+    mock_kb.add_document = AsyncMock(return_value={"status": "error", "message": "KB timeout"})
 
     request = TranscriptKBPushRequest(
         segment_text="Test segment.",

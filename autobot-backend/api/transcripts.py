@@ -24,8 +24,7 @@ from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from knowledge import get_knowledge_base
-from llm_shared.models import LLMRequest
-from llm_shared.provider_registry import get_provider_registry
+from llm_shared import LLMRequest, get_provider_registry
 
 logger = get_logger(__name__)
 router = APIRouter()
