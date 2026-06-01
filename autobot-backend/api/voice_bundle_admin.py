@@ -14,7 +14,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from api.redis_mcp.rbac import VALID_BUNDLES
+from api.voice_bundle_constants import VALID_BUNDLES, BundleAssignRequest
 from api.voice_bundle_user import _count_tools_for_bundle
 from auth_middleware import get_auth_middleware, get_current_user
 from autobot_shared.logging_manager import get_logger
@@ -60,10 +60,6 @@ class BundleAssignmentResponse(BaseModel):
     bundle_name: Optional[str]
 
 
-class BundleAssignRequest(BaseModel):
-    bundle_name: Optional[str] = None  # None = clear override
-
-
 # ---------------------------------------------------------------------------
 # GET /voice/realtime/bundle/me
 # ---------------------------------------------------------------------------
@@ -77,7 +73,11 @@ async def get_my_bundle(
     """Return the resolved voice bundle for the authenticated caller."""
     from api.redis_mcp.rbac import resolve_bundle_for_user  # noqa: PLC0415
 
-    user_id = current_user.get("user_id") or current_user.get("sub") or current_user.get("username")
+    user_id = (
+        current_user.get("user_id")
+        or current_user.get("sub")
+        or current_user.get("username")
+    )
     role = current_user.get("role", "user")
     is_admin = role == "admin"
 
@@ -96,7 +96,9 @@ async def get_my_bundle(
 # ---------------------------------------------------------------------------
 
 
-@bundle_admin_router.get("/voice/bundle/{user_id}", response_model=BundleAssignmentResponse)
+@bundle_admin_router.get(
+    "/voice/bundle/{user_id}", response_model=BundleAssignmentResponse
+)
 async def get_user_bundle(
     user_id: str,
     request: Request,
@@ -127,7 +129,9 @@ async def get_user_bundle(
 # ---------------------------------------------------------------------------
 
 
-@bundle_admin_router.put("/voice/bundle/{user_id}", response_model=BundleAssignmentResponse)
+@bundle_admin_router.put(
+    "/voice/bundle/{user_id}", response_model=BundleAssignmentResponse
+)
 async def set_user_bundle(
     user_id: str,
     body: BundleAssignRequest,
@@ -141,7 +145,12 @@ async def set_user_bundle(
             detail=f"Invalid bundle_name '{body.bundle_name}'. Valid: {sorted(VALID_BUNDLES)}",
         )
 
-    admin_id = admin_user.get("user_id") or admin_user.get("sub") or admin_user.get("username") or "unknown"
+    admin_id = (
+        admin_user.get("user_id")
+        or admin_user.get("sub")
+        or admin_user.get("username")
+        or "unknown"
+    )
 
     try:
         from sqlalchemy import text  # noqa: PLC0415

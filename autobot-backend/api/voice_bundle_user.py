@@ -14,7 +14,11 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from api.redis_mcp.rbac import VALID_BUNDLES
+from api.voice_bundle_constants import (
+    BUNDLE_DEFINITIONS,
+    VALID_BUNDLES,
+    BundleAssignRequest,
+)
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -47,32 +51,6 @@ class UserBundleResponse(BaseModel):
     bundle_name: Optional[str] = None
 
 
-class BundleAssignRequest(BaseModel):
-    """Request to assign or clear a bundle for a user."""
-
-    bundle_name: Optional[str] = None  # None = clear override
-
-
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
-BUNDLE_DEFINITIONS: dict[str, dict[str, str]] = {
-    "voice_safe": {
-        "label": "Voice Safe",
-        "description": "Basic voice commands for standard users",
-    },
-    "voice_extended": {
-        "label": "Voice Extended",
-        "description": "Extended voice commands with advanced features",
-    },
-    "voice_admin": {
-        "label": "Voice Admin",
-        "description": "Full voice command set for administrators",
-    },
-}
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -84,10 +62,15 @@ async def _count_tools_for_bundle(bundle: str, is_admin: bool) -> int:
     """Return the number of tools available in this bundle (cached per bundle+role)."""
     key = (bundle, is_admin)
     if key not in _tool_count_cache:
-        from api.redis_mcp.rbac import TOOL_ACCESS_MATRIX, filter_tools_for_bundle  # noqa: PLC0415
+        from api.redis_mcp.rbac import (  # noqa: PLC0415
+            TOOL_ACCESS_MATRIX,
+            filter_tools_for_bundle,
+        )
 
         all_tools = list(TOOL_ACCESS_MATRIX.keys())
-        _tool_count_cache[key] = len(filter_tools_for_bundle(all_tools, bundle=bundle, is_admin=is_admin))
+        _tool_count_cache[key] = len(
+            filter_tools_for_bundle(all_tools, bundle=bundle, is_admin=is_admin)
+        )
     return _tool_count_cache[key]
 
 
@@ -100,7 +83,9 @@ def _get_user_id(user: dict) -> str:
     return user.get("user_id") or user.get("sub") or user.get("username") or "unknown"
 
 
-def _check_self_or_admin(request: Request, current_user: dict, target_user_id: str) -> bool:
+def _check_self_or_admin(
+    request: Request, current_user: dict, target_user_id: str
+) -> bool:
     """Verify user can access target_user_id (self or admin)."""
     current_user_id = _get_user_id(current_user)
     return current_user_id == target_user_id or _is_admin(current_user)
@@ -251,7 +236,11 @@ async def set_user_bundle(
                               assigned_by = EXCLUDED.assigned_by,
                               assigned_at = EXCLUDED.assigned_at
                         """),
-                    {"uid": user_id, "bundle": body.bundle_name, "by": str(current_user_id)},
+                    {
+                        "uid": user_id,
+                        "bundle": body.bundle_name,
+                        "by": str(current_user_id),
+                    },
                 )
             await session.commit()
             # Re-read after commit so response reflects actual stored value.
@@ -275,7 +264,9 @@ async def set_user_bundle(
                 )
             )
         except Exception:
-            logger.warning("set_user_bundle: failed to emit failure audit", exc_info=True)
+            logger.warning(
+                "set_user_bundle: failed to emit failure audit", exc_info=True
+            )
         logger.error("set_user_bundle: DB error: %s", exc)
         raise HTTPException(status_code=500, detail="Database error") from exc
 
