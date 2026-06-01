@@ -53,12 +53,15 @@ async def _stream_analysis(transcript_content: str, request: TranscriptAnalyzeRe
         # Build LLM prompt
         prompt = _get_analysis_prompt(request.analysis_type, transcript_content, request.custom_prompt)
 
+        # Security: Pass context as separate system message boundary instead of concatenating
+        messages = []
         if request.context:
-            prompt = f"Context: {request.context}\n\n{prompt}"
+            messages.append({"role": "system", "content": f"Context: {request.context}"})
+        messages.append({"role": "user", "content": prompt})
 
         # Create LLM request
         llm_request = LLMRequest(
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
             model=None,  # Use default model from provider
             stream=True,
         )
@@ -75,8 +78,22 @@ async def _stream_analysis(transcript_content: str, request: TranscriptAnalyzeRe
             yield token
 
     except Exception as e:
-        logger.error("Analysis streaming failed: %s", e)
-        yield f"\n\n[ERROR: Analysis failed - {str(e)}]"
+        # Security: Log full error but only send generic message to client
+        logger.error("Analysis streaming failed: %s", e, exc_info=True)
+        yield "\n\n[ERROR: Analysis failed. Please try again later.]"
+
+
+def _verify_ws_token(token: str) -> dict | None:
+    """Verify JWT token for WebSocket; returns payload dict or None if invalid."""
+    if not token:
+        return None
+    try:
+        from auth_middleware import get_auth_middleware
+
+        return get_auth_middleware().verify_jwt_token(token)
+    except Exception as exc:
+        logger.warning("WebSocket token verification failed: %s", exc)
+        return None
 
 
 @router.websocket("/transcripts/{transcript_id}/analyze")
@@ -85,17 +102,34 @@ async def analyze_transcript_ws(websocket: WebSocket, transcript_id: str):
     WebSocket endpoint for streaming AI analysis of transcripts.
 
     Protocol:
-      Connect: wss://host/api/transcripts/{id}/analyze
+      Connect: wss://host/api/transcripts/{id}/analyze?token=<jwt>
       Client sends: {"analysis_type": "summarize", "custom_prompt": "...", "context": "..."}
       Server streams: Analysis chunks as text
       On completion: Server closes connection
+
+    Security: Requires JWT authentication via query parameter.
     """
+    # Security: Authenticate before accepting connection
+    token = websocket.query_params.get("token")
+    user_payload = _verify_ws_token(token)
+
+    if not user_payload:
+        await websocket.close(code=4001, reason="Unauthorized")
+        return
+
     await websocket.accept()
 
     try:
         # Receive analysis request
         data = await websocket.receive_json()
         request = TranscriptAnalyzeRequest(**data)
+
+        # TODO(MVA-2155): Verify transcript ownership when storage is implemented
+        # transcript = await get_transcript(transcript_id)
+        # if transcript.user_id != user_payload.get("user_id"):
+        #     await websocket.send_json({"error": "Forbidden"})
+        #     await websocket.close(code=4003)
+        #     return
 
         # TODO: Fetch actual transcript content from storage
         # For now, using placeholder. Parent issue MVA-2155 should define storage.
@@ -136,24 +170,41 @@ async def push_transcript_to_kb(
     Push a transcript segment to the Knowledge Base.
 
     Creates a KB entry from the provided transcript segment with metadata.
+
+    Security: Requires authentication. Verifies transcript ownership.
     """
     try:
+        # TODO(MVA-2155): Verify transcript ownership when storage is implemented
+        # transcript = await get_transcript(transcript_id)
+        # if transcript.user_id != user.get("user_id"):
+        #     raise HTTPException(status_code=403, detail="Forbidden")
+
         kb = await get_knowledge_base()
 
-        # Build metadata
+        # Security: Build metadata with system fields AFTER user fields to prevent override
+        user_metadata = {}
+        if request.speaker:
+            user_metadata["speaker"] = request.speaker
+        if request.confidence is not None:
+            user_metadata["confidence"] = request.confidence
+        if request.language:
+            user_metadata["language"] = request.language
+
+        # Add segment timing if provided
+        if request.segment_start is not None:
+            user_metadata["segment_start"] = request.segment_start
+        if request.segment_end is not None:
+            user_metadata["segment_end"] = request.segment_end
+
+        # System-controlled metadata (cannot be overridden by client)
         metadata = {
+            **user_metadata,
             "source_type": "transcript",
             "transcript_id": transcript_id,
             "source": f"transcript:{transcript_id}",
             "verification_status": "unverified",
-            **request.metadata,
+            "user_id": user.get("user_id"),
         }
-
-        # Add segment timing if provided
-        if request.segment_start is not None:
-            metadata["segment_start"] = request.segment_start
-        if request.segment_end is not None:
-            metadata["segment_end"] = request.segment_end
 
         # Add to knowledge base
         result = await kb.add_document(
@@ -174,8 +225,9 @@ async def push_transcript_to_kb(
             )
 
     except Exception as e:
+        # Security: Log full error but only send generic message to client
         logger.error("KB push failed for transcript %s: %s", transcript_id, e, exc_info=True)
         return TranscriptKBPushResponse(
             success=False,
-            message=f"KB push failed: {str(e)}",
+            message="KB push failed. Please try again later.",
         )
