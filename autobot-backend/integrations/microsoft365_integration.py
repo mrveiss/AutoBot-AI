@@ -17,13 +17,13 @@ All operations use Microsoft Graph API v1.0 endpoints.
 import re
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Literal
+from typing import Any, Dict, List
 from urllib.parse import quote
 
 import aiohttp
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.time_utils import now_utc
+
 from integrations.base import (
     BaseIntegration,
     IntegrationAction,
