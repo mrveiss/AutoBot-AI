@@ -32,17 +32,29 @@ def generate_vapid_keys() -> dict:
     """Generate a new VAPID key pair and return {public_key, private_key}.
 
     Run once; persist both values to .env as VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY.
+
+    GH#4459: py_vapid API uses save_key/save_public_key methods, not direct attributes.
     """
     try:
-        from py_vapid import Vapid
+        from py_vapid import Vapid01 as Vapid
+        import tempfile
     except ImportError as exc:
         raise RuntimeError("pywebpush not installed — run: pip install pywebpush") from exc
 
     v = Vapid()
     v.generate_keys()
+
+    # Export keys via temp files (py_vapid API requires file paths)
+    with tempfile.NamedTemporaryFile(mode='r', delete=True, suffix='_private.pem') as priv_f, \
+         tempfile.NamedTemporaryFile(mode='r', delete=True, suffix='_public.pem') as pub_f:
+        v.save_key(priv_f.name)
+        v.save_public_key(pub_f.name)
+        private_key = priv_f.read().strip()
+        public_key = pub_f.read().strip()
+
     return {
-        "public_key": v.public_key_urlsafe,
-        "private_key": v.private_key_urlsafe,
+        "public_key": public_key,
+        "private_key": private_key,
     }
 
 
