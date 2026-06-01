@@ -1556,7 +1556,7 @@ async def _init_plugin_manager(app: FastAPI) -> None:
         from pathlib import Path
 
         from autobot_shared.ssot_config import config as ssot_config
-        from plugin_sdk.plugin_manager import PluginManager
+        from autobot_shared.plugin_sdk import PluginManager
 
         plugins_root = ssot_config.path.plugins_path
         plugin_dirs = [
