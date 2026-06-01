@@ -251,6 +251,32 @@ class Database:
         if cur.rowcount == 0:
             raise KeyError(f"no speaker with id={speaker_id}")
 
+    async def merge_speakers(self, source_speaker_id: int, target_speaker_id: int) -> None:
+        """Merge source speaker into target speaker. All segments referencing source will point to target, then source is deleted."""
+        # Verify both speakers exist and belong to the same recording
+        src_cur = await self._db().execute("SELECT recording_id FROM speakers WHERE id=?", (source_speaker_id,))
+        src_row = await src_cur.fetchone()
+        if not src_row:
+            raise KeyError(f"no speaker with id={source_speaker_id}")
+
+        tgt_cur = await self._db().execute("SELECT recording_id FROM speakers WHERE id=?", (target_speaker_id,))
+        tgt_row = await tgt_cur.fetchone()
+        if not tgt_row:
+            raise KeyError(f"no speaker with id={target_speaker_id}")
+
+        if src_row[0] != tgt_row[0]:
+            raise ValueError("Cannot merge speakers from different recordings")
+
+        # Update all segments that reference source speaker to point to target speaker
+        await self._db().execute(
+            "UPDATE segments SET speaker_id=? WHERE speaker_id=?",
+            (target_speaker_id, source_speaker_id)
+        )
+
+        # Delete the source speaker
+        await self._db().execute("DELETE FROM speakers WHERE id=?", (source_speaker_id,))
+        await self._db().commit()
+
     # ── Segments ──────────────────────────────────────────────────────────────
 
     async def create_segment(

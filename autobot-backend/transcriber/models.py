@@ -53,6 +53,11 @@ class SpeakerUpdate(BaseModel):
     display_name: str = Field(min_length=1, max_length=100)
 
 
+class SpeakerMerge(BaseModel):
+    source_speaker_id: int = Field(gt=0, description="Speaker ID to merge from (will be deleted)")
+    target_speaker_id: int = Field(gt=0, description="Speaker ID to merge into (will remain)")
+
+
 class SegmentOut(BaseModel):
     id: int
     recording_id: int

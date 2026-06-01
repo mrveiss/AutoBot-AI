@@ -76,3 +76,63 @@ async def test_create_and_delete_note(client, tmp_path):
     note_id = r.json()["id"]
     r2 = await client.delete(f"/api/transcriber/notes/{note_id}")
     assert r2.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_merge_speakers(client, tmp_path):
+    # Get database instance from the app
+    app = client._transport.app  # type: ignore
+    db_dep = app.dependency_overrides[get_db]
+    db = await db_dep()
+
+    # Create a second speaker and segments for both
+    rid = app.state._test_rid
+    sid1 = app.state._test_sid  # Alice
+    sid2 = await db.create_speaker(rid, "SPEAKER_01", "Bob", "lv")
+
+    # Create segments for both speakers
+    seg1 = await db.create_segment(rid, sid1, 1.5, 3.0, "Alice says this")
+    seg2 = await db.create_segment(rid, sid2, 3.0, 5.0, "Bob says this")
+    seg3 = await db.create_segment(rid, sid2, 5.0, 7.0, "Bob says more")
+
+    # Verify initial state
+    transcript = (await client.get(f"/api/transcriber/recordings/{rid}/transcript")).json()
+    assert len(transcript["speakers"]) == 2
+    assert len(transcript["segments"]) == 4  # 1 from fixture + 3 new
+
+    # Merge Bob into Alice (source=sid2, target=sid1)
+    r = await client.post("/api/transcriber/speakers/merge",
+                          json={"source_speaker_id": sid2, "target_speaker_id": sid1})
+    assert r.status_code == 200
+    assert r.json()["success"] is True
+
+    # Verify speakers after merge
+    transcript_after = (await client.get(f"/api/transcriber/recordings/{rid}/transcript")).json()
+    assert len(transcript_after["speakers"]) == 1  # Bob was deleted
+    assert transcript_after["speakers"][0]["id"] == sid1  # Only Alice remains
+
+    # Verify all segments now point to Alice
+    for seg in transcript_after["segments"]:
+        assert seg["speaker_id"] == sid1
+
+
+@pytest.mark.asyncio
+async def test_merge_speakers_from_different_recordings_fails(client, tmp_path):
+    # Get database instance
+    app = client._transport.app  # type: ignore
+    db_dep = app.dependency_overrides[get_db]
+    db = await db_dep()
+
+    # Create a second recording with a speaker
+    rid1 = app.state._test_rid
+    sid1 = app.state._test_sid
+
+    pid = await db.create_project("P2", "", "u1")
+    rid2 = await db.create_recording(pid, "b.wav", "/tmp/b.wav", "u1")
+    sid2 = await db.create_speaker(rid2, "SPEAKER_00", "Charlie", "en")
+
+    # Try to merge speakers from different recordings
+    r = await client.post("/api/transcriber/speakers/merge",
+                          json={"source_speaker_id": sid2, "target_speaker_id": sid1})
+    assert r.status_code == 400
+    assert "different recordings" in r.json()["detail"]

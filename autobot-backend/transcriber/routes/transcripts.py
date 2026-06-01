@@ -8,7 +8,7 @@ from transcriber.database import Database
 from transcriber.deps import get_db
 from transcriber.models import (
     NoteCreate, NoteOut, NoteUpdate, SegmentOut, SegmentUpdate,
-    SpeakerOut, SpeakerUpdate, TranscriptOut, RecordingOut,
+    SpeakerOut, SpeakerUpdate, SpeakerMerge, TranscriptOut, RecordingOut,
 )
 
 router = APIRouter(tags=["transcriber-transcripts"])
@@ -50,6 +50,18 @@ async def update_speaker(speaker_id: int, body: SpeakerUpdate, db: Database = De
     cur2 = await db._db().execute("SELECT * FROM speakers WHERE id=?", (speaker_id,))
     updated = await cur2.fetchone()
     return SpeakerOut(**dict(updated))
+
+
+@router.post("/speakers/merge", status_code=200)
+async def merge_speakers(body: SpeakerMerge, db: Database = Depends(get_db)):
+    """Merge source speaker into target speaker. All segments from source will be reassigned to target, then source is deleted."""
+    try:
+        await db.merge_speakers(body.source_speaker_id, body.target_speaker_id)
+        return {"success": True, "message": f"Speaker {body.source_speaker_id} merged into {body.target_speaker_id}"}
+    except KeyError as e:
+        raise HTTPException(404, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @router.post("/segments/{segment_id}/notes", response_model=NoteOut, status_code=201)
