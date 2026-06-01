@@ -9,7 +9,7 @@ import re
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -3940,3 +3940,34 @@ class AssessmentMutationData(BaseModel):
     success: bool = True
     message: str = ""
     request_id: str = ""
+
+
+# ---------------------------------------------------------------------------
+# Telegram Bot (MVA-2074)
+# ---------------------------------------------------------------------------
+
+
+class TelegramWebhookUpdate(BaseModel):
+    """Telegram webhook update object."""
+
+    update_id: int
+    message: Optional[Dict[str, Any]] = None
+    edited_message: Optional[Dict[str, Any]] = None
+    channel_post: Optional[Dict[str, Any]] = None
+    edited_channel_post: Optional[Dict[str, Any]] = None
+    callback_query: Optional[Dict[str, Any]] = None
+
+
+class TelegramBotConfigRequest(BaseModel):
+    """Request to configure Telegram bot."""
+
+    bot_token: str = Field(..., description="Telegram Bot API token")
+    webhook_url: Optional[str] = Field(None, description="Webhook URL (optional)")
+
+
+class TelegramBotConfigResponse(BaseModel):
+    """Response for Telegram bot configuration."""
+
+    status: str
+    message: str
+    webhook_url: Optional[str] = None

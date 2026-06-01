@@ -82,6 +82,13 @@ Issue #753: User preference management interface
           {{ $t('settings.presets.title') }}
         </button>
         <button
+          @click="activeTab = 'telegram'"
+          :class="['settings-tab', { active: activeTab === 'telegram' }]"
+        >
+          <Icon name="paper-plane" />
+          Telegram
+        </button>
+        <button
           @click="activeTab = 'notifications'"
           :class="['settings-tab', { active: activeTab === 'notifications' }]"
         >
@@ -250,6 +257,20 @@ Issue #753: User preference management interface
           </div>
         </section>
 
+        <!-- MVA-2074: Telegram bot configuration -->
+        <section v-if="activeTab === 'telegram'" class="settings-section">
+          <div class="section-header">
+            <h2 class="section-title">
+              <Icon name="paper-plane" />
+              Telegram Bot
+            </h2>
+            <p class="section-description">Configure the AutoBot Telegram bot to receive and respond to messages.</p>
+          </div>
+          <div class="section-content">
+            <TelegramSettingsPanel />
+          </div>
+        </section>
+
         <!-- GH#4459: Web push notification toggle -->
         <section v-if="activeTab === 'notifications'" class="settings-section">
           <div class="section-header">
@@ -275,6 +296,7 @@ import PreferencesPanel from '@/components/ui/PreferencesPanel.vue'
 import LanguageSettingsPanel from '@/components/settings/LanguageSettingsPanel.vue'
 import VoiceSettingsPanel from '@/components/settings/VoiceSettingsPanel.vue'
 import WebResearchSettingsPanel from '@/components/settings/WebResearchSettingsPanel.vue'
+import TelegramSettingsPanel from '@/components/settings/TelegramSettingsPanel.vue'
 import ApiKeySetupWizard from '@/components/settings/ApiKeySetupWizard.vue'
 import ConnectionSettingsPanel from '@/components/desktop/ConnectionSettingsPanel.vue'
 import FeatureFlagsSettingsPanel from '@/components/settings/FeatureFlagsSettingsPanel.vue'

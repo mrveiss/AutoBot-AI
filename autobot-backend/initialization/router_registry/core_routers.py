@@ -30,6 +30,7 @@ from api.chat_embed import router as chat_embed_router  # GH#9047
 from api.chat_presets import router as chat_presets_router  # GH#8595
 from api.collaboration import router as collaboration_router
 from api.config_revisions import router as config_revisions_router  # #1404
+from api.telegram_bot import router as telegram_bot_router  # MVA-2074
 from api.data_storage import router as data_storage_router
 from api.database_mcp import router as database_mcp_router
 from api.developer import router as developer_router
@@ -114,6 +115,7 @@ def _get_system_routers() -> list:
         (chat_embed_router, "", ["chat", "embed"], "chat_embed"),  # GH#9047
         (chat_presets_router, "", ["chat"], "chat_presets"),  # GH#8595
         (collaboration_router, "", ["collaboration"], "collaboration"),
+        (telegram_bot_router, "", ["telegram-bot", "integrations"], "telegram_bot"),  # MVA-2074
         (system_router, "/system", ["system"], "system"),
         (settings_router, "/settings", ["settings"], "settings"),
         (usage_router, "/usage", ["usage", "analytics"], "usage"),  # Issue #1807
