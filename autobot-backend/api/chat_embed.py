@@ -68,8 +68,7 @@ if _TRUSTED_PROXIES:
     )
 else:
     logger.info(
-        "Embed trusted proxies: none — rate limiting by direct connection IP only "
-        "(set %s if behind reverse proxy)",
+        "Embed trusted proxies: none — rate limiting by direct connection IP only " "(set %s if behind reverse proxy)",
         _TRUSTED_PROXIES_ENV,
     )
 
