@@ -16,8 +16,9 @@ from autobot_shared.redis_client import get_redis_client
 
 logger = get_logger(__name__)
 
-# Redis key for storing Telegram bot token
+# Redis keys for storing Telegram bot config
 TELEGRAM_BOT_TOKEN_KEY = "autobot:settings:telegram_bot_token"
+TELEGRAM_WEBHOOK_SECRET_KEY = "autobot:settings:telegram_webhook_secret"
 
 
 class TelegramBotService:
@@ -99,12 +100,13 @@ class TelegramBotService:
                 logger.info(f"Sent Telegram message to chat {chat_id}")
                 return result
 
-    async def set_webhook(self, webhook_url: str) -> Dict[str, Any]:
+    async def set_webhook(self, webhook_url: str, secret_token: str) -> Dict[str, Any]:
         """
-        Set the webhook URL for receiving Telegram updates.
+        Set the webhook URL for receiving Telegram updates with secret token.
 
         Args:
             webhook_url: Public HTTPS URL where Telegram will send updates
+            secret_token: Secret token for webhook authentication
 
         Returns:
             API response dict
@@ -118,7 +120,10 @@ class TelegramBotService:
 
         async with aiohttp.ClientSession() as session:
             url = f"{self.base_url}/setWebhook"
-            payload = {"url": webhook_url}
+            payload = {
+                "url": webhook_url,
+                "secret_token": secret_token,
+            }
             async with session.post(url, json=payload) as response:
                 if response.status != 200:
                     error_text = await response.text()
@@ -212,4 +217,37 @@ async def get_telegram_bot_token() -> Optional[str]:
     bot_token = await redis.get(TELEGRAM_BOT_TOKEN_KEY)
     if bot_token:
         return bot_token.decode("utf-8") if isinstance(bot_token, bytes) else bot_token
+    return None
+
+
+async def save_telegram_webhook_secret(secret: str) -> None:
+    """
+    Save Telegram webhook secret to Redis.
+
+    Args:
+        secret: Webhook secret token
+    """
+    redis = await get_redis_client()
+    if redis is None:
+        raise RuntimeError("Redis client not available")
+
+    await redis.set(TELEGRAM_WEBHOOK_SECRET_KEY, secret)
+    logger.info("Saved Telegram webhook secret to Redis")
+
+
+async def get_telegram_webhook_secret() -> Optional[str]:
+    """
+    Get Telegram webhook secret from Redis.
+
+    Returns:
+        Webhook secret or None if not configured
+    """
+    redis = await get_redis_client()
+    if redis is None:
+        logger.error("Redis client not available")
+        return None
+
+    secret = await redis.get(TELEGRAM_WEBHOOK_SECRET_KEY)
+    if secret:
+        return secret.decode("utf-8") if isinstance(secret, bytes) else secret
     return None

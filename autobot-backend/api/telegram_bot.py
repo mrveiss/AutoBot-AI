@@ -8,6 +8,7 @@ Provides webhook endpoint for receiving Telegram messages and
 routing them to AutoBot chat service.
 """
 
+import secrets
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
@@ -27,6 +28,8 @@ from services.telegram_bot_service import (
     TelegramBotService,
     save_telegram_bot_token,
     get_telegram_bot_token,
+    save_telegram_webhook_secret,
+    get_telegram_webhook_secret,
 )
 from utils.chat_utils import generate_message_id, generate_request_id
 
@@ -45,6 +48,7 @@ gateway_manager = GatewayManager()
     error_code_prefix="TELEGRAM_BOT",
 )
 async def telegram_webhook(
+    request: Request,
     update: Dict[str, Any] = Body(...),
 ) -> JSONResponse:
     """
@@ -53,13 +57,27 @@ async def telegram_webhook(
     This endpoint is called by Telegram servers when a message is sent to the bot.
     Messages are normalized via TelegramAdapter and routed to AutoBot chat.
 
+    Security: Verifies X-Telegram-Bot-Api-Secret-Token header matches stored secret.
+
     Args:
+        request: FastAPI request (for header access)
         update: Telegram Update object
 
     Returns:
         200 OK to acknowledge receipt
     """
     try:
+        # Verify webhook secret token (MVA-2074 security requirement)
+        stored_secret = await get_telegram_webhook_secret()
+        if not stored_secret:
+            logger.error("Telegram webhook secret not configured")
+            return JSONResponse({"status": "ok"})  # Return OK to avoid retry storm
+
+        request_secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
+        if request_secret != stored_secret:
+            logger.warning("Telegram webhook authentication failed - invalid secret token")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
         # Extract message from update
         message = update.get("message")
         if not message:
@@ -99,10 +117,12 @@ async def telegram_webhook(
 
         return JSONResponse({"status": "ok"})
 
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.exception("Failed to process Telegram webhook update")
-        # Return 200 to prevent Telegram from retrying
-        return JSONResponse({"status": "error", "message": str(exc)})
+        # Return 200 to prevent Telegram from retrying, no error details to client
+        return JSONResponse({"status": "ok"})
 
 
 @router.post(
@@ -147,7 +167,14 @@ async def configure_telegram_bot(
         # Set webhook if URL provided
         webhook_url = None
         if request.webhook_url:
-            await service.set_webhook(request.webhook_url)
+            # Generate secure random secret token
+            secret_token = secrets.token_urlsafe(32)
+
+            # Save secret to Redis
+            await save_telegram_webhook_secret(secret_token)
+
+            # Set webhook with secret
+            await service.set_webhook(request.webhook_url, secret_token)
             webhook_url = request.webhook_url
 
         return TelegramBotConfigResponse(
@@ -162,7 +189,7 @@ async def configure_telegram_bot(
         logger.exception("Failed to configure Telegram bot")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to configure Telegram bot: {str(exc)}",
+            detail="Failed to configure Telegram bot",
         ) from exc
 
 
@@ -214,7 +241,7 @@ async def get_telegram_config() -> TelegramBotConfigResponse:
         logger.exception("Failed to get Telegram bot config")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get Telegram bot config: {str(exc)}",
+            detail="Failed to get Telegram bot config",
         ) from exc
 
 
