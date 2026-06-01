@@ -91,9 +91,7 @@ class TelegramBotService:
             async with session.post(url, json=payload) as response:
                 if response.status != 200:
                     error_text = await response.text()
-                    logger.error(
-                        f"Telegram sendMessage failed: {response.status} - {error_text}"
-                    )
+                    logger.error(f"Telegram sendMessage failed: {response.status} - {error_text}")
                     response.raise_for_status()
 
                 result = await response.json()
@@ -177,9 +175,7 @@ class TelegramBotService:
                         result = await response.json()
                         if result.get("ok"):
                             bot_info = result.get("result", {})
-                            logger.info(
-                                f"Telegram bot verified: @{bot_info.get('username')}"
-                            )
+                            logger.info(f"Telegram bot verified: @{bot_info.get('username')}")
                             return True
             return False
         except Exception as exc:

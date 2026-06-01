@@ -80,6 +80,7 @@ async def _route_to_chat_and_reply(request: Request, unified_message: Any) -> No
     chat_history_manager = get_chat_history_manager(request)
 
     from services.llm_service import LLMService
+
     llm_service = lazy_init_singleton(request.app.state, "llm_service", LLMService)
     memory_interface = getattr(request.app.state, "memory_interface", None)
 
