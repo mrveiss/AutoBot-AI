@@ -56,6 +56,37 @@ class SSOAuthenticationError(SSOServiceError):
 class SSOService(BaseService):
     """SSO provider management and authentication service."""
 
+    @staticmethod
+    def get_provider_endpoint_template(provider_type: str, domain: str = "") -> dict[str, str]:
+        """Return pre-filled OIDC endpoint config for known provider types."""
+        templates = {
+            SSOProviderType.OKTA.value: {
+                "authorize_url": f"https://{domain}/oauth2/v1/authorize",
+                "token_url": f"https://{domain}/oauth2/v1/token",
+                "userinfo_url": f"https://{domain}/oauth2/v1/userinfo",
+                "scope": "openid email profile groups",
+            },
+            SSOProviderType.MICROSOFT_ENTRA.value: {
+                "authorize_url": f"https://login.microsoftonline.com/{domain}/oauth2/v2.0/authorize",
+                "token_url": f"https://login.microsoftonline.com/{domain}/oauth2/v2.0/token",
+                "userinfo_url": "https://graph.microsoft.com/oidc/userinfo",
+                "scope": "openid email profile",
+            },
+            SSOProviderType.GOOGLE_WORKSPACE.value: {
+                "authorize_url": "https://accounts.google.com/o/oauth2/v2/auth",
+                "token_url": "https://oauth2.googleapis.com/token",
+                "userinfo_url": "https://openidconnect.googleapis.com/v1/userinfo",
+                "scope": "openid email profile",
+            },
+            SSOProviderType.GITHUB.value: {
+                "authorize_url": "https://github.com/login/oauth/authorize",
+                "token_url": "https://github.com/login/oauth/access_token",
+                "userinfo_url": "https://api.github.com/user",
+                "scope": "user:email read:user",
+            },
+        }
+        return templates.get(provider_type, {})
+
     async def create_provider(self, data: SSOProviderCreate) -> SSOProvider:
         """Create a new SSO provider."""
         provider = SSOProvider(
