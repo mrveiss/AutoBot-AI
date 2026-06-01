@@ -140,11 +140,16 @@ const EmbedChatApp = defineComponent({
     const errorMsg = ref('')
     let nextId = 1
     let abortController: AbortController | null = null
+    let currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null
 
-    onUnmounted(() => {
+    function cleanup() {
       abortController?.abort()
       abortController = null
-    })
+      currentReader?.cancel()
+      currentReader = null
+    }
+
+    onUnmounted(cleanup)
 
     // Dynamically computed CSS custom properties
     const cssVars = computed(() => ({
@@ -171,6 +176,9 @@ const EmbedChatApp = defineComponent({
       await nextTick()
       scrollToBottom()
 
+      // Cancel any in-flight request before starting new one
+      cleanup()
+
       abortController = new AbortController()
       try {
         const apiBase = props.config.apiUrl.replace(/\/$/, '')
@@ -193,12 +201,12 @@ const EmbedChatApp = defineComponent({
 
         if (contentType.includes('text/event-stream')) {
           // SSE streaming response
-          const reader = resp.body?.getReader()
+          currentReader = resp.body?.getReader() ?? null
           const decoder = new TextDecoder()
-          if (reader) {
+          if (currentReader) {
             let buf = ''
             while (true) {
-              const { done, value } = await reader.read()
+              const { done, value } = await currentReader.read()
               if (done) break
               buf += decoder.decode(value, { stream: true })
               const lines = buf.split('\n')
@@ -231,8 +239,8 @@ const EmbedChatApp = defineComponent({
 
         placeholder.pending = false
       } catch (err: unknown) {
-        if (err instanceof Error && err.name === 'AbortError') {
-          // Component unmounted mid-stream — discard silently
+        if (err instanceof Error && (err.name === 'AbortError' || err.message.includes('reader was released'))) {
+          // Component unmounted mid-stream or reader cancelled — discard silently
           placeholder.pending = false
           return
         }
@@ -241,6 +249,7 @@ const EmbedChatApp = defineComponent({
         errorMsg.value = err instanceof Error ? err.message : String(err)
       } finally {
         abortController = null
+        currentReader = null
         loading.value = false
         await nextTick()
         scrollToBottom()
