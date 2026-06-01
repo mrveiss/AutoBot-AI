@@ -65,6 +65,15 @@
                   ({{ message.metadata.model }})
                 </span>
               </span>
+              <!-- MVA-1993: Lightweight mode cost indicator -->
+              <span
+                v-if="message.sender === 'assistant' && message.metadata?.lightweight_mode_used"
+                class="message-type-badge badge-info"
+                :title="$t('chat.lightweightModeTooltip', { default: '~90% cheaper than standard mode' })"
+              >
+                <i class="fas fa-bolt mr-1"></i>
+                {{ $t('chat.lightweightMode', { default: 'Lightweight' }) }}
+              </span>
               <!-- Issue #1310: Visible type badge for typed messages -->
               <span
                 v-if="getMessageTypeBadge(message)"
