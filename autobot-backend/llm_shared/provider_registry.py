@@ -450,6 +450,7 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
     from llm_shared.providers.openrouter import OpenRouterProvider
     from llm_shared.providers.vertexai import VertexAIProvider
     from llm_shared.providers.vllm_base import VLLMBaseProvider
+    from llm_shared.providers.bedrock import BedrockProvider
 
     fallback: List[str] = []
 
@@ -587,6 +588,44 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
             logger.debug("Vertex AI provider not registered: %s", exc)
     else:
         logger.debug("VERTEX_AI_PROJECT not set — Vertex AI provider not registered")
+
+    # AWS Bedrock — registered when AWS credentials are available (GH#9010)
+    # Credentials can come from env vars (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY)
+    # or IAM role (automatic in EC2/ECS). Region defaults to us-east-1.
+    aws_access_key = os.getenv("AWS_ACCESS_KEY_ID")
+    aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+    aws_region = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+
+    # Register if credentials are explicitly provided OR if we're in an AWS environment
+    # (IAM role will be used automatically by boto3)
+    if aws_access_key and aws_secret_key:
+        try:
+            bedrock_provider = BedrockProvider(
+                settings={
+                    "aws_access_key_id": aws_access_key,
+                    "aws_secret_access_key": aws_secret_key,
+                    "region": aws_region,
+                    "default_model": "claude-3-5-sonnet",
+                }
+            )
+            registry.register(bedrock_provider)
+            fallback.append(bedrock_provider.provider_name)
+        except Exception as exc:
+            logger.debug("Bedrock provider not registered: %s", exc)
+    else:
+        # Try IAM role registration (will work in EC2/ECS without explicit credentials)
+        try:
+            bedrock_provider = BedrockProvider(
+                settings={
+                    "region": aws_region,
+                    "default_model": "claude-3-5-sonnet",
+                }
+            )
+            registry.register(bedrock_provider)
+            fallback.append(bedrock_provider.provider_name)
+            logger.debug("Bedrock provider registered with IAM role authentication")
+        except Exception as exc:
+            logger.debug("Bedrock provider not registered (no credentials or IAM role): %s", exc)
 
     registry.set_fallback_chain(fallback)
     logger.info(
