@@ -45,8 +45,10 @@ def generate_vapid_keys() -> dict:
     v.generate_keys()
 
     # Export keys via temp files (py_vapid API requires file paths)
-    with tempfile.NamedTemporaryFile(mode='r', delete=True, suffix='_private.pem') as priv_f, \
-         tempfile.NamedTemporaryFile(mode='r', delete=True, suffix='_public.pem') as pub_f:
+    with (
+        tempfile.NamedTemporaryFile(mode="r", delete=True, suffix="_private.pem") as priv_f,
+        tempfile.NamedTemporaryFile(mode="r", delete=True, suffix="_public.pem") as pub_f,
+    ):
         v.save_key(priv_f.name)
         v.save_public_key(pub_f.name)
         private_key = priv_f.read().strip()

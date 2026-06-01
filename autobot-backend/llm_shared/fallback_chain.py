@@ -58,7 +58,9 @@ class FallbackChain:
                 # There's a next fallback
                 next_model = self.fallback_models[idx + 1]
                 next_provider = (
-                    self.fallback_providers[idx + 1] if self.fallback_providers and idx + 1 < len(self.fallback_providers) else None
+                    self.fallback_providers[idx + 1]
+                    if self.fallback_providers and idx + 1 < len(self.fallback_providers)
+                    else None
                 )
                 return next_model, next_provider
         except ValueError:

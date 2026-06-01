@@ -35,7 +35,7 @@ from integrations.base import (
 logger = get_logger(__name__)
 
 # Graph API resource IDs are base64url-ish tokens, never contain path separators
-_GRAPH_ID_PATTERN = re.compile(r'^[A-Za-z0-9_\-=+/.@]+$')
+_GRAPH_ID_PATTERN = re.compile(r"^[A-Za-z0-9_\-=+/.@]+$")
 
 
 def _validate_graph_id(value: str, name: str = "ID") -> str:
@@ -61,7 +61,7 @@ def _validate_graph_id(value: str, name: str = "ID") -> str:
         raise ValueError(f"{name} contains invalid characters")
 
     # URL-encode to prevent injection even if regex is bypassed
-    return quote(value, safe='')
+    return quote(value, safe="")
 
 
 def _validate_datetime_iso(value: str, name: str = "datetime") -> str:
@@ -80,7 +80,7 @@ def _validate_datetime_iso(value: str, name: str = "datetime") -> str:
         ValueError: If datetime format is invalid
     """
     try:
-        dt = datetime.fromisoformat(value.replace('Z', '+00:00'))
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
         return dt.isoformat()
     except (ValueError, AttributeError) as exc:
         raise ValueError(f"{name} must be valid ISO-8601 format") from exc
@@ -425,16 +425,12 @@ class Microsoft365Integration(BaseIntegration):
                     "contentType": params.get("body_type", "HTML"),
                     "content": params["body"],
                 },
-                "toRecipients": [
-                    {"emailAddress": {"address": addr}} for addr in params["to"]
-                ],
+                "toRecipients": [{"emailAddress": {"address": addr}} for addr in params["to"]],
             }
         }
 
         if "cc" in params:
-            message_data["message"]["ccRecipients"] = [
-                {"emailAddress": {"address": addr}} for addr in params["cc"]
-            ]
+            message_data["message"]["ccRecipients"] = [{"emailAddress": {"address": addr}} for addr in params["cc"]]
 
         if "attachments" in params:
             message_data["message"]["attachments"] = params["attachments"]

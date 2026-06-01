@@ -195,9 +195,7 @@ class TestContextOverflowProtection:
             compress_threshold=0.90,
         )
 
-        messages = [
-            {"sender": "user", "text": f"Message {i}"} for i in range(10)
-        ]
+        messages = [{"sender": "user", "text": f"Message {i}"} for i in range(10)]
 
         # Mock context limit of 1000 tokens
         with patch.object(protection, "_get_context_limit", return_value=1000):

@@ -28,9 +28,7 @@ class TestLightweightMode:
 
     def test_llm_request_defaults_to_full_mode(self):
         """Verify lightweight_mode defaults to False."""
-        request = LLMRequest(
-            messages=[{"role": "user", "content": "Complex query"}]
-        )
+        request = LLMRequest(messages=[{"role": "user", "content": "Complex query"}])
         assert request.lightweight_mode is False
 
     def test_complexity_router_trivial_tier_when_configured(self):
@@ -43,6 +41,7 @@ class TestLightweightMode:
         if hasattr(TierConfig, "trivial_threshold"):
             # Build a TierModels with a trivial model set so the router uses the tier
             from llm_shared.tiered_routing.tier_config import TierModels
+
             config_kwargs["trivial_threshold"] = 1.0
             config_kwargs["models"] = TierModels(trivial="phi3:mini", simple="llama3:8b", complex="llama3:70b")
 
@@ -93,9 +92,21 @@ class TestLightweightMode:
         mock_session.metadata = {}
 
         with patch("chat_workflow.llm_handler._emit_before_prompt_build", new_callable=AsyncMock):
-            with patch("chat_workflow.llm_handler._emit_system_prompt_ready", new_callable=AsyncMock, return_value="System prompt"):
-                with patch("chat_workflow.llm_handler._emit_after_prompt_build", new_callable=AsyncMock, return_value="Full prompt"):
-                    with patch("chat_workflow.llm_handler._emit_full_prompt_ready", new_callable=AsyncMock, return_value="Full prompt"):
+            with patch(
+                "chat_workflow.llm_handler._emit_system_prompt_ready",
+                new_callable=AsyncMock,
+                return_value="System prompt",
+            ):
+                with patch(
+                    "chat_workflow.llm_handler._emit_after_prompt_build",
+                    new_callable=AsyncMock,
+                    return_value="Full prompt",
+                ):
+                    with patch(
+                        "chat_workflow.llm_handler._emit_full_prompt_ready",
+                        new_callable=AsyncMock,
+                        return_value="Full prompt",
+                    ):
                         params = await handler._prepare_llm_request_params(
                             mock_session,
                             "Hi",
@@ -129,9 +140,21 @@ class TestLightweightMode:
 
         tiered_ctx_build = AsyncMock(return_value=None)
         with patch("chat_workflow.llm_handler._emit_before_prompt_build", new_callable=AsyncMock):
-            with patch("chat_workflow.llm_handler._emit_system_prompt_ready", new_callable=AsyncMock, return_value="System prompt"):
-                with patch("chat_workflow.llm_handler._emit_after_prompt_build", new_callable=AsyncMock, return_value="Full prompt"):
-                    with patch("chat_workflow.llm_handler._emit_full_prompt_ready", new_callable=AsyncMock, return_value="Full prompt"):
+            with patch(
+                "chat_workflow.llm_handler._emit_system_prompt_ready",
+                new_callable=AsyncMock,
+                return_value="System prompt",
+            ):
+                with patch(
+                    "chat_workflow.llm_handler._emit_after_prompt_build",
+                    new_callable=AsyncMock,
+                    return_value="Full prompt",
+                ):
+                    with patch(
+                        "chat_workflow.llm_handler._emit_full_prompt_ready",
+                        new_callable=AsyncMock,
+                        return_value="Full prompt",
+                    ):
                         with patch("chat_history.layers.TieredContextBuilder.build", tiered_ctx_build):
                             await handler._prepare_llm_request_params(
                                 mock_session,
