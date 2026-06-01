@@ -103,6 +103,8 @@ AutoBot supports comprehensive configuration through environment variables with 
 |----------|---------|-------------|
 | `AUTOBOT_ENABLE_ENCRYPTION` | `false` | Enable data encryption |
 | `AUTOBOT_SESSION_TIMEOUT` | `30` | Session timeout in minutes |
+| `AUTOBOT_EMBED_ALLOWED_ORIGINS` | `*` | Comma-separated list of allowed origins for embed widget. Use `*` (default) to allow all origins, or specify domains like `https://example.com,https://app.acme.io` to restrict access (GH#9117) |
+| `AUTOBOT_EMBED_TRUSTED_PROXIES` | `` | Comma-separated list of trusted proxy IPs for X-Forwarded-For validation. Only connections from these IPs will have their X-Forwarded-For header trusted for rate limiting. Leave empty (default) to rate-limit by direct connection IP only. Example: `10.0.1.100,10.0.1.101` (GH#9117) |
 
 ## Voice Interface Configuration
 

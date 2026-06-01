@@ -19,6 +19,11 @@ Config:
         compatible open mode).  When any specific origins are listed only
         those origins may call the embed endpoint; requests from other
         origins receive 403 (GH#9117).
+
+Rate Limiting (GH#9117):
+    Per-IP rate limiting using the shared RateLimiter with "anonymous" tier
+    defaults (20 req/min, 500 req/hour). Requests exceeding the limit receive
+    429 with Retry-After header.
 """
 
 import json
@@ -30,10 +35,63 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.rate_limiter import RateLimiter
 
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["chat", "embed"])
+
+# ---------------------------------------------------------------------------
+# Rate limiter (GH#9117)
+# ---------------------------------------------------------------------------
+_embed_rate_limiter = RateLimiter(
+    scope_prefix="embed",
+    default_tier="anonymous",  # 20 req/min, 500 req/hour
+)
+
+# Trusted proxy IPs for X-Forwarded-For header validation (GH#9117)
+# Only honor X-Forwarded-For when the immediate peer is in this allowlist
+# to prevent rate-limit bypass via header spoofing.
+_TRUSTED_PROXIES_ENV = "AUTOBOT_EMBED_TRUSTED_PROXIES"
+_TRUSTED_PROXIES_RAW = os.environ.get(_TRUSTED_PROXIES_ENV, "").strip()
+_TRUSTED_PROXIES: frozenset[str] = (
+    frozenset(ip.strip() for ip in _TRUSTED_PROXIES_RAW.split(",") if ip.strip())
+    if _TRUSTED_PROXIES_RAW
+    else frozenset()
+)
+
+if _TRUSTED_PROXIES:
+    logger.info(
+        "Embed trusted proxies: %d configured — X-Forwarded-For honored only from: %s",
+        len(_TRUSTED_PROXIES),
+        ", ".join(sorted(_TRUSTED_PROXIES)),
+    )
+else:
+    logger.info(
+        "Embed trusted proxies: none — rate limiting by direct connection IP only "
+        "(set %s if behind reverse proxy)",
+        _TRUSTED_PROXIES_ENV,
+    )
+
+
+def _get_client_ip(request: Request) -> str:
+    """Extract client IP for rate limiting, validating X-Forwarded-For against trusted proxies.
+
+    Only trusts X-Forwarded-For when the immediate peer is in AUTOBOT_EMBED_TRUSTED_PROXIES
+    to prevent rate-limit bypass via header spoofing (GH#9117).
+    """
+    peer_ip = request.client.host if request.client else "unknown"
+
+    # Only honor X-Forwarded-For if the immediate connection is from a trusted proxy
+    if _TRUSTED_PROXIES and peer_ip in _TRUSTED_PROXIES:
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            # X-Forwarded-For can be comma-separated; use the first (client) IP
+            return forwarded.split(",")[0].strip()
+
+    # Default: use the direct connection IP (untrusted proxies or no XFF)
+    return peer_ip
+
 
 # ---------------------------------------------------------------------------
 # Origin allowlist (GH#9117)
@@ -127,10 +185,25 @@ async def embed_message(
 
     No authentication required — the endpoint is designed for unauthenticated
     embed contexts.  Origin enforcement via AUTOBOT_EMBED_ALLOWED_ORIGINS
-    (GH#9117).
+    and per-IP rate limiting (GH#9117).
     """
     origin = _check_embed_origin(request)
     acao = _acao_header(origin)
+
+    # Rate limit check (GH#9117)
+    client_ip = _get_client_ip(request)
+    allowed = await _embed_rate_limiter.acquire(client_ip)
+    if not allowed:
+        retry_after = await _embed_rate_limiter.get_retry_after_seconds(client_ip)
+        logger.warning("embed: rate limit exceeded for IP %s (retry after %ds)", client_ip, retry_after)
+        return JSONResponse(
+            {"detail": "Rate limit exceeded. Please try again later."},
+            status_code=429,
+            headers={
+                "Retry-After": str(retry_after),
+                "Access-Control-Allow-Origin": acao,
+            },
+        )
 
     accept = request.headers.get("accept", "")
     message = body.message.strip()
@@ -167,6 +240,18 @@ async def embed_message(
 @router.options("/chats/embed/message")
 async def embed_message_preflight(request: Request) -> JSONResponse:
     """CORS preflight for embed widget cross-origin requests (GH#9117)."""
+    # Rate limit preflight requests to prevent abuse (GH#9117)
+    client_ip = _get_client_ip(request)
+    allowed = await _embed_rate_limiter.acquire(client_ip)
+    if not allowed:
+        retry_after = await _embed_rate_limiter.get_retry_after_seconds(client_ip)
+        logger.warning("embed preflight: rate limit exceeded for IP %s", client_ip)
+        return JSONResponse(
+            {},
+            status_code=429,
+            headers={"Retry-After": str(retry_after)},
+        )
+
     if _EMBED_ORIGIN_ENFORCEMENT_ENABLED:
         origin = request.headers.get("origin", "")
         if not origin or origin not in _EMBED_ALLOWED_ORIGINS:
