@@ -1775,8 +1775,17 @@ before summarizing.
 ---
 {instructions}"""
 
-    def _get_llm_request_payload(self, selected_model: str, current_prompt: str, system_prompt: str = "") -> dict:
-        """Build LLM request payload."""
+    def _get_llm_request_payload(
+        self,
+        selected_model: str,
+        current_prompt: str,
+        system_prompt: str = "",
+        api_kwargs: dict | None = None,
+    ) -> dict:
+        """Build LLM request payload.
+
+        Issue #8993: api_kwargs are merged at top level for Anthropic extended-thinking.
+        """
         payload = {
             "model": selected_model,
             "prompt": current_prompt,
@@ -1789,6 +1798,8 @@ before summarizing.
         }
         if system_prompt:
             payload["system"] = system_prompt
+        if api_kwargs:
+            payload.update(api_kwargs)
         return payload
 
     async def _log_and_parse_tool_calls(
@@ -1879,11 +1890,12 @@ before summarizing.
         rag_citations: List[Dict[str, Any]],
         iteration: int,
         system_prompt: str = "",
+        api_kwargs: dict | None = None,
     ):
         """Process a single LLM iteration. Yields chunks, then (llm_response, tool_calls). Issue #620."""
         import aiohttp
 
-        payload = self._get_llm_request_payload(selected_model, current_prompt, system_prompt)
+        payload = self._get_llm_request_payload(selected_model, current_prompt, system_prompt, api_kwargs=api_kwargs)
         llm_response = ""
 
         try:
@@ -2083,6 +2095,21 @@ before summarizing.
         llm_response = None
         tool_calls = None
 
+        # Issue #8993: Wire thinking mode from request context for Anthropic models.
+        api_kwargs = None
+        if ctx.context.get("thinking_mode_enabled") and "claude" in ctx.selected_model.lower():
+            budget_tokens = int(ctx.context.get("thinking_budget_tokens", 10000))
+            api_kwargs = {
+                "thinking": {"type": "enabled", "budget_tokens": budget_tokens},
+                "max_tokens": max(budget_tokens + 1000, 8192),
+                "temperature": 1,
+                "betas": ["interleaved-thinking-2025-05-14"],
+            }
+            logger.info(
+                "[#8993] Thinking mode enabled for model=%s budget_tokens=%d",
+                ctx.selected_model,
+                budget_tokens,
+            )
         async for item in self._process_single_llm_iteration(
             http_client,
             ctx.ollama_endpoint,
@@ -2093,6 +2120,7 @@ before summarizing.
             ctx.rag_citations,
             iteration,
             system_prompt=ctx.system_prompt or "",
+            api_kwargs=api_kwargs,
         ):
             if isinstance(item, tuple):
                 llm_response, tool_calls = item
@@ -2754,20 +2782,21 @@ before summarizing.
                 # Trivial tier is the canonical lightweight signal (GH#9050).
                 # Fall back to simple tier when trivial is not configured.
                 is_trivial = complexity_result.tier == "trivial"
-                is_simple_fallback = (
-                    complexity_result.tier == "simple"
-                    and not getattr(tier_config.models, "trivial", "")
+                is_simple_fallback = complexity_result.tier == "simple" and not getattr(
+                    tier_config.models, "trivial", ""
                 )
                 lightweight_mode = is_trivial or is_simple_fallback
                 if lightweight_mode:
-                    logger.info("[MVA-1992] Lightweight mode enabled (tier=%s, score=%.1f)",
-                               complexity_result.tier, complexity_result.score)
+                    logger.info(
+                        "[MVA-1992] Lightweight mode enabled (tier=%s, score=%.1f)",
+                        complexity_result.tier,
+                        complexity_result.score,
+                    )
         except Exception as e:
             logger.warning("[MVA-1992] Complexity routing failed, defaulting to full mode: %s", e)
 
         llm_params = await self._prepare_llm_request_params(
-            session, message, use_knowledge=use_knowledge, language=language,
-            lightweight_mode=lightweight_mode
+            session, message, use_knowledge=use_knowledge, language=language, lightweight_mode=lightweight_mode
         )
         # MVA-1993: Store lightweight_mode in params for response metadata
         llm_params["lightweight_mode_used"] = lightweight_mode
