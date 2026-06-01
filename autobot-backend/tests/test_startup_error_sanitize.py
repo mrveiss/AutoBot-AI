@@ -17,7 +17,7 @@ import json
 import sys
 import types
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 # ---------------------------------------------------------------------------
 # Minimal stubs so api/system.py and initialization/lifespan.py import cleanly
