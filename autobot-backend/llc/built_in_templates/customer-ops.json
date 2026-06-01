@@ -1,0 +1,109 @@
+{
+  "metadata": {
+    "name": "Customer Operations Team",
+    "description": "Complete customer support workflow with triage, support specialists, and escalation handling",
+    "category": "company",
+    "version": "1.0",
+    "tags": ["customer-support", "ops", "triage", "escalation"]
+  },
+  "variables": {
+    "company_name": "{{COMPANY_NAME}}",
+    "support_email": "{{SUPPORT_EMAIL}}",
+    "escalation_contact": "{{ESCALATION_CONTACT}}"
+  },
+  "agents": [
+    {
+      "name": "Triage Agent",
+      "role": "triage",
+      "description": "First-line support agent that categorizes and routes customer inquiries",
+      "capabilities": ["ticket_categorization", "urgency_assessment", "routing"],
+      "instructions": "You are the triage agent. Quickly assess customer inquiries, categorize them by type and urgency, and route to the appropriate support agent or escalation path.",
+      "model": "claude-haiku-4-5",
+      "adapter_config": {
+        "type": "local",
+        "tools": ["read", "write"]
+      }
+    },
+    {
+      "name": "Support Specialist",
+      "role": "support",
+      "description": "Handles customer inquiries, troubleshoots issues, and provides solutions",
+      "capabilities": ["troubleshooting", "customer_communication", "issue_resolution"],
+      "instructions": "You are a support specialist. Handle customer inquiries with empathy and professionalism. Troubleshoot issues, provide clear solutions, and escalate complex cases when needed.",
+      "model": "claude-sonnet-4-6",
+      "adapter_config": {
+        "type": "local",
+        "tools": ["read", "write", "bash", "grep"]
+      }
+    },
+    {
+      "name": "Escalation Manager",
+      "role": "escalation",
+      "description": "Handles complex customer issues requiring human intervention or executive decisions",
+      "capabilities": ["complex_resolution", "human_handoff", "executive_communication"],
+      "instructions": "You are the escalation manager. Handle complex issues that require human judgment, coordinate with human staff for critical decisions, and ensure high-priority customers receive appropriate attention.",
+      "model": "claude-sonnet-4-6",
+      "adapter_config": {
+        "type": "local",
+        "tools": ["read", "write", "bash"]
+      }
+    }
+  ],
+  "goals": [
+    {
+      "title": "Establish Support Processes",
+      "description": "Define ticket workflows, SLAs, and escalation procedures",
+      "priority": "high",
+      "status": "todo"
+    },
+    {
+      "title": "Build Knowledge Base",
+      "description": "Create comprehensive support documentation and FAQ",
+      "priority": "high",
+      "status": "backlog"
+    },
+    {
+      "title": "Optimize Response Times",
+      "description": "Achieve and maintain target SLAs for all ticket categories",
+      "priority": "medium",
+      "status": "backlog"
+    }
+  ],
+  "work_items": [
+    {
+      "title": "Define ticket categories",
+      "description": "Establish taxonomy for issue types, urgency levels, and routing rules",
+      "assignee_role": "triage",
+      "priority": "high",
+      "status": "todo"
+    },
+    {
+      "title": "Create response templates",
+      "description": "Develop standard responses for common customer inquiries",
+      "assignee_role": "support",
+      "priority": "high",
+      "status": "todo"
+    },
+    {
+      "title": "Setup escalation criteria",
+      "description": "Define when and how to escalate issues to human staff",
+      "assignee_role": "escalation",
+      "priority": "high",
+      "status": "todo"
+    }
+  ],
+  "kb_collections": [
+    {
+      "name": "Support Knowledge Base",
+      "description": "Common issues, solutions, and troubleshooting guides"
+    },
+    {
+      "name": "Customer FAQ",
+      "description": "Frequently asked questions and self-service guides"
+    },
+    {
+      "name": "Escalation Procedures",
+      "description": "Guidelines for handling complex cases and human handoffs"
+    }
+  ]
+}
