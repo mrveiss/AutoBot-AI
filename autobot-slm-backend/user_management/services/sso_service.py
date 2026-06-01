@@ -247,9 +247,13 @@ class SSOService(BaseService):
             raise SSOAuthenticationError(f"SSO provider {provider.name} is disabled")
         return await self._get_oauth_authorize_url(provider, callback_url)
 
-    async def complete_oauth_login(self, provider_id: uuid.UUID, code: str, state: str, callback_url: str) -> User:
+    async def complete_oauth_login(self, code: str, state: str, callback_url: str, provider_id: uuid.UUID | None = None) -> User:
         """Complete OAuth2 login flow and return authenticated user."""
-        provider_id = await self._validate_oauth_state(state)
+        # Always validate state to prevent CSRF attacks
+        state_provider_id = await self._validate_oauth_state(state)
+        if provider_id is not None and provider_id != state_provider_id:
+            raise SSOAuthenticationError("State/provider mismatch")
+        provider_id = state_provider_id
         provider = await self.get_provider(provider_id)
         token = await self._exchange_oauth_code(provider, code, callback_url)
         userinfo = await self._get_oauth_userinfo(provider, token)
