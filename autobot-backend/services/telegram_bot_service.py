@@ -8,6 +8,7 @@ Manages Telegram bot instance, sends messages via Bot API,
 handles webhook verification, and supports file/photo uploads.
 """
 
+import io
 from typing import Any, Dict, Optional
 
 import aiohttp
