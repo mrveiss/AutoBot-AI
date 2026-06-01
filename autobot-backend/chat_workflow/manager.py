@@ -2760,20 +2760,21 @@ before summarizing.
                 # Trivial tier is the canonical lightweight signal (GH#9050).
                 # Fall back to simple tier when trivial is not configured.
                 is_trivial = complexity_result.tier == "trivial"
-                is_simple_fallback = (
-                    complexity_result.tier == "simple"
-                    and not getattr(tier_config.models, "trivial", "")
+                is_simple_fallback = complexity_result.tier == "simple" and not getattr(
+                    tier_config.models, "trivial", ""
                 )
                 lightweight_mode = is_trivial or is_simple_fallback
                 if lightweight_mode:
-                    logger.info("[MVA-1992] Lightweight mode enabled (tier=%s, score=%.1f)",
-                               complexity_result.tier, complexity_result.score)
+                    logger.info(
+                        "[MVA-1992] Lightweight mode enabled (tier=%s, score=%.1f)",
+                        complexity_result.tier,
+                        complexity_result.score,
+                    )
         except Exception as e:
             logger.warning("[MVA-1992] Complexity routing failed, defaulting to full mode: %s", e)
 
         llm_params = await self._prepare_llm_request_params(
-            session, message, use_knowledge=use_knowledge, language=language,
-            lightweight_mode=lightweight_mode
+            session, message, use_knowledge=use_knowledge, language=language, lightweight_mode=lightweight_mode
         )
 
         logger.info(
