@@ -2,15 +2,44 @@
 
 Thanks for your interest in contributing! Here's how to get started.
 
+## Development Setup
+
+Before making your first commit, install pre-commit hooks to catch code quality issues locally:
+
+```bash
+# Install pre-commit (one-time setup)
+pip install pre-commit
+
+# Install the git hooks
+pre-commit install
+
+# Optional: Run hooks on all files to verify setup
+pre-commit run --all-files
+```
+
+Pre-commit hooks automatically check your code for:
+- **Black** formatting (line length: 120)
+- **isort** import sorting
+- **flake8** linting
+- **autoflake** unused imports/variables
+- **mypy** type checking
+- **bandit** security issues
+- Custom AutoBot-specific checks
+
+These hooks run automatically before each commit, catching issues **before** they reach CI. This saves time and reduces CI failures.
+
 ## Getting Started
 
 1. Fork the repository
 2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/AutoBot-AI.git`
-3. Create a branch: `git checkout -b feature/your-feature`
-4. Make your changes
-5. Commit: `git commit -m "feat: description of changes"`
-6. Push to your fork: `git push origin feature/your-feature`
-7. Open a Pull Request
+3. **Install pre-commit hooks** (see Development Setup above)
+4. Create a branch: `git checkout -b feature/your-feature`
+5. Make your changes
+6. Commit: `git commit -m "feat: description of changes"`
+   - Pre-commit hooks will run automatically and may auto-fix some issues
+   - If hooks fail, review the output, fix the issues, and commit again
+7. Push to your fork: `git push origin feature/your-feature`
+8. Open a Pull Request
 
 ## Code of Conduct
 
