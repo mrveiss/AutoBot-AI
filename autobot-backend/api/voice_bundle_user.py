@@ -68,9 +68,7 @@ async def _count_tools_for_bundle(bundle: str, is_admin: bool) -> int:
         )
 
         all_tools = list(TOOL_ACCESS_MATRIX.keys())
-        _tool_count_cache[key] = len(
-            filter_tools_for_bundle(all_tools, bundle=bundle, is_admin=is_admin)
-        )
+        _tool_count_cache[key] = len(filter_tools_for_bundle(all_tools, bundle=bundle, is_admin=is_admin))
     return _tool_count_cache[key]
 
 
@@ -83,9 +81,7 @@ def _get_user_id(user: dict) -> str:
     return user.get("user_id") or user.get("sub") or user.get("username") or "unknown"
 
 
-def _check_self_or_admin(
-    request: Request, current_user: dict, target_user_id: str
-) -> bool:
+def _check_self_or_admin(request: Request, current_user: dict, target_user_id: str) -> bool:
     """Verify user can access target_user_id (self or admin)."""
     current_user_id = _get_user_id(current_user)
     return current_user_id == target_user_id or _is_admin(current_user)
@@ -264,9 +260,7 @@ async def set_user_bundle(
                 )
             )
         except Exception:
-            logger.warning(
-                "set_user_bundle: failed to emit failure audit", exc_info=True
-            )
+            logger.warning("set_user_bundle: failed to emit failure audit", exc_info=True)
         logger.error("set_user_bundle: DB error: %s", exc)
         raise HTTPException(status_code=500, detail="Database error") from exc
 
