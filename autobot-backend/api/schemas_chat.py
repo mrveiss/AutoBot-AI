@@ -452,6 +452,18 @@ class ChatMessage(BaseModel):
         description="Preferred response language code (e.g. 'en', 'es', 'de'). "
         "Overrides personality language when set.",
     )
+    thinking_mode_enabled: bool | None = Field(
+        None,
+        description="Enable extended thinking mode for reasoning models (Claude 3.7+, DeepSeek R1). "
+        "When enabled, the model performs chain-of-thought reasoning before responding.",
+    )
+    thinking_budget_tokens: int | None = Field(
+        None,
+        ge=1000,
+        le=128000,
+        description="Thinking budget in tokens (e.g., 1000, 5000, 10000, 63000). "
+        "Only used when thinking_mode_enabled=True. Limits the amount of reasoning tokens.",
+    )
 
 
 class ChatResponse(BaseModel):
@@ -496,6 +508,18 @@ class EnhancedChatMessage(BaseModel):
     use_knowledge_base: bool = Field(True, description="Whether to include knowledge base context")
     response_style: str = Field("conversational", description="Response style preference")
     include_sources: bool = Field(True, description="Whether to include source citations")
+    thinking_mode_enabled: bool | None = Field(
+        None,
+        description="Enable extended thinking mode for reasoning models (Claude 3.7+, DeepSeek R1). "
+        "When enabled, the model performs chain-of-thought reasoning before responding.",
+    )
+    thinking_budget_tokens: int | None = Field(
+        None,
+        ge=1000,
+        le=128000,
+        description="Thinking budget in tokens (e.g., 1000, 5000, 10000, 63000). "
+        "Only used when thinking_mode_enabled=True. Limits the amount of reasoning tokens.",
+    )
 
 
 class ChatPreferences(BaseModel):
@@ -505,6 +529,26 @@ class ChatPreferences(BaseModel):
     technical_level: str = Field("adaptive", description="Technical complexity level")
     include_reasoning: bool = Field(False, description="Include reasoning steps in responses")
     fact_checking: bool = Field(True, description="Enable fact checking against knowledge base")
+
+
+class ThinkingPreferences(BaseModel):
+    """Thinking mode preferences per conversation (#8993)."""
+
+    enabled: bool = Field(False, description="Enable extended thinking mode by default")
+    budget_tokens: int = Field(
+        10000,
+        ge=1000,
+        le=128000,
+        description="Default thinking budget in tokens (1k, 5k, 10k, max=63k)",
+    )
+
+
+class ThinkingPreferencesData(BaseModel):
+    """Data payload for GET/PUT /chat/sessions/{session_id}/thinking-preferences."""
+
+    session_id: str
+    enabled: bool
+    budget_tokens: int
 
 
 class TranslateRequest(BaseModel):

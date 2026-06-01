@@ -34,6 +34,8 @@ from api.schemas_chat import (
     SessionShareRequest,
     SessionUpdate,
     SessionUpdateData,
+    ThinkingPreferences,
+    ThinkingPreferencesData,
 )
 from api.schemas_common import DataResponse
 from auth_middleware import get_auth_middleware, get_current_user
