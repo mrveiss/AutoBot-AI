@@ -222,7 +222,7 @@ async def initialize_session(state: ChatState, config: RunnableConfig) -> dict:
 
         # Issue #3278: fire ON_MESSAGE_RECEIVED hook so plugins can observe chat input.
         try:
-            from plugin_sdk.hooks import Hook, HookRegistry
+            from autobot_shared.plugin_sdk import Hook, HookRegistry
 
             await HookRegistry().call_hook(
                 Hook.ON_MESSAGE_RECEIVED.value,
@@ -478,7 +478,7 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
 
     # Issue #3278: notify plugins before LLM execution.
     try:
-        from plugin_sdk.hooks import Hook, HookRegistry
+        from autobot_shared.plugin_sdk import Hook, HookRegistry
 
         await HookRegistry().call_hook(
             Hook.ON_AGENT_EXECUTE.value,
@@ -505,7 +505,7 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
         )
         # Issue #3278: notify plugins on agent error.
         try:
-            from plugin_sdk.hooks import Hook, HookRegistry
+            from autobot_shared.plugin_sdk import Hook, HookRegistry
 
             await HookRegistry().call_hook(
                 Hook.ON_AGENT_ERROR.value,
@@ -519,7 +519,7 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
 
     # Issue #3278: notify plugins after successful LLM execution.
     try:
-        from plugin_sdk.hooks import Hook, HookRegistry
+        from autobot_shared.plugin_sdk import Hook, HookRegistry
 
         await HookRegistry().call_hook(
             Hook.ON_AGENT_COMPLETE.value,
@@ -725,7 +725,7 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
 
     # Issue #3278: notify plugins before tool execution.
     try:
-        from plugin_sdk.hooks import Hook, HookRegistry
+        from autobot_shared.plugin_sdk import Hook, HookRegistry
 
         await HookRegistry().call_hook(
             Hook.ON_TOOL_CALL.value,
@@ -778,7 +778,7 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
 
     # Issue #3278: notify plugins after tool execution.
     try:
-        from plugin_sdk.hooks import Hook, HookRegistry
+        from autobot_shared.plugin_sdk import Hook, HookRegistry
 
         await HookRegistry().call_hook(
             Hook.ON_TOOL_COMPLETE.value,
@@ -906,7 +906,7 @@ async def perform_knowledge_search(state: ChatState, config: RunnableConfig) -> 
 
         # Issue #3278: notify plugins after knowledge base search.
         try:
-            from plugin_sdk.hooks import Hook, HookRegistry
+            from autobot_shared.plugin_sdk import Hook, HookRegistry
 
             await HookRegistry().call_hook(
                 Hook.ON_KB_SEARCH.value,
