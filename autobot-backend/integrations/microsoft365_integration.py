@@ -14,9 +14,11 @@ Authentication uses OAuth2 with Microsoft Authentication Library (MSAL).
 All operations use Microsoft Graph API v1.0 endpoints.
 """
 
+import re
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Literal
+from urllib.parse import quote
 
 import aiohttp
 
@@ -31,6 +33,57 @@ from integrations.base import (
 )
 
 logger = get_logger(__name__)
+
+# Graph API resource IDs are base64url-ish tokens, never contain path separators
+_GRAPH_ID_PATTERN = re.compile(r'^[A-Za-z0-9_\-=+/.@]+$')
+
+
+def _validate_graph_id(value: str, name: str = "ID") -> str:
+    """Validate and sanitize a Microsoft Graph resource ID.
+
+    Prevents path traversal and SSRF by ensuring IDs match expected format.
+    Graph IDs are opaque tokens that never contain '/', '?', '#', '..', or whitespace.
+
+    Args:
+        value: The ID to validate
+        name: Human-readable name for error messages
+
+    Returns:
+        URL-encoded ID safe for interpolation
+
+    Raises:
+        ValueError: If ID format is invalid
+    """
+    if not value or not isinstance(value, str):
+        raise ValueError(f"{name} must be a non-empty string")
+
+    if not _GRAPH_ID_PATTERN.fullmatch(value):
+        raise ValueError(f"{name} contains invalid characters")
+
+    # URL-encode to prevent injection even if regex is bypassed
+    return quote(value, safe='')
+
+
+def _validate_datetime_iso(value: str, name: str = "datetime") -> str:
+    """Validate and canonicalize ISO-8601 datetime string.
+
+    Prevents OData filter injection by parsing and reformatting datetime values.
+
+    Args:
+        value: ISO-8601 datetime string
+        name: Human-readable name for error messages
+
+    Returns:
+        Canonical ISO-8601 string
+
+    Raises:
+        ValueError: If datetime format is invalid
+    """
+    try:
+        dt = datetime.fromisoformat(value.replace('Z', '+00:00'))
+        return dt.isoformat()
+    except (ValueError, AttributeError) as exc:
+        raise ValueError(f"{name} must be valid ISO-8601 format") from exc
 
 
 class Microsoft365Integration(BaseIntegration):
@@ -260,12 +313,15 @@ class Microsoft365Integration(BaseIntegration):
         if calendar_id == "primary":
             url = f"{self.graph_url}/me/calendar/events"
         else:
-            url = f"{self.graph_url}/me/calendars/{calendar_id}/events"
+            safe_calendar_id = _validate_graph_id(calendar_id, "calendar_id")
+            url = f"{self.graph_url}/me/calendars/{safe_calendar_id}/events"
 
-        # Apply time filters if provided
+        # Apply time filters if provided - use validated datetime strings
         query_params = {}
         if start_dt and end_dt:
-            query_params["$filter"] = f"start/dateTime ge '{start_dt}' and end/dateTime le '{end_dt}'"
+            safe_start = _validate_datetime_iso(start_dt, "start")
+            safe_end = _validate_datetime_iso(end_dt, "end")
+            query_params["$filter"] = f"start/dateTime ge '{safe_start}' and end/dateTime le '{safe_end}'"
 
         result = await self._make_graph_request("GET", url, params=query_params)
         return result.get("body", {})
@@ -306,8 +362,8 @@ class Microsoft365Integration(BaseIntegration):
 
     async def _update_calendar_event(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Update an existing calendar event."""
-        event_id = params["event_id"]
-        url = f"{self.graph_url}/me/calendar/events/{event_id}"
+        safe_event_id = _validate_graph_id(params["event_id"], "event_id")
+        url = f"{self.graph_url}/me/calendar/events/{safe_event_id}"
 
         update_data = params.get("updates", {})
         result = await self._make_graph_request("PATCH", url, json_data=update_data)
@@ -315,8 +371,8 @@ class Microsoft365Integration(BaseIntegration):
 
     async def _delete_calendar_event(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Delete a calendar event."""
-        event_id = params["event_id"]
-        url = f"{self.graph_url}/me/calendar/events/{event_id}"
+        safe_event_id = _validate_graph_id(params["event_id"], "event_id")
+        url = f"{self.graph_url}/me/calendar/events/{safe_event_id}"
 
         result = await self._make_graph_request("DELETE", url)
         return {"success": result.get("status_code") == 204}
@@ -351,7 +407,8 @@ class Microsoft365Integration(BaseIntegration):
         if folder_id == "inbox":
             url = f"{self.graph_url}/me/mailFolders/inbox/messages"
         else:
-            url = f"{self.graph_url}/me/mailFolders/{folder_id}/messages"
+            safe_folder_id = _validate_graph_id(folder_id, "folder_id")
+            url = f"{self.graph_url}/me/mailFolders/{safe_folder_id}/messages"
 
         query_params = {"$top": min(limit, 1000)}  # Graph API max is 1000
         result = await self._make_graph_request("GET", url, params=query_params)
@@ -390,6 +447,10 @@ class Microsoft365Integration(BaseIntegration):
         query = params["query"]
         limit = params.get("limit", 50)
 
+        # Prevent OData injection - reject embedded quotes
+        if '"' in query or "'" in query:
+            raise ValueError("Search query cannot contain quote characters")
+
         url = f"{self.graph_url}/me/messages"
         query_params = {
             "$search": f'"{query}"',
@@ -408,7 +469,12 @@ class Microsoft365Integration(BaseIntegration):
     async def _create_folder(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new mail folder."""
         parent_id = params.get("parent_folder_id", "inbox")
-        url = f"{self.graph_url}/me/mailFolders/{parent_id}/childFolders"
+
+        if parent_id == "inbox":
+            url = f"{self.graph_url}/me/mailFolders/inbox/childFolders"
+        else:
+            safe_parent_id = _validate_graph_id(parent_id, "parent_folder_id")
+            url = f"{self.graph_url}/me/mailFolders/{safe_parent_id}/childFolders"
 
         folder_data = {"displayName": params["name"]}
         result = await self._make_graph_request("POST", url, json_data=folder_data)
@@ -418,9 +484,9 @@ class Microsoft365Integration(BaseIntegration):
 
     async def _send_teams_message(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Send a message to a Teams channel."""
-        team_id = params["team_id"]
-        channel_id = params["channel_id"]
-        url = f"{self.graph_url}/teams/{team_id}/channels/{channel_id}/messages"
+        safe_team_id = _validate_graph_id(params["team_id"], "team_id")
+        safe_channel_id = _validate_graph_id(params["channel_id"], "channel_id")
+        url = f"{self.graph_url}/teams/{safe_team_id}/channels/{safe_channel_id}/messages"
 
         message_data = {
             "body": {
@@ -439,18 +505,18 @@ class Microsoft365Integration(BaseIntegration):
 
     async def _list_team_channels(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """List all channels in a team."""
-        team_id = params["team_id"]
-        url = f"{self.graph_url}/teams/{team_id}/channels"
+        safe_team_id = _validate_graph_id(params["team_id"], "team_id")
+        url = f"{self.graph_url}/teams/{safe_team_id}/channels"
         result = await self._make_graph_request("GET", url)
         return result.get("body", {})
 
     async def _get_channel_messages(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Get messages from a Teams channel."""
-        team_id = params["team_id"]
-        channel_id = params["channel_id"]
+        safe_team_id = _validate_graph_id(params["team_id"], "team_id")
+        safe_channel_id = _validate_graph_id(params["channel_id"], "channel_id")
         limit = params.get("limit", 50)
 
-        url = f"{self.graph_url}/teams/{team_id}/channels/{channel_id}/messages"
+        url = f"{self.graph_url}/teams/{safe_team_id}/channels/{safe_channel_id}/messages"
         query_params = {"$top": min(limit, 50)}  # Teams messages limited to 50
 
         result = await self._make_graph_request("GET", url, params=query_params)
