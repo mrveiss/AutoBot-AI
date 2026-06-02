@@ -10,7 +10,7 @@ Part of Issue #9044 (MVA-2154 parent).
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
 

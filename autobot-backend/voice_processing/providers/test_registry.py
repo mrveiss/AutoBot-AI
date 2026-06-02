@@ -11,8 +11,6 @@ Part of Issue MVA-2185.
 import sys
 from pathlib import Path
 
-import pytest
-
 # Add autobot-backend to path for imports
 backend_path = Path(__file__).parent.parent.parent
 if str(backend_path) not in sys.path:
