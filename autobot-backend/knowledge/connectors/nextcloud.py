@@ -25,7 +25,7 @@ Nextcloud WebDAV endpoint: {nextcloud_url}/remote.php/dav/files/{username}/
 
 import hashlib
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 from urllib.parse import quote, urljoin, urlparse
 
 import aiohttp
@@ -33,7 +33,7 @@ import defusedxml.ElementTree as ET
 
 from autobot_shared.auth import BasicAuth
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.time_utils import now_utc, parse_utc_iso
+from autobot_shared.time_utils import now_utc
 from knowledge.connectors.base import AbstractConnector, RetryableError
 from knowledge.connectors.models import (
     ChangeInfo,
