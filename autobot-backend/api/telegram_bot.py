@@ -425,6 +425,7 @@ async def send_telegram_response(
                 chat_id=chat_id,
                 text=response_text,
                 reply_to_message_id=message_id,
+                message_thread_id=thread_id,
             )
             if thread_id:
                 logger.info(f"Sent response to Telegram chat {chat_id} thread {thread_id}")
