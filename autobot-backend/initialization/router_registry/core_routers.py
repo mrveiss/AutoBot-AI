@@ -25,6 +25,7 @@ from api.auth import router as auth_router
 from api.browser_mcp import router as browser_mcp_router
 from api.canvas import router as canvas_router  # MVA-359
 from api.chat import router as chat_router
+from api.transcriber import router as transcriber_router  # Issue #9044, MVA-2186
 from api.chat_compare import router as chat_compare_router  # Issue #4414
 from api.chat_embed import router as chat_embed_router  # GH#9047
 from api.chat_presets import router as chat_presets_router  # GH#8595
