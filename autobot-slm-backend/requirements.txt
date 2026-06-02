@@ -25,7 +25,7 @@ pydantic-settings>=2.14.1
 typing_extensions>=4.15.0  # For Python 3.8 compatibility
 
 # Authentication
-PyJWT[crypto]>=2.12.1
+PyJWT[crypto]>=2.13.0
 bcrypt>=5.0.0  # Direct bcrypt API — passlib removed (#2669)
 python-multipart>=0.0.29          # SECURITY UPDATE - arbitrary file write fix
 
