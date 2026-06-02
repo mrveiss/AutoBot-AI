@@ -1193,88 +1193,223 @@
   </footer>
 
   <script>
-    // ── Particle mesh background ────────────────────────────────────
+    // ── Force-directed cluster graph (Obsidian-style) ───────────────
     (function(){
       if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-      var canvas = document.getElementById('mesh-canvas');
-      var ctx = canvas.getContext('2d');
-      var W, H, nodes, raf;
-      var NODE_COUNT = 38;
-      var CONNECT_DIST = 160;
-      var NODE_RADIUS = 2.2;
-      var SPEED = 0.28;
 
+      var canvas = document.getElementById('mesh-canvas');
+      var ctx    = canvas.getContext('2d');
+      var W, H, nodes, clusters, raf, pulseInterval;
+
+      // ── Config ──────────────────────────────────────────────────────
+      var N_NODES     = 110;
+      var N_CLUSTERS  = 7;
+      var DAMPING     = 0.82;
+      var G_ATTRACT   = 0.0018;  // pull toward cluster centre
+      var REPULSION   = 1100;    // node-to-node repulsion
+      var SPRING_K    = 0.006;   // spring stiffness between nearby same-cluster nodes
+      var SPRING_REST = 55;      // spring rest length
+      var LINK_DIST   = 95;      // max dist for intra-cluster line
+      var CROSS_DIST  = 65;      // max dist for inter-cluster hub line
+      var HUB_CHANCE  = 0.13;    // fraction that are "hub" nodes
+
+      // Ember palette per cluster — warm gold / orange / wine / clay family
+      var CLUSTER_RGB = [
+        [226,132, 46],  // orange-400
+        [247,185, 74],  // gold-400
+        [162, 55, 74],  // wine
+        [189,100, 68],  // clay-500
+        [196,101, 26],  // orange-600
+        [236,162, 42],  // gold-500
+        [205, 95, 34],  // burnt orange
+      ];
+
+      // ── Init ─────────────────────────────────────────────────────────
       function resize() {
         W = canvas.width  = canvas.offsetWidth;
         H = canvas.height = canvas.offsetHeight;
       }
 
-      function mkNode() {
-        return {
-          x: Math.random() * W,
-          y: Math.random() * H,
-          vx: (Math.random() - .5) * SPEED,
-          vy: (Math.random() - .5) * SPEED
-        };
+      function initClusters() {
+        clusters = [];
+        for (var i = 0; i < N_CLUSTERS; i++) {
+          // Arrange cluster centres in a loose scattered grid
+          var angle = (i / N_CLUSTERS) * Math.PI * 2;
+          var rad   = Math.min(W, H) * 0.28;
+          clusters.push({
+            x:  W * 0.5 + Math.cos(angle) * rad * (0.7 + Math.random() * 0.5),
+            y:  H * 0.5 + Math.sin(angle) * rad * (0.7 + Math.random() * 0.5),
+            vx: (Math.random() - 0.5) * 0.08,
+            vy: (Math.random() - 0.5) * 0.08,
+          });
+        }
+      }
+
+      function initNodes() {
+        nodes = [];
+        for (var i = 0; i < N_NODES; i++) {
+          var c   = i % N_CLUSTERS;
+          var cx  = clusters[c].x;
+          var cy  = clusters[c].y;
+          var hub = Math.random() < HUB_CHANCE;
+          nodes.push({
+            x:     cx + (Math.random() - 0.5) * 100,
+            y:     cy + (Math.random() - 0.5) * 100,
+            vx:    (Math.random() - 0.5) * 0.4,
+            vy:    (Math.random() - 0.5) * 0.4,
+            c:     c,
+            hub:   hub,
+            r:     hub ? 4.2 : 2.0,
+            pulse: 0,
+          });
+        }
       }
 
       function init() {
         resize();
-        nodes = Array.from({length: NODE_COUNT}, mkNode);
+        initClusters();
+        initNodes();
+        // Random synaptic pulses
+        pulseInterval = setInterval(function(){
+          var n = nodes[Math.floor(Math.random() * nodes.length)];
+          if (n) n.pulse = 1.0;
+        }, 220);
       }
 
-      function getColors() {
-        var dark = document.documentElement.dataset.theme === 'dark'
-          || (!document.documentElement.dataset.theme
-              && window.matchMedia('(prefers-color-scheme:dark)').matches);
-        return dark
-          ? { node: 'rgba(226,132,46,', line: 'rgba(226,132,46,' }   // orange-400
-          : { node: 'rgba(163,82,20,',  line: 'rgba(163,82,20,' };   // orange-700
+      // ── Physics ───────────────────────────────────────────────────────
+      function stepClusters() {
+        for (var i = 0; i < clusters.length; i++) {
+          var cl = clusters[i];
+          cl.x += cl.vx;
+          cl.y += cl.vy;
+          if (cl.x < W * 0.12 || cl.x > W * 0.88) cl.vx *= -1;
+          if (cl.y < H * 0.12 || cl.y > H * 0.88) cl.vy *= -1;
+        }
+      }
+
+      function stepNodes() {
+        var i, j, n, o, dx, dy, d, d2, f, stretch;
+        for (i = 0; i < nodes.length; i++) {
+          n = nodes[i];
+          var fx = 0, fy = 0;
+
+          // Pull toward cluster centre
+          var cl = clusters[n.c];
+          fx += (cl.x - n.x) * G_ATTRACT;
+          fy += (cl.y - n.y) * G_ATTRACT;
+
+          // Node interactions
+          for (j = 0; j < nodes.length; j++) {
+            if (i === j) continue;
+            o  = nodes[j];
+            dx = n.x - o.x;
+            dy = n.y - o.y;
+            d2 = dx*dx + dy*dy + 0.01;
+            d  = Math.sqrt(d2);
+
+            // Repulsion (all pairs, short range)
+            if (d < 180) {
+              f = REPULSION / d2;
+              fx += (dx / d) * f;
+              fy += (dy / d) * f;
+            }
+
+            // Spring attraction (same cluster, within link distance)
+            if (o.c === n.c && d < LINK_DIST) {
+              stretch = d - SPRING_REST;
+              fx -= (dx / d) * stretch * SPRING_K;
+              fy -= (dy / d) * stretch * SPRING_K;
+            }
+          }
+
+          n.vx = (n.vx + fx) * DAMPING;
+          n.vy = (n.vy + fy) * DAMPING;
+        }
+
+        for (i = 0; i < nodes.length; i++) {
+          n = nodes[i];
+          n.x += n.vx;
+          n.y += n.vy;
+          if (n.x < 2)     { n.x = 2;     n.vx *= -0.4; }
+          if (n.x > W - 2) { n.x = W - 2; n.vx *= -0.4; }
+          if (n.y < 2)     { n.y = 2;     n.vy *= -0.4; }
+          if (n.y > H - 2) { n.y = H - 2; n.vy *= -0.4; }
+          if (n.pulse > 0) n.pulse *= 0.92;
+        }
+      }
+
+      // ── Draw ──────────────────────────────────────────────────────────
+      function col(c, a) {
+        var rgb = CLUSTER_RGB[c];
+        return 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + a + ')';
       }
 
       function draw() {
         ctx.clearRect(0, 0, W, H);
-        var c = getColors();
+        var i, j, a, b, dx, dy, d, alpha;
 
-        // Lines
-        for (var i = 0; i < nodes.length; i++) {
-          for (var j = i + 1; j < nodes.length; j++) {
-            var dx = nodes[i].x - nodes[j].x;
-            var dy = nodes[i].y - nodes[j].y;
-            var d  = Math.sqrt(dx*dx + dy*dy);
-            if (d < CONNECT_DIST) {
-              ctx.beginPath();
-              ctx.strokeStyle = c.line + (0.5 * (1 - d / CONNECT_DIST)).toFixed(3) + ')';
-              ctx.lineWidth = 0.8;
-              ctx.moveTo(nodes[i].x, nodes[i].y);
-              ctx.lineTo(nodes[j].x, nodes[j].y);
-              ctx.stroke();
-            }
+        // Intra-cluster edges
+        for (i = 0; i < nodes.length; i++) {
+          a = nodes[i];
+          for (j = i + 1; j < nodes.length; j++) {
+            b = nodes[j];
+            if (a.c !== b.c) continue;
+            dx = a.x - b.x; dy = a.y - b.y;
+            d  = Math.sqrt(dx*dx + dy*dy);
+            if (d > LINK_DIST) continue;
+            alpha = (1 - d / LINK_DIST) * 0.42;
+            ctx.beginPath();
+            ctx.strokeStyle = col(a.c, alpha);
+            ctx.lineWidth = 0.85;
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+          }
+        }
+
+        // Inter-cluster edges (hub-to-hub only, dimmer)
+        for (i = 0; i < nodes.length; i++) {
+          if (!nodes[i].hub) continue;
+          for (j = i + 1; j < nodes.length; j++) {
+            if (!nodes[j].hub || nodes[j].c === nodes[i].c) continue;
+            a = nodes[i]; b = nodes[j];
+            dx = a.x - b.x; dy = a.y - b.y;
+            d  = Math.sqrt(dx*dx + dy*dy);
+            if (d > CROSS_DIST) continue;
+            alpha = (1 - d / CROSS_DIST) * 0.2;
+            ctx.beginPath();
+            ctx.strokeStyle = col(a.c, alpha);
+            ctx.lineWidth   = 0.55;
+            ctx.setLineDash([3, 5]);
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
           }
         }
 
         // Nodes
-        for (var i = 0; i < nodes.length; i++) {
+        for (i = 0; i < nodes.length; i++) {
           var n = nodes[i];
+          // Pulse glow ring
+          if (n.pulse > 0.05) {
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, n.r + n.pulse * 10, 0, Math.PI * 2);
+            ctx.fillStyle = col(n.c, n.pulse * 0.13);
+            ctx.fill();
+          }
+          // Node body
           ctx.beginPath();
-          ctx.arc(n.x, n.y, NODE_RADIUS, 0, Math.PI*2);
-          ctx.fillStyle = c.node + '0.7)';
+          ctx.arc(n.x, n.y, n.r + (n.hub ? n.pulse * 0.8 : 0), 0, Math.PI * 2);
+          ctx.fillStyle = col(n.c, n.hub ? 0.82 : 0.62);
           ctx.fill();
         }
       }
 
-      function move() {
-        for (var i = 0; i < nodes.length; i++) {
-          var n = nodes[i];
-          n.x += n.vx;
-          n.y += n.vy;
-          if (n.x < 0 || n.x > W) n.vx *= -1;
-          if (n.y < 0 || n.y > H) n.vy *= -1;
-        }
-      }
-
+      // ── Loop ──────────────────────────────────────────────────────────
       function loop() {
-        move();
+        stepClusters();
+        stepNodes();
         draw();
         raf = requestAnimationFrame(loop);
       }
@@ -1285,13 +1420,24 @@
       var resizeTimer;
       window.addEventListener('resize', function(){
         clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(function(){ resize(); }, 100);
+        resizeTimer = setTimeout(function(){
+          resize();
+          initClusters();
+          initNodes();
+        }, 150);
       });
 
-      // Pause when tab is hidden, resume on focus
       document.addEventListener('visibilitychange', function(){
-        if (document.hidden) { cancelAnimationFrame(raf); }
-        else { loop(); }
+        if (document.hidden) {
+          cancelAnimationFrame(raf);
+          clearInterval(pulseInterval);
+        } else {
+          loop();
+          pulseInterval = setInterval(function(){
+            var n = nodes[Math.floor(Math.random() * nodes.length)];
+            if (n) n.pulse = 1.0;
+          }, 220);
+        }
       });
     })();
 
