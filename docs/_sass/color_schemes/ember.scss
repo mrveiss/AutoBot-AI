@@ -1,0 +1,64 @@
+// AutoBot "Ember" color scheme for just-the-docs
+// Warm mulberry-plum dark surfaces + marigold orange accent
+// Mirrors the Ember token system from the landing page (issue #9274)
+
+// ── Primitives ───────────────────────────────────────────────────────
+$orange-300: #e99e55;
+$orange-400: #e2842e;
+$orange-500: #d6731f;
+$orange-600: #c4651a;
+
+$gold-400:   #f7b94a;
+$gold-500:   #eca22a;
+
+$plum-950:   #1e1418;
+$plum-900:   #281a20;
+$plum-850:   #322229;
+$plum-800:   #402c34;
+$plum-700:   #523944;
+$plum-cream: #f1e8de;
+
+$wax-100:    #ede2d1;
+$wax-200:    #d2c1a6;
+$wax-400:    #8f8068;
+$wax-500:    #6c5f4d;
+
+// ── just-the-docs variables ──────────────────────────────────────────
+
+// Backgrounds
+$body-background-color:      $plum-950;
+$sidebar-color:              $plum-900;
+$search-background-color:    $plum-900;
+$table-background-color:     $plum-900;
+$code-background-color:      $plum-850;
+
+// Borders
+$border-color:               $plum-800;
+$search-result-preview-color: $wax-400;
+
+// Text
+$body-text-color:            $plum-cream;
+$body-heading-color:         #fff;
+$nav-child-link-color:       $wax-400;
+$search-result-preview-color: $wax-400;
+$base-button-color:          $plum-700;
+$btn-primary-color:          $orange-600;
+
+// Links & accent
+$link-color:                 $orange-400;
+$link-color-visited:         $orange-300;
+$nav-arrow-color:            $orange-400;
+
+// Labels / badges
+$label-blue:                 $orange-600;
+$label-green:                #2f8a5f;
+$label-red:                  #cb3326;
+$label-yellow:               $gold-500;
+$label-purple:               #8a2f57;
+
+// Feedback / callouts (just-the-docs v0.9+)
+$callout-color-blue:         color-mix(in srgb, $orange-600 15%, transparent);
+$callout-color-yellow:       color-mix(in srgb, $gold-500 12%, transparent);
+
+// Code highlighting — warm dark tones
+$code-font-size:             0.875rem;

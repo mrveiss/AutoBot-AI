@@ -1,0 +1,62 @@
+title: AutoBot
+description: Autonomous AI workspace — self-hosted, privacy-first, hardware-accelerated.
+url: "https://mrveiss.github.io"
+baseurl: "/AutoBot-AI"
+
+remote_theme: just-the-docs/just-the-docs@v0.10.0
+
+plugins:
+  - jekyll-remote-theme
+  - jekyll-seo-tag
+
+# ── just-the-docs settings ──────────────────────────────────────────
+color_scheme: ember
+
+search_enabled: true
+search:
+  heading_level: 2
+  previews: 3
+  preview_words_before: 5
+  preview_words_after: 10
+  tokenizer_separator: /[\s/]+/
+  rel_url: true
+  button: false
+
+heading_anchors: true
+
+# Navigation
+nav_sort: case_insensitive
+nav_external_links:
+  - title: GitHub
+    url: https://github.com/mrveiss/AutoBot-AI
+    hide_icon: false
+
+# Footer
+footer_content: >
+  &copy; 2025 mrveiss &mdash; <a href="https://github.com/mrveiss/AutoBot-AI/blob/Dev_new_gui/LICENSE">MIT License</a>
+
+# Back to top
+back_to_top: true
+back_to_top_text: "Back to top"
+
+# Last edit timestamp (requires jekyll-last-modified-at plugin — optional)
+last_edit_timestamp: false
+
+# ── Build settings ───────────────────────────────────────────────────
+markdown: kramdown
+kramdown:
+  syntax_highlighter: rouge
+  syntax_highlighter_opts:
+    block:
+      line_numbers: false
+
+# Exclude non-doc files from Jekyll processing
+exclude:
+  - "*.sh"
+  - "*.rb"
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor
+  - "*.log"
+  - archives
