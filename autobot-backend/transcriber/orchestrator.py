@@ -17,7 +17,7 @@ from media.audio.ffmpeg_service import get_ffmpeg_service
 from transcriber.database import TranscriberDatabase, get_transcriber_db
 from transcriber.models import RecordingStatus, TranscriptionSegment
 from voice_processing.language_detection import detect_language
-from voice_processing.providers import get_speech_provider_registry
+from voice_processing.providers import get_provider_registry
 
 logger = get_logger(__name__)
 
@@ -34,7 +34,7 @@ class TranscriberOrchestrator:
         self.db = db
         self.ffmpeg_service = get_ffmpeg_service()
         self.diarization_service = get_diarization_service()
-        self.provider_registry = get_speech_provider_registry()
+        self.provider_registry = get_provider_registry()
 
     async def process_recording(self, recording_id: int) -> dict:
         """Process a recording through the full pipeline.
