@@ -13,7 +13,7 @@
 #   ansible-playbook -i inventory/slm-nodes.yml playbooks/provision-fleet-roles.yml
 #
 # Limit to specific nodes:
-#   --limit "02-Frontend,04-Databases"
+#   --limit "frontend,databases"
 #
 # Tag filtering (--tags) works correctly with include_role because
 # every include_role task carries an apply: block that propagates
