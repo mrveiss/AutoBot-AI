@@ -9,13 +9,34 @@
   <title>AutoBot — Autonomous AI Workspace</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-ZV9XT0XSWR"></script>
+  <!-- Consent Mode v2: defaults MUST be set before gtag.js loads -->
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
+    gtag('consent', 'default', {
+      analytics_storage:  'denied',
+      ad_storage:         'denied',
+      ad_user_data:       'denied',
+      ad_personalization: 'denied',
+      wait_for_update:    500
+    });
+    (function(){
+      var c = localStorage.getItem('ab-consent');
+      if (c === 'granted') {
+        gtag('consent', 'update', {
+          analytics_storage:  'granted',
+          ad_storage:         'denied',
+          ad_user_data:       'denied',
+          ad_personalization: 'denied'
+        });
+      }
+    })();
+  </script>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-ZV9XT0XSWR"></script>
+  <script>
     gtag('js', new Date());
-    gtag('config', 'G-ZV9XT0XSWR');
+    gtag('config', 'G-ZV9XT0XSWR', { send_page_view: true });
   </script>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300&family=Schibsted+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
@@ -118,6 +139,44 @@
     :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
     @media(prefers-reduced-motion:reduce){
       *,*::before,*::after{transition:none!important;animation:none!important}
+    }
+
+    /* ── Cookie consent banner ──────────────────────────────────────── */
+    #consent-banner{
+      position:fixed;bottom:0;left:0;right:0;z-index:999;
+      background:var(--surface-raised);border-top:1px solid var(--border-strong);
+      box-shadow:0 -4px 24px rgba(0,0,0,.18);
+      transform:translateY(100%);
+      transition:transform .35s var(--ease);
+    }
+    #consent-banner.visible{transform:translateY(0)}
+    .consent-inner{
+      max-width:1120px;margin:0 auto;padding:16px 24px;
+      display:flex;align-items:center;flex-wrap:wrap;gap:16px;
+    }
+    .consent-text{flex:1;min-width:260px;font-size:.875rem;color:var(--text-muted);line-height:1.55}
+    .consent-text strong{color:var(--text);font-weight:600}
+    .consent-text a{color:var(--accent-text);font-size:.8125rem}
+    .consent-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .consent-btn{
+      padding:9px 20px;border-radius:var(--r-full);border:none;cursor:pointer;
+      font-family:var(--font-sans);font-size:.875rem;font-weight:600;
+      transition:background var(--dur) var(--ease),box-shadow var(--dur) var(--ease);
+      white-space:nowrap;
+    }
+    .consent-btn-accept{
+      background:var(--gradient-ember);color:#fff;box-shadow:var(--shadow-sm);
+    }
+    .consent-btn-accept:hover{box-shadow:var(--shadow-md),var(--glow)}
+    .consent-btn-decline{
+      background:var(--surface-sunken);color:var(--text-muted);
+      border:1px solid var(--border);
+    }
+    .consent-btn-decline:hover{background:var(--surface-hover);color:var(--text)}
+    @media(max-width:480px){
+      .consent-inner{padding:14px 16px}
+      .consent-actions{width:100%}
+      .consent-btn{flex:1;text-align:center}
     }
 
     /* ── Icon helper ────────────────────────────────────────────────── */
@@ -1096,6 +1155,21 @@
     </div>
   </section>
 
+  <!-- Cookie consent banner -->
+  <div id="consent-banner" role="dialog" aria-label="Cookie consent" aria-live="polite">
+    <div class="consent-inner">
+      <p class="consent-text">
+        <strong>We use analytics cookies</strong> to understand how visitors use this site.
+        No ads, no tracking — just page-view data via Google Analytics to improve AutoBot.
+        <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a>
+      </p>
+      <div class="consent-actions">
+        <button class="consent-btn consent-btn-decline" id="consent-decline">Decline</button>
+        <button class="consent-btn consent-btn-accept" id="consent-accept">Accept analytics</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Footer -->
   <footer>
     <div class="container">
@@ -1160,6 +1234,41 @@
       });
     }, { threshold: 0.15 });
     tiles.forEach(t => tileIO.observe(t));
+
+    // ── Cookie consent ──────────────────────────────────────────────
+    (function(){
+      var banner = document.getElementById('consent-banner');
+      var stored = localStorage.getItem('ab-consent');
+      if (!stored) {
+        // Show banner after short delay so it doesn't flash on load
+        setTimeout(function(){ banner.classList.add('visible'); }, 800);
+      }
+
+      function grantConsent() {
+        gtag('consent', 'update', {
+          analytics_storage:  'granted',
+          ad_storage:         'denied',
+          ad_user_data:       'denied',
+          ad_personalization: 'denied'
+        });
+        localStorage.setItem('ab-consent', 'granted');
+        banner.classList.remove('visible');
+      }
+
+      function denyConsent() {
+        gtag('consent', 'update', {
+          analytics_storage:  'denied',
+          ad_storage:         'denied',
+          ad_user_data:       'denied',
+          ad_personalization: 'denied'
+        });
+        localStorage.setItem('ab-consent', 'denied');
+        banner.classList.remove('visible');
+      }
+
+      document.getElementById('consent-accept').addEventListener('click', grantConsent);
+      document.getElementById('consent-decline').addEventListener('click', denyConsent);
+    })();
 
     // ── Copy button ─────────────────────────────────────────────────
     document.getElementById('copy-btn').addEventListener('click', function() {
