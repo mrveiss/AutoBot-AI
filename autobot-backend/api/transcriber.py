@@ -161,7 +161,11 @@ async def process_recording(
             "recording_id": result["recording_id"],
             "status": result["status"],
             "segments_count": result["segments_count"],
-            "message": f"Processed successfully: {result['segments_count']} segments, language: {result.get('language', 'unknown')}, duration: {result.get('duration', 0):.2f}s",
+            "message": (
+                f"Processed successfully: {result['segments_count']} segments, "
+                f"language: {result.get('language', 'unknown')}, "
+                f"duration: {result.get('duration', 0):.2f}s"
+            ),
         }
 
         return JSONResponse(status_code=200, content={"data": response_data})
