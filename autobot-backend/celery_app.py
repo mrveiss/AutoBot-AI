@@ -233,6 +233,11 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=3, minute=30, day_of_week=0),  # Sunday 03:30 UTC
         "kwargs": {"dry_run": False},
     },
+    # MVA-2228: nightly snapshot cleanup (TTL-based eviction)
+    "snapshot-cleanup-daily": {
+        "task": "tasks.cleanup_expired_snapshots",
+        "schedule": crontab(hour=3, minute=0),
+    },
 }
 
 # GH#4459: Register web-push task_success signal so tasks that pass user_id
