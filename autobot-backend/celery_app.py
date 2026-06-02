@@ -34,7 +34,9 @@ _celery_results_db = DATABASE_MAPPING["celery_results"]
 
 # Issue #725: Check if TLS is enabled for Redis connections
 _redis_tls_enabled = ssot_config.tls.redis_tls_enabled
-_redis_port = ssot_config.tls.redis_tls_port if _redis_tls_enabled else ssot_config.port.redis
+_redis_port = (
+    ssot_config.tls.redis_tls_port if _redis_tls_enabled else ssot_config.port.redis
+)
 _redis_scheme = "rediss" if _redis_tls_enabled else "redis"
 
 # Build SSL context for TLS connections - Issue #725, #164
@@ -57,7 +59,9 @@ if _redis_tls_enabled:
         _client_cert = str(_project_root / _cert_dir / "main-host" / "server-cert.pem")
         _client_key = str(_project_root / _cert_dir / "main-host" / "server-key.pem")
 
-    _ssl_context = get_internal_tls_context(ca_path=_ca_cert, client_cert=_client_cert, client_key=_client_key)
+    _ssl_context = get_internal_tls_context(
+        ca_path=_ca_cert, client_cert=_client_cert, client_key=_client_key
+    )
     _broker_ssl_options = {"ssl": _ssl_context}
     _backend_ssl_options = {"ssl": _ssl_context}
 
@@ -68,12 +72,18 @@ if _redis_password:
     _default_broker_url = f"{_redis_scheme}://:{_encoded_password}@{_redis_host}:{_redis_port}/{_celery_broker_db}"
     _default_backend_url = f"{_redis_scheme}://:{_encoded_password}@{_redis_host}:{_redis_port}/{_celery_results_db}"
 else:
-    _default_broker_url = f"{_redis_scheme}://{_redis_host}:{_redis_port}/{_celery_broker_db}"
-    _default_backend_url = f"{_redis_scheme}://{_redis_host}:{_redis_port}/{_celery_results_db}"
+    _default_broker_url = (
+        f"{_redis_scheme}://{_redis_host}:{_redis_port}/{_celery_broker_db}"
+    )
+    _default_backend_url = (
+        f"{_redis_scheme}://{_redis_host}:{_redis_port}/{_celery_results_db}"
+    )
 
 # Get Celery-specific configuration
 _celery_config = config.get("celery", {})
-_visibility_timeout = _celery_config.get("visibility_timeout", 43200)  # 12 hours default
+_visibility_timeout = _celery_config.get(
+    "visibility_timeout", 43200
+)  # 12 hours default
 _result_expires = _celery_config.get("result_expires", 86400)  # 24 hours default
 _worker_prefetch = _celery_config.get("worker_prefetch_multiplier", 1)
 _worker_max_tasks = _celery_config.get("worker_max_tasks_per_child", 100)
@@ -148,6 +158,9 @@ celery_app.autodiscover_tasks(["tasks", "workers"])
 # workers register it. autodiscover_tasks only scans the listed packages.
 import services.pricing_refresh  # noqa: F401
 
+# GH#4463: Mobile device tasks module
+import tasks.mobile_device_tasks  # noqa: F401
+
 # =========================================================================
 # Issue #4455: Periodic knowledge-base cleanup schedule
 # =========================================================================
@@ -186,13 +199,17 @@ celery_app.conf.beat_schedule = {
     },
     "knowledge-cleanup-generated-files": {
         "task": "tasks.cleanup_generated_files",
-        "schedule": _crontab_from_string(ssot_config.knowledge_generated_files_cleanup_schedule),
+        "schedule": _crontab_from_string(
+            ssot_config.knowledge_generated_files_cleanup_schedule
+        ),
         "kwargs": {"dry_run": False},
     },
     # Issue #5081: prune expired entries from the doc_sync:queue:done zset
     "knowledge-sync-queue-prune": {
         "task": "tasks.prune_sync_queue_done",
-        "schedule": _crontab_from_string(ssot_config.knowledge_sync_queue_prune_schedule),
+        "schedule": _crontab_from_string(
+            ssot_config.knowledge_sync_queue_prune_schedule
+        ),
     },
     # GH#8224: detect expired active sprints and queue SPRINT_CLOSE approvals daily
     "llc-sprint-autoclose-daily": {
@@ -224,6 +241,12 @@ celery_app.conf.beat_schedule = {
         "task": "pricing.refresh_daily",
         "schedule": crontab(hour=2, minute=15),
     },
+    # GH#4463: weekly cleanup of stale mobile devices (inactive for 90+ days)
+    "mobile-devices-cleanup-weekly": {
+        "task": "tasks.cleanup_stale_mobile_devices",
+        "schedule": crontab(hour=3, minute=30, day_of_week=0),  # Sunday 03:30 UTC
+        "kwargs": {"dry_run": False},
+    },
 }
 
 # GH#4459: Register web-push task_success signal so tasks that pass user_id
@@ -235,4 +258,6 @@ try:
 except ImportError:
     pass  # pywebpush not installed — push notifications disabled
 except Exception:
-    logger.warning("Push notification hook registration failed (GH#4459)", exc_info=True)
+    logger.warning(
+        "Push notification hook registration failed (GH#4459)", exc_info=True
+    )

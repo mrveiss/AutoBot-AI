@@ -21,7 +21,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Uuid(as_uuid=True), primary_key=True),
         sa.Column("user_id", sa.String(64), nullable=False, index=True),
         sa.Column("device_name", sa.String(255), nullable=False),
-        sa.Column("device_token", sa.String(512), nullable=False),
+        sa.Column("device_token", sa.Text, nullable=False),
         sa.Column("platform", sa.String(16), nullable=False),
         sa.Column("last_seen_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
@@ -39,5 +39,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_desktop_mobile_devices_user_id", table_name="desktop_mobile_devices")
+    op.drop_index(
+        "ix_desktop_mobile_devices_user_id", table_name="desktop_mobile_devices"
+    )
     op.drop_table("desktop_mobile_devices")
