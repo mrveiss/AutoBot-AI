@@ -710,40 +710,42 @@
         <svg width="64" height="64" viewBox="0 0 48 48" style="color:var(--accent);margin-bottom:20px;animation:fade-up .5s var(--ease) both"><use href="#logo-mark"/></svg>
         <div class="hero-badge">
           <svg class="icon" style="width:14px;height:14px"><use href="#i-spark"/></svg>
-          Self-hosted · Privacy-first · Hardware-accelerated
+          Self-hosted · Your data never leaves your server
         </div>
-        <h1>Your infrastructure,<br>your AI.</h1>
+        <h1>AI for your runbooks,<br>servers, and workflows.</h1>
         <p class="hero-sub">
-          AutoBot is an autonomous AI workspace that runs on your hardware, speaks to your
-          knowledge base, and orchestrates agents across your entire fleet.
+          Deploy once with Docker. Add your docs and fleet nodes. Ask AutoBot to explain,
+          summarize, or run the next operation — without sending your infrastructure
+          knowledge to a SaaS dashboard.
         </p>
         <div class="hero-actions">
           <a href="#deploy" class="btn-primary">
             <svg class="icon" style="width:18px;height:18px"><use href="#i-spark"/></svg>
-            Deploy now
+            Deploy locally
           </a>
-          <a href="https://github.com/mrveiss/AutoBot-AI" class="btn-secondary" target="_blank" rel="noopener">
-            <svg class="icon" style="width:18px;height:18px"><use href="#i-github"/></svg>
-            View on GitHub
+          <a href="https://github.com/mrveiss/AutoBot-AI/blob/Dev_new_gui/docs/GETTING_STARTED_COMPLETE.md" class="btn-secondary" target="_blank" rel="noopener">
+            <svg class="icon" style="width:18px;height:18px"><use href="#i-book"/></svg>
+            Read docs
           </a>
         </div>
 
-        <!-- Terminal -->
+        <!-- 3-step proof terminal -->
         <div class="hero-terminal">
           <div class="terminal-bar">
             <span class="dot dot-red"></span>
             <span class="dot dot-yellow"></span>
             <span class="dot dot-green"></span>
-            <span class="terminal-title">autobot — bash</span>
+            <span class="terminal-title">3 steps to working dashboard</span>
           </div>
           <div class="terminal-body">
-            <div><span class="t-comment"># Clone and start in 60 seconds</span></div>
-            <div><span class="t-cmd">$ git clone</span> <span class="t-out">https://github.com/mrveiss/AutoBot-AI</span></div>
-            <div><span class="t-cmd">$ cd</span> AutoBot-AI <span class="t-cmd">&amp;&amp; sudo ./install.sh</span></div>
-            <div style="margin-top:8px"><span class="t-success">✓ SLM deployed</span> <span class="t-comment">— control plane on :8001</span></div>
-            <div><span class="t-success">✓ Knowledge engine</span> <span class="t-comment">— ChromaDB on :8100</span></div>
-            <div><span class="t-success">✓ NPU workers</span> <span class="t-comment">— OpenVINO acceleration active</span></div>
-            <div><span class="t-highlight">→ Open</span> <span class="t-out">https://autobot.local</span> <span class="t-cursor"></span></div>
+            <div><span class="t-comment"># Step 1 — clone</span></div>
+            <div><span class="t-cmd">$ git clone</span> <span class="t-out">https://github.com/mrveiss/AutoBot-AI &amp;&amp; cd AutoBot-AI</span></div>
+            <div style="margin-top:6px"><span class="t-comment"># Step 2 — start</span></div>
+            <div><span class="t-cmd">$ docker compose up -d --build</span></div>
+            <div style="margin-top:6px"><span class="t-comment"># Step 3 — open dashboard, add your docs and fleet nodes</span></div>
+            <div><span class="t-highlight">→ Open</span> <span class="t-out">http://localhost:7000</span> <span class="t-cursor"></span></div>
+            <div style="margin-top:8px"><span class="t-success">✓ FastAPI backend</span> <span class="t-comment">· Redis · ChromaDB · Ollama all included</span></div>
+            <div><span class="t-success">✓ Ask:</span> <span class="t-out">"Summarise last week's Ansible failures and suggest fixes"</span></div>
           </div>
         </div>
       </div>
@@ -754,40 +756,40 @@
   <section id="features">
     <div class="container">
       <div class="features-header">
-        <span class="section-label">Capabilities</span>
-        <h2 class="section-title">Everything an AI workspace needs</h2>
-        <p class="section-sub">From conversational chat to multi-agent orchestration — all running on your own hardware.</p>
+        <span class="section-label">What you can do</span>
+        <h2 class="section-title">From first deploy to production operations</h2>
+        <p class="section-sub">All model inference, document storage, and fleet data stays on your servers. No SaaS, no telemetry, no vendor lock-in.</p>
       </div>
       <div class="features-grid">
         <div class="feature-card">
           <div class="feature-icon"><svg class="icon"><use href="#i-chat"/></svg></div>
-          <h3>Multi-model Chat</h3>
-          <p>Converse with any local or API model. Anthropic, Ollama, vLLM, OpenRouter — add endpoints in seconds from the settings panel.</p>
+          <h3>Chat with your infrastructure docs</h3>
+          <p>Upload runbooks, man pages, or architecture diagrams. Ask in plain language — AutoBot retrieves and answers from your own indexed content, not training data.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon"><svg class="icon"><use href="#i-layers"/></svg></div>
-          <h3>Agent Orchestration</h3>
-          <p>Hand the agent tools and let it run entire tasks: shell commands, file operations, web research, and cross-VM deployments.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon"><svg class="icon"><use href="#i-scope"/></svg></div>
-          <h3>Knowledge Engine</h3>
-          <p>ChromaDB-backed RAG with semantic + keyword hybrid retrieval. Man pages, codebase, and documents — always in context.</p>
+          <h3>Turn runbooks into actions</h3>
+          <p>Give the agent a task and let it run: execute shell commands, trigger Ansible playbooks, or chain multi-step operations across your fleet — with confirmation gates.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon"><svg class="icon"><use href="#i-mesh"/></svg></div>
-          <h3>Fleet Management</h3>
-          <p>Manage distributed VM infrastructure from a single interface. Ansible playbooks, health checks, and live terminal access.</p>
+          <h3>Enroll fleet nodes over SSH</h3>
+          <p>Add servers from the dashboard. AutoBot generates an SSH key pair, registers the node, and makes it available for remote commands and health checks immediately.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon"><svg class="icon"><use href="#i-scope"/></svg></div>
+          <h3>Build repeatable workflows</h3>
+          <p>Schedule a weekly health check → summarise → Slack-ready report. Workflows run on cron, trigger on events, or execute on demand with a single click.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon"><svg class="icon"><use href="#i-cpu"/></svg></div>
-          <h3>NPU Acceleration</h3>
-          <p>OpenVINO-powered inference routing. AutoBot detects available NPU hardware and routes compatible workloads automatically.</p>
+          <h3>Run models on your hardware</h3>
+          <p>Ollama, vLLM, llama.cpp, or any OpenAI-compatible endpoint. AutoBot routes to the fastest available compute — including NPU acceleration via OpenVINO.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon"><svg class="icon"><use href="#i-code"/></svg></div>
-          <h3>Persistent Memory</h3>
-          <p>Facts extracted from every conversation are stored, consolidated, and injected into future sessions — the agent remembers you.</p>
+          <h3>Keep data local with open components</h3>
+          <p>FastAPI backend · PostgreSQL/SQLite · Redis · ChromaDB · Ollama. Every component is replaceable, self-hosted, and ships in the Docker Compose bundle.</p>
         </div>
       </div>
     </div>
@@ -796,38 +798,38 @@
   <!-- Architecture -->
   <section id="architecture">
     <div class="container">
-      <span class="section-label">Under the hood</span>
-      <h2 class="section-title">Designed for production from day one</h2>
-      <p class="section-sub">A distributed architecture that separates concerns cleanly and scales with your hardware.</p>
+      <span class="section-label">How it fits together</span>
+      <h2 class="section-title">One stack, everything included</h2>
+      <p class="section-sub">Vue 3 frontend → FastAPI backend → PostgreSQL / Redis / ChromaDB / Ollama → Ansible / browser worker. Every layer is open source and replaceable.</p>
       <div class="arch-grid">
         <div class="arch-card">
-          <h3><span class="arch-num">1</span> SLM Control Plane</h3>
-          <p><strong>SLM</strong> — Service Lifecycle Manager. A dedicated control plane that handles all admin and orchestration functions separately from the AI workload. This separation keeps infrastructure management concerns (deployments, health checks, configuration, user management) isolated from chat and inference traffic, so a heavy model run never blocks a config update.</p>
+          <h3><span class="arch-num">1</span> FastAPI Backend + SLM</h3>
+          <p><strong>SLM</strong> (Service Lifecycle Manager) is the admin control plane — it handles deployments, health checks, config, and user management separately from chat traffic, so a heavy inference job never blocks an operator command.</p>
           <ul>
-            <li>Multi-provider LLM gateway</li>
-            <li>Tiered routing with Claude escalation</li>
-            <li>Redis-backed session cache (24h TTL)</li>
-            <li>WebSocket streaming with JWT auth</li>
+            <li>FastAPI · 4 uvicorn workers</li>
+            <li>Multi-provider LLM gateway (Ollama, vLLM, Anthropic, OpenAI)</li>
+            <li>Redis session cache · WebSocket streaming</li>
+            <li>PostgreSQL or SQLite for persistence</li>
           </ul>
         </div>
         <div class="arch-card">
-          <h3><span class="arch-num">2</span> Managed Services</h3>
-          <p>Purpose-built workers deployed by Ansible onto dedicated VMs. Each service has a single responsibility and communicates via Redis pub/sub.</p>
+          <h3><span class="arch-num">2</span> Fleet + Ansible Workers</h3>
+          <p>Each worker VM has one job and communicates via Redis. Ansible provisions and updates everything — no SSH drift, no manual config. Add a node from the dashboard and it's registered in seconds.</p>
           <ul>
-            <li>NPU worker (OpenVINO)</li>
-            <li>Browser VM (Playwright)</li>
-            <li>AI stack VM (vLLM / Ollama)</li>
-            <li>Redis Stack data layer</li>
+            <li>Ansible playbook execution with confirmation gates</li>
+            <li>Browser worker (Playwright) for web automation</li>
+            <li>NPU worker (OpenVINO) for hardware-accelerated inference</li>
+            <li>Redis Stack — sessions, pub/sub, rate limiting</li>
           </ul>
         </div>
         <div class="arch-card">
-          <h3><span class="arch-num">3</span> Knowledge Engine</h3>
-          <p>Hybrid retrieval combining dense vector search (ChromaDB + fastembed) with keyword BM25. Prepends an "essential story" of top facts to every system prompt — no round-trip needed.</p>
+          <h3><span class="arch-num">3</span> ChromaDB Knowledge Engine</h3>
+          <p>Upload docs once, query forever. ChromaDB stores vector embeddings alongside keyword index. Every system prompt gets your top relevant facts prepended automatically — no retrieval round-trip at chat time.</p>
           <ul>
-            <li>ONNX-accelerated embeddings</li>
-            <li>Content-addressed cache (SHA-256)</li>
-            <li>Auto memory extraction from chat</li>
-            <li>Man page + codebase indexing</li>
+            <li>ChromaDB · fastembed (ONNX, no GPU needed)</li>
+            <li>Hybrid search: semantic vectors + BM25 keyword</li>
+            <li>Auto-indexes: runbooks, man pages, codebase</li>
+            <li>Memory extracted and consolidated from every session</li>
           </ul>
         </div>
       </div>
