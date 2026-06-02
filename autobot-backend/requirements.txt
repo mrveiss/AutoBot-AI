@@ -23,6 +23,7 @@ aiosqlite>=0.21.0
 # Document Generation (MVA-2174)
 python-docx>=1.1.0  # DOCX export for transcripts
 reportlab>=4.0.0    # PDF export for transcripts
+PyPDF2>=3.0.0       # PDF testing for transcript export
 
 # AI/ML
 openai>=2.32.0
