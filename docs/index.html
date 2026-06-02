@@ -8,6 +8,13 @@
   <title>AutoBot — Autonomous AI Workspace</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Google Tag Manager -->
+  <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+  new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+  j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+  'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+  })(window,document,'script','dataLayer','GTM-535NHL3D');</script>
+  <!-- End Google Tag Manager -->
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300&family=Schibsted+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
   <style>
@@ -562,6 +569,10 @@
 </head>
 
 <body>
+  <!-- Google Tag Manager (noscript) -->
+  <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-535NHL3D"
+  height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+  <!-- End Google Tag Manager (noscript) -->
   <!-- Kiln icon sprite (inline, hidden) -->
   <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
     <symbol id="i-chat" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="12" rx="3"/><path d="M8 16.5v3l4-3"/><path d="M8 9.5h8M8 12.5h5"/></symbol>
@@ -583,13 +594,49 @@
     <symbol id="i-zap" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
     <symbol id="i-tag" viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82Z"/><line x1="7" y1="7" x2="7.01" y2="7"/></symbol>
     <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
+
+    <!-- AutoBot logo mark — geometric circuit-node diamond -->
+    <symbol id="logo-mark" viewBox="0 0 48 48">
+      <defs>
+        <linearGradient id="ember-logo" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%"   stop-color="#f7b94a"/>
+          <stop offset="38%"  stop-color="#e2842e"/>
+          <stop offset="70%"  stop-color="#cf5f22"/>
+          <stop offset="100%" stop-color="#a2374a"/>
+        </linearGradient>
+        <linearGradient id="ember-logo-fade" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%"   stop-color="#f7b94a" stop-opacity="0.18"/>
+          <stop offset="100%" stop-color="#a2374a" stop-opacity="0.18"/>
+        </linearGradient>
+      </defs>
+      <!-- Outer rounded square container -->
+      <rect x="1" y="1" width="46" height="46" rx="13" fill="url(#ember-logo-fade)"/>
+      <rect x="1" y="1" width="46" height="46" rx="13" stroke="url(#ember-logo)" stroke-width="1.5" fill="none"/>
+      <!-- Four outer nodes at cardinal positions -->
+      <circle cx="24" cy="8"  r="3.2" fill="url(#ember-logo)"/>
+      <circle cx="40" cy="24" r="3.2" fill="url(#ember-logo)"/>
+      <circle cx="24" cy="40" r="3.2" fill="url(#ember-logo)"/>
+      <circle cx="8"  cy="24" r="3.2" fill="url(#ember-logo)"/>
+      <!-- Center hub — larger -->
+      <circle cx="24" cy="24" r="4.5" fill="url(#ember-logo)"/>
+      <!-- Spokes from center to outer nodes -->
+      <path d="M24 12.5 L24 19.5" stroke="url(#ember-logo)" stroke-width="2" stroke-linecap="round"/>
+      <path d="M35.5 24 L28.5 24" stroke="url(#ember-logo)" stroke-width="2" stroke-linecap="round"/>
+      <path d="M24 36.5 L24 28.5" stroke="url(#ember-logo)" stroke-width="2" stroke-linecap="round"/>
+      <path d="M12.5 24 L19.5 24" stroke="url(#ember-logo)" stroke-width="2" stroke-linecap="round"/>
+      <!-- Diagonal connector lines (circuit traces) -->
+      <path d="M10.3 10.3 L19.5 19.5" stroke="url(#ember-logo)" stroke-width="1" stroke-linecap="round" opacity="0.45"/>
+      <path d="M37.7 10.3 L28.5 19.5" stroke="url(#ember-logo)" stroke-width="1" stroke-linecap="round" opacity="0.45"/>
+      <path d="M10.3 37.7 L19.5 28.5" stroke="url(#ember-logo)" stroke-width="1" stroke-linecap="round" opacity="0.45"/>
+      <path d="M37.7 37.7 L28.5 28.5" stroke="url(#ember-logo)" stroke-width="1" stroke-linecap="round" opacity="0.45"/>
+    </symbol>
   </svg>
 
   <!-- Navigation -->
   <nav>
     <div class="nav-inner">
       <a href="#" class="nav-logo" style="text-decoration:none">
-        <span class="ember-dot"></span>
+        <svg width="28" height="28" viewBox="0 0 48 48" style="flex:none"><use href="#logo-mark"/></svg>
         AutoBot
       </a>
       <div class="nav-links">
@@ -614,6 +661,7 @@
   <section class="hero">
     <div class="container">
       <div class="hero-inner">
+        <svg width="72" height="72" viewBox="0 0 48 48" style="margin-bottom:20px;animation:fade-up .5s var(--ease) both"><use href="#logo-mark"/></svg>
         <div class="hero-badge">
           <svg class="icon" style="width:14px;height:14px"><use href="#i-spark"/></svg>
           Self-hosted · Privacy-first · Hardware-accelerated
@@ -1068,7 +1116,10 @@
   <footer>
     <div class="container">
       <div class="footer-inner">
-        <span class="footer-logo">AutoBot</span>
+        <span class="footer-logo" style="display:flex;align-items:center;gap:8px">
+          <svg width="22" height="22" viewBox="0 0 48 48"><use href="#logo-mark"/></svg>
+          AutoBot
+        </span>
         <div class="footer-links">
           <a href="https://github.com/mrveiss/AutoBot-AI" target="_blank" rel="noopener">GitHub</a>
           <a href="https://github.com/mrveiss/AutoBot-AI/blob/Dev_new_gui/docs/GETTING_STARTED_COMPLETE.md" target="_blank" rel="noopener">Docs</a>
