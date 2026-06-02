@@ -240,10 +240,8 @@ class ConversationSummarizer:
             # Sanitize orphaned tool messages before formatting
             safe_messages = _sanitize_tool_messages(messages)
             conversation_text = self._format_messages(safe_messages)
-            prompt = (
-                self._SUMMARIZATION_PROMPT
-                .replace("{{conversation}}", conversation_text)
-                .replace("{{count}}", str(len(messages)))
+            prompt = self._SUMMARIZATION_PROMPT.replace("{{conversation}}", conversation_text).replace(
+                "{{count}}", str(len(messages))
             )
 
             # Generate summary via LLM
@@ -282,8 +280,7 @@ class ConversationSummarizer:
             content = msg.get("content") or msg.get("text", "")
             if isinstance(content, list):
                 content = " ".join(
-                    p.get("text", "") for p in content
-                    if isinstance(p, dict) and p.get("type") == "text"
+                    p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"
                 )
             if role and content:
                 lines.append(f"{role}: {content}")

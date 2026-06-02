@@ -298,6 +298,7 @@ class ContextWindowManager:
         """Try to get context window from llm_shared model registry. Returns 0 when unknown."""
         try:
             from llm_shared.model_param_registry import get_model_kwargs
+
             kwargs = get_model_kwargs(model_name)
             return int(kwargs.get("context_window_tokens", 0))
         except Exception:
