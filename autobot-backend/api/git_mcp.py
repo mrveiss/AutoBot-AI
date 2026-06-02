@@ -918,3 +918,311 @@ async def get_git_mcp_status() -> Metadata:
         },
         "timestamp": now_utc().isoformat(),
     }
+
+
+# ---------------------------------------------------------------------------
+# MCP Resources and Prompts (Issue MVA-2165)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/mcp/resources")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_git_resources",
+    error_code_prefix="GIT_MCP",
+)
+async def list_git_resources() -> Metadata:
+    """
+    List available git resources as MCP resources.
+
+    Issue MVA-2165: Exposes git commits, branches, and diffs as browseable resources.
+
+    Resources use git:// URI scheme:
+    - git://repo/commit/<SHA> - specific commit
+    - git://repo/branch/<name> - branch tip commit
+    - git://repo/diff/<base>..<head> - diff between commits
+    """
+    if not await check_rate_limit():
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    resources = []
+
+    # Get repository info
+    repo_path = DEFAULT_REPO_PATH
+    if is_repository_allowed(repo_path):
+        # Recent commits as resources
+        result = await execute_git_command(repo_path, ["log", "--oneline", "--max-count=10"])
+        if result["success"]:
+            for line in result["stdout"].strip().split("\n"):
+                if line:
+                    parts = line.split(" ", 1)
+                    if len(parts) == 2:
+                        sha, message = parts
+                        resources.append(
+                            {
+                                "uri": f"git://{repo_path}/commit/{sha}",
+                                "name": f"Commit {sha[:7]}",
+                                "description": message,
+                                "mime_type": "text/x-git-commit",
+                            }
+                        )
+
+        # Branches as resources
+        result = await execute_git_command(repo_path, ["branch", "-a"])
+        if result["success"]:
+            for line in result["stdout"].strip().split("\n"):
+                if line:
+                    branch = line.strip().lstrip("* ").strip()
+                    if branch and not branch.startswith("remotes/"):
+                        resources.append(
+                            {
+                                "uri": f"git://{repo_path}/branch/{branch}",
+                                "name": f"Branch: {branch}",
+                                "description": f"Branch {branch} tip commit",
+                                "mime_type": "text/x-git-branch",
+                            }
+                        )
+
+    return {
+        "success": True,
+        "resources": resources,
+        "total": len(resources),
+    }
+
+
+@router.post("/mcp/resources/read")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="read_git_resource",
+    error_code_prefix="GIT_MCP",
+)
+async def read_git_resource(request: Metadata) -> Metadata:
+    """
+    Read a git resource by its URI.
+
+    Issue MVA-2165: Implements MCP resource reading via git:// URIs.
+
+    Supports:
+    - git://repo/commit/<SHA> - show commit details
+    - git://repo/branch/<name> - show branch tip commit
+    - git://repo/diff/<base>..<head> - show diff between commits
+    """
+    if not await check_rate_limit():
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    uri = request.get("uri", "")
+    if not uri.startswith("git://"):
+        raise HTTPException(status_code=400, detail="Only git:// URIs are supported")
+
+    # Parse URI: git://repo/type/identifier
+    parts = uri[6:].split("/", 2)  # Remove 'git://'
+    if len(parts) < 3:
+        raise HTTPException(status_code=400, detail="Invalid git:// URI format")
+
+    repo_path, resource_type, identifier = parts
+
+    if not is_repository_allowed(repo_path):
+        raise HTTPException(status_code=403, detail="Repository not in whitelist")
+
+    try:
+        if resource_type == "commit":
+            # Show commit details
+            if not _COMMIT_REF_RE.match(identifier):
+                raise HTTPException(status_code=400, detail="Invalid commit reference")
+            result = await execute_git_command(repo_path, ["show", identifier])
+            content = result["stdout"]
+            mime_type = "text/x-git-commit"
+
+        elif resource_type == "branch":
+            # Show branch tip commit
+            if not sanitize_git_args([identifier]):
+                raise HTTPException(status_code=400, detail="Invalid branch name")
+            result = await execute_git_command(repo_path, ["show", identifier])
+            content = result["stdout"]
+            mime_type = "text/x-git-branch"
+
+        elif resource_type == "diff":
+            # Show diff between commits
+            if ".." in identifier:
+                base, head = identifier.split("..", 1)
+                if not _COMMIT_REF_RE.match(base) or not _COMMIT_REF_RE.match(head):
+                    raise HTTPException(status_code=400, detail="Invalid diff reference")
+                result = await execute_git_command(repo_path, ["diff", f"{base}..{head}"])
+            else:
+                raise HTTPException(status_code=400, detail="Diff URI must use base..head format")
+            content = result["stdout"]
+            mime_type = "text/x-git-diff"
+
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown resource type: {resource_type}")
+
+        if not result["success"]:
+            raise HTTPException(status_code=500, detail="Git command failed")
+
+        return {
+            "success": True,
+            "uri": uri,
+            "content": content,
+            "mime_type": mime_type,
+            "size_bytes": len(content),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error reading git resource: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to read git resource")
+
+
+@router.get("/mcp/prompts")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_git_prompts",
+    error_code_prefix="GIT_MCP",
+)
+async def list_git_prompts() -> Metadata:
+    """
+    List available git prompt templates.
+
+    Issue MVA-2165: Exposes predefined prompt templates for common
+    git analysis tasks.
+
+    Templates can be invoked via the /mcp/prompts/get endpoint with
+    appropriate arguments to generate contextual prompts.
+    """
+    prompts = [
+        {
+            "name": "review_pr",
+            "description": "Review a pull request or commit range for quality and issues",
+            "arguments": [
+                {
+                    "name": "base",
+                    "description": "Base commit or branch",
+                    "required": True,
+                },
+                {
+                    "name": "head",
+                    "description": "Head commit or branch",
+                    "required": True,
+                },
+            ],
+        },
+        {
+            "name": "explain_commit",
+            "description": "Explain what a commit does and why",
+            "arguments": [
+                {
+                    "name": "commit",
+                    "description": "Commit SHA or reference",
+                    "required": True,
+                },
+            ],
+        },
+        {
+            "name": "diff_analysis",
+            "description": "Analyze a diff for breaking changes and impact",
+            "arguments": [
+                {
+                    "name": "diff_ref",
+                    "description": "Diff reference (e.g., HEAD~1..HEAD)",
+                    "required": True,
+                },
+            ],
+        },
+    ]
+
+    return {
+        "success": True,
+        "prompts": prompts,
+        "total": len(prompts),
+    }
+
+
+@router.post("/mcp/prompts/get")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_git_prompt",
+    error_code_prefix="GIT_MCP",
+)
+async def get_git_prompt(request: Metadata) -> Metadata:
+    """
+    Get a specific git prompt template with arguments interpolated.
+
+    Issue MVA-2165: Returns formatted prompt messages for common
+    git analysis tasks.
+
+    The template arguments are validated and interpolated into the
+    prompt to generate contextual instructions for LLMs.
+    """
+    name = request.get("name", "")
+    arguments = request.get("arguments", {})
+
+    if name == "review_pr":
+        base = arguments.get("base")
+        head = arguments.get("head")
+        if not base or not head:
+            raise HTTPException(status_code=400, detail="Missing required arguments: base, head")
+
+        return {
+            "success": True,
+            "name": name,
+            "description": "Review a pull request or commit range",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": f"Please review the changes from {base} to {head}. "
+                    f"Analyze for:\n"
+                    f"- Code quality and maintainability\n"
+                    f"- Potential bugs or issues\n"
+                    f"- Security vulnerabilities\n"
+                    f"- Breaking changes\n"
+                    f"- Test coverage gaps",
+                }
+            ],
+        }
+
+    elif name == "explain_commit":
+        commit = arguments.get("commit")
+        if not commit:
+            raise HTTPException(status_code=400, detail="Missing required argument: commit")
+
+        return {
+            "success": True,
+            "name": name,
+            "description": "Explain what a commit does",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": f"Please explain commit {commit}:\n"
+                    f"- What changes were made?\n"
+                    f"- Why were these changes necessary?\n"
+                    f"- What is the impact of these changes?\n"
+                    f"- Are there any side effects to be aware of?",
+                }
+            ],
+        }
+
+    elif name == "diff_analysis":
+        diff_ref = arguments.get("diff_ref")
+        if not diff_ref:
+            raise HTTPException(status_code=400, detail="Missing required argument: diff_ref")
+
+        return {
+            "success": True,
+            "name": name,
+            "description": "Analyze a diff for impact",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": f"Please analyze the diff {diff_ref}:\n"
+                    f"- Identify breaking changes\n"
+                    f"- Assess backward compatibility impact\n"
+                    f"- Find potential runtime issues\n"
+                    f"- Evaluate performance implications\n"
+                    f"- Check for missing tests or documentation",
+                }
+            ],
+        }
+
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown prompt template: {name}")

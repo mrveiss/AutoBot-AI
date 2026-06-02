@@ -1022,3 +1022,294 @@ async def mcp_health():
         logger.exception("Unexpected error")
 
         return {"status": "unhealthy", "error": "Internal server error"}
+
+
+# ---------------------------------------------------------------------------
+# MCP Resources and Prompts (Issue MVA-2165)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/mcp/resources")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_kb_resources",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
+async def list_kb_resources(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    List available knowledge base resources as MCP resources.
+
+    Issue MVA-2165: Exposes KB documents and chunks as browseable resources.
+    Issue #744: Requires authenticated user.
+
+    Resources use kb:// URI scheme:
+    - kb://doc/<ID> - specific document
+    - kb://chunk/<ID> - specific chunk
+    """
+    try:
+        kb = get_knowledge_base()
+        resources = []
+
+        # Get recent documents as resources
+        # Note: This is a simplified implementation - in production,
+        # you'd want pagination and proper document listing
+        stats = {
+            "total_documents": await kb.get_document_count(),
+        }
+
+        # For now, expose the document count as metadata
+        # Individual documents would be accessed via kb://doc/<id> URIs
+        resources.append(
+            {
+                "uri": f"kb://stats",
+                "name": "Knowledge Base Statistics",
+                "description": f"Total documents: {stats['total_documents']}",
+                "mime_type": "application/json",
+            }
+        )
+
+        return {
+            "success": True,
+            "resources": resources,
+            "total": len(resources),
+        }
+
+    except Exception as e:
+        logger.error("Error listing KB resources: %s", e)
+        return {"success": False, "error": "Internal server error", "resources": []}
+
+
+@router.post("/mcp/resources/read")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="read_kb_resource",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
+async def read_kb_resource(
+    request: Metadata,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Read a knowledge base resource by its URI.
+
+    Issue MVA-2165: Implements MCP resource reading via kb:// URIs.
+    Issue #744: Requires authenticated user.
+
+    Supports:
+    - kb://doc/<ID> - retrieve document by ID
+    - kb://chunk/<ID> - retrieve chunk by ID
+    - kb://stats - retrieve knowledge base statistics
+    """
+    uri = request.get("uri", "")
+    if not uri.startswith("kb://"):
+        return {"success": False, "error": "Only kb:// URIs are supported"}
+
+    # Parse URI: kb://type/identifier
+    parts = uri[5:].split("/", 1)  # Remove 'kb://'
+    if len(parts) < 1:
+        return {"success": False, "error": "Invalid kb:// URI format"}
+
+    resource_type = parts[0]
+    identifier = parts[1] if len(parts) > 1 else None
+
+    try:
+        kb = get_knowledge_base()
+
+        if resource_type == "stats":
+            # Return KB statistics as JSON
+            stats = {
+                "total_documents": await kb.get_document_count(),
+                "index_name": kb.redis_index_name,
+                "vector_store_type": kb.vector_store_type,
+                "embedding_model": kb.embedding_model_name,
+                "chunk_size": kb.chunk_size,
+            }
+            content = str(stats)
+            mime_type = "application/json"
+
+        elif resource_type == "doc":
+            if not identifier:
+                return {"success": False, "error": "Document ID required"}
+            # Retrieve document by ID
+            # Note: This is a simplified implementation - you'd need to
+            # implement document retrieval by ID in the knowledge base
+            results = await kb.search(query=f"id:{identifier}", top_k=1)
+            if results:
+                content = results[0].get("content", "")
+                mime_type = "text/plain"
+            else:
+                return {"success": False, "error": f"Document not found: {identifier}"}
+
+        elif resource_type == "chunk":
+            if not identifier:
+                return {"success": False, "error": "Chunk ID required"}
+            # Retrieve chunk by ID
+            results = await kb.search(query=f"chunk_id:{identifier}", top_k=1)
+            if results:
+                content = results[0].get("content", "")
+                mime_type = "text/plain"
+            else:
+                return {"success": False, "error": f"Chunk not found: {identifier}"}
+
+        else:
+            return {"success": False, "error": f"Unknown resource type: {resource_type}"}
+
+        return {
+            "success": True,
+            "uri": uri,
+            "content": content,
+            "mime_type": mime_type,
+            "size_bytes": len(content),
+        }
+
+    except Exception as e:
+        logger.error("Error reading KB resource: %s", e)
+        return {"success": False, "error": "Internal server error"}
+
+
+@router.get("/mcp/prompts")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_kb_prompts",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
+async def list_kb_prompts(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    List available knowledge base prompt templates.
+
+    Issue MVA-2165: Exposes predefined prompt templates for common
+    knowledge base operations.
+    Issue #744: Requires authenticated user.
+
+    Templates can be invoked via the /mcp/prompts/get endpoint with
+    appropriate arguments to generate contextual prompts.
+    """
+    prompts = [
+        {
+            "name": "search_knowledge",
+            "description": "Search the knowledge base for information on a topic",
+            "arguments": [
+                {
+                    "name": "topic",
+                    "description": "Topic or query to search for",
+                    "required": True,
+                },
+                {
+                    "name": "depth",
+                    "description": "Search depth: 'quick' (top 3), 'normal' (top 5), 'deep' (top 10)",
+                    "required": False,
+                },
+            ],
+        },
+        {
+            "name": "summarize_topic",
+            "description": "Generate a comprehensive summary of knowledge on a topic",
+            "arguments": [
+                {
+                    "name": "topic",
+                    "description": "Topic to summarize",
+                    "required": True,
+                },
+                {
+                    "name": "format",
+                    "description": "Output format: 'brief', 'detailed', or 'technical'",
+                    "required": False,
+                },
+            ],
+        },
+    ]
+
+    return {
+        "success": True,
+        "prompts": prompts,
+        "total": len(prompts),
+    }
+
+
+@router.post("/mcp/prompts/get")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_kb_prompt",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
+async def get_kb_prompt(
+    request: Metadata,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get a specific knowledge base prompt template with arguments interpolated.
+
+    Issue MVA-2165: Returns formatted prompt messages for common
+    knowledge base operations.
+    Issue #744: Requires authenticated user.
+
+    The template arguments are validated and interpolated into the
+    prompt to generate contextual instructions for LLMs.
+    """
+    name = request.get("name", "")
+    arguments = request.get("arguments", {})
+
+    if name == "search_knowledge":
+        topic = arguments.get("topic")
+        if not topic:
+            return {"success": False, "error": "Missing required argument: topic"}
+
+        depth = arguments.get("depth", "normal")
+        depth_map = {"quick": 3, "normal": 5, "deep": 10}
+        top_k = depth_map.get(depth, 5)
+
+        return {
+            "success": True,
+            "name": name,
+            "description": "Search knowledge base for a topic",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": f"Search the knowledge base for information about: {topic}\n"
+                    f"Provide a comprehensive answer based on the top {top_k} most relevant sources.\n"
+                    f"Include:\n"
+                    f"- Key concepts and definitions\n"
+                    f"- Important details and context\n"
+                    f"- Relevant examples or use cases\n"
+                    f"- Cite sources when possible",
+                }
+            ],
+        }
+
+    elif name == "summarize_topic":
+        topic = arguments.get("topic")
+        if not topic:
+            return {"success": False, "error": "Missing required argument: topic"}
+
+        format_type = arguments.get("format", "detailed")
+        format_guidance = {
+            "brief": "Keep it concise - 2-3 paragraphs maximum",
+            "detailed": "Provide comprehensive coverage with examples",
+            "technical": "Focus on technical details, specifications, and implementation notes",
+        }
+        guidance = format_guidance.get(format_type, format_guidance["detailed"])
+
+        return {
+            "success": True,
+            "name": name,
+            "description": "Summarize knowledge on a topic",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": f"Generate a {format_type} summary of: {topic}\n"
+                    f"Guidelines: {guidance}\n"
+                    f"Structure:\n"
+                    f"- Overview\n"
+                    f"- Key points\n"
+                    f"- Important considerations\n"
+                    f"- Related topics or next steps",
+                }
+            ],
+        }
+
+    else:
+        return {"success": False, "error": f"Unknown prompt template: {name}"}
