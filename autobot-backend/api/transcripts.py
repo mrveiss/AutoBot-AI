@@ -32,7 +32,9 @@ def _get_analysis_prompt(analysis_type: AnalysisType, content: str, custom_promp
     """Generate analysis prompt based on type."""
     prompts = {
         AnalysisType.SUMMARIZE: f"Summarize the following transcript in a clear and concise manner:\n\n{content}",
-        AnalysisType.KEY_FACTS: f"Extract the key facts and important information from this transcript:\n\n{content}",
+        AnalysisType.KEY_FACTS: (
+            f"Extract the key facts and important information from this transcript:\n\n{content}"
+        ),
         AnalysisType.PROTOCOL: (
             f"Identify any protocols, procedures, or standard processes " f"mentioned in this transcript:\n\n{content}"
         ),
