@@ -175,8 +175,6 @@ from api.schemas_code import (
     GetPromptRequest,
     ListDirectoryRequest,
     ListDirectoryWithSizesRequest,
-    MCPPromptTemplate,
-    MCPResource,
     MCPTool,
     MoveFileRequest,
     ReadMediaFileRequest,
