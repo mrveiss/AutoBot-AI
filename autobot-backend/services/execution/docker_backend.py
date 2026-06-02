@@ -386,6 +386,8 @@ class DockerBackend(ExecutionBackend):
     async def snapshot(self, container_id: str, session_id: str = "", user_id: str = "") -> SnapshotRecord:
         """Commit a running container's filesystem to a named image and record metadata.
 
+        Implements ExecutionBackend.snapshot() for Docker containers (GH#4458).
+
         Args:
             container_id: ID or name of the Docker container to snapshot.
             session_id: Caller-supplied identifier for the agent session.
@@ -453,6 +455,8 @@ class DockerBackend(ExecutionBackend):
     async def restore(self, snapshot_id: str, caller_user_id: str) -> str:
         """Start a new detached container from a previously saved snapshot.
 
+        Implements ExecutionBackend.restore() for Docker containers (GH#4458).
+
         Args:
             snapshot_id: ID returned by a prior ``snapshot()`` call.
             caller_user_id: ID of the user requesting restore.  When the snapshot has a
@@ -503,6 +507,8 @@ class DockerBackend(ExecutionBackend):
     async def delete_snapshot(self, snapshot_id: str, caller_user_id: str) -> bool:
         """Remove the snapshot image and its index entry.
 
+        Implements ExecutionBackend.delete_snapshot() for Docker containers (GH#4458).
+
         Args:
             snapshot_id: ID returned by a prior ``snapshot()`` call.
             caller_user_id: ID of the user requesting deletion.  When the snapshot has a
@@ -537,7 +543,16 @@ class DockerBackend(ExecutionBackend):
         return removed
 
     async def get_snapshots_for_session(self, session_id: str) -> list:
-        """Return all SnapshotRecords for the given session_id."""
+        """Return all SnapshotRecords for the given session_id.
+
+        Implements ExecutionBackend.get_snapshots_for_session() for Docker containers (GH#4458).
+
+        Args:
+            session_id: Session identifier to query snapshots for.
+
+        Returns:
+            List of SnapshotRecord objects for the session.
+        """
         return await asyncio.to_thread(self._snapshot_index.list_by_session, session_id)
 
     # ------------------------------------------------------------------

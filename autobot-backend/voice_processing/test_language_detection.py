@@ -33,9 +33,7 @@ class TestLanguageDetectionService:
         service = LanguageDetectionService()
 
         # Create temp file with Latvian hint
-        with tempfile.NamedTemporaryFile(
-            suffix="_lv_audio.wav", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(suffix="_lv_audio.wav", delete=False) as f:
             temp_path = f.name
 
         try:
@@ -51,9 +49,7 @@ class TestLanguageDetectionService:
         """Test detection from English filename hints."""
         service = LanguageDetectionService()
 
-        with tempfile.NamedTemporaryFile(
-            suffix="_en_audio.wav", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(suffix="_en_audio.wav", delete=False) as f:
             temp_path = f.name
 
         try:
@@ -137,9 +133,7 @@ class TestFilenamePatterns:
         ]
 
         for pattern in patterns:
-            with tempfile.NamedTemporaryFile(
-                suffix=pattern, delete=False
-            ) as f:
+            with tempfile.NamedTemporaryFile(suffix=pattern, delete=False) as f:
                 temp_path = f.name
 
             try:
@@ -161,9 +155,7 @@ class TestFilenamePatterns:
         ]
 
         for pattern in patterns:
-            with tempfile.NamedTemporaryFile(
-                suffix=pattern, delete=False
-            ) as f:
+            with tempfile.NamedTemporaryFile(suffix=pattern, delete=False) as f:
                 temp_path = f.name
 
             try:

@@ -140,6 +140,26 @@ class SnapshotIndex:
                 logger.warning("Skipping malformed snapshot record: %s", exc)
         return result
 
+    def list_by_user(self, user_id: str) -> List[SnapshotRecord]:
+        """List all snapshots owned by a specific user.
+
+        Args:
+            user_id: User identifier to filter by
+
+        Returns:
+            List of SnapshotRecord objects owned by the user
+        """
+        records = self._load()
+        result = []
+        for v in records.values():
+            if v.get("user_id") != user_id:
+                continue
+            try:
+                result.append(SnapshotRecord.from_dict(v))
+            except (TypeError, KeyError) as exc:
+                logger.warning("Skipping malformed snapshot record: %s", exc)
+        return result
+
     def remove(self, snapshot_id: str) -> bool:
         with self._lock:
             records = self._load()

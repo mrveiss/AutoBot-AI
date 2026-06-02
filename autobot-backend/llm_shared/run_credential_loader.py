@@ -9,7 +9,7 @@ into the request context for use by the provider registry.
 """
 
 import json
-from typing import Dict, Any
+from typing import Any, Dict
 from uuid import UUID
 
 from sqlalchemy import select

@@ -285,7 +285,9 @@ import { useAppStore } from '@/stores/useAppStore'
 import { useNotificationBus } from '@/composables/useNotificationBus'
 import { usePreferences } from '@/composables/usePreferences'
 import { useOverseerAgent } from '@/composables/useOverseerAgent'
-import { useGlobalWebSocket } from '@/composables/useGlobalWebSocket'
+// GH#9062: migrated from useGlobalWebSocket — context events flow through
+// LiveEventManager (global channel), so useEventBus is the correct subscriber
+import { useEventBus } from '@/composables/useEventBus'
 import ApiClient from '@/utils/ApiClient'
 import batchApiService from '@/services/BatchApiService'
 // MIGRATED: Using AppConfig.js for better configuration management
@@ -464,34 +466,36 @@ const notify = (message: string, type: 'info' | 'success' | 'warning' | 'error' 
 }
 
 // MVA-2006: Context window overflow WebSocket listeners
-const ws = useGlobalWebSocket()
+// GH#9062: migrated to useEventBus for channel-based event subscriptions
+const { subscribe } = useEventBus()
 const contextWarningShown = ref(false)
 
 // Listen for context_warning events (80% threshold)
-ws.on('context_warning', (data: any) => {
-  logger.debug('[ContextWindow] Warning event received:', data)
+subscribe('global', (event) => {
+  if (event.event_type === 'context_warning') {
+    const data = event.payload as any
+    logger.debug('[ContextWindow] Warning event received:', data)
 
-  // Only show toast if mode is 'auto' or 'warn', and not already shown
-  if (contextOverflowMode.value !== 'disabled' && !contextWarningShown.value) {
-    const percent = data.usage_percent ?? _ctxWindow.usagePercent.value
-    notify(
-      t('chat.contextWindow.warningToast', { percent: percent.toFixed(1) }),
-      'warning'
-    )
-    contextWarningShown.value = true
-  }
-})
+    // Only show toast if mode is 'auto' or 'warn', and not already shown
+    if (contextOverflowMode.value !== 'disabled' && !contextWarningShown.value) {
+      const percent = data.usage_percent ?? _ctxWindow.usagePercent.value
+      notify(
+        t('chat.contextWindow.warningToast', { percent: percent.toFixed(1) }),
+        'warning'
+      )
+      contextWarningShown.value = true
+    }
+  } else if (event.event_type === 'context_compressed') {
+    const data = event.payload as any
+    logger.info('[ContextWindow] Context compressed:', data)
 
-// Listen for context_compressed events (summary injected)
-ws.on('context_compressed', (data: any) => {
-  logger.info('[ContextWindow] Context compressed:', data)
+    // Reset warning flag so next session can show it again
+    contextWarningShown.value = false
 
-  // Reset warning flag so next session can show it again
-  contextWarningShown.value = false
-
-  // Notify user that compression occurred
-  if (contextOverflowMode.value === 'auto') {
-    notify(t('chat.contextWindow.compressedToast'), 'info')
+    // Notify user that compression occurred
+    if (contextOverflowMode.value === 'auto') {
+      notify(t('chat.contextWindow.compressedToast'), 'info')
+    }
   }
 })
 

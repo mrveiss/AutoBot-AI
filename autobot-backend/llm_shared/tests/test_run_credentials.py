@@ -4,6 +4,7 @@
 """Tests for per-run credential injection (GH#9037)."""
 
 import asyncio
+
 import pytest
 
 from llm_shared.provider_registry import (

@@ -129,6 +129,8 @@ def get_cross_worker_load_results() -> Dict[str, Any]:
 # Issue #281: Router configurations as data instead of repetitive code blocks
 # Format: (module_path, prefix, tags, name)
 FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
+    # GH#4458: execution snapshot/restore — api.execution_snapshots not yet implemented
+    ("api.execution_snapshots", "", ["execution", "snapshots"], "execution_snapshots"),
     # Core workflow and batch processing
     # Issue #6229: api.websockets and api.live_events promoted to core_routers
     ("api.workflow", "/workflow", ["workflow"], "workflow"),
@@ -625,6 +627,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ("api.chat_sessions_thinking", "", ["chat-thinking"], "chat_sessions_thinking"),
     # GH#8996: public shared chat links with optional password protection
     ("api.chat_shared_links", "", ["chat-shared-links"], "chat_shared_links"),
+    # GH#9047: embed widget unauthenticated chat endpoint
+    ("api.chat_embed", "", ["chat", "embed"], "chat_embed"),
     # GH#8987: conversation folders and collections
     ("api.chat_folders", "", ["chat-folders"], "chat_folders"),
     # Issue #5061: First-run onboarding presets + doctor
@@ -655,6 +659,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ),
     # GH#4459: Web push notification endpoints (subscribe/unsubscribe/vapid-key)
     ("api.push", "/push", ["push", "notifications"], "push"),
+    # MVA-2176: Transcript AI analysis and KB integration
+    ("api.transcripts", "/transcripts", ["transcripts"], "transcripts"),
 ]
 
 

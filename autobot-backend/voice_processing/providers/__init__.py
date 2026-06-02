@@ -33,9 +33,7 @@ class SpeechProvider(ABC):
     """Base interface for speech recognition providers."""
 
     @abstractmethod
-    async def transcribe(
-        self, audio_path: str, language: Optional[str] = None
-    ) -> List[TranscriptSegment]:
+    async def transcribe(self, audio_path: str, language: Optional[str] = None) -> List[TranscriptSegment]:
         """Transcribe audio file to segments.
 
         Args:
@@ -88,10 +86,7 @@ class ProviderRegistry:
             insert_idx = i + 1
 
         providers.insert(insert_idx, (provider, priority))
-        logger.info(
-            f"Registered {provider.provider_name} for language '{language}' "
-            f"with priority {priority}"
-        )
+        logger.info(f"Registered {provider.provider_name} for language '{language}' " f"with priority {priority}")
 
     def get_provider(self, language: str) -> Optional[SpeechProvider]:
         """Get highest-priority provider for a language.
@@ -109,10 +104,7 @@ class ProviderRegistry:
 
         # Return highest priority (first in list)
         provider, priority = providers[0]
-        logger.debug(
-            f"Selected {provider.provider_name} for language '{language}' "
-            f"(priority {priority})"
-        )
+        logger.debug(f"Selected {provider.provider_name} for language '{language}' " f"(priority {priority})")
         return provider
 
     def get_all_providers(self, language: str) -> List[SpeechProvider]:

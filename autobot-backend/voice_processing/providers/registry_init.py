@@ -46,10 +46,7 @@ def initialize_providers():
     registry.register("lv", generic, priority=-10)
     registry.register("lat", generic, priority=-10)
 
-    logger.info(
-        "Speech providers initialized: "
-        "LATE (lv), Tilde (lv), Generic (en, de, es, fr, ...)"
-    )
+    logger.info("Speech providers initialized: " "LATE (lv), Tilde (lv), Generic (en, de, es, fr, ...)")
 
 
 # Auto-initialize on import
