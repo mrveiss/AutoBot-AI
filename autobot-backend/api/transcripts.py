@@ -159,7 +159,7 @@ async def analyze_transcript_ws(websocket: WebSocket, transcript_id: str):
 
 
 @router.post("/transcripts/{transcript_id}/kb-push", response_model=TranscriptKBPushResponse)
-@with_error_handling(category=ErrorCategory.KNOWLEDGE_OPERATION)
+@with_error_handling(category=ErrorCategory.DATABASE)
 async def push_transcript_to_kb(
     transcript_id: str,
     request: TranscriptKBPushRequest,
