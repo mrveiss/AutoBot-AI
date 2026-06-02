@@ -28,7 +28,7 @@ chromadb>=1.5.9,<2.0.0             # upper bound guards against breaking API cha
 protobuf>=5.29.6,<8.0.0           # required floor for chromadb 1.5.5+ opentelemetry exporter; resolves googleapis-common-protos conflict (#4061)
 sentence-transformers>=5.4.1
 torch>=2.12.0  # Issue #904: ML model training
-torchvision>=0.26.0  # Issue #904: Must match torch CUDA major version (torch 2.11 → torchvision 0.26)
+torchvision>=0.27.0  # Issue #904: Must match torch CUDA major version (torch 2.11 → torchvision 0.26)
 torchmetrics>=1.9.0  # Issue #904: Training metrics
 vanna>=2.0.2  # Issue #723: Natural language to SQL via Vanna.ai
                # SECURITY: CVE unpatched in all published releases (Dependabot alert #298,
