@@ -361,6 +361,170 @@
     .stat-label{font-size:.875rem;color:var(--text-muted);margin-top:4px}
     @media(max-width:640px){.stat{border-right:none;border-bottom:1px solid var(--border)}.stat:last-child{border-bottom:none}}
 
+    /* ── Scale ──────────────────────────────────────────────────────── */
+    #scale{background:var(--bg)}
+    .scale-grid{
+      display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center;margin-top:48px;
+    }
+    @media(max-width:768px){.scale-grid{grid-template-columns:1fr}}
+    .scale-visual{
+      display:grid;grid-template-columns:1fr 1fr;gap:12px;
+    }
+    .scale-tile{
+      padding:20px;border-radius:var(--r-lg);border:1px solid var(--border);
+      background:var(--surface);box-shadow:var(--shadow-sm);
+      opacity:0;transform:scale(.96);
+      transition:opacity .45s var(--ease),transform .45s var(--ease);
+    }
+    .scale-tile.visible{opacity:1;transform:none}
+    .scale-tile-wide{grid-column:1/-1}
+    .scale-tile-num{
+      font-family:var(--font-display);font-size:1.75rem;font-weight:600;
+      background:var(--gradient-ember);-webkit-background-clip:text;background-clip:text;
+      -webkit-text-fill-color:transparent;
+    }
+    .scale-tile-label{font-size:.8125rem;color:var(--text-muted);margin-top:2px}
+    .scale-points{display:flex;flex-direction:column;gap:16px}
+    .scale-point{display:flex;gap:12px;align-items:flex-start}
+    .scale-point .sp-icon{
+      width:32px;height:32px;flex:none;border-radius:var(--r-md);
+      background:var(--accent-subtle);color:var(--accent);
+      display:flex;align-items:center;justify-content:center;margin-top:2px;
+    }
+    .scale-point strong{display:block;font-size:.9375rem;font-weight:600}
+    .scale-point p{font-size:.875rem;color:var(--text-muted);margin-top:2px}
+
+    /* ── Knowledge base ─────────────────────────────────────────────── */
+    #knowledge{background:var(--surface-sunken)}
+    .kb-grid{
+      display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:start;margin-top:48px;
+    }
+    @media(max-width:768px){.kb-grid{grid-template-columns:1fr}}
+    .kb-flow{display:flex;flex-direction:column;gap:0;position:relative}
+    .kb-flow::before{
+      content:"";position:absolute;left:14px;top:32px;bottom:32px;
+      width:2px;background:linear-gradient(to bottom,var(--accent),var(--grape));
+      border-radius:2px;
+    }
+    .kb-step{display:flex;gap:16px;padding:16px 0;position:relative}
+    .kb-dot{
+      width:30px;height:30px;flex:none;border-radius:var(--r-full);
+      background:var(--surface-raised);border:2px solid var(--accent);
+      display:flex;align-items:center;justify-content:center;
+      color:var(--accent);z-index:1;
+    }
+    .kb-dot .icon{width:14px;height:14px}
+    .kb-step strong{display:block;font-size:.9375rem;font-weight:600;margin-bottom:2px}
+    .kb-step p{font-size:.875rem;color:var(--text-muted);line-height:1.6}
+    .kb-cards{display:flex;flex-direction:column;gap:14px}
+    .kb-card{
+      padding:20px;border-radius:var(--r-lg);
+      border:1px solid var(--border);background:var(--surface);box-shadow:var(--shadow-sm);
+    }
+    .kb-card h4{font-size:.9375rem;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+    .kb-card p{font-size:.875rem;color:var(--text-muted);line-height:1.6}
+    .kb-tag{
+      display:inline-block;padding:2px 8px;border-radius:var(--r-full);
+      font-size:.75rem;font-weight:600;background:var(--accent-subtle);color:var(--accent-text);
+    }
+
+    /* ── Contribute ─────────────────────────────────────────────────── */
+    #contribute{background:var(--surface-sunken)}
+    .contribute-grid{
+      display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start;margin-top:48px;
+    }
+    @media(max-width:768px){.contribute-grid{grid-template-columns:1fr}}
+    .contribute-steps{display:flex;flex-direction:column;gap:0}
+    .step{
+      display:flex;gap:16px;padding:16px 0;
+      border-bottom:1px solid var(--border);
+    }
+    .step:last-child{border-bottom:none}
+    .step-num{
+      width:28px;height:28px;flex:none;border-radius:var(--r-full);
+      background:var(--accent-subtle);color:var(--accent-text);
+      font-family:var(--font-mono);font-size:.8125rem;font-weight:600;
+      display:flex;align-items:center;justify-content:center;margin-top:2px;
+    }
+    .step strong{display:block;font-size:.9375rem;font-weight:600;margin-bottom:2px}
+    .step p{font-size:.875rem;color:var(--text-muted)}
+    .step code{font-family:var(--font-mono);font-size:.8125rem;
+      background:var(--surface-sunken);padding:1px 6px;border-radius:4px;
+      border:1px solid var(--border)}
+    .contribute-ctas{display:flex;flex-direction:column;gap:12px;margin-top:24px}
+    .cta-link{
+      display:flex;align-items:center;gap:12px;
+      padding:16px 20px;border-radius:var(--r-lg);
+      background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow-sm);
+      color:var(--text);text-decoration:none;
+      transition:background var(--dur) var(--ease),box-shadow var(--dur) var(--ease),border-color var(--dur) var(--ease);
+    }
+    .cta-link:hover{background:var(--surface-hover);box-shadow:var(--shadow-md);border-color:var(--border-strong);text-decoration:none}
+    .cta-link .cta-icon{
+      width:36px;height:36px;flex:none;border-radius:var(--r-md);
+      display:flex;align-items:center;justify-content:center;
+    }
+    .cta-icon-green{background:#e3f1e9;color:var(--green-500)}
+    [data-theme="dark"] .cta-icon-green,
+    :root:not([data-theme="light"]) .cta-icon-green{background:#12281e;color:#5fb78f}
+    .cta-icon-accent{background:var(--accent-subtle);color:var(--accent)}
+    .cta-link strong{display:block;font-size:.9375rem;font-weight:600}
+    .cta-link span{font-size:.8125rem;color:var(--text-muted)}
+    .cta-link .cta-arrow{margin-left:auto;color:var(--text-subtle)}
+
+    /* ── Support / Donate ───────────────────────────────────────────── */
+    #support{background:var(--bg)}
+    .support-intro{max-width:600px;margin-bottom:48px}
+    .donate-grid{
+      display:grid;grid-template-columns:repeat(3,1fr);gap:20px;
+    }
+    @media(max-width:768px){.donate-grid{grid-template-columns:1fr}}
+    .donate-card{
+      padding:28px 24px;border-radius:var(--r-xl);
+      border:1px solid var(--border);background:var(--surface);box-shadow:var(--shadow-sm);
+      display:flex;flex-direction:column;gap:12px;
+      transition:box-shadow var(--dur) var(--ease),border-color var(--dur) var(--ease);
+      position:relative;overflow:hidden;
+    }
+    .donate-card:hover{box-shadow:var(--shadow-md);border-color:var(--border-strong)}
+    .donate-card.featured{
+      border-color:var(--accent);
+      background:linear-gradient(160deg,var(--accent-subtle) 0%,var(--surface) 60%);
+    }
+    .donate-card.featured::before{
+      content:"";position:absolute;top:0;left:0;right:0;height:3px;
+      background:var(--gradient-ember);
+    }
+    .donate-logo{
+      width:48px;height:48px;border-radius:var(--r-lg);
+      display:flex;align-items:center;justify-content:center;
+      font-size:1.5rem;
+    }
+    .donate-card h3{font-family:var(--font-display);font-size:1.125rem;font-weight:600}
+    .donate-card p{font-size:.875rem;color:var(--text-muted);line-height:1.6;flex:1}
+    .donate-btn{
+      display:inline-flex;align-items:center;justify-content:center;gap:8px;
+      padding:10px 20px;border-radius:var(--r-full);
+      font-size:.875rem;font-weight:600;text-decoration:none;
+      transition:background var(--dur) var(--ease),box-shadow var(--dur) var(--ease);
+      align-self:flex-start;
+    }
+    .donate-btn-primary{
+      background:var(--gradient-ember);color:#fff;box-shadow:var(--shadow-sm);
+    }
+    .donate-btn-primary:hover{box-shadow:var(--shadow-md),var(--glow);text-decoration:none}
+    .donate-btn-secondary{
+      background:var(--surface-sunken);color:var(--text);border:1px solid var(--border-strong);
+    }
+    .donate-btn-secondary:hover{background:var(--surface-hover);box-shadow:var(--shadow-sm);text-decoration:none}
+    .badge-featured{
+      display:inline-flex;align-items:center;gap:4px;
+      padding:3px 10px;border-radius:var(--r-full);
+      background:var(--accent-subtle);color:var(--accent-text);
+      font-size:.75rem;font-weight:600;border:1px solid var(--accent);
+      align-self:flex-start;
+    }
+
     /* ── Footer ─────────────────────────────────────────────────────── */
     footer{
       padding:40px 0;border-top:1px solid var(--border);
@@ -413,6 +577,12 @@
     <symbol id="i-github" viewBox="0 0 24 24"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></symbol>
     <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/></symbol>
     <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></symbol>
+    <symbol id="i-git-fork" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="M6 8v2a4 4 0 0 0 4 4h4a4 4 0 0 0 4-4V8M12 14v4"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82Z"/><line x1="7" y1="7" x2="7.01" y2="7"/></symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
   </svg>
 
   <!-- Navigation -->
@@ -424,8 +594,10 @@
       </a>
       <div class="nav-links">
         <a href="#features" class="nav-link">Features</a>
-        <a href="#architecture" class="nav-link">Architecture</a>
+        <a href="#scale" class="nav-link">Scale</a>
+        <a href="#knowledge" class="nav-link">Knowledge</a>
         <a href="#deploy" class="nav-link">Deploy</a>
+        <a href="#support" class="nav-link">Donate</a>
         <a href="https://github.com/mrveiss/AutoBot-AI" class="nav-link" target="_blank" rel="noopener">
           <svg class="icon" style="width:16px;height:16px;display:inline-block;vertical-align:middle"><use href="#i-github"/></svg>
         </a>
@@ -536,7 +708,7 @@
       <div class="arch-grid">
         <div class="arch-card">
           <h3><span class="arch-num">1</span> SLM Control Plane</h3>
-          <p>The primary FastAPI backend that owns all orchestration, routing, and user state. Runs as a dedicated systemd service with 4 uvicorn workers.</p>
+          <p><strong>SLM</strong> — Service Lifecycle Manager. A dedicated control plane that handles all admin and orchestration functions separately from the AI workload. This separation keeps infrastructure management concerns (deployments, health checks, configuration, user management) isolated from chat and inference traffic, so a heavy model run never blocks a config update.</p>
           <ul>
             <li>Multi-provider LLM gateway</li>
             <li>Tiered routing with Claude escalation</li>
@@ -572,6 +744,130 @@
         <div class="stat"><div class="stat-num">MIT</div><div class="stat-label">Open source license</div></div>
         <div class="stat"><div class="stat-num">25 min</div><div class="stat-label">Full fleet setup</div></div>
         <div class="stat"><div class="stat-num">∞</div><div class="stat-label">Models supported</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Scale -->
+  <section id="scale">
+    <div class="container">
+      <span class="section-label">Scalability</span>
+      <h2 class="section-title">Grows with your infrastructure</h2>
+      <p class="section-sub">Start on a single machine. Expand to a full distributed fleet as your workload demands — without changing your workflow.</p>
+      <div class="scale-grid">
+        <div class="scale-points">
+          <div class="scale-point">
+            <div class="sp-icon"><svg class="icon" style="width:16px;height:16px"><use href="#i-layers"/></svg></div>
+            <div>
+              <strong>Single-node to fleet — no re-architecture</strong>
+              <p>AutoBot runs on one machine out of the box. Add VMs via the setup wizard and Ansible provisions each role automatically — NPU worker, Redis, AI stack, browser VM.</p>
+            </div>
+          </div>
+          <div class="scale-point">
+            <div class="sp-icon"><svg class="icon" style="width:16px;height:16px"><use href="#i-zap"/></svg></div>
+            <div>
+              <strong>Hardware acceleration at every tier</strong>
+              <p>OpenVINO NPU routing assigns inference tasks to the fastest available compute — Intel NPU, GPU, or CPU — with automatic fallback. No manual routing config.</p>
+            </div>
+          </div>
+          <div class="scale-point">
+            <div class="sp-icon"><svg class="icon" style="width:16px;height:16px"><use href="#i-mesh"/></svg></div>
+            <div>
+              <strong>Redis-backed shared state across workers</strong>
+              <p>All four uvicorn backend workers share session cache and rate-limit counters via Redis Stack. Adding more workers requires zero code change.</p>
+            </div>
+          </div>
+          <div class="scale-point">
+            <div class="sp-icon"><svg class="icon" style="width:16px;height:16px"><use href="#i-sliders"/></svg></div>
+            <div>
+              <strong>Ansible-managed configuration at scale</strong>
+              <p>Every VM role is an Ansible playbook. Push config updates, rotate secrets, or deploy to 20 nodes in one command — no SSH drift.</p>
+            </div>
+          </div>
+        </div>
+        <div class="scale-visual">
+          <div class="scale-tile">
+            <div class="scale-tile-num">1→∞</div>
+            <div class="scale-tile-label">VMs supported</div>
+          </div>
+          <div class="scale-tile">
+            <div class="scale-tile-num">4</div>
+            <div class="scale-tile-label">Concurrent backend workers</div>
+          </div>
+          <div class="scale-tile">
+            <div class="scale-tile-num">8+</div>
+            <div class="scale-tile-label">LLM providers</div>
+          </div>
+          <div class="scale-tile">
+            <div class="scale-tile-num">24 h</div>
+            <div class="scale-tile-label">Session cache TTL</div>
+          </div>
+          <div class="scale-tile scale-tile-wide">
+            <div class="scale-tile-num">~25 min</div>
+            <div class="scale-tile-label">Full 6-VM fleet from zero — automated by one install script</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Knowledge base -->
+  <section id="knowledge" style="background:var(--surface-sunken)">
+    <div class="container">
+      <span class="section-label">Knowledge engine</span>
+      <h2 class="section-title">An AI that actually knows your system</h2>
+      <p class="section-sub">AutoBot's knowledge base isn't a static FAQ — it's a living, queryable index of everything in your infrastructure: man pages, codebase, documents, and memory extracted from every conversation.</p>
+      <div class="kb-grid">
+        <div>
+          <div class="kb-flow">
+            <div class="kb-step">
+              <div class="kb-dot"><svg class="icon"><use href="#i-code"/></svg></div>
+              <div>
+                <strong>Index your content</strong>
+                <p>Man pages, source code, internal docs, and PDFs are chunked, embedded with ONNX-accelerated fastembed, and stored in ChromaDB.</p>
+              </div>
+            </div>
+            <div class="kb-step">
+              <div class="kb-dot"><svg class="icon"><use href="#i-scope"/></svg></div>
+              <div>
+                <strong>Hybrid retrieval</strong>
+                <p>Each query runs both dense vector search and BM25 keyword matching, then merges results by relevance score — catching what pure vector search misses.</p>
+              </div>
+            </div>
+            <div class="kb-step">
+              <div class="kb-dot"><svg class="icon"><use href="#i-spark"/></svg></div>
+              <div>
+                <strong>Essential story — always in context</strong>
+                <p>The top facts about you and your system are condensed into a compact "essential story" block and prepended to every LLM system prompt — no round-trip needed.</p>
+              </div>
+            </div>
+            <div class="kb-step">
+              <div class="kb-dot"><svg class="icon"><use href="#i-chat"/></svg></div>
+              <div>
+                <strong>Learns from every conversation</strong>
+                <p>After each session, AutoBot extracts durable facts — preferences, project names, infra details — and adds them to memory. The agent improves with use.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="kb-cards">
+          <div class="kb-card">
+            <h4><span class="kb-tag">Vector</span> ChromaDB + fastembed</h4>
+            <p>ONNX-accelerated embedding generation. No GPU required — the embedding model runs efficiently on CPU with sub-100ms latency per chunk.</p>
+          </div>
+          <div class="kb-card">
+            <h4><span class="kb-tag">Keyword</span> BM25 hybrid search</h4>
+            <p>Exact-match keyword search complements vector similarity. Critical for queries about specific command names, file paths, or error codes that embeddings can underweight.</p>
+          </div>
+          <div class="kb-card">
+            <h4><span class="kb-tag">Memory</span> Persistent fact extraction</h4>
+            <p>LLM-based extraction pulls structured facts from chat history. Content-addressed SHA-256 cache keys ensure stale summaries never outlive their source data.</p>
+          </div>
+          <div class="kb-card">
+            <h4><span class="kb-tag">Context</span> Adaptive token budget</h4>
+            <p>Context window usage scales automatically to the active model's declared capacity — a 128k-context model uses its full window, not a hardcoded 4k fallback.</p>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -642,6 +938,132 @@
     </div>
   </section>
 
+  <!-- Contribute -->
+  <section id="contribute">
+    <div class="container">
+      <span class="section-label">Open source</span>
+      <h2 class="section-title">Built with the community</h2>
+      <p class="section-sub">Every improvement ships faster with fresh eyes. Here's how to get involved.</p>
+      <div class="contribute-grid">
+        <div>
+          <div class="contribute-steps">
+            <div class="step">
+              <div class="step-num">1</div>
+              <div>
+                <strong>Fork &amp; clone</strong>
+                <p><code>gh repo fork mrveiss/AutoBot-AI --clone</code></p>
+              </div>
+            </div>
+            <div class="step">
+              <div class="step-num">2</div>
+              <div>
+                <strong>Create a branch</strong>
+                <p><code>git checkout -b feature/your-feature origin/Dev_new_gui</code></p>
+              </div>
+            </div>
+            <div class="step">
+              <div class="step-num">3</div>
+              <div>
+                <strong>Make your change</strong>
+                <p>Write tests, follow the existing code style, keep commits focused.</p>
+              </div>
+            </div>
+            <div class="step">
+              <div class="step-num">4</div>
+              <div>
+                <strong>Open a PR → <code>Dev_new_gui</code></strong>
+                <p>Describe what changed and why. CI runs automatically.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <p style="font-size:.9375rem;color:var(--text-muted);margin-bottom:24px;line-height:1.7">
+            Not sure where to start? Browse <strong>good-first-issue</strong> tags for bite-sized tasks,
+            or pick up a <strong>bounty</strong> issue on Polar.sh for paid contributions.
+          </p>
+          <div class="contribute-ctas">
+            <a href="https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aopen+label%3A%22good+first+issue%22" class="cta-link" target="_blank" rel="noopener">
+              <div class="cta-icon cta-icon-green">
+                <svg class="icon" style="width:18px;height:18px"><use href="#i-star"/></svg>
+              </div>
+              <div>
+                <strong>Good first issues</strong>
+                <span>Beginner-friendly tasks, well-scoped and documented</span>
+              </div>
+              <svg class="icon cta-arrow" style="width:16px;height:16px"><use href="#i-arrow-right"/></svg>
+            </a>
+            <a href="https://polar.sh/mrveiss/AutoBot-AI" class="cta-link" target="_blank" rel="noopener">
+              <div class="cta-icon cta-icon-accent">
+                <svg class="icon" style="width:18px;height:18px"><use href="#i-tag"/></svg>
+              </div>
+              <div>
+                <strong>Bounty issues on Polar.sh</strong>
+                <span>Paid contributions — solve an issue, earn a reward</span>
+              </div>
+              <svg class="icon cta-arrow" style="width:16px;height:16px"><use href="#i-arrow-right"/></svg>
+            </a>
+            <a href="https://github.com/mrveiss/AutoBot-AI/blob/Dev_new_gui/CONTRIBUTING.md" class="cta-link" target="_blank" rel="noopener">
+              <div class="cta-icon" style="background:var(--surface-sunken);color:var(--text-muted)">
+                <svg class="icon" style="width:18px;height:18px"><use href="#i-book"/></svg>
+              </div>
+              <div>
+                <strong>Contributing guide</strong>
+                <span>Code style, commit format, PR conventions</span>
+              </div>
+              <svg class="icon cta-arrow" style="width:16px;height:16px"><use href="#i-arrow-right"/></svg>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Support -->
+  <section id="support" style="background:var(--surface-sunken)">
+    <div class="container">
+      <span class="section-label">Support the project</span>
+      <h2 class="section-title">Keep AutoBot growing</h2>
+      <div class="support-intro">
+        <p style="color:var(--text-muted);font-size:1.0625rem;line-height:1.7;margin-top:12px">
+          AutoBot is free and open source. If it saves you time or powers something you care about,
+          consider supporting continued development — every contribution helps.
+        </p>
+      </div>
+      <div class="donate-grid">
+        <div class="donate-card featured">
+          <span class="badge-featured">
+            <svg class="icon" style="width:12px;height:12px"><use href="#i-spark"/></svg>
+            Recommended
+          </span>
+          <div class="donate-logo" style="background:var(--accent-subtle)">💛</div>
+          <h3>GitHub Sponsors</h3>
+          <p>Recurring or one-time sponsorship through GitHub. Directly funds development time and infrastructure costs.</p>
+          <a href="https://github.com/sponsors/mrveiss" class="donate-btn donate-btn-primary" target="_blank" rel="noopener">
+            <svg class="icon" style="width:16px;height:16px"><use href="#i-heart"/></svg>
+            Sponsor on GitHub
+          </a>
+        </div>
+        <div class="donate-card">
+          <div class="donate-logo" style="background:#fff1e6">☕</div>
+          <h3>Ko-fi</h3>
+          <p>Quick one-time contribution — buy the developer a coffee. No account needed, any amount appreciated.</p>
+          <a href="https://ko-fi.com/mrveiss" class="donate-btn donate-btn-secondary" target="_blank" rel="noopener">
+            Support on Ko-fi
+          </a>
+        </div>
+        <div class="donate-card">
+          <div class="donate-logo" style="background:var(--accent-subtle)">🏆</div>
+          <h3>Polar.sh Bounties</h3>
+          <p>Fund specific features or bugs you care about. Post a bounty and the community delivers — you pay on merge.</p>
+          <a href="https://polar.sh/mrveiss/AutoBot-AI" class="donate-btn donate-btn-secondary" target="_blank" rel="noopener">
+            Browse bounties
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Footer -->
   <footer>
     <div class="container">
@@ -651,6 +1073,8 @@
           <a href="https://github.com/mrveiss/AutoBot-AI" target="_blank" rel="noopener">GitHub</a>
           <a href="https://github.com/mrveiss/AutoBot-AI/blob/Dev_new_gui/docs/GETTING_STARTED_COMPLETE.md" target="_blank" rel="noopener">Docs</a>
           <a href="https://github.com/mrveiss/AutoBot-AI/issues" target="_blank" rel="noopener">Issues</a>
+          <a href="https://github.com/sponsors/mrveiss" target="_blank" rel="noopener">Sponsor</a>
+          <a href="https://polar.sh/mrveiss/AutoBot-AI" target="_blank" rel="noopener">Bounties</a>
           <a href="https://github.com/mrveiss/AutoBot-AI/blob/Dev_new_gui/LICENSE" target="_blank" rel="noopener">MIT License</a>
         </div>
         <span class="footer-copy">© 2025 mrveiss</span>
@@ -690,6 +1114,18 @@
       });
     }, { threshold: 0.15 });
     cards.forEach(c => io.observe(c));
+
+    // ── Scale tile reveal ────────────────────────────────────────────
+    const tiles = document.querySelectorAll('.scale-tile');
+    const tileIO = new IntersectionObserver((entries) => {
+      entries.forEach((e, i) => {
+        if (e.isIntersecting) {
+          setTimeout(() => e.target.classList.add('visible'), i * 60);
+          tileIO.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.15 });
+    tiles.forEach(t => tileIO.observe(t));
 
     // ── Copy button ─────────────────────────────────────────────────
     document.getElementById('copy-btn').addEventListener('click', function() {
