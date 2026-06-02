@@ -148,6 +148,9 @@ celery_app.autodiscover_tasks(["tasks", "workers"])
 # workers register it. autodiscover_tasks only scans the listed packages.
 import services.pricing_refresh  # noqa: F401
 
+# GH#4463: Mobile device tasks module
+import tasks.mobile_device_tasks  # noqa: F401
+
 # =========================================================================
 # Issue #4455: Periodic knowledge-base cleanup schedule
 # =========================================================================
@@ -223,6 +226,12 @@ celery_app.conf.beat_schedule = {
     "pricing-refresh-daily": {
         "task": "pricing.refresh_daily",
         "schedule": crontab(hour=2, minute=15),
+    },
+    # GH#4463: weekly cleanup of stale mobile devices (inactive for 90+ days)
+    "mobile-devices-cleanup-weekly": {
+        "task": "tasks.cleanup_stale_mobile_devices",
+        "schedule": crontab(hour=3, minute=30, day_of_week=0),  # Sunday 03:30 UTC
+        "kwargs": {"dry_run": False},
     },
 }
 

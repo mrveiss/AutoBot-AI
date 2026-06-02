@@ -126,6 +126,11 @@ class LanguageDetectionService:
 _language_detection_service: Optional[LanguageDetectionService] = None
 
 
+async def detect_language(audio_path: str, filename_hint: Optional[str] = None) -> Optional[str]:
+    """Detect language from audio file via the singleton service."""
+    return await get_language_detection_service().detect_language(audio_path)
+
+
 def get_language_detection_service() -> LanguageDetectionService:
     """Get or create language detection service singleton."""
     global _language_detection_service

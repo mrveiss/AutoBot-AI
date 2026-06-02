@@ -7,11 +7,12 @@
 
 """Database operations for transcriber module."""
 
-import aiosqlite
 import json
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
+
+import aiosqlite
 
 from autobot_shared.logging_manager import get_logger
 from transcriber.models import Recording, RecordingStatus, TranscriptionSegment
