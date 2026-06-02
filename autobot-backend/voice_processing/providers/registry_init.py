@@ -9,7 +9,7 @@ Part of Issue MVA-2185.
 """
 
 from autobot_shared.logging_manager import get_logger
-from voice_processing.providers import get_provider_registry
+from voice_processing.providers import get_speech_provider_registry
 from voice_processing.providers.generic_provider import GenericProvider
 from voice_processing.providers.lv.late_provider import LateProvider
 from voice_processing.providers.lv.tilde_provider import TildeProvider
@@ -25,7 +25,7 @@ def initialize_providers():
     - LATE (priority 10) > Tilde (priority 5) for Latvian
     - Generic provider is fallback for all languages (priority 0)
     """
-    registry = get_provider_registry()
+    registry = get_speech_provider_registry()
 
     # Register Latvian providers
     late = LateProvider()
