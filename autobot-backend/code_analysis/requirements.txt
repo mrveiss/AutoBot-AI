@@ -17,7 +17,7 @@ chromadb>=1.5.9
 
 # HTTP Client for API Analysis
 aiohttp>=3.13.4  # GH#8323: zip bomb, request smuggling CVEs
-requests>=2.33.0  # GH#8326: CVE-2026-25645
+requests>=2.34.2  # GH#8326: CVE-2026-25645
 
 # Configuration
 python-dotenv>=0.19.0
