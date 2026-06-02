@@ -35,20 +35,14 @@ class TildeProvider(SpeechProvider):
             api_url: Tilde API URL (defaults to env var or public endpoint)
         """
         self.api_key = api_key or os.getenv("TILDE_API_KEY")
-        self.api_url = api_url or os.getenv(
-            "TILDE_API_URL",
-            "https://api.tilde.com/v1/asr"
-        )
+        self.api_url = api_url or os.getenv("TILDE_API_URL", "https://api.tilde.com/v1/asr")
 
         if not self.api_key:
             logger.warning(
-                "TILDE_API_KEY not set - Tilde provider will not work. "
-                "Set TILDE_API_KEY environment variable."
+                "TILDE_API_KEY not set - Tilde provider will not work. " "Set TILDE_API_KEY environment variable."
             )
 
-    async def transcribe(
-        self, audio_path: str, language: Optional[str] = None
-    ) -> List[TranscriptSegment]:
+    async def transcribe(self, audio_path: str, language: Optional[str] = None) -> List[TranscriptSegment]:
         """Transcribe audio using Tilde ASR.
 
         Args:
@@ -68,23 +62,19 @@ class TildeProvider(SpeechProvider):
 
         try:
             # Read audio file
-            with open(audio_path, 'rb') as f:
+            with open(audio_path, "rb") as f:
                 audio_data = f.read()
 
             # Send to Tilde API
             segments = await self._call_tilde_api(audio_data, audio_path)
-            logger.info(
-                f"Tilde transcription completed: {len(segments)} segments"
-            )
+            logger.info(f"Tilde transcription completed: {len(segments)} segments")
             return segments
 
         except Exception as e:
             logger.error(f"Tilde transcription failed: {e}")
             return []
 
-    async def _call_tilde_api(
-        self, audio_data: bytes, audio_path: str
-    ) -> List[TranscriptSegment]:
+    async def _call_tilde_api(self, audio_data: bytes, audio_path: str) -> List[TranscriptSegment]:
         """Call Tilde ASR API.
 
         Args:
@@ -97,18 +87,13 @@ class TildeProvider(SpeechProvider):
         try:
             # Prepare multipart form data
             form = aiohttp.FormData()
-            form.add_field(
-                'audio',
-                audio_data,
-                filename=os.path.basename(audio_path),
-                content_type='audio/wav'
-            )
-            form.add_field('language', 'lv')
-            form.add_field('format', 'json')
-            form.add_field('segments', 'true')
+            form.add_field("audio", audio_data, filename=os.path.basename(audio_path), content_type="audio/wav")
+            form.add_field("language", "lv")
+            form.add_field("format", "json")
+            form.add_field("segments", "true")
 
             headers = {
-                'Authorization': f'Bearer {self.api_key}',
+                "Authorization": f"Bearer {self.api_key}",
             }
 
             timeout = aiohttp.ClientTimeout(total=300)  # 5 minute timeout
@@ -121,9 +106,7 @@ class TildeProvider(SpeechProvider):
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()
-                        logger.error(
-                            f"Tilde API error {response.status}: {error_text}"
-                        )
+                        logger.error(f"Tilde API error {response.status}: {error_text}")
                         return []
 
                     result = await response.json()

@@ -26,9 +26,7 @@ class GenericProvider(SpeechProvider):
         """Initialize generic provider with speech recognition engine."""
         self.engine = SpeechRecognitionEngine()
 
-    async def transcribe(
-        self, audio_path: str, language: Optional[str] = None
-    ) -> List[TranscriptSegment]:
+    async def transcribe(self, audio_path: str, language: Optional[str] = None) -> List[TranscriptSegment]:
         """Transcribe audio using generic recognition engine.
 
         Args:
@@ -54,16 +52,11 @@ class GenericProvider(SpeechProvider):
 
             # Use existing speech recognition engine
             lang = language or "en"
-            result: SpeechRecognitionResult = await self.engine.transcribe_audio(
-                audio_input, language=lang
-            )
+            result: SpeechRecognitionResult = await self.engine.transcribe_audio(audio_input, language=lang)
 
             # Convert SpeechRecognitionResult to TranscriptSegments
             segments = self._convert_to_segments(result)
-            logger.info(
-                f"Generic provider transcription completed: "
-                f"{len(segments)} segments"
-            )
+            logger.info(f"Generic provider transcription completed: " f"{len(segments)} segments")
             return segments
 
         except Exception as e:
@@ -84,7 +77,7 @@ class GenericProvider(SpeechProvider):
 
         try:
             # Try to load as WAV file
-            with wave.open(audio_path, 'rb') as wav:
+            with wave.open(audio_path, "rb") as wav:
                 frames = wav.readframes(wav.getnframes())
                 sample_rate = wav.getframerate()
                 duration = wav.getnframes() / float(sample_rate)
@@ -108,9 +101,7 @@ class GenericProvider(SpeechProvider):
                 metadata={"source_file": audio_path, "load_error": str(e)},
             )
 
-    def _convert_to_segments(
-        self, result: SpeechRecognitionResult
-    ) -> List[TranscriptSegment]:
+    def _convert_to_segments(self, result: SpeechRecognitionResult) -> List[TranscriptSegment]:
         """Convert SpeechRecognitionResult to TranscriptSegments.
 
         Args:

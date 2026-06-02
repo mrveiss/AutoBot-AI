@@ -40,7 +40,7 @@ class LateProvider(SpeechProvider):
                 capture_output=True,
                 text=True,
                 timeout=5,
-                encoding='utf-8',
+                encoding="utf-8",
             )
             if result.returncode == 0:
                 logger.info(f"LATE binary available: {self.late_binary}")
@@ -54,9 +54,7 @@ class LateProvider(SpeechProvider):
         except Exception as e:
             logger.warning(f"LATE availability check failed: {e}")
 
-    async def transcribe(
-        self, audio_path: str, language: Optional[str] = None
-    ) -> List[TranscriptSegment]:
+    async def transcribe(self, audio_path: str, language: Optional[str] = None) -> List[TranscriptSegment]:
         """Transcribe audio using LATE.
 
         Args:
@@ -86,9 +84,7 @@ class LateProvider(SpeechProvider):
 
             # Run in executor to avoid blocking
             loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(
-                None, self._run_late_command, cmd
-            )
+            result = await loop.run_in_executor(None, self._run_late_command, cmd)
 
             if result is None:
                 logger.error("LATE transcription failed")
@@ -96,9 +92,7 @@ class LateProvider(SpeechProvider):
 
             # Parse LATE JSON output
             segments = self._parse_late_output(result)
-            logger.info(
-                f"LATE transcription completed: {len(segments)} segments"
-            )
+            logger.info(f"LATE transcription completed: {len(segments)} segments")
             return segments
 
         except Exception as e:
@@ -120,7 +114,7 @@ class LateProvider(SpeechProvider):
                 capture_output=True,
                 text=True,
                 timeout=300,  # 5 minute timeout
-                encoding='utf-8',
+                encoding="utf-8",
             )
 
             if result.returncode != 0:
