@@ -1,8 +1,8 @@
-# Odysseus Improvements Implementation Plan
+# Reliability Improvements Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Port five high-value patterns from the Odysseus open-source AI workspace into AutoBot: circuit-breaker consecutive-failure reset, adaptive context budget scaling, structured conversation compaction prompt + tool-message sanitization, memory fingerprinting to skip redundant LLM audits, and an agent entity-anchor UI convention.
+**Goal:** Implement five reliability and UX patterns into AutoBot: circuit-breaker consecutive-failure reset, adaptive context budget scaling, structured conversation compaction prompt + tool-message sanitization, memory fingerprinting to skip redundant LLM audits, and an agent entity-anchor UI convention.
 
 **Architecture:** Each task is a surgical edit to one existing file (or one small addition). No new modules, no cross-cutting refactors. All changes are independently testable and committable.
 
@@ -25,7 +25,7 @@
 
 ## Task 1: Circuit Breaker — Consecutive-Failure Reset
 
-**Problem:** `_record_success()` in CLOSED state does `failure_count = max(0, failure_count - 1)`. A pattern of fail-fail-success-fail accumulates net failures toward the threshold. One transient error immediately after a success still moves toward lockout. Odysseus resets to zero on any success so intermittent blips never accumulate.
+**Problem:** `_record_success()` in CLOSED state does `failure_count = max(0, failure_count - 1)`. A pattern of fail-fail-success-fail accumulates net failures toward the threshold. One transient error immediately after a success still moves toward lockout. The pattern resets to zero on any success so intermittent blips never accumulate.
 
 **Files:**
 - Modify: `autobot-backend/circuit_breaker.py:253`
@@ -44,7 +44,7 @@ Expected output includes line ~253: `self.failure_count = max(0, self.failure_co
 In `autobot_shared/ssot_constants.py`, inside `class CircuitBreakerDefaults:`, add after line `MAX_HISTORY_SIZE = 100`:
 
 ```python
-    # Reset failure counter fully on any success in CLOSED state (Odysseus pattern).
+    # Reset failure counter fully on any success in CLOSED state (AutoBot improvement).
     # When True, a single success clears accumulated transient failures immediately
     # instead of decrementing one-by-one toward zero.
     CONSECUTIVE_RESET_ON_SUCCESS: bool = True
@@ -144,7 +144,7 @@ Expected: all green
 git add autobot_shared/ssot_constants.py autobot-backend/circuit_breaker.py autobot-backend/circuit_breaker_test.py
 git commit -m "feat(circuit-breaker): reset failure count to zero on success in CLOSED state
 
-Ports the consecutive-failure-reset pattern from Odysseus. Previously a
+Implements the consecutive-failure-reset pattern. Previously a
 success decremented failure_count by 1, so alternating fail/success still
 accumulated toward the threshold. Now any success in CLOSED state clears
 the counter entirely, preventing transient blips from causing false lockout.
@@ -157,7 +157,7 @@ and the per-instance reset_on_success config field."
 
 ## Task 2: Context Window Manager — Adaptive Budget for Unknown Models
 
-**Problem:** `_get_default_config()` returns `context_window_tokens: 4096` for any model not in `config/context_windows.yaml`. A newly added Ollama model is silently capped at 4096 tokens even if it has 128k context. Odysseus scales to `context_length * 0.85` capped at 200k for models it doesn't recognize.
+**Problem:** `_get_default_config()` returns `context_window_tokens: 4096` for any model not in `config/context_windows.yaml`. A newly added Ollama model is silently capped at 4096 tokens even if it has 128k context. The approach scales to `context_length * 0.85` capped at 200k for models it doesn't recognize.
 
 **Files:**
 - Modify: `autobot-backend/context_window_manager.py`
@@ -168,7 +168,7 @@ and the per-instance reset_on_success config field."
 Create `autobot-backend/tests/test_context_window_manager.py`:
 
 ```python
-"""Tests for adaptive context budget scaling (Odysseus pattern)."""
+"""Tests for adaptive context budget scaling (AutoBot improvement)."""
 import pytest
 from unittest.mock import patch
 from context_window_manager import ContextWindowManager, _CONTEXT_HEADROOM, _CONTEXT_HARD_MAX
@@ -313,14 +313,14 @@ Adds get_adaptive_context_length() to ContextWindowManager. Models not in
 context_windows.yaml now scale to 85% of their registry-discovered context
 window (capped at 200k) instead of silently falling back to 4096 tokens.
 
-Ports the adaptive budget pattern from Odysseus src/context_budget.py."
+Implements the adaptive budget pattern."
 ```
 
 ---
 
 ## Task 3: Conversation Compaction — Structured Summary Prompt + Tool-Message Sanitization
 
-**Problem:** `ConversationSummarizer._SUMMARIZATION_PROMPT` produces a generic 2–3 paragraph summary that loses structured context (what was done, what's pending, key facts). Orphaned `tool_call`/`tool` message pairs are not stripped before trimming, which can cause provider validation errors. Odysseus uses a Cursor-style structured template and sanitizes orphans.
+**Problem:** `ConversationSummarizer._SUMMARIZATION_PROMPT` produces a generic 2–3 paragraph summary that loses structured context (what was done, what's pending, key facts). Orphaned `tool_call`/`tool` message pairs are not stripped before trimming, which can cause provider validation errors. The structured template approach and sanitizes orphans.
 
 **Files:**
 - Modify: `autobot-backend/chat_history/context_overflow.py`
@@ -511,14 +511,14 @@ Also adds _sanitize_tool_messages() to strip orphaned role=tool messages
 before trimming — prevents provider validation errors when front-trimming
 cuts an assistant tool_calls parent while keeping its tool responses.
 
-Ports patterns from Odysseus src/context_compactor.py."
+Implements structured compaction patterns."
 ```
 
 ---
 
 ## Task 4: Memory Essential Story — Fingerprint Cache Key
 
-**Problem:** `EssentialStoryGenerator` caches the story in Redis keyed only by `model_name`. When facts are added, edited, or deleted, the cache is still served until TTL expiry (5 minutes), so the agent uses a stale summary. Odysseus uses a SHA-256 fingerprint of fact content as part of the cache key so any change invalidates automatically.
+**Problem:** `EssentialStoryGenerator` caches the story in Redis keyed only by `model_name`. When facts are added, edited, or deleted, the cache is still served until TTL expiry (5 minutes), so the agent uses a stale summary. The SHA-256 fingerprint approach of fact content as part of the cache key so any change invalidates automatically.
 
 **Files:**
 - Modify: `autobot-backend/memory/essential_story.py`
@@ -529,7 +529,7 @@ Ports patterns from Odysseus src/context_compactor.py."
 Create `autobot-backend/memory/essential_story_test.py`:
 
 ```python
-"""Tests for EssentialStoryGenerator fingerprint cache key (Odysseus pattern)."""
+"""Tests for EssentialStoryGenerator fingerprint cache key (AutoBot improvement)."""
 import hashlib
 import pytest
 from memory.essential_story import _compute_facts_fingerprint
@@ -691,7 +691,7 @@ tuples with SHA-256. The fingerprint is baked into the Redis cache key so
 any add, edit, or delete to the fact set automatically invalidates the
 cache — no more stale essential-story summaries after memory updates.
 
-Ports the memory-consolidation fingerprinting pattern from Odysseus
+Implements the memory-consolidation fingerprinting pattern
 services/memory/memory_extractor.py."
 ```
 
@@ -699,7 +699,7 @@ services/memory/memory_extractor.py."
 
 ## Task 5: Agent System Prompt — Entity Anchor UI Convention
 
-**Problem:** AutoBot's agent has no standardized way to reference entities (sessions, documents, tasks) as clickable links. Responses name entities in plain text; users cannot jump directly to them. Odysseus establishes `[Name](#kind-id)` anchors that the frontend converts to navigation buttons — a zero-backend-cost UX improvement that requires only a system-prompt addition.
+**Problem:** AutoBot's agent has no standardized way to reference entities (sessions, documents, tasks) as clickable links. Responses name entities in plain text; users cannot jump directly to them. The convention establishes `[Name](#kind-id)` anchors that the frontend converts to navigation buttons — a zero-backend-cost UX improvement that requires only a system-prompt addition.
 
 **Files:**
 - Modify: `autobot-backend/resources/prompts/chat/system_prompt.md`
@@ -774,7 +774,7 @@ entities (sessions, documents, tasks, workflows, knowledge) in agent
 replies. The frontend converts these anchors into clickable navigation
 buttons, making agent responses significantly more navigable.
 
-Ports the UI conventions pattern from Odysseus src/agent_loop.py."
+Implements the UI entity anchor convention."
 ```
 
 ---
