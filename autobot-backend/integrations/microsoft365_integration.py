@@ -24,7 +24,6 @@ import aiohttp
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
-
 from integrations.base import (
     BaseIntegration,
     IntegrationAction,
