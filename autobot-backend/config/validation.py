@@ -24,9 +24,8 @@ _PORT_MAX = 65535
 
 # Config keys that must resolve to a non-None value before serving requests.
 # Each entry is a dot-notation path checked via get_nested().
-_REQUIRED_CONFIG_KEYS: List[str] = [
-    "backend.server_host",
-]
+# GH#9232: backend.server_host removed — defaults to 0.0.0.0 in config/defaults.py
+_REQUIRED_CONFIG_KEYS: List[str] = []
 
 # Config keys required only when a feature flag is enabled.
 # Each tuple is (required_key, guard_path, guard_enabled_value).
