@@ -46,9 +46,7 @@ class MobileDevice(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=now_utc)
 
     def __repr__(self) -> str:
-        return (
-            f"<MobileDevice id={self.id} user={self.user_id} platform={self.platform}>"
-        )
+        return f"<MobileDevice id={self.id} user={self.user_id} platform={self.platform}>"
 
     @property
     def device_token(self) -> str:

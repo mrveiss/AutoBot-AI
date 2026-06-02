@@ -23,15 +23,9 @@ logger = get_logger(__name__)
 # Module-level constants resolved from env vars (CLAUDE.md TTL pattern / #6743).
 _VAPID_PUBLIC_KEY: str = os.environ.get("VAPID_PUBLIC_KEY", "")
 _VAPID_PRIVATE_KEY: str = os.environ.get("VAPID_PRIVATE_KEY", "")
-_VAPID_CLAIMS_SUB: str = os.environ.get(
-    "VAPID_CLAIMS_SUB", "mailto:admin@autobot.local"
-)
-_PUSH_NOTIFICATION_TTL: int = int(
-    os.environ.get("AUTOBOT_PUSH_NOTIFICATION_TTL", "86400")
-)
-logger.debug(
-    "Push notification TTL: %ds (AUTOBOT_PUSH_NOTIFICATION_TTL)", _PUSH_NOTIFICATION_TTL
-)
+_VAPID_CLAIMS_SUB: str = os.environ.get("VAPID_CLAIMS_SUB", "mailto:admin@autobot.local")
+_PUSH_NOTIFICATION_TTL: int = int(os.environ.get("AUTOBOT_PUSH_NOTIFICATION_TTL", "86400"))
+logger.debug("Push notification TTL: %ds (AUTOBOT_PUSH_NOTIFICATION_TTL)", _PUSH_NOTIFICATION_TTL)
 
 
 def generate_vapid_keys() -> dict:
@@ -46,21 +40,15 @@ def generate_vapid_keys() -> dict:
 
         from py_vapid import Vapid01 as Vapid
     except ImportError as exc:
-        raise RuntimeError(
-            "pywebpush not installed — run: pip install pywebpush"
-        ) from exc
+        raise RuntimeError("pywebpush not installed — run: pip install pywebpush") from exc
 
     v = Vapid()
     v.generate_keys()
 
     # Export keys via temp files (py_vapid API requires file paths)
     with (
-        tempfile.NamedTemporaryFile(
-            mode="r", delete=True, suffix="_private.pem"
-        ) as priv_f,
-        tempfile.NamedTemporaryFile(
-            mode="r", delete=True, suffix="_public.pem"
-        ) as pub_f,
+        tempfile.NamedTemporaryFile(mode="r", delete=True, suffix="_private.pem") as priv_f,
+        tempfile.NamedTemporaryFile(mode="r", delete=True, suffix="_public.pem") as pub_f,
     ):
         v.save_key(priv_f.name)
         v.save_public_key(pub_f.name)
@@ -106,17 +94,13 @@ async def _send_web_push(
 ) -> int:
     """Send web push notifications to browser subscriptions."""
     if not _VAPID_PUBLIC_KEY or not _VAPID_PRIVATE_KEY:
-        logger.debug(
-            "VAPID keys not configured — web push skipped for user %s", user_id
-        )
+        logger.debug("VAPID keys not configured — web push skipped for user %s", user_id)
         return 0
 
     try:
         from pywebpush import WebPusher, WebPushException
     except ImportError:
-        logger.warning(
-            "pywebpush not installed — web push skipped for user %s", user_id
-        )
+        logger.warning("pywebpush not installed — web push skipped for user %s", user_id)
         return 0
 
     subscriptions = await _get_subscriptions(user_id)
@@ -177,14 +161,9 @@ async def _get_subscriptions(user_id: str) -> list[dict]:
 
         factory = get_async_session_factory()
         async with factory() as session:
-            result = await session.execute(
-                select(PushSubscription).where(PushSubscription.user_id == user_id)
-            )
+            result = await session.execute(select(PushSubscription).where(PushSubscription.user_id == user_id))
             rows = result.scalars().all()
-            return [
-                {"endpoint": r.endpoint, "p256dh": r.p256dh, "auth": r.auth}
-                for r in rows
-            ]
+            return [{"endpoint": r.endpoint, "p256dh": r.p256dh, "auth": r.auth} for r in rows]
     except Exception:
         logger.exception("Failed to load push subscriptions for user %s", user_id)
         return []
@@ -200,9 +179,7 @@ async def _remove_stale_subscriptions(endpoints: list[str]) -> None:
 
         factory = get_async_session_factory()
         async with factory() as session:
-            await session.execute(
-                delete(PushSubscription).where(PushSubscription.endpoint.in_(endpoints))
-            )
+            await session.execute(delete(PushSubscription).where(PushSubscription.endpoint.in_(endpoints)))
             await session.commit()
             logger.info("Removed %d stale push subscription(s)", len(endpoints))
     except Exception:
@@ -221,9 +198,7 @@ async def _get_mobile_devices(user_id: str) -> list[dict]:
 
         factory = get_async_session_factory()
         async with factory() as session:
-            result = await session.execute(
-                select(MobileDevice).where(MobileDevice.user_id == user_id)
-            )
+            result = await session.execute(select(MobileDevice).where(MobileDevice.user_id == user_id))
             devices = result.scalars().all()
 
             # Filter to only active devices (seen within 90 days)
@@ -286,9 +261,7 @@ async def _send_mobile_push(
             dispatched += 1
         elif platform == "pwa":
             # PWA uses web push — already handled by _send_web_push
-            logger.debug(
-                "PWA device %s uses web push, skipping mobile push", device["id"]
-            )
+            logger.debug("PWA device %s uses web push, skipping mobile push", device["id"])
         else:
             logger.warning("Unknown platform %s for device %s", platform, device["id"])
 

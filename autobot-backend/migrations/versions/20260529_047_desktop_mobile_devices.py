@@ -39,7 +39,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "ix_desktop_mobile_devices_user_id", table_name="desktop_mobile_devices"
-    )
+    op.drop_index("ix_desktop_mobile_devices_user_id", table_name="desktop_mobile_devices")
     op.drop_table("desktop_mobile_devices")

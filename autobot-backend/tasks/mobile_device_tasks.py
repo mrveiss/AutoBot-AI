@@ -48,14 +48,8 @@ async def _cleanup_stale_devices_async(dry_run: bool) -> dict:
         # Find stale devices (last_seen_at older than 90 days or NULL and created > 90 days ago)
         result = await session.execute(
             select(MobileDevice).where(
-                (
-                    MobileDevice.last_seen_at.isnot(None)
-                    & (MobileDevice.last_seen_at < cutoff)
-                )
-                | (
-                    MobileDevice.last_seen_at.is_(None)
-                    & (MobileDevice.created_at < cutoff)
-                )
+                (MobileDevice.last_seen_at.isnot(None) & (MobileDevice.last_seen_at < cutoff))
+                | (MobileDevice.last_seen_at.is_(None) & (MobileDevice.created_at < cutoff))
             )
         )
         stale_devices = list(result.scalars().all())
@@ -71,9 +65,7 @@ async def _cleanup_stale_devices_async(dry_run: bool) -> dict:
 
         # Delete stale devices
         device_ids = [d.id for d in stale_devices]
-        await session.execute(
-            delete(MobileDevice).where(MobileDevice.id.in_(device_ids))
-        )
+        await session.execute(delete(MobileDevice).where(MobileDevice.id.in_(device_ids)))
         await session.commit()
         logger.info("Pruned %d stale mobile device(s)", count)
         return {"deleted_count": count, "dry_run": False}
