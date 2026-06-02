@@ -175,8 +175,6 @@ from api.schemas_code import (
     GetPromptRequest,
     ListDirectoryRequest,
     ListDirectoryWithSizesRequest,
-    MCPPromptTemplate,
-    MCPResource,
     MCPTool,
     MoveFileRequest,
     ReadMediaFileRequest,
@@ -1609,7 +1607,7 @@ async def subscribe_resource_mcp(
         "uri": canonical_uri,
         "session_id": request.session_id,
         "channel": channel,
-        "message": f"Subscribed to {canonical_uri}. Connect to WebSocket at /ws/live and subscribe to channel: {channel}",
+        "message": f"Subscribed to {canonical_uri}. Connect to WebSocket /ws/live, channel: {channel}",
     }
 
 

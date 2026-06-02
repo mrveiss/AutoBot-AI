@@ -18,9 +18,7 @@ from fastapi import APIRouter, Depends
 
 from api.schemas_code import (
     SubscribeResourceRequest,
-    SubscribeResourceResponse,
     UnsubscribeResourceRequest,
-    UnsubscribeResourceResponse,
 )
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -1069,7 +1067,7 @@ async def list_kb_resources(
         # Individual documents would be accessed via kb://doc/<id> URIs
         resources.append(
             {
-                "uri": f"kb://stats",
+                "uri": "kb://stats",
                 "name": "Knowledge Base Statistics",
                 "description": f"Total documents: {stats['total_documents']}",
                 "mime_type": "application/json",
