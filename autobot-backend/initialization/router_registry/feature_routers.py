@@ -587,6 +587,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["conversation-export"],
         "conversation_export",
     ),
+    # MVA-2174: Transcript export in multiple formats (DOCX, PDF, SRT, VTT)
+    (
+        "api.transcript_export",
+        "",
+        ["transcript-export"],
+        "transcript_export",
+    ),
     # Issue #3407: SLM Docker deployment bridge
     (
         "api.slm.deployments",
