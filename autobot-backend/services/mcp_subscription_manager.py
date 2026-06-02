@@ -151,16 +151,15 @@ class MCPSubscriptionManager:
             return 0
 
         channel = _uri_to_channel(uri)
-        event_payload = {
-            "uri": uri,
-            "change_type": change_type,
-            **payload
-        }
+        event_payload = {"uri": uri, "change_type": change_type, **payload}
 
         sent = await publish_live_event(channel, "mcp_resource_changed", event_payload)
         logger.info(
             "Published resource change for %s (type=%s, subscribers=%d, sent=%d)",
-            uri, change_type, len(session_ids), sent
+            uri,
+            change_type,
+            len(session_ids),
+            sent,
         )
         return sent
 
@@ -220,15 +219,11 @@ class MCPSubscriptionManager:
                         current_mtime = path.stat().st_mtime
                         if last_mtime is None:
                             # File was created
-                            await self.publish_change(uri, "created", {
-                                "size": path.stat().st_size
-                            })
+                            await self.publish_change(uri, "created", {"size": path.stat().st_size})
                             last_mtime = current_mtime
                         elif current_mtime != last_mtime:
                             # File was modified
-                            await self.publish_change(uri, "modified", {
-                                "size": path.stat().st_size
-                            })
+                            await self.publish_change(uri, "modified", {"size": path.stat().st_size})
                             last_mtime = current_mtime
                 except Exception as e:
                     logger.error("Error checking file %s: %s", path, e)

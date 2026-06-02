@@ -1593,6 +1593,7 @@ async def subscribe_resource_mcp(
 
     # Generate channel name for WebSocket subscription
     import hashlib
+
     uri_hash = hashlib.sha256(canonical_uri.encode()).hexdigest()[:16]
     channel = f"mcp:resource:{uri_hash}"
 
