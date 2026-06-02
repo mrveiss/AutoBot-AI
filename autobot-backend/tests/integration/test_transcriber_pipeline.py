@@ -7,7 +7,6 @@
 
 """Integration test for transcriber pipeline with sample audio."""
 
-import asyncio
 import tempfile
 from pathlib import Path
 

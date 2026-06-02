@@ -262,7 +262,7 @@ class TestDiarizationServiceIntegration:
         """
         pytest.skip("Requires Pyannote model files and HuggingFace token")
 
-        service = DiarizationService()
+        DiarizationService()
 
         # Would need a real audio file for full integration test
         # Skipping actual execution to avoid model download in CI
