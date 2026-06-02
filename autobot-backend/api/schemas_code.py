@@ -1481,6 +1481,71 @@ class FilesystemListAllowedResponse(BaseModel):
     security_info: FilesystemSecurityInfo
 
 
+class MCPResource(BaseModel):
+    """MCP resource definition."""
+
+    uri: str = Field(..., description="Resource URI (e.g., file:///path/to/file)")
+    name: str = Field(..., description="Human-readable resource name")
+    description: str | None = Field(None, description="Resource description")
+    mime_type: str | None = Field(None, description="MIME type of the resource")
+
+
+class MCPPromptTemplate(BaseModel):
+    """MCP prompt template definition."""
+
+    name: str = Field(..., description="Prompt template name")
+    description: str | None = Field(None, description="Template description")
+    arguments: List[Dict[str, Any]] = Field(default_factory=list, description="Template arguments schema")
+
+
+class FilesystemResourcesListResponse(BaseModel):
+    """Response for GET /mcp/resources."""
+
+    success: bool
+    resources: List[MCPResource]
+    total: int
+
+
+class ReadResourceRequest(BaseModel):
+    """Request model for reading a resource by URI."""
+
+    uri: str = Field(..., description="Resource URI (file:// scheme)")
+
+
+class FilesystemResourceReadResponse(BaseModel):
+    """Response for POST /mcp/resources/read."""
+
+    success: bool
+    uri: str
+    content: str
+    mime_type: str | None = None
+    size_bytes: int
+
+
+class FilesystemPromptsListResponse(BaseModel):
+    """Response for GET /mcp/prompts."""
+
+    success: bool
+    prompts: List[MCPPromptTemplate]
+    total: int
+
+
+class GetPromptRequest(BaseModel):
+    """Request model for getting a prompt template."""
+
+    name: str = Field(..., description="Prompt template name")
+    arguments: Dict[str, Any] = Field(default_factory=dict, description="Template arguments")
+
+
+class FilesystemPromptGetResponse(BaseModel):
+    """Response for POST /mcp/prompts/get."""
+
+    success: bool
+    name: str
+    description: str | None = None
+    messages: List[Dict[str, str]]
+
+
 class MCPTool(BaseModel):
     """Standard MCP tool definition (shared across all MCP endpoint files)."""
 
