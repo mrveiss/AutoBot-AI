@@ -188,6 +188,13 @@
     section{padding:80px 0}
     @media(max-width:640px){section{padding:56px 0}.container{padding:0 16px}}
 
+    /* ── Nav logo mark — CSS gradient so it works on any background ─── */
+    .nav-logo-mark{
+      width:30px;height:30px;flex:none;border-radius:7px;
+      background:linear-gradient(135deg,#f7b94a 0%,#e2842e 42%,#cf5f22 72%,#a2374a 100%);
+      display:flex;align-items:center;justify-content:center;
+    }
+
     /* ── Nav ────────────────────────────────────────────────────────── */
     nav{
       position:sticky;top:0;z-index:100;
@@ -632,6 +639,15 @@
 <body>
   <!-- Kiln icon sprite (inline, hidden) -->
   <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+  <!-- Gradient defined at top level so url(#ember-logo) resolves from any <use> -->
+  <defs>
+    <linearGradient id="ember-logo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#f7b94a"/>
+      <stop offset="42%"  stop-color="#e2842e"/>
+      <stop offset="72%"  stop-color="#cf5f22"/>
+      <stop offset="100%" stop-color="#a2374a"/>
+    </linearGradient>
+  </defs>
     <symbol id="i-chat" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="12" rx="3"/><path d="M8 16.5v3l4-3"/><path d="M8 9.5h8M8 12.5h5"/></symbol>
     <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3.5 21 8l-9 4.5L3 8l9-4.5Z"/><path d="M3.5 12 12 16.3 20.5 12"/><path d="M3.5 16 12 20.3 20.5 16"/></symbol>
     <symbol id="i-blocks" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.6"/><rect x="13" y="4" width="7" height="7" rx="1.6"/><rect x="4" y="13" width="7" height="7" rx="1.6"/><rect x="13" y="13" width="7" height="7" rx="1.6"/></symbol>
@@ -652,26 +668,15 @@
     <symbol id="i-tag" viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82Z"/><line x1="7" y1="7" x2="7.01" y2="7"/></symbol>
     <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
 
-    <!-- AutoBot logo mark — solid ember gradient fill, white inner mark
-         Works standalone at any size: 16px favicon → 512px app icon -->
+    <!-- AutoBot logo mark — gradient defined at top level (above), works via <use> -->
     <symbol id="logo-mark" viewBox="0 0 48 48">
-      <defs>
-        <linearGradient id="ember-logo" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%"   stop-color="#f7b94a"/>
-          <stop offset="42%"  stop-color="#e2842e"/>
-          <stop offset="72%"  stop-color="#cf5f22"/>
-          <stop offset="100%" stop-color="#a2374a"/>
-        </linearGradient>
-      </defs>
-      <!-- Solid gradient rounded square — readable at any size -->
       <rect x="0" y="0" width="48" height="48" rx="11" fill="url(#ember-logo)"/>
-      <!-- White inner mark: 4 agent nodes + center hub + spokes -->
       <circle cx="24" cy="9"  r="3.5" fill="white"/>
       <circle cx="39" cy="24" r="3.5" fill="white"/>
       <circle cx="24" cy="39" r="3.5" fill="white"/>
       <circle cx="9"  cy="24" r="3.5" fill="white"/>
       <circle cx="24" cy="24" r="4.5" fill="white"/>
-      <path d="M24 13 L24 19.5M32 24 L35.5 24M24 28.5 L24 35M12.5 24 L19 24"
+      <path d="M24 13v6.5M32 24h5.5M24 28.5v6.5M12.5 24H19"
             stroke="white" stroke-width="2.2" stroke-linecap="round"/>
     </symbol>
   </svg>
@@ -680,7 +685,16 @@
   <nav>
     <div class="nav-inner">
       <a href="#" class="nav-logo" style="text-decoration:none">
-        <svg width="30" height="30" viewBox="0 0 48 48" style="flex:none;border-radius:7px"><use href="#logo-mark"/></svg>
+        <span class="nav-logo-mark" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 48 48" fill="none">
+            <circle cx="24" cy="9"  r="3.5" fill="white"/>
+            <circle cx="39" cy="24" r="3.5" fill="white"/>
+            <circle cx="24" cy="39" r="3.5" fill="white"/>
+            <circle cx="9"  cy="24" r="3.5" fill="white"/>
+            <circle cx="24" cy="24" r="4.5" fill="white"/>
+            <path d="M24 13v6.5M32 24h5.5M24 28.5v6.5M10.5 24H19" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+        </span>
         AutoBot
       </a>
       <div class="nav-links">
