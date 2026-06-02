@@ -3,10 +3,9 @@ description: Autonomous AI workspace — self-hosted, privacy-first, hardware-ac
 url: "https://mrveiss.github.io"
 baseurl: "/AutoBot-AI"
 
-remote_theme: just-the-docs/just-the-docs@v0.10.0
+theme: just-the-docs
 
 plugins:
-  - jekyll-remote-theme
   - jekyll-seo-tag
 
 # ── just-the-docs settings ──────────────────────────────────────────
