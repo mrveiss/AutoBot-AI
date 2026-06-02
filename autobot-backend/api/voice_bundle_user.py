@@ -264,17 +264,20 @@ async def set_user_bundle(
         logger.error("set_user_bundle: DB error: %s", exc)
         raise HTTPException(status_code=500, detail="Database error") from exc
 
-    emit(
-        AuditEvent(
-            category=AuditCategory.SECURITY,
-            action="voice_bundle_assignment_changed",
-            actor_id=str(current_user_id),
-            resource_type="user_voice_bundle",
-            resource_id=user_id,
-            outcome="success",
-            metadata={**_audit_meta, "bundle_name": stored_bundle_name},
+    try:
+        emit(
+            AuditEvent(
+                category=AuditCategory.SECURITY,
+                action="voice_bundle_assignment_changed",
+                actor_id=str(current_user_id),
+                resource_type="user_voice_bundle",
+                resource_id=user_id,
+                outcome="success",
+                metadata={**_audit_meta, "bundle_name": stored_bundle_name},
+            )
         )
-    )
+    except Exception:
+        logger.warning("set_user_bundle: failed to emit success audit", exc_info=True)
 
     logger.info(
         "voice_bundle user_id=%s target=%s bundle=%s",

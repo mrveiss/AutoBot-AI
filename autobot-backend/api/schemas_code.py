@@ -1522,6 +1522,39 @@ class FilesystemResourceReadResponse(BaseModel):
     size_bytes: int
 
 
+class SubscribeResourceRequest(BaseModel):
+    """Request model for subscribing to a resource."""
+
+    uri: str = Field(..., description="Resource URI to subscribe to")
+    session_id: str = Field(..., description="Client session identifier")
+
+
+class SubscribeResourceResponse(BaseModel):
+    """Response for POST /mcp/resources/subscribe."""
+
+    success: bool
+    uri: str
+    session_id: str
+    channel: str = Field(..., description="WebSocket channel for notifications")
+    message: str
+
+
+class UnsubscribeResourceRequest(BaseModel):
+    """Request model for unsubscribing from a resource."""
+
+    uri: str = Field(..., description="Resource URI to unsubscribe from")
+    session_id: str = Field(..., description="Client session identifier")
+
+
+class UnsubscribeResourceResponse(BaseModel):
+    """Response for POST /mcp/resources/unsubscribe."""
+
+    success: bool
+    uri: str
+    session_id: str
+    message: str
+
+
 class FilesystemPromptsListResponse(BaseModel):
     """Response for GET /mcp/prompts."""
 

@@ -822,3 +822,10 @@
   tags: ['backend', 'smoke-test']
   register: backend_health_check
   until: backend_health_check is succeeded
+  # GH#9281/MVA-2431: Allow Phase 4c (nginx co-location) to run even if
+  # the backend health check times out on slow restarts. Phase 4c has no
+  # dependency on backend health — it only needs nginx config and the user
+  # frontend package.json. The backend service will eventually come up via
+  # systemd, but nginx must switch to co-located mode immediately so users
+  # can access the frontend.
+  ignore_errors: true

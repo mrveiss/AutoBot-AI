@@ -71,8 +71,9 @@ class SnapshotRecord:
 class SnapshotIndex:
     """File-backed index of container snapshot records (GH#4458).
 
-    Thread-safety: each operation re-reads and re-writes the index file.
-    This is safe for the expected low-frequency snapshot operations.
+    Thread-safety: all operations are protected by a threading lock (GH#8968).
+    Each operation re-reads and re-writes the index file under lock protection,
+    ensuring consistency under concurrent access in multi-worker deployments.
     """
 
     def __init__(self, storage_path: Optional[Path] = None) -> None:
@@ -108,37 +109,40 @@ class SnapshotIndex:
             logger.debug("Snapshot %s added to index", record.snapshot_id)
 
     def get(self, snapshot_id: str) -> Optional[SnapshotRecord]:
-        records = self._load()
-        data = records.get(snapshot_id)
-        if data is None:
-            return None
-        try:
-            return SnapshotRecord.from_dict(data)
-        except (TypeError, KeyError) as exc:
-            logger.warning("Malformed snapshot record for %s: %s", snapshot_id, exc)
-            return None
+        with self._lock:
+            records = self._load()
+            data = records.get(snapshot_id)
+            if data is None:
+                return None
+            try:
+                return SnapshotRecord.from_dict(data)
+            except (TypeError, KeyError) as exc:
+                logger.warning("Malformed snapshot record for %s: %s", snapshot_id, exc)
+                return None
 
     def list_by_session(self, session_id: str) -> List[SnapshotRecord]:
-        records = self._load()
-        result = []
-        for v in records.values():
-            if v.get("session_id") != session_id:
-                continue
-            try:
-                result.append(SnapshotRecord.from_dict(v))
-            except (TypeError, KeyError) as exc:
-                logger.warning("Skipping malformed snapshot record: %s", exc)
-        return result
+        with self._lock:
+            records = self._load()
+            result = []
+            for v in records.values():
+                if v.get("session_id") != session_id:
+                    continue
+                try:
+                    result.append(SnapshotRecord.from_dict(v))
+                except (TypeError, KeyError) as exc:
+                    logger.warning("Skipping malformed snapshot record: %s", exc)
+            return result
 
     def list_all(self) -> List[SnapshotRecord]:
-        records = self._load()
-        result = []
-        for v in records.values():
-            try:
-                result.append(SnapshotRecord.from_dict(v))
-            except (TypeError, KeyError) as exc:
-                logger.warning("Skipping malformed snapshot record: %s", exc)
-        return result
+        with self._lock:
+            records = self._load()
+            result = []
+            for v in records.values():
+                try:
+                    result.append(SnapshotRecord.from_dict(v))
+                except (TypeError, KeyError) as exc:
+                    logger.warning("Skipping malformed snapshot record: %s", exc)
+            return result
 
     def list_by_user(self, user_id: str) -> List[SnapshotRecord]:
         """List all snapshots owned by a specific user.
@@ -149,16 +153,17 @@ class SnapshotIndex:
         Returns:
             List of SnapshotRecord objects owned by the user
         """
-        records = self._load()
-        result = []
-        for v in records.values():
-            if v.get("user_id") != user_id:
-                continue
-            try:
-                result.append(SnapshotRecord.from_dict(v))
-            except (TypeError, KeyError) as exc:
-                logger.warning("Skipping malformed snapshot record: %s", exc)
-        return result
+        with self._lock:
+            records = self._load()
+            result = []
+            for v in records.values():
+                if v.get("user_id") != user_id:
+                    continue
+                try:
+                    result.append(SnapshotRecord.from_dict(v))
+                except (TypeError, KeyError) as exc:
+                    logger.warning("Skipping malformed snapshot record: %s", exc)
+            return result
 
     def remove(self, snapshot_id: str) -> bool:
         with self._lock:

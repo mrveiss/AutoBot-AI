@@ -6,7 +6,7 @@ AutoBot supports comprehensive configuration through environment variables with 
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AUTOBOT_BACKEND_HOST` | `0.0.0.0` | Backend server host |
+| `AUTOBOT_BACKEND_HOST` | `127.0.0.1` (or `0.0.0.0` on WSL2) | Backend server host — automatically configured by Ansible from `backend_host` variable (MVA-2418) |
 | `AUTOBOT_BACKEND_PORT` | `8001` | Backend server port |
 | `AUTOBOT_BACKEND_API_ENDPOINT` | `http://localhost:8001` | Full API endpoint URL |
 | `AUTOBOT_BACKEND_TIMEOUT` | `60` | Request timeout in seconds |

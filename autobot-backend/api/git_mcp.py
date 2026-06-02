@@ -43,6 +43,10 @@ from api.schemas_code import (
     GitShowRequest,
     GitStatusRequest,
     MCPTool,
+    SubscribeResourceRequest,
+    SubscribeResourceResponse,
+    UnsubscribeResourceRequest,
+    UnsubscribeResourceResponse,
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -1072,6 +1076,131 @@ async def read_git_resource(request: Metadata) -> Metadata:
     except Exception as e:
         logger.error("Error reading git resource: %s", e)
         raise HTTPException(status_code=500, detail="Failed to read git resource")
+
+
+@router.post("/mcp/resources/subscribe")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="subscribe_git_resource",
+    error_code_prefix="GIT_MCP",
+)
+async def subscribe_git_resource(
+    request: SubscribeResourceRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Metadata:
+    """
+    Subscribe to git resource change notifications.
+
+    Issue MVA-2166: Implements MCP resource subscriptions for real-time updates.
+
+    Clients can subscribe to git:// URIs and receive notifications when:
+    - Commits are pushed
+    - Branches are updated
+    - Tags are created
+
+    Note: Active change detection for git repositories will be implemented in a follow-up.
+    For now, subscriptions are registered but notifications must be manually triggered
+    via the MCPSubscriptionManager.publish_change() method.
+
+    Args:
+        request: Subscription request with URI and session_id
+
+    Returns:
+        Subscription confirmation with WebSocket channel
+    """
+    from services.mcp_subscription_manager import get_mcp_subscription_manager
+
+    # Validate URI
+    if not request.uri.startswith("git://"):
+        raise HTTPException(status_code=400, detail="Only git:// URIs are supported for git subscriptions")
+
+    # Parse URI to validate format
+    parts = request.uri[6:].split("/", 2)  # Remove 'git://'
+    if len(parts) < 3:
+        raise HTTPException(status_code=400, detail="Invalid git:// URI format. Expected: git://repo/type/identifier")
+
+    repo_path, resource_type, identifier = parts
+
+    if not is_repository_allowed(repo_path):
+        raise HTTPException(status_code=403, detail="Repository not in whitelist")
+
+    if resource_type not in ["commit", "branch", "diff"]:
+        raise HTTPException(status_code=400, detail=f"Unknown resource type: {resource_type}")
+
+    # Subscribe via subscription manager
+    success = await get_mcp_subscription_manager().subscribe(request.session_id, request.uri)
+
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to create subscription")
+
+    # Generate channel name for WebSocket subscription
+    import hashlib
+    uri_hash = hashlib.sha256(request.uri.encode()).hexdigest()[:16]
+    channel = f"mcp:resource:{uri_hash}"
+
+    logger.info(
+        "Created git subscription: session=%s, uri=%s, channel=%s",
+        request.session_id[:8],
+        request.uri,
+        channel,
+    )
+
+    return {
+        "success": True,
+        "uri": request.uri,
+        "session_id": request.session_id,
+        "channel": channel,
+        "message": f"Subscribed to {request.uri}. Connect to WebSocket at /ws/live and subscribe to channel: {channel}",
+    }
+
+
+@router.post("/mcp/resources/unsubscribe")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="unsubscribe_git_resource",
+    error_code_prefix="GIT_MCP",
+)
+async def unsubscribe_git_resource(
+    request: UnsubscribeResourceRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Metadata:
+    """
+    Unsubscribe from git resource change notifications.
+
+    Issue MVA-2166: Implements MCP resource subscriptions for real-time updates.
+
+    Removes a subscription for a specific session and resource URI.
+
+    Args:
+        request: Unsubscription request with URI and session_id
+
+    Returns:
+        Unsubscription confirmation
+    """
+    from services.mcp_subscription_manager import get_mcp_subscription_manager
+
+    # Validate URI
+    if not request.uri.startswith("git://"):
+        raise HTTPException(status_code=400, detail="Only git:// URIs are supported for git subscriptions")
+
+    # Unsubscribe via subscription manager
+    success = await get_mcp_subscription_manager().unsubscribe(request.session_id, request.uri)
+
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to remove subscription")
+
+    logger.info(
+        "Removed git subscription: session=%s, uri=%s",
+        request.session_id[:8],
+        request.uri,
+    )
+
+    return {
+        "success": True,
+        "uri": request.uri,
+        "session_id": request.session_id,
+        "message": f"Unsubscribed from {request.uri}",
+    }
 
 
 @router.get("/mcp/prompts")

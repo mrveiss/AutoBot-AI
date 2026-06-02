@@ -16,6 +16,12 @@ from typing import List
 
 from fastapi import APIRouter, Depends
 
+from api.schemas_code import (
+    SubscribeResourceRequest,
+    SubscribeResourceResponse,
+    UnsubscribeResourceRequest,
+    UnsubscribeResourceResponse,
+)
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -1167,6 +1173,132 @@ async def read_kb_resource(
     except Exception as e:
         logger.error("Error reading KB resource: %s", e)
         return {"success": False, "error": "Internal server error"}
+
+
+@router.post("/mcp/resources/subscribe")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="subscribe_kb_resource",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
+async def subscribe_kb_resource(
+    request: SubscribeResourceRequest,
+    current_user: dict = Depends(get_current_user),
+) -> Metadata:
+    """
+    Subscribe to knowledge base resource change notifications.
+
+    Issue MVA-2166: Implements MCP resource subscriptions for real-time updates.
+    Issue #744: Requires authenticated user.
+
+    Clients can subscribe to kb:// URIs and receive notifications when:
+    - Documents are added or updated
+    - Chunks are reindexed
+    - Knowledge base statistics change
+
+    Note: Active change detection for knowledge base updates will be implemented in a follow-up.
+    For now, subscriptions are registered but notifications must be manually triggered
+    via the MCPSubscriptionManager.publish_change() method.
+
+    Args:
+        request: Subscription request with URI and session_id
+        current_user: Authenticated user
+
+    Returns:
+        Subscription confirmation with WebSocket channel
+    """
+    from services.mcp_subscription_manager import get_mcp_subscription_manager
+
+    # Validate URI
+    if not request.uri.startswith("kb://"):
+        return {"success": False, "error": "Only kb:// URIs are supported for knowledge base subscriptions"}
+
+    # Parse URI to validate format
+    parts = request.uri[5:].split("/", 1)  # Remove 'kb://'
+    if len(parts) < 1:
+        return {"success": False, "error": "Invalid kb:// URI format. Expected: kb://type[/identifier]"}
+
+    resource_type = parts[0]
+
+    if resource_type not in ["doc", "chunk", "stats"]:
+        return {"success": False, "error": f"Unknown resource type: {resource_type}"}
+
+    # Subscribe via subscription manager
+    success = await get_mcp_subscription_manager().subscribe(request.session_id, request.uri)
+
+    if not success:
+        return {"success": False, "error": "Failed to create subscription"}
+
+    # Generate channel name for WebSocket subscription
+    import hashlib
+    uri_hash = hashlib.sha256(request.uri.encode()).hexdigest()[:16]
+    channel = f"mcp:resource:{uri_hash}"
+
+    logger.info(
+        "Created KB subscription: session=%s, uri=%s, channel=%s",
+        request.session_id[:8],
+        request.uri,
+        channel,
+    )
+
+    return {
+        "success": True,
+        "uri": request.uri,
+        "session_id": request.session_id,
+        "channel": channel,
+        "message": f"Subscribed to {request.uri}. Connect to WebSocket at /ws/live and subscribe to channel: {channel}",
+    }
+
+
+@router.post("/mcp/resources/unsubscribe")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="unsubscribe_kb_resource",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
+async def unsubscribe_kb_resource(
+    request: UnsubscribeResourceRequest,
+    current_user: dict = Depends(get_current_user),
+) -> Metadata:
+    """
+    Unsubscribe from knowledge base resource change notifications.
+
+    Issue MVA-2166: Implements MCP resource subscriptions for real-time updates.
+    Issue #744: Requires authenticated user.
+
+    Removes a subscription for a specific session and resource URI.
+
+    Args:
+        request: Unsubscription request with URI and session_id
+        current_user: Authenticated user
+
+    Returns:
+        Unsubscription confirmation
+    """
+    from services.mcp_subscription_manager import get_mcp_subscription_manager
+
+    # Validate URI
+    if not request.uri.startswith("kb://"):
+        return {"success": False, "error": "Only kb:// URIs are supported for knowledge base subscriptions"}
+
+    # Unsubscribe via subscription manager
+    success = await get_mcp_subscription_manager().unsubscribe(request.session_id, request.uri)
+
+    if not success:
+        return {"success": False, "error": "Failed to remove subscription"}
+
+    logger.info(
+        "Removed KB subscription: session=%s, uri=%s",
+        request.session_id[:8],
+        request.uri,
+    )
+
+    return {
+        "success": True,
+        "uri": request.uri,
+        "session_id": request.session_id,
+        "message": f"Unsubscribed from {request.uri}",
+    }
 
 
 @router.get("/mcp/prompts")
