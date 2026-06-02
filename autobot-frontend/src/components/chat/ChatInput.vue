@@ -200,6 +200,12 @@
               <Icon name="bookmark" />
             </BaseButton>
 
+            <!-- MVA-2167: MCP Prompt Template Picker -->
+            <McpPromptPicker
+              :disabled="isDisabled"
+              @insert="handlePromptInsert"
+            />
+
             <!-- Voice Input Button -->
             <BaseButton
               variant="ghost"
@@ -430,6 +436,7 @@ import VisionAnalysisModal from './VisionAnalysisModal.vue'
 import PresetManagementModal from './PresetManagementModal.vue'
 import TranslationShortcutPanel from './TranslationShortcutPanel.vue'
 import SlashCommandDropdown from './SlashCommandDropdown.vue'
+import McpPromptPicker from './McpPromptPicker.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
 import { getFileIconByMimeType } from '@/utils/iconMappings'
 import { createLogger } from '@/utils/debugUtils'
@@ -964,6 +971,16 @@ const handleTranslationResult = (payload: {
     sender: 'assistant',
     status: 'sent',
     type: 'message',
+  })
+}
+
+// MVA-2167: Handle MCP prompt template insertion
+const handlePromptInsert = (text: string) => {
+  messageText.value = text
+  nextTick(() => {
+    if (messageInput.value) {
+      messageInput.value.focus()
+    }
   })
 }
 

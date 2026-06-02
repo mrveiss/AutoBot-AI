@@ -200,6 +200,16 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
+        // MVA-2167: MCP Resource Browser
+        path: 'mcp-resources',
+        name: 'knowledge-mcp-resources',
+        component: () => import('@/components/knowledge/McpResourceBrowser.vue'),
+        meta: {
+          title: 'MCP Resources',
+          parent: 'knowledge'
+        }
+      },
+      {
         path: 'connectors',
         name: 'knowledge-connectors',
         component: () => import('@/components/knowledge/connectors/ConnectorManager.vue'),
