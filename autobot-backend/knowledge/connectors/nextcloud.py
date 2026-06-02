@@ -131,8 +131,7 @@ class NextcloudConnector(AbstractConnector):
         self._password: str = cfg.get("password", "")
         self._folders: List[str] = cfg.get("folders", [])
         self._file_extensions: List[str] = [
-            ext.lower().lstrip(".")
-            for ext in cfg.get("file_extensions", DEFAULT_FILE_EXTENSIONS)
+            ext.lower().lstrip(".") for ext in cfg.get("file_extensions", DEFAULT_FILE_EXTENSIONS)
         ]
         self._max_file_size_mb: int = int(cfg.get("max_file_size_mb", 50))
         self._max_file_size_bytes = self._max_file_size_mb * 1024 * 1024
@@ -146,9 +145,7 @@ class NextcloudConnector(AbstractConnector):
             raise ValueError("password is required")
 
         # Construct WebDAV endpoint: {base_url}/remote.php/dav/files/{username}/
-        self._webdav_base = urljoin(
-            self._base_url, f"/remote.php/dav/files/{quote(self._username)}/"
-        )
+        self._webdav_base = urljoin(self._base_url, f"/remote.php/dav/files/{quote(self._username)}/")
 
     # ------------------------------------------------------------------
     # AbstractConnector interface
@@ -160,17 +157,11 @@ class NextcloudConnector(AbstractConnector):
             async with aiohttp.ClientSession() as session:
                 auth = aiohttp.BasicAuth(self._username, self._password)
                 timeout = aiohttp.ClientTimeout(total=30.0)
-                async with session.options(
-                    self._webdav_base, auth=auth, timeout=timeout
-                ) as resp:
+                async with session.options(self._webdav_base, auth=auth, timeout=timeout) as resp:
                     if resp.status in (200, 204):
-                        self.logger.info(
-                            "Nextcloud connection test successful: %s", self._webdav_base
-                        )
+                        self.logger.info("Nextcloud connection test successful: %s", self._webdav_base)
                         return True
-                    self.logger.warning(
-                        "Nextcloud test_connection failed: HTTP %d", resp.status
-                    )
+                    self.logger.warning("Nextcloud test_connection failed: HTTP %d", resp.status)
                     return False
         except Exception as exc:
             self.logger.error("Nextcloud test_connection error: %s", exc)
@@ -188,9 +179,7 @@ class NextcloudConnector(AbstractConnector):
             # Sync all accessible files from root
             sources.extend(await self._discover_folder("/"))
 
-        self.logger.info(
-            "Discovered %d sources from Nextcloud %s", len(sources), self._base_url
-        )
+        self.logger.info("Discovered %d sources from Nextcloud %s", len(sources), self._base_url)
         return sources
 
     async def fetch_content(self, source_id: str) -> Optional[ContentResult]:
@@ -218,9 +207,7 @@ class NextcloudConnector(AbstractConnector):
                             content = content_bytes.decode("utf-8")
                         except UnicodeDecodeError:
                             # For binary files (PDF, DOCX), return as base64 or skip
-                            self.logger.warning(
-                                "Binary content for %s - may need extraction", source_id
-                            )
+                            self.logger.warning("Binary content for %s - may need extraction", source_id)
                             content = content_bytes.decode("utf-8", errors="replace")
 
                         await _store_ts(
@@ -239,9 +226,7 @@ class NextcloudConnector(AbstractConnector):
                         self.logger.warning("File not found: %s", file_url)
                         return None
                     else:
-                        raise RetryableError(
-                            f"WebDAV GET failed: HTTP {resp.status}", resp.status
-                        )
+                        raise RetryableError(f"WebDAV GET failed: HTTP {resp.status}", resp.status)
         except aiohttp.ClientError as exc:
             self.logger.error("WebDAV GET error for %s: %s", source_id, exc)
             raise RetryableError(str(exc))
@@ -386,10 +371,18 @@ class NextcloudConnector(AbstractConnector):
                 last_modified = self._parse_http_date(last_modified_str) if last_modified_str else now_utc()
 
                 content_type_elem = prop.find("d:getcontenttype", ns)
-                content_type = content_type_elem.text if content_type_elem is not None and content_type_elem.text else "application/octet-stream"
+                content_type = (
+                    content_type_elem.text
+                    if content_type_elem is not None and content_type_elem.text
+                    else "application/octet-stream"
+                )
 
                 displayname_elem = prop.find("d:displayname", ns)
-                display_name = displayname_elem.text if displayname_elem is not None and displayname_elem.text else path.rsplit("/", 1)[-1]
+                display_name = (
+                    displayname_elem.text
+                    if displayname_elem is not None and displayname_elem.text
+                    else path.rsplit("/", 1)[-1]
+                )
 
                 # Create source_id
                 source_id = f"nextcloud:{self.config.connector_id}:file:{quote(path, safe='')}"
