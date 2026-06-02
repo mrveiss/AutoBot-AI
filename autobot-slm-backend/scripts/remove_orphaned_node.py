@@ -3,7 +3,7 @@
 Remove orphaned/unreachable nodes from SLM database.
 
 Usage:
-    python remove_orphaned_node.py --ip 172.16.168.26
+    python remove_orphaned_node.py --ip <node-ip>
     python remove_orphaned_node.py --node-id <node_id>
     python remove_orphaned_node.py --list-unreachable
 
@@ -58,9 +58,7 @@ class SLMClient:
             ) as resp:
                 if resp.status not in (204, 200):
                     error_text = await resp.text()
-                    raise RuntimeError(
-                        f"Failed to delete node {node_id}: HTTP {resp.status}\n{error_text}"
-                    )
+                    raise RuntimeError(f"Failed to delete node {node_id}: HTTP {resp.status}\n{error_text}")
 
     async def test_node_reachability(self, node_id: str) -> dict:
         """Test SSH reachability of a node."""
@@ -110,9 +108,7 @@ async def list_unreachable_nodes(client: SLMClient) -> list[dict]:
 
 
 async def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Remove orphaned/unreachable nodes from SLM database"
-    )
+    parser = argparse.ArgumentParser(description="Remove orphaned/unreachable nodes from SLM database")
     parser.add_argument(
         "--ip",
         help="IP address of node to remove",
@@ -157,9 +153,7 @@ async def main() -> int:
             if unreachable:
                 print("\nTo remove a node, run:")
                 for node in unreachable:
-                    print(
-                        f"  python remove_orphaned_node.py --node-id {node['node_id']}"
-                    )
+                    print(f"  python remove_orphaned_node.py --node-id {node['node_id']}")
             return 0
 
         # Find node to remove
@@ -203,9 +197,7 @@ async def main() -> int:
         print(f"\nRemoving node {node_id}...")
         await client.delete_node(node_id)
         print(f"✓ Node {hostname} ({ip}) removed successfully")
-        print(
-            "\nThe node will no longer appear in provision warnings."
-        )
+        print("\nThe node will no longer appear in provision warnings.")
         return 0
 
     except Exception as e:
