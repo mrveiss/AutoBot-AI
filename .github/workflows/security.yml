@@ -184,7 +184,7 @@ jobs:
           autobot-backend/ autobot-slm-backend/ autobot_shared/ || true
 
     - name: Upload Semgrep SARIF to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@4f3212b61783c3c68e8309a0f18a699764811cda  # v3
+      uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa  # v3
       if: always()
       with:
         sarif_file: semgrep.sarif
