@@ -41,6 +41,9 @@ jobs:
       - name: Create .env from .env.example
         run: cp .env.example .env
 
+      - name: Ensure cache directory exists
+        run: mkdir -p /tmp/.buildx-cache
+
       - name: Build images with layer cache
         run: |
           docker buildx build \
