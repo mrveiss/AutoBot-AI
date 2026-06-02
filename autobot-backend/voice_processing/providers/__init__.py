@@ -124,8 +124,8 @@ class ProviderRegistry:
 _registry = ProviderRegistry()
 
 
-def get_provider_registry() -> ProviderRegistry:
-    """Get global provider registry instance."""
+def get_speech_provider_registry() -> ProviderRegistry:
+    """Get global speech provider registry instance."""
     return _registry
 
 

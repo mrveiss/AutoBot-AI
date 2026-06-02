@@ -23,7 +23,7 @@ from voice_processing.providers import (
     ProviderRegistry,
     SpeechProvider,
     TranscriptSegment,
-    get_provider_registry,
+    get_speech_provider_registry,
     get_speech_provider,
 )
 from voice_processing.providers.generic_provider import GenericProvider
@@ -221,10 +221,10 @@ class TestRealProviders:
 class TestGlobalRegistry:
     """Test global registry singleton."""
 
-    def test_get_provider_registry_singleton(self):
-        """Test that get_provider_registry returns same instance."""
-        registry1 = get_provider_registry()
-        registry2 = get_provider_registry()
+    def test_get_speech_provider_registry_singleton(self):
+        """Test that get_speech_provider_registry returns same instance."""
+        registry1 = get_speech_provider_registry()
+        registry2 = get_speech_provider_registry()
         assert registry1 is registry2
 
     def test_get_speech_provider_convenience(self):
