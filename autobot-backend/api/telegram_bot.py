@@ -40,6 +40,59 @@ router = APIRouter(tags=["telegram-bot"])
 gateway_manager = GatewayManager()
 
 
+async def telegram_gateway_response_handler(platform_response: Dict[str, Any]) -> None:
+    """
+    Handle denormalized Telegram responses from the gateway (MVA-2373).
+
+    Reads the `_api_method` field set by TelegramAdapter.denormalize_response()
+    and routes to the appropriate TelegramBotService method.
+
+    Args:
+        platform_response: Denormalized Telegram API payload with `_api_method` field
+
+    Raises:
+        ValueError: If required fields are missing
+    """
+    service = await TelegramBotService.from_redis()
+
+    # Extract routing key set by TelegramAdapter.denormalize_response()
+    api_method = platform_response.pop("_api_method", "sendMessage")
+    chat_id = platform_response.get("chat_id")
+
+    if not chat_id:
+        raise ValueError("Telegram response missing required 'chat_id' field")
+
+    # Route based on API method
+    if api_method == "sendPhoto":
+        await service.send_photo(
+            chat_id=chat_id,
+            photo=platform_response.get("photo"),
+            caption=platform_response.get("caption"),
+            reply_to_message_id=platform_response.get("reply_to_message_id"),
+            message_thread_id=platform_response.get("message_thread_id"),
+        )
+    elif api_method == "sendDocument":
+        await service.send_document(
+            chat_id=chat_id,
+            document=platform_response.get("document"),
+            caption=platform_response.get("caption"),
+            reply_to_message_id=platform_response.get("reply_to_message_id"),
+            message_thread_id=platform_response.get("message_thread_id"),
+        )
+    else:
+        # Default: sendMessage
+        await service.send_message(
+            chat_id=chat_id,
+            text=platform_response.get("text"),
+            reply_to_message_id=platform_response.get("reply_to_message_id"),
+            parse_mode=platform_response.get("parse_mode", "Markdown"),
+        )
+
+
+# Register Telegram response handler with gateway
+gateway_manager.register_response_handler("telegram", telegram_gateway_response_handler)
+
+
 def _get_chat_session_id(chat_id: str) -> str:
     """Return a stable session ID for a Telegram chat."""
     return f"telegram_{chat_id}"
