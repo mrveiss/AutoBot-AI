@@ -42,6 +42,9 @@ back_to_top_text: "Back to top"
 # Last edit timestamp (requires jekyll-last-modified-at plugin — optional)
 last_edit_timestamp: false
 
+# Google Analytics 4
+ga_tracking_id: "G-ZV9XT0XSWR"
+
 # ── Build settings ───────────────────────────────────────────────────
 markdown: kramdown
 kramdown:
