@@ -200,7 +200,7 @@ async def get_collection_detail(
             ),
         )
 
-    except ValueError as e:
+    except ValueError:
         # ChromaDB raises ValueError for missing collection
         logger.warning(f"Collection not found: {name}")
         raise HTTPException(
@@ -272,7 +272,7 @@ async def list_documents(
             total=total,
         )
 
-    except ValueError as e:
+    except ValueError:
         logger.warning(f"Collection not found: {name}")
         raise HTTPException(
             status_code=404,
@@ -359,7 +359,7 @@ async def search_collection(
 
     except HTTPException:
         raise
-    except ValueError as e:
+    except ValueError:
         logger.warning(f"Collection not found: {name}")
         raise HTTPException(
             status_code=404,

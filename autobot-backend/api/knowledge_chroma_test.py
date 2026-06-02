@@ -8,7 +8,7 @@ Tests all 4 endpoints with success cases, error cases, and edge cases.
 Uses pytest with async test support and mocks ChromaDB client.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import HTTPException
