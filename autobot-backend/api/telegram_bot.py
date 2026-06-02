@@ -45,9 +45,54 @@ def _get_chat_session_id(chat_id: str) -> str:
     return f"telegram_{chat_id}"
 
 
+async def _handle_command(command: str, args: list[str], chat_id: str, message_id: int) -> Optional[str]:
+    """
+    Handle Telegram bot commands (MVA-2075).
+
+    Args:
+        command: Command name (without /)
+        args: Command arguments
+        chat_id: Telegram chat ID
+        message_id: Message ID
+
+    Returns:
+        Response text or None if command not recognized
+    """
+    if command == "start":
+        return "🤖 Welcome to AutoBot! Send me a message and I'll help you with AI-powered automation."
+
+    elif command == "status":
+        return "✅ AutoBot is online and ready to help!"
+
+    elif command == "task":
+        if not args:
+            return "Usage: /task <task description>\nExample: /task analyze this code"
+        task_desc = " ".join(args)
+        return f"📝 Task received: {task_desc}\n\nProcessing with AI..."
+
+    elif command == "help":
+        return """
+**AutoBot Commands:**
+
+/start - Start conversation
+/status - Check bot status
+/task <description> - Create an AI task
+/help - Show this help message
+
+You can also just send me a regular message!
+        """.strip()
+
+    return None  # Unknown command
+
+
 async def _route_to_chat_and_reply(request: Request, unified_message: Any) -> None:
     """
     Route a normalized Telegram message to AutoBot chat service and send the reply.
+
+    Handles:
+    - Bot commands (/status, /task, etc.) (MVA-2075)
+    - File attachments (MVA-2075)
+    - Regular chat messages
 
     Uses request.app.state to access chat_history_manager and llm_service,
     matching the same pattern as api/chat.py.
@@ -56,6 +101,30 @@ async def _route_to_chat_and_reply(request: Request, unified_message: Any) -> No
         request: FastAPI request (provides access to app.state services)
         unified_message: Normalized message from TelegramAdapter
     """
+    # Handle bot commands (MVA-2075)
+    if unified_message.metadata.get("is_command"):
+        command = unified_message.metadata.get("command")
+        args = unified_message.metadata.get("command_args", [])
+        message_id = unified_message.metadata.get("message_id")
+
+        response_text = await _handle_command(command, args, unified_message.channel_id, message_id)
+
+        if response_text:
+            await send_telegram_response(
+                chat_id=unified_message.channel_id,
+                response_text=response_text,
+                message_id=message_id,
+            )
+            logger.info(f"Handled command /{command} in chat {unified_message.channel_id}")
+            return
+
+    # Handle file downloads (MVA-2075)
+    if unified_message.metadata.get("has_file"):
+        file_id = unified_message.metadata.get("file_id")
+        file_type = unified_message.metadata.get("file_type")
+        logger.info(f"Received {file_type} file from Telegram: {file_id} in chat {unified_message.channel_id}")
+        # File metadata is already in metadata, can be processed by chat service
+
     from api.chat import process_chat_message
     from utils.chat_utils import get_chat_history_manager
     from utils.lazy_singleton import lazy_init_singleton
@@ -98,10 +167,12 @@ async def _route_to_chat_and_reply(request: Request, unified_message: Any) -> No
 
     # Send response back to Telegram
     reply_message_id = unified_message.metadata.get("message_id")
+    thread_id = unified_message.metadata.get("thread_id")
     await send_telegram_response(
         chat_id=unified_message.channel_id,
         response_text=response_data.content,
         message_id=reply_message_id,
+        thread_id=thread_id,
     )
     logger.info(
         "Sent Telegram reply to chat %s (session %s)",
@@ -172,7 +243,7 @@ async def telegram_webhook(
 
     except HTTPException:
         raise
-    except Exception as exc:
+    except Exception:
         logger.exception("Failed to process Telegram webhook update")
         # Return 200 to prevent Telegram from retrying, no error details to client
         return JSONResponse({"status": "ok"})
@@ -302,23 +373,65 @@ async def send_telegram_response(
     chat_id: str,
     response_text: str,
     message_id: Optional[int] = None,
+    thread_id: Optional[int] = None,
+    file_id: Optional[str] = None,
+    file_type: Optional[str] = None,
 ) -> None:
     """
-    Send a response back to Telegram user.
+    Send a response back to Telegram user (MVA-2074, MVA-2075).
+
+    Supports:
+    - Text messages
+    - Photos (via file_id)
+    - Documents (via file_id)
+    - Thread replies (group chats)
 
     Args:
         chat_id: Telegram chat ID
-        response_text: Response message text
+        response_text: Response message text or caption
         message_id: Optional message ID to reply to
+        thread_id: Optional thread ID for group chats (MVA-2075)
+        file_id: Optional file ID to send photo/document (MVA-2075)
+        file_type: Optional file type ('photo' or 'document') (MVA-2075)
     """
     try:
         service = await TelegramBotService.from_redis()
-        await service.send_message(
-            chat_id=chat_id,
-            text=response_text,
-            reply_to_message_id=message_id,
-        )
-        logger.info(f"Sent response to Telegram chat {chat_id}")
-    except Exception as exc:
+
+        # Send photo
+        if file_id and file_type == "photo":
+            await service.send_photo(
+                chat_id=chat_id,
+                photo=file_id,
+                caption=response_text,
+                reply_to_message_id=message_id,
+                message_thread_id=thread_id,
+            )
+            logger.info(f"Sent photo response to Telegram chat {chat_id}")
+
+        # Send document
+        elif file_id and file_type == "document":
+            await service.send_document(
+                chat_id=chat_id,
+                document=file_id,
+                caption=response_text,
+                reply_to_message_id=message_id,
+                message_thread_id=thread_id,
+            )
+            logger.info(f"Sent document response to Telegram chat {chat_id}")
+
+        # Send text message
+        else:
+            await service.send_message(
+                chat_id=chat_id,
+                text=response_text,
+                reply_to_message_id=message_id,
+                message_thread_id=thread_id,
+            )
+            if thread_id:
+                logger.info(f"Sent response to Telegram chat {chat_id} thread {thread_id}")
+            else:
+                logger.info(f"Sent response to Telegram chat {chat_id}")
+
+    except Exception:
         logger.exception("Failed to send Telegram response")
         raise

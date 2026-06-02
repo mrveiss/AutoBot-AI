@@ -63,6 +63,7 @@ class NotificationChannel(str, Enum):
     SLACK = "slack"
     WEBHOOK = "webhook"
     IN_APP = "in_app"
+    TELEGRAM = "telegram"  # MVA-2075
 
 
 class NotificationEvent(str, Enum):
@@ -103,6 +104,8 @@ class NotificationConfig:
     webhook_url: str | None = None
     # user_id for IN_APP delivery
     user_id: str | None = None
+    # Telegram chat_id for TELEGRAM delivery (MVA-2075)
+    telegram_chat_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -391,6 +394,17 @@ class NotificationService:
                     "IN_APP channel requested but user_id not set (workflow=%s)",
                     workflow_id,
                 )
+        elif channel == NotificationChannel.TELEGRAM:
+            if config.telegram_chat_id:
+                await self._send_telegram(
+                    chat_id=config.telegram_chat_id,
+                    message=message,
+                )
+            else:
+                logger.warning(
+                    "Telegram channel requested but telegram_chat_id not set (workflow=%s)",
+                    workflow_id,
+                )
 
     # ------------------------------------------------------------------
     # Channel implementations
@@ -482,6 +496,27 @@ class NotificationService:
         Slack incoming webhooks accept ``{"text": "..."}`` JSON payloads.
         """
         await self._send_webhook(webhook_url, {"text": message})
+
+    async def _send_telegram(self, chat_id: str, message: str) -> None:
+        """
+        Send *message* to a Telegram chat via TelegramBotService (MVA-2075).
+
+        Args:
+            chat_id: Telegram chat ID
+            message: Notification message text
+        """
+        try:
+            from services.telegram_bot_service import TelegramBotService
+
+            service = await TelegramBotService.from_redis()
+            await service.send_message(
+                chat_id=chat_id,
+                text=message,
+            )
+            logger.info(f"Sent Telegram notification to chat {chat_id}")
+        except Exception as exc:
+            logger.error(f"Failed to send Telegram notification to chat {chat_id}: {exc}")
+            raise
 
     async def _send_in_app(
         self,

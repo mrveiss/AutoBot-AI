@@ -2,10 +2,10 @@
 # Copyright (c) 2026 mrveiss
 # Author: mrveiss
 """
-Telegram Bot Service (MVA-2074)
+Telegram Bot Service (MVA-2074, MVA-2075)
 
 Manages Telegram bot instance, sends messages via Bot API,
-and handles webhook verification.
+handles webhook verification, and supports file/photo uploads.
 """
 
 from typing import Any, Dict, Optional
@@ -78,7 +78,7 @@ class TelegramBotService:
         if not self.bot_token or not self.base_url:
             raise ValueError("Telegram bot token not configured")
 
-        payload = {
+        payload: Dict[str, Any] = {
             "chat_id": chat_id,
             "text": text,
             "parse_mode": parse_mode,
@@ -156,6 +156,177 @@ class TelegramBotService:
                     response.raise_for_status()
 
                 result = await response.json()
+                return result
+
+    async def get_file(self, file_id: str) -> Dict[str, Any]:
+        """
+        Get file metadata from Telegram (MVA-2075).
+
+        Args:
+            file_id: Telegram file ID
+
+        Returns:
+            File metadata including file_path for download
+
+        Raises:
+            ValueError: If bot token not configured
+            aiohttp.ClientError: If API request fails
+        """
+        if not self.bot_token or not self.base_url:
+            raise ValueError("Telegram bot token not configured")
+
+        async with aiohttp.ClientSession() as session:
+            url = f"{self.base_url}/getFile"
+            payload = {"file_id": file_id}
+            async with session.post(url, json=payload) as response:
+                if response.status != 200:
+                    error_text = await response.text()
+                    logger.error(f"Telegram getFile failed: {response.status} - {error_text}")
+                    response.raise_for_status()
+
+                result = await response.json()
+                if result.get("ok"):
+                    return result.get("result", {})
+                return {}
+
+    async def download_file(self, file_path: str) -> bytes:
+        """
+        Download file content from Telegram servers (MVA-2075).
+
+        Args:
+            file_path: File path from getFile response
+
+        Returns:
+            File content as bytes
+
+        Raises:
+            ValueError: If bot token not configured
+            aiohttp.ClientError: If download fails
+        """
+        if not self.bot_token:
+            raise ValueError("Telegram bot token not configured")
+
+        download_url = f"https://api.telegram.org/file/bot{self.bot_token}/{file_path}"
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(download_url) as response:
+                if response.status != 200:
+                    error_text = await response.text()
+                    logger.error(f"File download failed: {response.status} - {error_text}")
+                    response.raise_for_status()
+
+                content = await response.read()
+                logger.info(f"Downloaded file from Telegram: {file_path}")
+                return content
+
+    async def send_photo(
+        self,
+        chat_id: str,
+        photo: str,
+        caption: Optional[str] = None,
+        reply_to_message_id: Optional[int] = None,
+        message_thread_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Send a photo via Telegram Bot API (MVA-2075).
+
+        Args:
+            chat_id: Telegram chat ID
+            photo: File ID or URL
+            caption: Optional caption text
+            reply_to_message_id: Optional message ID to reply to
+            message_thread_id: Optional thread ID for group chats
+
+        Returns:
+            API response dict
+
+        Raises:
+            ValueError: If bot token not configured
+            aiohttp.ClientError: If API request fails
+        """
+        if not self.bot_token or not self.base_url:
+            raise ValueError("Telegram bot token not configured")
+
+        payload: Dict[str, Any] = {
+            "chat_id": chat_id,
+            "photo": photo,
+        }
+
+        if caption:
+            payload["caption"] = caption
+            payload["parse_mode"] = "Markdown"
+
+        if reply_to_message_id:
+            payload["reply_to_message_id"] = reply_to_message_id
+
+        if message_thread_id:
+            payload["message_thread_id"] = message_thread_id
+
+        async with aiohttp.ClientSession() as session:
+            url = f"{self.base_url}/sendPhoto"
+            async with session.post(url, json=payload) as response:
+                if response.status != 200:
+                    error_text = await response.text()
+                    logger.error(f"Telegram sendPhoto failed: {response.status} - {error_text}")
+                    response.raise_for_status()
+
+                result = await response.json()
+                logger.info(f"Sent photo to Telegram chat {chat_id}")
+                return result
+
+    async def send_document(
+        self,
+        chat_id: str,
+        document: str,
+        caption: Optional[str] = None,
+        reply_to_message_id: Optional[int] = None,
+        message_thread_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Send a document via Telegram Bot API (MVA-2075).
+
+        Args:
+            chat_id: Telegram chat ID
+            document: File ID or URL
+            caption: Optional caption text
+            reply_to_message_id: Optional message ID to reply to
+            message_thread_id: Optional thread ID for group chats
+
+        Returns:
+            API response dict
+
+        Raises:
+            ValueError: If bot token not configured
+            aiohttp.ClientError: If API request fails
+        """
+        if not self.bot_token or not self.base_url:
+            raise ValueError("Telegram bot token not configured")
+
+        payload: Dict[str, Any] = {
+            "chat_id": chat_id,
+            "document": document,
+        }
+
+        if caption:
+            payload["caption"] = caption
+            payload["parse_mode"] = "Markdown"
+
+        if reply_to_message_id:
+            payload["reply_to_message_id"] = reply_to_message_id
+
+        if message_thread_id:
+            payload["message_thread_id"] = message_thread_id
+
+        async with aiohttp.ClientSession() as session:
+            url = f"{self.base_url}/sendDocument"
+            async with session.post(url, json=payload) as response:
+                if response.status != 200:
+                    error_text = await response.text()
+                    logger.error(f"Telegram sendDocument failed: {response.status} - {error_text}")
+                    response.raise_for_status()
+
+                result = await response.json()
+                logger.info(f"Sent document to Telegram chat {chat_id}")
                 return result
 
     async def verify_token(self) -> bool:
