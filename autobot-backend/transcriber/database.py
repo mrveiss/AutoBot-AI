@@ -71,7 +71,7 @@ class TranscriberDatabase:
             columns = await cursor.fetchall()
             column_names = [col[1] for col in columns]
 
-            if 'user_id' not in column_names:
+            if "user_id" not in column_names:
                 logger.warning("Migrating transcriber_recording table: adding user_id column")
                 # For existing records, set a placeholder user_id
                 # In production, these should be marked for manual review or deleted

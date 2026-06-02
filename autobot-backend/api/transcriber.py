@@ -55,9 +55,7 @@ async def create_recording(
             raise HTTPException(status_code=401, detail="User ID not found in session")
 
         db = await get_transcriber_db()
-        created = await db.create_recording(
-            filename=recording.filename, file_path=recording.file_path, user_id=user_id
-        )
+        created = await db.create_recording(filename=recording.filename, file_path=recording.file_path, user_id=user_id)
 
         response_data = {
             "id": created.id,
