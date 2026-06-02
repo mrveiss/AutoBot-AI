@@ -39,9 +39,7 @@ async def _async_cleanup_expired_snapshots(ttl_days: int) -> Dict[str, int]:
 
         if created < cutoff:
             try:
-                await backend.delete_snapshot(
-                    record.snapshot_id, caller_user_id=_SYSTEM_CALLER
-                )
+                await backend.delete_snapshot(record.snapshot_id, caller_user_id=_SYSTEM_CALLER)
                 deleted += 1
                 logger.info(
                     "Deleted snapshot %s (age: %d days, size: %d bytes)",
@@ -51,9 +49,7 @@ async def _async_cleanup_expired_snapshots(ttl_days: int) -> Dict[str, int]:
                 )
             except Exception as exc:
                 errors += 1
-                logger.error(
-                    "Failed to delete snapshot %s: %s", record.snapshot_id, exc
-                )
+                logger.error("Failed to delete snapshot %s: %s", record.snapshot_id, exc)
 
     logger.info(
         "Snapshot cleanup: deleted=%d, errors=%d, ttl_days=%d",

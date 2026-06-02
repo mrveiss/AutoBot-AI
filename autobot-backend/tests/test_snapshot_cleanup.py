@@ -48,9 +48,7 @@ async def test_cleanup_expired_snapshots_ttl_filter():
 
     assert result["deleted"] == 1
     assert result["errors"] == 0
-    mock_backend.delete_snapshot.assert_called_once_with(
-        "old1", caller_user_id="__system__"
-    )
+    mock_backend.delete_snapshot.assert_called_once_with("old1", caller_user_id="__system__")
 
 
 @pytest.mark.asyncio
@@ -87,9 +85,7 @@ async def test_cleanup_expired_snapshots_env_var():
 
     assert result["deleted"] == 1
     assert result["errors"] == 0
-    mock_backend.delete_snapshot.assert_called_once_with(
-        "old1", caller_user_id="__system__"
-    )
+    mock_backend.delete_snapshot.assert_called_once_with("old1", caller_user_id="__system__")
 
 
 @pytest.mark.asyncio
@@ -119,9 +115,7 @@ async def test_cleanup_expired_snapshots_error_handling():
     mock_backend = MagicMock()
     mock_backend._snapshot_index.list_all.return_value = snapshots
     # First delete fails, second succeeds
-    mock_backend.delete_snapshot = AsyncMock(
-        side_effect=[Exception("Docker error"), True]
-    )
+    mock_backend.delete_snapshot = AsyncMock(side_effect=[Exception("Docker error"), True])
 
     with patch("tasks.snapshot_cleanup.lazy_singleton", return_value=mock_backend):
         result = cleanup_expired_snapshots(ttl_days=7)
