@@ -103,6 +103,59 @@ class TestTelegramAdapter:
         payload = await adapter.denormalize_response(response)
         assert payload["reply_to_message_id"] == 42
 
+    @pytest.mark.asyncio
+    async def test_denormalize_photo_response(self, adapter):
+        """Test denormalization sets _api_method for photo responses (MVA-2373)."""
+        response = NormalizedResponse(
+            platform="telegram",
+            channel_id="-9001",
+            user_id="123456",
+            content="Check this photo",
+            response_type="message",
+            metadata={"file_id": "AgACAgIAAxkBAAIC", "file_type": "photo"},
+        )
+        payload = await adapter.denormalize_response(response)
+        assert payload["_api_method"] == "sendPhoto"
+        assert payload["photo"] == "AgACAgIAAxkBAAIC"
+        assert payload["caption"] == "Check this photo"
+        assert payload["parse_mode"] == "Markdown"
+        assert "text" not in payload
+
+    @pytest.mark.asyncio
+    async def test_denormalize_document_response(self, adapter):
+        """Test denormalization sets _api_method for document responses (MVA-2373)."""
+        response = NormalizedResponse(
+            platform="telegram",
+            channel_id="-9001",
+            user_id="123456",
+            content="Here's the file",
+            response_type="message",
+            metadata={"file_id": "BQACAgIAAxkBAAIC", "file_type": "document"},
+        )
+        payload = await adapter.denormalize_response(response)
+        assert payload["_api_method"] == "sendDocument"
+        assert payload["document"] == "BQACAgIAAxkBAAIC"
+        assert payload["caption"] == "Here's the file"
+        assert payload["parse_mode"] == "Markdown"
+        assert "text" not in payload
+
+    @pytest.mark.asyncio
+    async def test_denormalize_text_sets_api_method(self, adapter):
+        """Test denormalization sets _api_method for text messages (MVA-2373)."""
+        response = NormalizedResponse(
+            platform="telegram",
+            channel_id="-9001",
+            user_id="123456",
+            content="Just text",
+            response_type="message",
+            metadata={},
+        )
+        payload = await adapter.denormalize_response(response)
+        assert payload["_api_method"] == "sendMessage"
+        assert payload["text"] == "Just text"
+        assert "photo" not in payload
+        assert "document" not in payload
+
     def test_rate_limit(self, adapter):
         limits = adapter.get_rate_limit()
         assert limits["requests_per_second"] == 30
