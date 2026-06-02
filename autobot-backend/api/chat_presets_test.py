@@ -70,6 +70,7 @@ class TestListPresets:
             "createdAt": "2025-01-01T00:00:00+00:00",
             "updatedAt": "2025-01-01T00:00:00+00:00",
         }
+
         async def mock_hgetall(key):
             if key == USER_HASH_KEY:
                 return {"a": json.dumps(p1)}
@@ -101,6 +102,7 @@ class TestListPresets:
             "createdAt": "2025-01-02T00:00:00+00:00",
             "updatedAt": "2025-01-02T00:00:00+00:00",
         }
+
         async def mock_hgetall(key):
             if key == USER_HASH_KEY:
                 return {"a": json.dumps(p1)}
@@ -164,6 +166,7 @@ class TestUpdatePreset:
             "createdAt": "2025-01-01T00:00:00+00:00",
             "updatedAt": "2025-01-01T00:00:00+00:00",
         }
+
         async def mock_hget(key, preset_id):
             if key == USER_HASH_KEY and preset_id == "abc":
                 return json.dumps(existing)
@@ -187,6 +190,7 @@ class TestUpdatePreset:
             "createdAt": "2025-01-01T00:00:00+00:00",
             "updatedAt": "2025-01-01T00:00:00+00:00",
         }
+
         async def mock_hget(key, preset_id):
             if key == ORG_HASH_KEY and preset_id == "xyz":
                 return json.dumps(existing)
@@ -209,6 +213,7 @@ class TestUpdatePreset:
             "createdAt": "2025-01-01T00:00:00+00:00",
             "updatedAt": "2025-01-01T00:00:00+00:00",
         }
+
         async def mock_hget(key, preset_id):
             if key == ORG_HASH_KEY and preset_id == "xyz":
                 return json.dumps(existing)
@@ -236,6 +241,7 @@ class TestDeletePreset:
             "name": "org preset",
             "scope": "org",
         }
+
         async def mock_hdel(key, preset_id):
             return 0  # Not found in personal presets
 
@@ -255,6 +261,7 @@ class TestDeletePreset:
             "name": "org preset",
             "scope": "org",
         }
+
         async def mock_hdel(key, preset_id):
             return 0  # Not found in personal presets
 

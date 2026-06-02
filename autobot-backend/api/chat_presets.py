@@ -125,14 +125,10 @@ async def create_preset(
     if payload.scope == "org":
         if not org_id:
             raise HTTPException(
-                status_code=400,
-                detail="Cannot create org preset: user not associated with an organization"
+                status_code=400, detail="Cannot create org preset: user not associated with an organization"
             )
         if not _is_org_admin(current_user):
-            raise HTTPException(
-                status_code=403,
-                detail="Only org admins can create org-wide presets"
-            )
+            raise HTTPException(status_code=403, detail="Only org admins can create org-wide presets")
 
     now = _now_iso()
     preset = {
@@ -158,7 +154,7 @@ async def create_preset(
         "Created %s preset %s for %s",
         payload.scope,
         preset["id"],
-        f"org {org_id}" if payload.scope == "org" else f"user {user_id}"
+        f"org {org_id}" if payload.scope == "org" else f"user {user_id}",
     )
     return JSONResponse(content=preset, status_code=201)
 
@@ -198,10 +194,7 @@ async def update_preset(
 
     # Permission check for org presets
     if is_org_preset and not _is_org_admin(current_user):
-        raise HTTPException(
-            status_code=403,
-            detail="Only org admins can update org-wide presets"
-        )
+        raise HTTPException(status_code=403, detail="Only org admins can update org-wide presets")
 
     try:
         preset = json.loads(raw)
@@ -217,11 +210,7 @@ async def update_preset(
     preset["updatedAt"] = _now_iso()
 
     await redis.hset(hash_key, preset_id, json.dumps(preset))
-    logger.info(
-        "Updated %s preset %s",
-        "org" if is_org_preset else "personal",
-        preset_id
-    )
+    logger.info("Updated %s preset %s", "org" if is_org_preset else "personal", preset_id)
     return JSONResponse(content=preset)
 
 
@@ -255,10 +244,7 @@ async def delete_preset(
         if raw is not None:
             # Permission check for org presets
             if not _is_org_admin(current_user):
-                raise HTTPException(
-                    status_code=403,
-                    detail="Only org admins can delete org-wide presets"
-                )
+                raise HTTPException(status_code=403, detail="Only org admins can delete org-wide presets")
             await redis.hdel(_org_hash_key(org_id), preset_id)
             logger.info("Deleted org preset %s for org %s", preset_id, org_id)
             return Response(status_code=204)
