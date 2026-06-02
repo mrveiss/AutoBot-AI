@@ -1084,7 +1084,10 @@ async def read_git_resource(request: Metadata) -> Metadata:
     operation="subscribe_git_resource",
     error_code_prefix="GIT_MCP",
 )
-async def subscribe_git_resource(request: SubscribeResourceRequest) -> Metadata:
+async def subscribe_git_resource(
+    request: SubscribeResourceRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Metadata:
     """
     Subscribe to git resource change notifications.
 
@@ -1157,7 +1160,10 @@ async def subscribe_git_resource(request: SubscribeResourceRequest) -> Metadata:
     operation="unsubscribe_git_resource",
     error_code_prefix="GIT_MCP",
 )
-async def unsubscribe_git_resource(request: UnsubscribeResourceRequest) -> Metadata:
+async def unsubscribe_git_resource(
+    request: UnsubscribeResourceRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Metadata:
     """
     Unsubscribe from git resource change notifications.
 

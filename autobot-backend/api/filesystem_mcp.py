@@ -1582,30 +1582,33 @@ async def subscribe_resource_mcp(
     path = request.uri[7:]  # Remove 'file://'
     safe_path = _validated_path(path)
 
+    # Construct canonical URI from validated path to prevent path traversal
+    canonical_uri = f"file://{safe_path}"
+
     # Subscribe via subscription manager
-    success = await get_mcp_subscription_manager().subscribe(request.session_id, request.uri)
+    success = await get_mcp_subscription_manager().subscribe(request.session_id, canonical_uri)
 
     if not success:
         raise_internal_error("Failed to create subscription")
 
     # Generate channel name for WebSocket subscription
     import hashlib
-    uri_hash = hashlib.sha256(request.uri.encode()).hexdigest()[:16]
+    uri_hash = hashlib.sha256(canonical_uri.encode()).hexdigest()[:16]
     channel = f"mcp:resource:{uri_hash}"
 
     logger.info(
         "Created subscription: session=%s, uri=%s, channel=%s",
         request.session_id[:8],
-        request.uri,
+        canonical_uri,
         channel,
     )
 
     return {
         "success": True,
-        "uri": request.uri,
+        "uri": canonical_uri,
         "session_id": request.session_id,
         "channel": channel,
-        "message": f"Subscribed to {request.uri}. Connect to WebSocket at /ws/live and subscribe to channel: {channel}",
+        "message": f"Subscribed to {canonical_uri}. Connect to WebSocket at /ws/live and subscribe to channel: {channel}",
     }
 
 
@@ -1640,8 +1643,15 @@ async def unsubscribe_resource_mcp(
     if not request.uri.startswith("file://"):
         raise_invalid_input("uri", "Only file:// URIs are supported for filesystem subscriptions")
 
+    # Extract and validate path
+    path = request.uri[7:]  # Remove 'file://'
+    safe_path = _validated_path(path)
+
+    # Construct canonical URI from validated path
+    canonical_uri = f"file://{safe_path}"
+
     # Unsubscribe via subscription manager
-    success = await get_mcp_subscription_manager().unsubscribe(request.session_id, request.uri)
+    success = await get_mcp_subscription_manager().unsubscribe(request.session_id, canonical_uri)
 
     if not success:
         raise_internal_error("Failed to remove subscription")
@@ -1649,14 +1659,14 @@ async def unsubscribe_resource_mcp(
     logger.info(
         "Removed subscription: session=%s, uri=%s",
         request.session_id[:8],
-        request.uri,
+        canonical_uri,
     )
 
     return {
         "success": True,
-        "uri": request.uri,
+        "uri": canonical_uri,
         "session_id": request.session_id,
-        "message": f"Unsubscribed from {request.uri}",
+        "message": f"Unsubscribed from {canonical_uri}",
     }
 
 
