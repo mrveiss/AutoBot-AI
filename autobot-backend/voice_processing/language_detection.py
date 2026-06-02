@@ -48,11 +48,12 @@ class LanguageDetectionService:
             logger.warning("lingua-language-detector not installed - " "language detection disabled")
             self._detector = None
 
-    async def detect_language(self, audio_path: str) -> Optional[str]:
+    async def detect_language(self, audio_path: str, filename_hint: Optional[str] = None) -> Optional[str]:
         """Detect language from audio file.
 
         Args:
             audio_path: Path to audio file
+            filename_hint: Optional filename to use for hint extraction instead of audio_path
 
         Returns:
             BCP-47 language code (e.g., 'lv', 'en') or None if detection fails
@@ -69,7 +70,7 @@ class LanguageDetectionService:
             # For now, extract a sample of text from the audio
             # In production, this would use a speech-to-text model
             # to get a text sample, then detect language from that text
-            text_sample = await self._extract_text_sample(audio_path)
+            text_sample = await self._extract_text_sample(audio_path, filename_hint)
 
             if not text_sample:
                 logger.warning(f"Could not extract text sample from {audio_path}, " "defaulting to 'en'")
@@ -91,7 +92,7 @@ class LanguageDetectionService:
             logger.error(f"Language detection failed: {e}")
             return "en"  # Default to English on error
 
-    async def _extract_text_sample(self, audio_path: str) -> Optional[str]:
+    async def _extract_text_sample(self, audio_path: str, filename_hint: Optional[str] = None) -> Optional[str]:
         """Extract text sample from audio for language detection.
 
         This is a placeholder that would use a fast, lightweight
@@ -103,12 +104,13 @@ class LanguageDetectionService:
 
         Args:
             audio_path: Path to audio file
+            filename_hint: Optional filename to use for hint extraction instead of audio_path
 
         Returns:
             Text sample or None
         """
-        # Check filename for language hints
-        filename = os.path.basename(audio_path).lower()
+        # Check filename for language hints - prefer filename_hint if provided
+        filename = (filename_hint or os.path.basename(audio_path)).lower()
 
         if "latvian" in filename or "_lv_" in filename or "_lat_" in filename:
             return "latviešu valoda"  # Latvian text sample
@@ -127,8 +129,16 @@ _language_detection_service: Optional[LanguageDetectionService] = None
 
 
 async def detect_language(audio_path: str, filename_hint: Optional[str] = None) -> Optional[str]:
-    """Detect language from audio file via the singleton service."""
-    return await get_language_detection_service().detect_language(audio_path)
+    """Detect language from audio file via the singleton service.
+
+    Args:
+        audio_path: Path to audio file
+        filename_hint: Optional filename to use for hint extraction instead of audio_path
+
+    Returns:
+        BCP-47 language code (e.g., 'lv', 'en') or None if detection fails
+    """
+    return await get_language_detection_service().detect_language(audio_path, filename_hint)
 
 
 def get_language_detection_service() -> LanguageDetectionService:
