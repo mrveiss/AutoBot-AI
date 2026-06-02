@@ -41,6 +41,7 @@ class TranscriberDatabase:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     filename TEXT NOT NULL,
                     file_path TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
                     duration REAL,
                     language TEXT,
                     status TEXT NOT NULL DEFAULT 'pending',
@@ -63,15 +64,34 @@ class TranscriberDatabase:
                 )
                 """)
             await db.execute("CREATE INDEX IF NOT EXISTS idx_segment_recording ON transcriber_segment(recording_id)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_recording_user ON transcriber_recording(user_id)")
+
+            # Migration: Add user_id column if it doesn't exist
+            cursor = await db.execute("PRAGMA table_info(transcriber_recording)")
+            columns = await cursor.fetchall()
+            column_names = [col[1] for col in columns]
+
+            if "user_id" not in column_names:
+                logger.warning("Migrating transcriber_recording table: adding user_id column")
+                # For existing records, set a placeholder user_id
+                # In production, these should be marked for manual review or deleted
+                await db.execute("""
+                    ALTER TABLE transcriber_recording ADD COLUMN user_id TEXT DEFAULT 'unknown-user'
+                """)
+                logger.warning("Migration complete: existing recordings assigned 'unknown-user' as user_id")
+
             await db.commit()
             logger.info("Transcriber database initialized at %s", self.db_path)
 
-    async def create_recording(self, filename: str, file_path: str, metadata: Optional[dict] = None) -> Recording:
+    async def create_recording(
+        self, filename: str, file_path: str, user_id: str, metadata: Optional[dict] = None
+    ) -> Recording:
         """Create a new recording entry.
 
         Args:
             filename: Original filename
             file_path: Path to audio file
+            user_id: User ID who owns this recording
             metadata: Optional metadata dictionary
 
         Returns:
@@ -80,12 +100,13 @@ class TranscriberDatabase:
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
                 """
-                INSERT INTO transcriber_recording (filename, file_path, status, metadata)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO transcriber_recording (filename, file_path, user_id, status, metadata)
+                VALUES (?, ?, ?, ?, ?)
                 """,
                 (
                     filename,
                     file_path,
+                    user_id,
                     RecordingStatus.PENDING.value,
                     json.dumps(metadata) if metadata else None,
                 ),
@@ -99,17 +120,26 @@ class TranscriberDatabase:
 
             return self._row_to_recording(row)
 
-    async def get_recording(self, recording_id: int) -> Optional[Recording]:
-        """Get recording by ID.
+    async def get_recording(self, recording_id: int, user_id: Optional[str] = None) -> Optional[Recording]:
+        """Get recording by ID with optional ownership check.
 
         Args:
             recording_id: Recording ID
+            user_id: Optional user ID for ownership verification (returns None if mismatch)
 
         Returns:
-            Recording object or None if not found
+            Recording object or None if not found or ownership check fails
         """
         async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute("SELECT * FROM transcriber_recording WHERE id = ?", (recording_id,))
+            if user_id is not None:
+                # Include ownership check
+                cursor = await db.execute(
+                    "SELECT * FROM transcriber_recording WHERE id = ? AND user_id = ?", (recording_id, user_id)
+                )
+            else:
+                # No ownership check (for internal use)
+                cursor = await db.execute("SELECT * FROM transcriber_recording WHERE id = ?", (recording_id,))
+
             row = await cursor.fetchone()
 
             if row is None:
@@ -223,18 +253,19 @@ class TranscriberDatabase:
 
     def _row_to_recording(self, row) -> Recording:
         """Convert database row to Recording object."""
-        metadata_json = row[8]
+        metadata_json = row[9]
         metadata = json.loads(metadata_json) if metadata_json else None
 
         return Recording(
             id=row[0],
             filename=row[1],
             file_path=row[2],
-            duration=row[3],
-            language=row[4],
-            status=RecordingStatus(row[5]),
-            created_at=datetime.fromisoformat(row[6]),
-            updated_at=datetime.fromisoformat(row[7]),
+            user_id=row[3],
+            duration=row[4],
+            language=row[5],
+            status=RecordingStatus(row[6]),
+            created_at=datetime.fromisoformat(row[7]),
+            updated_at=datetime.fromisoformat(row[8]),
             metadata=metadata,
         )
 

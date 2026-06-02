@@ -50,13 +50,18 @@ async def create_recording(
     Issue #9044: Transcriber pipeline foundation
     """
     try:
+        user_id = current_user.get("id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="User ID not found in session")
+
         db = await get_transcriber_db()
-        created = await db.create_recording(filename=recording.filename, file_path=recording.file_path)
+        created = await db.create_recording(filename=recording.filename, file_path=recording.file_path, user_id=user_id)
 
         response_data = {
             "id": created.id,
             "filename": created.filename,
             "file_path": created.file_path,
+            "user_id": created.user_id,
             "duration": created.duration,
             "language": created.language,
             "status": created.status.value,
@@ -94,9 +99,15 @@ async def get_recording(
     Issue #9044: Transcriber pipeline foundation
     """
     try:
-        db = await get_transcriber_db()
-        recording = await db.get_recording(recording_id)
+        user_id = current_user.get("id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="User ID not found in session")
 
+        db = await get_transcriber_db()
+        # Ownership check: returns None if user doesn't own the recording
+        recording = await db.get_recording(recording_id, user_id=user_id)
+
+        # Return 404 (not 403) to avoid ID enumeration
         if recording is None:
             raise HTTPException(status_code=404, detail="Recording not found")
 
@@ -104,6 +115,7 @@ async def get_recording(
             "id": recording.id,
             "filename": recording.filename,
             "file_path": recording.file_path,
+            "user_id": recording.user_id,
             "duration": recording.duration,
             "language": recording.language,
             "status": recording.status.value,
@@ -154,6 +166,18 @@ async def process_recording(
     Issue #9044: Transcriber pipeline integration
     """
     try:
+        user_id = current_user.get("id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="User ID not found in session")
+
+        # Ownership check before processing
+        db = await get_transcriber_db()
+        recording = await db.get_recording(recording_id, user_id=user_id)
+
+        # Return 404 (not 403) to avoid ID enumeration
+        if recording is None:
+            raise HTTPException(status_code=404, detail="Recording not found")
+
         orchestrator = get_transcriber_orchestrator()
         result = await orchestrator.process_recording(recording_id)
 
@@ -169,6 +193,8 @@ async def process_recording(
     except ValueError as exc:
         logger.warning("Processing validation error for recording %d: %s", recording_id, exc)
         raise HTTPException(status_code=400, detail=str(exc))
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Failed to process recording %d: %s", recording_id, exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -199,10 +225,16 @@ async def get_segments(
     Issue #9044: Transcriber pipeline foundation
     """
     try:
+        user_id = current_user.get("id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="User ID not found in session")
+
         db = await get_transcriber_db()
 
-        # Verify recording exists
-        recording = await db.get_recording(recording_id)
+        # Ownership check: verify user owns this recording
+        recording = await db.get_recording(recording_id, user_id=user_id)
+
+        # Return 404 (not 403) to avoid ID enumeration
         if recording is None:
             raise HTTPException(status_code=404, detail="Recording not found")
 
