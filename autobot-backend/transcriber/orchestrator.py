@@ -34,7 +34,7 @@ class TranscriberOrchestrator:
         self.db = db
         self.ffmpeg_service = get_ffmpeg_service()
         self.diarization_service = get_diarization_service()
-        self.provider_registry = get_speech_provider_registry()
+        self.provider_registry = get_provider_registry()
 
     async def process_recording(self, recording_id: int) -> dict:
         """Process a recording through the full pipeline.
