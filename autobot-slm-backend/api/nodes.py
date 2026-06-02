@@ -76,7 +76,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nodes", tags=["nodes"])
 
 
-async def _broadcast_lifecycle_event(node_id: str, event_type: str, details: dict = None) -> None:
+async def _broadcast_lifecycle_event(
+    node_id: str, event_type: str, details: dict = None
+) -> None:
     """Broadcast a node lifecycle event via WebSocket."""
     try:
         from api.websocket import ws_manager
@@ -108,7 +110,9 @@ async def _create_node_event(
     return event
 
 
-async def _process_role_report(db: AsyncSession, node_id: str, role_report: dict) -> None:
+async def _process_role_report(
+    db: AsyncSession, node_id: str, role_report: dict
+) -> None:
     """
     Process role report from agent heartbeat (Issue #779).
 
@@ -124,7 +128,11 @@ async def _process_role_report(db: AsyncSession, node_id: str, role_report: dict
             report = report_data
 
         # Find or create NodeRole entry
-        result = await db.execute(select(NodeRole).where(NodeRole.node_id == node_id, NodeRole.role_name == role_name))
+        result = await db.execute(
+            select(NodeRole).where(
+                NodeRole.node_id == node_id, NodeRole.role_name == role_name
+            )
+        )
         node_role = result.scalar_one_or_none()
 
         if not node_role:
@@ -141,7 +149,9 @@ async def _process_role_report(db: AsyncSession, node_id: str, role_report: dict
     await db.flush()
 
 
-async def _handle_enrollment_started(db: AsyncSession, node_id: str, ssh_password: str | None) -> None:
+async def _handle_enrollment_started(
+    db: AsyncSession, node_id: str, ssh_password: str | None
+) -> None:
     """
     Create event and broadcast for enrollment started.
 
@@ -166,7 +176,9 @@ async def _handle_enrollment_started(db: AsyncSession, node_id: str, ssh_passwor
     )
 
 
-async def _handle_enrollment_failed(db: AsyncSession, node_id: str, message: str) -> None:
+async def _handle_enrollment_failed(
+    db: AsyncSession, node_id: str, message: str
+) -> None:
     """
     Create event, broadcast, and raise HTTPException on enrollment failure.
 
@@ -356,7 +368,9 @@ async def _create_registration_event(
     )
 
 
-async def _get_service_counts(db: AsyncSession, node_ids: list[str]) -> dict[str, dict[str, int]]:
+async def _get_service_counts(
+    db: AsyncSession, node_ids: list[str]
+) -> dict[str, dict[str, int]]:
     """Fetch per-node service status counts.
 
     Issue #1019: Returns {node_id: {running: N, stopped: N, failed: N, total: N}}.
@@ -378,7 +392,9 @@ async def _get_service_counts(db: AsyncSession, node_ids: list[str]) -> dict[str
     for node_id, status_val, cnt in rows:
         if node_id not in counts:
             counts[node_id] = {"running": 0, "stopped": 0, "failed": 0, "total": 0}
-        key = status_val if status_val in ("running", "stopped", "failed") else "stopped"
+        key = (
+            status_val if status_val in ("running", "stopped", "failed") else "stopped"
+        )
         counts[node_id][key] += cnt
         counts[node_id]["total"] += cnt
 
@@ -595,7 +611,9 @@ async def update_node_roles(
     # Sync NodeRole entries to match (#2829, #2836)
     # The provisioning playbook reads node_roles from the NodeRole table,
     # so we must keep it in sync with the Node.roles display column.
-    existing_roles = await db.execute(select(NodeRole).where(NodeRole.node_id == node_id))
+    existing_roles = await db.execute(
+        select(NodeRole).where(NodeRole.node_id == node_id)
+    )
     existing_map = {nr.role_name: nr for nr in existing_roles.scalars().all()}
 
     desired_roles = set(roles_data.roles or [])
@@ -714,7 +732,9 @@ def _check_role_conflicts(
     return conflicts, warnings
 
 
-def _detect_orphaned_dependencies(active_roles: list[str], removed_role: str) -> list[str]:
+def _detect_orphaned_dependencies(
+    active_roles: list[str], removed_role: str
+) -> list[str]:
     """Return dependencies no longer needed after removing a role."""
     from services.role_registry import ROLE_DEPENDENCIES
 
@@ -727,7 +747,9 @@ def _detect_orphaned_dependencies(active_roles: list[str], removed_role: str) ->
     return sorted(removed_deps - still_needed)
 
 
-async def _run_preflight(node_id: str, role_name: str, db: AsyncSession) -> PreflightResult:
+async def _run_preflight(
+    node_id: str, role_name: str, db: AsyncSession
+) -> PreflightResult:
     """
     Run manifest-based pre-flight checks for assigning role_name to node_id.
 
@@ -740,13 +762,17 @@ async def _run_preflight(node_id: str, role_name: str, db: AsyncSession) -> Pref
     candidate = loader.load(role_name)
 
     if candidate is None:
-        return PreflightResult(allowed=True, role_name=role_name, node_id=node_id, manifest_found=False)
+        return PreflightResult(
+            allowed=True, role_name=role_name, node_id=node_id, manifest_found=False
+        )
 
     candidate_ports = set(candidate.port_numbers())
     hard_conflicts = set(candidate.hard_conflicts())
     soft_warnings = set(candidate.coexistence.warns_with)
 
-    existing_result = await db.execute(select(NodeRole).where(NodeRole.node_id == node_id))
+    existing_result = await db.execute(
+        select(NodeRole).where(NodeRole.node_id == node_id)
+    )
     existing_roles = [r.role_name for r in existing_result.scalars().all()]
 
     all_conflicts: list = []
@@ -785,7 +811,9 @@ async def _upsert_node_role(
     Creates or updates the NodeRole record and returns the validated response.
     """
     role_result = await db.execute(
-        select(NodeRole).where(NodeRole.node_id == node_id, NodeRole.role_name == role_request.role_name)
+        select(NodeRole).where(
+            NodeRole.node_id == node_id, NodeRole.role_name == role_request.role_name
+        )
     )
     existing = role_result.scalar_one_or_none()
 
@@ -907,7 +935,9 @@ async def _execute_provision_playbook(
         f"      ansible_user: {ssh_user}\n"
         "      ansible_ssh_private_key_file: ~/.ssh/autobot_key\n"
         "      ansible_python_interpreter: /usr/bin/python3\n"
-        "      node_roles:\n" + roles_yaml + ("      node_dependencies:\n" + deps_yaml if deps_yaml else "")
+        "      node_roles:\n"
+        + roles_yaml
+        + ("      node_dependencies:\n" + deps_yaml if deps_yaml else "")
     )
     tmp_inv = None
     try:
@@ -1009,7 +1039,11 @@ async def remove_role_from_node(
     Stops the service via Ansible, optionally backs up data,
     then removes the DB assignment.
     """
-    result = await db.execute(select(NodeRole).where(NodeRole.node_id == node_id, NodeRole.role_name == role_name))
+    result = await db.execute(
+        select(NodeRole).where(
+            NodeRole.node_id == node_id, NodeRole.role_name == role_name
+        )
+    )
     node_role = result.scalar_one_or_none()
     if not node_role:
         raise HTTPException(
@@ -1022,9 +1056,16 @@ async def remove_role_from_node(
 
     # If there's a service, run Ansible to stop and clean up
     if service_name:
-        ansible_result = await _run_role_removal(node_id, role_name, service_name, backup, target_path)
+        ansible_result = await _run_role_removal(
+            node_id, role_name, service_name, backup, target_path
+        )
         if not ansible_result["success"]:
-            logger.error("Role removal failed for node %s role %s: %s", node_id, role_name, ansible_result["output"])
+            logger.error(
+                "Role removal failed for node %s role %s: %s",
+                node_id,
+                role_name,
+                ansible_result["output"],
+            )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Role removal failed",
@@ -1044,7 +1085,9 @@ async def remove_role_from_node(
     remaining_roles = [nr.role_name for nr in remaining_roles_result.scalars().all()]
     orphaned_deps = _detect_orphaned_dependencies(remaining_roles, role_name)
 
-    logger.info("Removed role from node: %s -> %s (backup=%s)", node_id, role_name, backup)
+    logger.info(
+        "Removed role from node: %s -> %s (backup=%s)", node_id, role_name, backup
+    )
     response: dict = {
         "success": True,
         "message": f"Role '{role_name}' removed from node",
@@ -1078,7 +1121,9 @@ async def mark_dependency_for_removal(
         NodeRole.node_id == node_id,
         NodeRole.status.in_(["active", "inactive"]),
     )
-    active_roles = [nr.role_name for nr in (await db.execute(role_query)).scalars().all()]
+    active_roles = [
+        nr.role_name for nr in (await db.execute(role_query)).scalars().all()
+    ]
     for role in active_roles:
         if dep_name in ROLE_DEPENDENCIES.get(role, []):
             raise HTTPException(
@@ -1098,9 +1143,13 @@ async def mark_dependency_for_removal(
     return {"status": "marked_for_removal", "dependency": dep_name}
 
 
-async def _get_role_service_and_path(db: AsyncSession, role_name: str) -> tuple[str | None, str | None]:
+async def _get_role_service_and_path(
+    db: AsyncSession, role_name: str
+) -> tuple[str | None, str | None]:
     """Look up the systemd service name and target path for a role."""
-    result = await db.execute(select(Role.systemd_service, Role.target_path).where(Role.name == role_name))
+    result = await db.execute(
+        select(Role.systemd_service, Role.target_path).where(Role.name == role_name)
+    )
     row = result.one_or_none()
     if row is None:
         return None, None
@@ -1164,7 +1213,9 @@ async def _verify_node_not_manager(db: AsyncSession, node_id: str) -> Node:
     # Block SLM Manager via node_id convention or DB setting
     is_manager = node_id.startswith("00-")
     if not is_manager:
-        mgr_result = await db.execute(select(Setting.value).where(Setting.key == "slm_manager_node"))
+        mgr_result = await db.execute(
+            select(Setting.value).where(Setting.key == "slm_manager_node")
+        )
         manager_node = mgr_result.scalar_one_or_none()
         is_manager = manager_node is not None and node_id == manager_node
     if is_manager:
@@ -1175,7 +1226,9 @@ async def _verify_node_not_manager(db: AsyncSession, node_id: str) -> Node:
     return node
 
 
-async def _classify_role(db: AsyncSession, nr: NodeRole, node_id: str) -> tuple[str, dict]:
+async def _classify_role(
+    db: AsyncSession, nr: NodeRole, node_id: str
+) -> tuple[str, dict]:
     """Classify a single role for decommission preflight (#1369).
 
     Returns (bucket, info) where bucket is one of:
@@ -1217,7 +1270,9 @@ async def _classify_role(db: AsyncSession, nr: NodeRole, node_id: str) -> tuple[
         info["reason"] = f"System degraded without: {reasons}"
         return "should_migrate", info
 
-    info["reason"] = "Redundant (other nodes have this role)" if other_count > 0 else "Optional role"
+    info["reason"] = (
+        "Redundant (other nodes have this role)" if other_count > 0 else "Optional role"
+    )
     return "safe_to_remove", info
 
 
@@ -1257,7 +1312,9 @@ async def decommission_preflight(
     }
 
 
-async def _run_decommission_playbook(ip_address: str, ssh_user: str, backup: bool) -> dict:
+async def _run_decommission_playbook(
+    ip_address: str, ssh_user: str, backup: bool
+) -> dict:
     """Execute the decommission Ansible playbook (#1369, #2678).
 
     Connects as the node's original SSH user (stored in Node.ssh_user
@@ -1322,9 +1379,13 @@ async def _cleanup_decommissioned_node(
 ) -> None:
     """Remove DB records and mark node decommissioned (#1369)."""
     await db.execute(delete(NodeRole).where(NodeRole.node_id == node.node_id))
-    await db.execute(delete(NodeCodeVersion).where(NodeCodeVersion.node_id == node.node_id))
+    await db.execute(
+        delete(NodeCodeVersion).where(NodeCodeVersion.node_id == node.node_id)
+    )
     await db.execute(delete(Service).where(Service.node_id == node.node_id))
-    await db.execute(delete(NodeCredential).where(NodeCredential.node_id == node.node_id))
+    await db.execute(
+        delete(NodeCredential).where(NodeCredential.node_id == node.node_id)
+    )
     await db.execute(delete(NodeConfig).where(NodeConfig.node_id == node.node_id))
     node.status = NodeStatus.DECOMMISSIONED.value
     node.updated_at = datetime.now(timezone.utc)
@@ -1423,7 +1484,9 @@ async def decommission_node(
     await db.commit()
 
     if request.force:
-        ansible_result = {"output": "Force decommission: Ansible playbook skipped (node already removed)"}
+        ansible_result = {
+            "output": "Force decommission: Ansible playbook skipped (node already removed)"
+        }
     else:
         # Use original SSH user for decommission so Ansible can remove
         # the autobot account without killing its own session (#2826)
@@ -1689,7 +1752,9 @@ async def replace_node(
     return NodeResponse.model_validate(new_node)
 
 
-async def _update_heartbeat_code_status(db: AsyncSession, node: Node, extra_data: dict | None = None) -> str | None:
+async def _update_heartbeat_code_status(
+    db: AsyncSession, node: Node, extra_data: dict | None = None
+) -> str | None:
     """Query latest commit setting and update node.code_status.
 
     Returns the latest_version string or None.
@@ -1697,7 +1762,9 @@ async def _update_heartbeat_code_status(db: AsyncSession, node: Node, extra_data
     Issue #1605: Also checks service health — code_current_service_failed
     when commit matches but autobot services are failed/crash-looping.
     """
-    latest_result = await db.execute(select(Setting).where(Setting.key == "slm_agent_latest_commit"))
+    latest_result = await db.execute(
+        select(Setting).where(Setting.key == "slm_agent_latest_commit")
+    )
     latest_setting = latest_result.scalar_one_or_none()
     latest_version = latest_setting.value if latest_setting else None
 
@@ -1749,7 +1816,9 @@ def _has_failed_autobot_service(extra_data: dict | None) -> bool:
     return False
 
 
-async def _apply_heartbeat_reports(db: AsyncSession, node_id: str, heartbeat: HeartbeatRequest, node) -> None:
+async def _apply_heartbeat_reports(
+    db: AsyncSession, node_id: str, heartbeat: HeartbeatRequest, node
+) -> None:
     """Helper for node_heartbeat. Ref: #1088.
 
     Applies role_report (soft failure) and listening_ports updates to node in-place.
@@ -1760,7 +1829,9 @@ async def _apply_heartbeat_reports(db: AsyncSession, node_id: str, heartbeat: He
             await _process_role_report(db, node_id, heartbeat.role_report)
             node.detected_roles = list(heartbeat.role_report.keys())
             node.role_versions = {
-                name: report.version for name, report in heartbeat.role_report.items() if report.version
+                name: report.version
+                for name, report in heartbeat.role_report.items()
+                if report.version
             }
         except Exception as role_exc:
             logger.warning(
@@ -1830,16 +1901,20 @@ async def node_heartbeat(
 
         await _auto_populate_ansible_name(db, node, node_id, heartbeat)
 
-        latest_version = await _update_heartbeat_code_status(db, node, heartbeat.extra_data)
+        latest_version = await _update_heartbeat_code_status(
+            db, node, heartbeat.extra_data
+        )
         await db.commit()
         await db.refresh(node)
 
-        update_available = node.code_status == CodeStatus.OUTDATED.value and latest_version is not None
+        update_available = (
+            node.code_status == CodeStatus.OUTDATED.value and latest_version is not None
+        )
         return HeartbeatResponse(
             status="ok",
             update_available=update_available,
             latest_version=latest_version if update_available else None,
-            update_url=(f"/api/nodes/{node_id}/code-package" if update_available else None),
+            update_url=(f"/api/nodes/{node_id}/package" if update_available else None),
         )
 
     except HTTPException:
@@ -1879,7 +1954,9 @@ async def get_node_health(
     result = await db.execute(select(Node).where(Node.node_id == node_id))
     node = result.scalar_one_or_none()
     if not node:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Node not found"
+        )
 
     svc_result = await db.execute(select(Service).where(Service.node_id == node_id))
     services = svc_result.scalars().all()
@@ -1894,7 +1971,9 @@ async def get_node_health(
         memory_percent=node.memory_percent or 0.0,
         disk_percent=node.disk_percent or 0.0,
         last_heartbeat=heartbeat_str,
-        services=[{"name": s.service_name, "status": s.status or "unknown"} for s in services],
+        services=[
+            {"name": s.service_name, "status": s.status or "unknown"} for s in services
+        ],
     )
 
 
@@ -1924,7 +2003,9 @@ async def enroll_node(
     await _handle_enrollment_started(db, node_id, ssh_password)
 
     # Run enrollment (deploys agent via Ansible)
-    success, message = await deployment_service.enroll_node(db, node_id, ssh_password=ssh_password)
+    success, message = await deployment_service.enroll_node(
+        db, node_id, ssh_password=ssh_password
+    )
 
     # Handle failure if enrollment did not succeed
     if not success:
@@ -2128,7 +2209,9 @@ async def acknowledge_remediation(
     }
 
 
-def _build_password_ssh_command(request: ConnectionTestRequest, remote_cmd: str) -> list[str]:
+def _build_password_ssh_command(
+    request: ConnectionTestRequest, remote_cmd: str
+) -> list[str]:
     """
     Build SSH command with sshpass for password authentication.
 
@@ -2153,7 +2236,9 @@ def _build_password_ssh_command(request: ConnectionTestRequest, remote_cmd: str)
     ]
 
 
-def _build_key_ssh_command(request: ConnectionTestRequest, remote_cmd: str) -> list[str]:
+def _build_key_ssh_command(
+    request: ConnectionTestRequest, remote_cmd: str
+) -> list[str]:
     """
     Build SSH command with BatchMode for key-based authentication.
 
@@ -2175,7 +2260,9 @@ def _build_key_ssh_command(request: ConnectionTestRequest, remote_cmd: str) -> l
     ]
 
 
-def _build_ssh_success_response(stdout: bytes, latency_ms: float) -> ConnectionTestResponse:
+def _build_ssh_success_response(
+    stdout: bytes, latency_ms: float
+) -> ConnectionTestResponse:
     """
     Create success ConnectionTestResponse from SSH stdout.
 
@@ -2190,7 +2277,9 @@ def _build_ssh_success_response(stdout: bytes, latency_ms: float) -> ConnectionT
     )
 
 
-def _build_ssh_failure_response(stderr: bytes, latency_ms: float) -> ConnectionTestResponse:
+def _build_ssh_failure_response(
+    stderr: bytes, latency_ms: float
+) -> ConnectionTestResponse:
     """
     Create failure ConnectionTestResponse from SSH stderr with cleaned error.
 
@@ -2237,7 +2326,10 @@ async def test_connection(
     import shutil
 
     start_time = time.time()
-    remote_cmd = "uname -a && cat /etc/os-release 2>/dev/null | " "head -5 || echo 'OS info unavailable'"
+    remote_cmd = (
+        "uname -a && cat /etc/os-release 2>/dev/null | "
+        "head -5 || echo 'OS info unavailable'"
+    )
 
     try:
         # Build SSH command based on auth method
@@ -2346,7 +2438,9 @@ async def get_node_certificate(
 
     # Get certificate
     cert_result = await db.execute(
-        select(Certificate).where(Certificate.node_id == node_id).order_by(Certificate.created_at.desc())
+        select(Certificate)
+        .where(Certificate.node_id == node_id)
+        .order_by(Certificate.created_at.desc())
     )
     cert = cert_result.scalar_one_or_none()
 
@@ -2385,7 +2479,9 @@ async def renew_node_certificate(
 
     # Get existing certificate
     cert_result = await db.execute(
-        select(Certificate).where(Certificate.node_id == node_id).order_by(Certificate.created_at.desc())
+        select(Certificate)
+        .where(Certificate.node_id == node_id)
+        .order_by(Certificate.created_at.desc())
     )
     old_cert = cert_result.scalar_one_or_none()
 
@@ -2398,7 +2494,9 @@ async def renew_node_certificate(
             subject=f"CN={node.hostname}",
             issuer="CN=SLM-CA",
             not_before=datetime.now(timezone.utc),
-            not_after=datetime.now(timezone.utc).replace(year=datetime.now(timezone.utc).year + 1),
+            not_after=datetime.now(timezone.utc).replace(
+                year=datetime.now(timezone.utc).year + 1
+            ),
             status="active",
         )
         db.add(new_cert)
@@ -2444,7 +2542,9 @@ async def deploy_node_certificate(
 
     # Check if certificate already exists
     cert_result = await db.execute(
-        select(Certificate).where(Certificate.node_id == node_id).where(Certificate.status == "active")
+        select(Certificate)
+        .where(Certificate.node_id == node_id)
+        .where(Certificate.status == "active")
     )
     if cert_result.scalar_one_or_none():
         raise HTTPException(
@@ -2461,7 +2561,9 @@ async def deploy_node_certificate(
             subject=f"CN={node.hostname}",
             issuer="CN=SLM-CA",
             not_before=datetime.now(timezone.utc),
-            not_after=datetime.now(timezone.utc).replace(year=datetime.now(timezone.utc).year + 1),
+            not_after=datetime.now(timezone.utc).replace(
+                year=datetime.now(timezone.utc).year + 1
+            ),
             status="active",
         )
         db.add(new_cert)
@@ -2541,7 +2643,9 @@ async def apply_node_updates(
         )
 
     # Get the updates
-    updates_result = await db.execute(select(UpdateInfo).where(UpdateInfo.update_id.in_(update_ids)))
+    updates_result = await db.execute(
+        select(UpdateInfo).where(UpdateInfo.update_id.in_(update_ids))
+    )
     updates = updates_result.scalars().all()
 
     if not updates:
@@ -2567,7 +2671,9 @@ async def apply_node_updates(
     logger.info("Applied %d updates to node %s", len(applied), node_id)
     return UpdateApplyResponse(
         success=len(failed) == 0,
-        message=(f"Applied {len(applied)} update(s)" if applied else "No updates applied"),
+        message=(
+            f"Applied {len(applied)} update(s)" if applied else "No updates applied"
+        ),
         applied_updates=applied,
         failed_updates=failed,
     )
@@ -2594,7 +2700,9 @@ async def preflight_role_assignment(
     """
     node_result = await db.execute(select(Node).where(Node.node_id == node_id))
     if not node_result.scalar_one_or_none():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Node not found"
+        )
 
     return await _run_preflight(node_id, role, db)
 
@@ -2616,7 +2724,9 @@ async def get_node_update_policy(
 
     node_result = await db.execute(select(Node).where(Node.node_id == node_id))
     if not node_result.scalar_one_or_none():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Node not found"
+        )
 
     roles_result = await db.execute(select(NodeRole).where(NodeRole.node_id == node_id))
     role_names = [r.role_name for r in roles_result.scalars().all()]
@@ -2635,7 +2745,9 @@ async def get_node_update_policy(
                 strat = manifest.system_updates.reboot_strategy.value
                 if reboot_strategy is None:
                     reboot_strategy = strat
-                elif strat == "manual" or (strat == "scheduled" and reboot_strategy == "immediate"):
+                elif strat == "manual" or (
+                    strat == "scheduled" and reboot_strategy == "immediate"
+                ):
                     reboot_strategy = strat
 
     effective_policy = loader.node_update_policy(role_names)
@@ -2664,7 +2776,9 @@ async def get_node_service_order(
 
     node_result = await db.execute(select(Node).where(Node.node_id == node_id))
     if not node_result.scalar_one_or_none():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Node not found"
+        )
 
     roles_result = await db.execute(select(NodeRole).where(NodeRole.node_id == node_id))
     role_names = [r.role_name for r in roles_result.scalars().all()]
@@ -2694,7 +2808,9 @@ async def get_node_service_order(
 # Node SSH Exec endpoint (Issue #933)
 # =============================================================================
 
-_DEFAULT_SSH_KEY = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")  # noqa: ssot-path
+_DEFAULT_SSH_KEY = os.environ.get(
+    "SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key"
+)  # noqa: ssot-path
 _DEFAULT_SSH_USER = os.environ.get("SLM_SSH_USER", "autobot")
 
 
@@ -2752,7 +2868,9 @@ async def exec_node_command(
     result = await db.execute(select(Node).where(Node.node_id == node_id))
     node = result.scalar_one_or_none()
     if not node:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Node not found"
+        )
 
     ssh_user = node.ssh_user or _DEFAULT_SSH_USER
     ssh_port = node.ssh_port or 22
@@ -2768,7 +2886,9 @@ async def exec_node_command(
             ),
             timeout=body.timeout + 5,
         )
-        stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=body.timeout)
+        stdout_bytes, stderr_bytes = await asyncio.wait_for(
+            proc.communicate(), timeout=body.timeout
+        )
         exit_code = proc.returncode or 0
     except asyncio.TimeoutError:
         logger.warning("SSH exec timed out on node %s: %s", node_id, body.command)
@@ -2842,7 +2962,9 @@ async def get_node_a2a_card(
     result = await db.execute(select(Node).where(Node.node_id == node_id))
     node = result.scalar_one_or_none()
     if not node:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Node not found"
+        )
     extra = node.extra_data or {}
     return {
         "node_id": node_id,
@@ -2867,7 +2989,9 @@ async def refresh_node_a2a_card(
     result = await db.execute(select(Node).where(Node.node_id == node_id))
     node = result.scalar_one_or_none()
     if not node:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Node not found"
+        )
 
     from services.a2a_card_fetcher import fetch_card_for_node
 
