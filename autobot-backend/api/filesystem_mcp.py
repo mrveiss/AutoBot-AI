@@ -184,6 +184,10 @@ from api.schemas_code import (
     ReadResourceRequest,
     ReadTextFileRequest,
     SearchFilesRequest,
+    SubscribeResourceRequest,
+    SubscribeResourceResponse,
+    UnsubscribeResourceRequest,
+    UnsubscribeResourceResponse,
     WriteFileRequest,
 )
 from auth_middleware import check_admin_permission
@@ -1535,6 +1539,135 @@ async def read_resource_mcp(
         raise_invalid_input("uri", "Resource is not a text file")
     except OSError:
         raise_internal_error("Failed to read resource")
+
+
+@router.post("/mcp/resources/subscribe", response_model=SubscribeResourceResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="subscribe_resource_mcp",
+    error_code_prefix="FILESYSTEM_MCP",
+)
+async def subscribe_resource_mcp(
+    request: SubscribeResourceRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Metadata:
+    """
+    Subscribe to resource change notifications.
+
+    Issue MVA-2166: Implements MCP resource subscriptions for real-time updates.
+    Issue #744: Requires admin authentication.
+
+    Clients can subscribe to file:// URIs and receive notifications when files change
+    via the WebSocket live events channel. Notifications are published when:
+    - File is created
+    - File is modified
+    - File is deleted
+
+    The response includes a WebSocket channel name that clients should subscribe to
+    via /ws/live to receive notifications.
+
+    Args:
+        request: Subscription request with URI and session_id
+
+    Returns:
+        Subscription confirmation with WebSocket channel
+    """
+    from services.mcp_subscription_manager import get_mcp_subscription_manager
+
+    # Validate URI
+    if not request.uri.startswith("file://"):
+        raise_invalid_input("uri", "Only file:// URIs are supported for filesystem subscriptions")
+
+    # Extract and validate path
+    path = request.uri[7:]  # Remove 'file://'
+    safe_path = _validated_path(path)
+
+    # Construct canonical URI from validated path to prevent path traversal
+    canonical_uri = f"file://{safe_path}"
+
+    # Subscribe via subscription manager
+    success = await get_mcp_subscription_manager().subscribe(request.session_id, canonical_uri)
+
+    if not success:
+        raise_internal_error("Failed to create subscription")
+
+    # Generate channel name for WebSocket subscription
+    import hashlib
+    uri_hash = hashlib.sha256(canonical_uri.encode()).hexdigest()[:16]
+    channel = f"mcp:resource:{uri_hash}"
+
+    logger.info(
+        "Created subscription: session=%s, uri=%s, channel=%s",
+        request.session_id[:8],
+        canonical_uri,
+        channel,
+    )
+
+    return {
+        "success": True,
+        "uri": canonical_uri,
+        "session_id": request.session_id,
+        "channel": channel,
+        "message": f"Subscribed to {canonical_uri}. Connect to WebSocket at /ws/live and subscribe to channel: {channel}",
+    }
+
+
+@router.post("/mcp/resources/unsubscribe", response_model=UnsubscribeResourceResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="unsubscribe_resource_mcp",
+    error_code_prefix="FILESYSTEM_MCP",
+)
+async def unsubscribe_resource_mcp(
+    request: UnsubscribeResourceRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Metadata:
+    """
+    Unsubscribe from resource change notifications.
+
+    Issue MVA-2166: Implements MCP resource subscriptions for real-time updates.
+    Issue #744: Requires admin authentication.
+
+    Removes a subscription for a specific session and resource URI.
+    If this was the last subscriber for the resource, the file watcher is stopped.
+
+    Args:
+        request: Unsubscription request with URI and session_id
+
+    Returns:
+        Unsubscription confirmation
+    """
+    from services.mcp_subscription_manager import get_mcp_subscription_manager
+
+    # Validate URI
+    if not request.uri.startswith("file://"):
+        raise_invalid_input("uri", "Only file:// URIs are supported for filesystem subscriptions")
+
+    # Extract and validate path
+    path = request.uri[7:]  # Remove 'file://'
+    safe_path = _validated_path(path)
+
+    # Construct canonical URI from validated path
+    canonical_uri = f"file://{safe_path}"
+
+    # Unsubscribe via subscription manager
+    success = await get_mcp_subscription_manager().unsubscribe(request.session_id, canonical_uri)
+
+    if not success:
+        raise_internal_error("Failed to remove subscription")
+
+    logger.info(
+        "Removed subscription: session=%s, uri=%s",
+        request.session_id[:8],
+        canonical_uri,
+    )
+
+    return {
+        "success": True,
+        "uri": canonical_uri,
+        "session_id": request.session_id,
+        "message": f"Unsubscribed from {canonical_uri}",
+    }
 
 
 @router.get("/mcp/prompts", response_model=FilesystemPromptsListResponse)
