@@ -1,64 +1,36 @@
 // AutoBot "Ember" color scheme for just-the-docs
-// Warm mulberry-plum dark surfaces + marigold orange accent
-// Mirrors the Ember token system from the landing page (issue #9274)
+// Mulberry-plum dark surfaces + marigold orange accent
 
-// ── Primitives ───────────────────────────────────────────────────────
-$orange-300: #e99e55;
-$orange-400: #e2842e;
-$orange-500: #d6731f;
-$orange-600: #c4651a;
+// ── Backgrounds ──────────────────────────────────────────────────────
+$body-background-color:   #1e1418;   // plum-950
+$sidebar-color:           #281a20;   // plum-900
+$search-background-color: #281a20;
+$table-background-color:  #281a20;
+$code-background-color:   #322229;   // plum-850
 
-$gold-400:   #f7b94a;
-$gold-500:   #eca22a;
+// ── Borders ───────────────────────────────────────────────────────────
+$border-color:            #402c34;   // plum-800
 
-$plum-950:   #1e1418;
-$plum-900:   #281a20;
-$plum-850:   #322229;
-$plum-800:   #402c34;
-$plum-700:   #523944;
-$plum-cream: #f1e8de;
+// ── Text ──────────────────────────────────────────────────────────────
+$body-text-color:         #f1e8de;   // plum-cream
+$body-heading-color:      #ffffff;
+$nav-child-link-color:    #8f8068;   // wax-400
 
-$wax-100:    #ede2d1;
-$wax-200:    #d2c1a6;
-$wax-400:    #8f8068;
-$wax-500:    #6c5f4d;
+// ── Links & accent ────────────────────────────────────────────────────
+$link-color:              #e2842e;   // orange-400
+$link-color-visited:      #e99e55;   // orange-300
+$btn-primary-color:       #c4651a;   // orange-600
+$base-button-color:       #523944;   // plum-700
 
-// ── just-the-docs variables ──────────────────────────────────────────
+// ── Labels ────────────────────────────────────────────────────────────
+$label-blue:   #c4651a;
+$label-green:  #2f8a5f;
+$label-red:    #cb3326;
+$label-yellow: #eca22a;
+$label-purple: #8a2f57;
 
-// Backgrounds
-$body-background-color:      $plum-950;
-$sidebar-color:              $plum-900;
-$search-background-color:    $plum-900;
-$table-background-color:     $plum-900;
-$code-background-color:      $plum-850;
-
-// Borders
-$border-color:               $plum-800;
-$search-result-preview-color: $wax-400;
-
-// Text
-$body-text-color:            $plum-cream;
-$body-heading-color:         #fff;
-$nav-child-link-color:       $wax-400;
-$search-result-preview-color: $wax-400;
-$base-button-color:          $plum-700;
-$btn-primary-color:          $orange-600;
-
-// Links & accent
-$link-color:                 $orange-400;
-$link-color-visited:         $orange-300;
-$nav-arrow-color:            $orange-400;
-
-// Labels / badges
-$label-blue:                 $orange-600;
-$label-green:                #2f8a5f;
-$label-red:                  #cb3326;
-$label-yellow:               $gold-500;
-$label-purple:               #8a2f57;
-
-// Feedback / callouts (just-the-docs v0.9+)
-$callout-color-blue:         color-mix(in srgb, $orange-600 15%, transparent);
-$callout-color-yellow:       color-mix(in srgb, $gold-500 12%, transparent);
-
-// Code highlighting — warm dark tones
-$code-font-size:             0.875rem;
+// ── Callouts (rgba — no color-mix, Sass-safe) ─────────────────────────
+$callout-color-blue:   rgba(196, 101,  26, 0.15);
+$callout-color-yellow: rgba(236, 162,  42, 0.12);
+$callout-color-green:  rgba( 47, 138,  95, 0.12);
+$callout-color-red:    rgba(203,  51,  38, 0.12);
