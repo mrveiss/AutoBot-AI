@@ -623,6 +623,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ("api.chat_sessions", "", ["chat-sessions"], "chat_sessions"),
     # GH#8996: public shared chat links with optional password protection
     ("api.chat_shared_links", "", ["chat-shared-links"], "chat_shared_links"),
+    # GH#9047: embed widget unauthenticated chat endpoint
+    ("api.chat_embed", "", ["chat", "embed"], "chat_embed"),
     # GH#8987: conversation folders and collections
     ("api.chat_folders", "", ["chat-folders"], "chat_folders"),
     # Issue #5061: First-run onboarding presets + doctor
