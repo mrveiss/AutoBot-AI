@@ -176,6 +176,30 @@
       when: github_sync is not failed
       tags: [always]
 
+    # GH#9284: When GitHub sync fails, validate that stale code_source
+    # has critical frontend dependencies (vega fix from 267b2044a).
+    # Prevents late build failures with cryptic Rolldown errors.
+    - name: "[PRE-FLIGHT] Validate stale code_source has critical dependencies"
+      block:
+        - name: "[PRE-FLIGHT] Check if package.json has vega dependency"
+          ansible.builtin.command:
+            cmd: jq -e '.dependencies.vega' {{ git_repo_root }}/autobot-frontend/package.json
+          register: vega_check
+          changed_when: false
+          failed_when: false
+
+        - name: "[PRE-FLIGHT] Abort if code_source missing critical frontend deps"
+          ansible.builtin.fail:
+            msg: >-
+              CRITICAL: Stale code_source missing vega dependency (GH#9284).
+              Frontend build will fail at Phase 4b with Rolldown import error.
+              Fix: Restore internet connectivity and re-run provisioning to sync latest code from {{ deploy_ref }}.
+              Current commit: {{ deploy_info.stdout }}
+              Required commit: 267b2044a or later (fix(frontend): add vega as explicit dep)
+          when: vega_check.rc != 0
+      when: github_sync is failed
+      tags: [always]
+
 # -------------------------------------------------------------------
 # Phase 0: Shared Dependencies (nginx, python312, nodejs)
 # Resolved from ROLE_DEPENDENCIES map via node_dependencies host var.
