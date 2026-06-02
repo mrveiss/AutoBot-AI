@@ -17,7 +17,7 @@ from media.audio.ffmpeg_service import get_ffmpeg_service
 from transcriber.database import TranscriberDatabase, get_transcriber_db
 from transcriber.models import RecordingStatus, TranscriptionSegment
 from voice_processing.language_detection import detect_language
-from voice_processing.providers import get_speech_provider_registry
+from voice_processing.providers import get_provider_registry
 
 logger = get_logger(__name__)
 

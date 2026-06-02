@@ -226,9 +226,7 @@ class TestRestoreSnapshot:
 
     @patch("api.execution_snapshots.get_docker_backend")
     @patch("api.execution_snapshots.get_current_user")
-    def test_restore_snapshot_permission_denied(
-        self, mock_get_user, mock_get_backend, client, mock_backend, mock_user
-    ):
+    def test_restore_snapshot_permission_denied(self, mock_get_user, mock_get_backend, client, mock_backend, mock_user):
         """Test restore when user does not own snapshot (403)."""
         mock_get_user.return_value = mock_user
         mock_get_backend.return_value = mock_backend
@@ -291,9 +289,7 @@ class TestDeleteSnapshot:
 
     @patch("api.execution_snapshots.get_docker_backend")
     @patch("api.execution_snapshots.get_current_user")
-    def test_delete_snapshot_permission_denied(
-        self, mock_get_user, mock_get_backend, client, mock_backend, mock_user
-    ):
+    def test_delete_snapshot_permission_denied(self, mock_get_user, mock_get_backend, client, mock_backend, mock_user):
         """Test delete when user does not own snapshot (403)."""
         mock_get_user.return_value = mock_user
         mock_get_backend.return_value = mock_backend
