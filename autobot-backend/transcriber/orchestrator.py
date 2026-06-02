@@ -85,9 +85,7 @@ class TranscriberOrchestrator:
         try:
             Path(recording.file_path).resolve().relative_to(upload_base)
         except ValueError:
-            raise ValueError(
-                f"Path traversal blocked: {recording.file_path} not in upload directory {upload_base}"
-            )
+            raise ValueError(f"Path traversal blocked: {recording.file_path} not in upload directory {upload_base}")
 
         # Ensure file exists and is not a symlink
         if not Path(recording.file_path).exists():

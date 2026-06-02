@@ -89,9 +89,7 @@ def generate_secure_filename(original_filename: str) -> str:
     ext = Path(original_filename).suffix.lower()
 
     if not ext or ext not in ALLOWED_EXTENSIONS:
-        raise UploadSecurityError(
-            f"File extension '{ext}' not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
-        )
+        raise UploadSecurityError(f"File extension '{ext}' not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS)}")
 
     # Generate UUID filename
     secure_name = f"{uuid.uuid4()}{ext}"
