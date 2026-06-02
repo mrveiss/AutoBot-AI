@@ -5,8 +5,9 @@
 Unit tests for transcript AI analysis and KB integration (MVA-2176).
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from api.schemas_transcripts import (
     AnalysisType,

@@ -42,15 +42,10 @@ class LanguageDetectionService:
             ]
 
             self._detector = LanguageDetectorBuilder.from_languages(*languages).build()
-            logger.info(
-                f"Language detector initialized with {len(languages)} languages"
-            )
+            logger.info(f"Language detector initialized with {len(languages)} languages")
 
         except ImportError:
-            logger.warning(
-                "lingua-language-detector not installed - "
-                "language detection disabled"
-            )
+            logger.warning("lingua-language-detector not installed - " "language detection disabled")
             self._detector = None
 
     async def detect_language(self, audio_path: str) -> Optional[str]:
@@ -77,10 +72,7 @@ class LanguageDetectionService:
             text_sample = await self._extract_text_sample(audio_path)
 
             if not text_sample:
-                logger.warning(
-                    f"Could not extract text sample from {audio_path}, "
-                    "defaulting to 'en'"
-                )
+                logger.warning(f"Could not extract text sample from {audio_path}, " "defaulting to 'en'")
                 return "en"
 
             # Detect language from text
@@ -92,9 +84,7 @@ class LanguageDetectionService:
 
             # Convert lingua Language enum to BCP-47 code
             lang_code = detected.iso_code_639_1.name.lower()
-            logger.info(
-                f"Detected language '{lang_code}' from audio: {audio_path}"
-            )
+            logger.info(f"Detected language '{lang_code}' from audio: {audio_path}")
             return lang_code
 
         except Exception as e:
@@ -128,10 +118,7 @@ class LanguageDetectionService:
 
         # If no hints in filename, we'd use a fast speech-to-text model here
         # For now, default to None (caller will use default language)
-        logger.debug(
-            f"No language hints in filename: {filename}, "
-            "full transcription needed for detection"
-        )
+        logger.debug(f"No language hints in filename: {filename}, " "full transcription needed for detection")
         return None
 
 
