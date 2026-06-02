@@ -239,7 +239,7 @@ async def _send_mobile_push(
     dispatched = 0
     for device in devices:
         platform = device["platform"]
-        token = device["device_token"]
+        _ = device["device_token"]  # noqa: F841
 
         if platform == "ios":
             # TODO: Implement APNs delivery with apns2 library
