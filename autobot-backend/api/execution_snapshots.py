@@ -98,10 +98,7 @@ async def create_snapshot(
             container_owner = container_labels.get("autobot-owner", "")
 
             if container_owner and container_owner != user_id:
-                raise HTTPException(
-                    status_code=403,
-                    detail="Access denied: container belongs to another user"
-                )
+                raise HTTPException(status_code=403, detail="Access denied: container belongs to another user")
         except Exception as container_err:
             logger.warning("Container verification failed for %s: %s", container_id, container_err)
             # Container not found or not accessible - let backend.snapshot handle it
