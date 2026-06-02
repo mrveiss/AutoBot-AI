@@ -19,7 +19,7 @@ from transcriber.database import TranscriberDatabase
 from transcriber.models import RecordingStatus
 from transcriber.orchestrator import TranscriberOrchestrator
 from voice_processing.language_detection import detect_language
-from voice_processing.providers import get_speech_provider_registry
+from voice_processing.providers import get_provider_registry
 
 
 @pytest.fixture
@@ -77,7 +77,7 @@ async def test_service_availability():
     assert diarization is not None
 
     # Speech provider registry
-    registry = get_speech_provider_registry()
+    registry = get_provider_registry()
     assert registry is not None
 
     # Check that language detection works
