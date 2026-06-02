@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="AutoBot — autonomous AI workspace for your infrastructure. Self-hosted, privacy-first, hardware-accelerated.">
   <meta name="theme-color" content="#c4651a">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23f7b94a'/%3E%3Cstop offset='45%25' stop-color='%23e2842e'/%3E%3Cstop offset='100%25' stop-color='%23a2374a'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='48' height='48' rx='11' fill='url(%23g)'/%3E%3Ccircle cx='24' cy='9' r='3.5' fill='white'/%3E%3Ccircle cx='39' cy='24' r='3.5' fill='white'/%3E%3Ccircle cx='24' cy='39' r='3.5' fill='white'/%3E%3Ccircle cx='9' cy='24' r='3.5' fill='white'/%3E%3Ccircle cx='24' cy='24' r='4.5' fill='white'/%3E%3Cpath d='M24 13v8M32 24h5.5M24 27v8M10.5 24H19' stroke='white' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E">
   <title>AutoBot — Autonomous AI Workspace</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -595,40 +596,27 @@
     <symbol id="i-tag" viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82Z"/><line x1="7" y1="7" x2="7.01" y2="7"/></symbol>
     <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
 
-    <!-- AutoBot logo mark — geometric circuit-node diamond -->
+    <!-- AutoBot logo mark — solid ember gradient fill, white inner mark
+         Works standalone at any size: 16px favicon → 512px app icon -->
     <symbol id="logo-mark" viewBox="0 0 48 48">
       <defs>
         <linearGradient id="ember-logo" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%"   stop-color="#f7b94a"/>
-          <stop offset="38%"  stop-color="#e2842e"/>
-          <stop offset="70%"  stop-color="#cf5f22"/>
+          <stop offset="42%"  stop-color="#e2842e"/>
+          <stop offset="72%"  stop-color="#cf5f22"/>
           <stop offset="100%" stop-color="#a2374a"/>
         </linearGradient>
-        <linearGradient id="ember-logo-fade" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%"   stop-color="#f7b94a" stop-opacity="0.18"/>
-          <stop offset="100%" stop-color="#a2374a" stop-opacity="0.18"/>
-        </linearGradient>
       </defs>
-      <!-- Outer rounded square container -->
-      <rect x="1" y="1" width="46" height="46" rx="13" fill="url(#ember-logo-fade)"/>
-      <rect x="1" y="1" width="46" height="46" rx="13" stroke="url(#ember-logo)" stroke-width="1.5" fill="none"/>
-      <!-- Four outer nodes at cardinal positions -->
-      <circle cx="24" cy="8"  r="3.2" fill="url(#ember-logo)"/>
-      <circle cx="40" cy="24" r="3.2" fill="url(#ember-logo)"/>
-      <circle cx="24" cy="40" r="3.2" fill="url(#ember-logo)"/>
-      <circle cx="8"  cy="24" r="3.2" fill="url(#ember-logo)"/>
-      <!-- Center hub — larger -->
-      <circle cx="24" cy="24" r="4.5" fill="url(#ember-logo)"/>
-      <!-- Spokes from center to outer nodes -->
-      <path d="M24 12.5 L24 19.5" stroke="url(#ember-logo)" stroke-width="2" stroke-linecap="round"/>
-      <path d="M35.5 24 L28.5 24" stroke="url(#ember-logo)" stroke-width="2" stroke-linecap="round"/>
-      <path d="M24 36.5 L24 28.5" stroke="url(#ember-logo)" stroke-width="2" stroke-linecap="round"/>
-      <path d="M12.5 24 L19.5 24" stroke="url(#ember-logo)" stroke-width="2" stroke-linecap="round"/>
-      <!-- Diagonal connector lines (circuit traces) -->
-      <path d="M10.3 10.3 L19.5 19.5" stroke="url(#ember-logo)" stroke-width="1" stroke-linecap="round" opacity="0.45"/>
-      <path d="M37.7 10.3 L28.5 19.5" stroke="url(#ember-logo)" stroke-width="1" stroke-linecap="round" opacity="0.45"/>
-      <path d="M10.3 37.7 L19.5 28.5" stroke="url(#ember-logo)" stroke-width="1" stroke-linecap="round" opacity="0.45"/>
-      <path d="M37.7 37.7 L28.5 28.5" stroke="url(#ember-logo)" stroke-width="1" stroke-linecap="round" opacity="0.45"/>
+      <!-- Solid gradient rounded square — readable at any size -->
+      <rect x="0" y="0" width="48" height="48" rx="11" fill="url(#ember-logo)"/>
+      <!-- White inner mark: 4 agent nodes + center hub + spokes -->
+      <circle cx="24" cy="9"  r="3.5" fill="white"/>
+      <circle cx="39" cy="24" r="3.5" fill="white"/>
+      <circle cx="24" cy="39" r="3.5" fill="white"/>
+      <circle cx="9"  cy="24" r="3.5" fill="white"/>
+      <circle cx="24" cy="24" r="4.5" fill="white"/>
+      <path d="M24 13 L24 19.5M32 24 L35.5 24M24 28.5 L24 35M12.5 24 L19 24"
+            stroke="white" stroke-width="2.2" stroke-linecap="round"/>
     </symbol>
   </svg>
 
@@ -636,7 +624,7 @@
   <nav>
     <div class="nav-inner">
       <a href="#" class="nav-logo" style="text-decoration:none">
-        <svg width="28" height="28" viewBox="0 0 48 48" style="flex:none"><use href="#logo-mark"/></svg>
+        <svg width="30" height="30" viewBox="0 0 48 48" style="flex:none;border-radius:7px"><use href="#logo-mark"/></svg>
         AutoBot
       </a>
       <div class="nav-links">
