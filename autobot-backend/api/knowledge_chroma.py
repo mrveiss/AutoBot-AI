@@ -37,9 +37,7 @@ class CollectionMetadata(BaseModel):
 
     name: str = Field(..., description="Collection name")
     count: int = Field(..., description="Number of documents in collection")
-    metadata: Optional[Dict[str, Any]] = Field(
-        default=None, description="Collection metadata"
-    )
+    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Collection metadata")
 
 
 class CollectionListResponse(BaseModel):
@@ -64,9 +62,7 @@ class DocumentItem(BaseModel):
     id: str = Field(..., description="Document ID")
     document: Optional[str] = Field(None, description="Document text content")
     metadata: Optional[Dict[str, Any]] = Field(None, description="Document metadata")
-    embedding_dim: Optional[int] = Field(
-        None, description="Embedding vector dimensionality"
-    )
+    embedding_dim: Optional[int] = Field(None, description="Embedding vector dimensionality")
 
 
 class DocumentListResponse(BaseModel):
@@ -86,9 +82,7 @@ class SearchRequest(BaseModel):
 
     query: str = Field(..., description="Query text for similarity search")
     n_results: int = Field(10, ge=1, le=100, description="Number of results to return")
-    where: Optional[Dict[str, Any]] = Field(
-        None, description="Metadata filter (ChromaDB where clause)"
-    )
+    where: Optional[Dict[str, Any]] = Field(None, description="Metadata filter (ChromaDB where clause)")
 
 
 class SearchResultItem(BaseModel):
@@ -157,9 +151,7 @@ async def list_collections(
             except Exception as e:
                 logger.warning(f"Failed to get metadata for collection {name}: {e}")
                 # Include collection with partial data
-                collections_data.append(
-                    CollectionMetadata(name=name, count=0, metadata=None)
-                )
+                collections_data.append(CollectionMetadata(name=name, count=0, metadata=None))
 
         return CollectionListResponse(success=True, data=collections_data)
 

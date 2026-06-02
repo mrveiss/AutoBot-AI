@@ -160,12 +160,14 @@ async def test_get_collection_detail_connection_error(mock_current_user, mock_ch
 @pytest.mark.asyncio
 async def test_list_documents_success(mock_current_user, mock_chroma_client, mock_chroma_collection):
     """Test successful listing of documents with pagination."""
-    mock_chroma_collection.get = AsyncMock(return_value={
-        "ids": ["doc1", "doc2", "doc3"],
-        "documents": ["Text 1", "Text 2", "Text 3"],
-        "metadatas": [{"source": "a"}, {"source": "b"}, {"source": "c"}],
-        "embeddings": [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6], [0.7, 0.8, 0.9]],
-    })
+    mock_chroma_collection.get = AsyncMock(
+        return_value={
+            "ids": ["doc1", "doc2", "doc3"],
+            "documents": ["Text 1", "Text 2", "Text 3"],
+            "metadatas": [{"source": "a"}, {"source": "b"}, {"source": "c"}],
+            "embeddings": [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6], [0.7, 0.8, 0.9]],
+        }
+    )
 
     mock_chroma_client.get_collection = AsyncMock(return_value=mock_chroma_collection)
 
@@ -193,12 +195,14 @@ async def test_list_documents_success(mock_current_user, mock_chroma_client, moc
 @pytest.mark.asyncio
 async def test_list_documents_pagination(mock_current_user, mock_chroma_client, mock_chroma_collection):
     """Test pagination parameters are correctly passed."""
-    mock_chroma_collection.get = AsyncMock(return_value={
-        "ids": ["doc4", "doc5"],
-        "documents": ["Text 4", "Text 5"],
-        "metadatas": [{}, {}],
-        "embeddings": [[0.1], [0.2]],
-    })
+    mock_chroma_collection.get = AsyncMock(
+        return_value={
+            "ids": ["doc4", "doc5"],
+            "documents": ["Text 4", "Text 5"],
+            "metadatas": [{}, {}],
+            "embeddings": [[0.1], [0.2]],
+        }
+    )
 
     mock_chroma_client.get_collection = AsyncMock(return_value=mock_chroma_collection)
 
@@ -219,12 +223,14 @@ async def test_list_documents_pagination(mock_current_user, mock_chroma_client, 
 @pytest.mark.asyncio
 async def test_list_documents_empty_collection(mock_current_user, mock_chroma_client, mock_chroma_collection):
     """Test listing documents from empty collection."""
-    mock_chroma_collection.get = AsyncMock(return_value={
-        "ids": [],
-        "documents": [],
-        "metadatas": [],
-        "embeddings": [],
-    })
+    mock_chroma_collection.get = AsyncMock(
+        return_value={
+            "ids": [],
+            "documents": [],
+            "metadatas": [],
+            "embeddings": [],
+        }
+    )
     mock_chroma_collection.count = AsyncMock(return_value=0)
 
     mock_chroma_client.get_collection = AsyncMock(return_value=mock_chroma_collection)
@@ -261,12 +267,14 @@ async def test_list_documents_not_found(mock_current_user, mock_chroma_client):
 @pytest.mark.asyncio
 async def test_search_collection_success(mock_current_user, mock_chroma_client, mock_chroma_collection):
     """Test successful similarity search."""
-    mock_chroma_collection.query = AsyncMock(return_value={
-        "ids": [["doc1", "doc2"]],
-        "documents": [["Match 1", "Match 2"]],
-        "metadatas": [[{"score": 0.9}, {"score": 0.8}]],
-        "distances": [[0.1, 0.2]],
-    })
+    mock_chroma_collection.query = AsyncMock(
+        return_value={
+            "ids": [["doc1", "doc2"]],
+            "documents": [["Match 1", "Match 2"]],
+            "metadatas": [[{"score": 0.9}, {"score": 0.8}]],
+            "distances": [[0.1, 0.2]],
+        }
+    )
 
     mock_chroma_client.get_collection = AsyncMock(return_value=mock_chroma_collection)
 
@@ -296,20 +304,18 @@ async def test_search_collection_success(mock_current_user, mock_chroma_client, 
 @pytest.mark.asyncio
 async def test_search_collection_with_filter(mock_current_user, mock_chroma_client, mock_chroma_collection):
     """Test search with metadata filter."""
-    mock_chroma_collection.query = AsyncMock(return_value={
-        "ids": [["doc1"]],
-        "documents": [["Filtered match"]],
-        "metadatas": [[{"category": "tech"}]],
-        "distances": [[0.1]],
-    })
+    mock_chroma_collection.query = AsyncMock(
+        return_value={
+            "ids": [["doc1"]],
+            "documents": [["Filtered match"]],
+            "metadatas": [[{"category": "tech"}]],
+            "distances": [[0.1]],
+        }
+    )
 
     mock_chroma_client.get_collection = AsyncMock(return_value=mock_chroma_collection)
 
-    search_req = SearchRequest(
-        query="test",
-        n_results=5,
-        where={"category": "tech"}
-    )
+    search_req = SearchRequest(query="test", n_results=5, where={"category": "tech"})
 
     with patch("api.knowledge_chroma.get_async_chromadb_client", return_value=mock_chroma_client):
         response = await search_collection(
@@ -359,12 +365,14 @@ async def test_search_collection_whitespace_query(mock_current_user, mock_chroma
 @pytest.mark.asyncio
 async def test_search_collection_no_results(mock_current_user, mock_chroma_client, mock_chroma_collection):
     """Test search returning no results."""
-    mock_chroma_collection.query = AsyncMock(return_value={
-        "ids": [[]],
-        "documents": [[]],
-        "metadatas": [[]],
-        "distances": [[]],
-    })
+    mock_chroma_collection.query = AsyncMock(
+        return_value={
+            "ids": [[]],
+            "documents": [[]],
+            "metadatas": [[]],
+            "distances": [[]],
+        }
+    )
 
     mock_chroma_client.get_collection = AsyncMock(return_value=mock_chroma_collection)
 
