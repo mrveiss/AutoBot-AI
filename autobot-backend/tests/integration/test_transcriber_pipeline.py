@@ -19,7 +19,7 @@ from transcriber.database import TranscriberDatabase
 from transcriber.models import RecordingStatus
 from transcriber.orchestrator import TranscriberOrchestrator
 from voice_processing.language_detection import detect_language
-from voice_processing.providers import get_speech_provider_registry
+from voice_processing.providers import get_provider_registry
 
 
 @pytest.fixture
