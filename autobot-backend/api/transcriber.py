@@ -73,8 +73,8 @@ async def create_recording(
         return JSONResponse(status_code=201, content={"data": response_data})
 
     except Exception as exc:
-        logger.error("Failed to create recording: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.error("Failed to create recording: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/recordings/{recording_id}", response_model=DataResponse[RecordingResponse])
@@ -129,8 +129,8 @@ async def get_recording(
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error("Failed to get recording %d: %s", recording_id, exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.error("Failed to get recording %d: %s", recording_id, exc, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post(
@@ -200,8 +200,8 @@ async def process_recording(
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error("Failed to process recording %d: %s", recording_id, exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.error("Failed to process recording %d: %s", recording_id, exc, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get(
@@ -264,5 +264,5 @@ async def get_segments(
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error("Failed to get segments for recording %d: %s", recording_id, exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.error("Failed to get segments for recording %d: %s", recording_id, exc, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
