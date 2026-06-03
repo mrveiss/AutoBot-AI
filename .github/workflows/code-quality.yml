@@ -34,7 +34,7 @@ permissions:
 
 jobs:
   code-quality:
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest  # Temporary: self-hosted runner offline (MVA-2605)
 
     steps:
     - name: Checkout code
