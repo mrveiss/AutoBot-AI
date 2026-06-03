@@ -1077,6 +1077,8 @@ async def _ansible_self_update(node_id: str) -> None:
     plugins, npu-worker, browser-worker, etc.) — not just the SLM components.
     Fire-and-forget: the SLM service restarts mid-run so this coroutine dies;
     callers must poll health rather than await a result.
+
+    Issue #9224: Update node version in DB after successful sync.
     """
     executor = get_playbook_executor()
     limit = ["localhost", node_id]
@@ -1089,6 +1091,8 @@ async def _ansible_self_update(node_id: str) -> None:
             logger.error("Ansible full-machine update failed for %s: %s", node_id, result["output"][:500])
         else:
             logger.info("Ansible full-machine update complete for %s", node_id)
+            # Update node version in DB (Issue #9224)
+            await _update_fleet_node_version(node_id)
     except Exception as exc:
         logger.error("Ansible full-machine update error for %s: %s", node_id, exc)
 
