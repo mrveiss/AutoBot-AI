@@ -3,7 +3,7 @@
 # Author: mrveiss
 #
 # Transcriber Data Models
-# Issue #9044
+# Issue #9044, #9214
 
 """Data models for transcriber module."""
 
@@ -58,10 +58,24 @@ class TranscriptionSegment:
 
 
 class RecordingCreate(BaseModel):
-    """Request schema for creating a recording."""
+    """Request schema for creating a recording.
+
+    Note: file_path is now server-managed after upload.
+    Use POST /api/transcriber/upload to upload files first.
+
+    Issue #9214: Removed client-provided file_path to prevent path injection
+    """
 
     filename: str = Field(..., description="Original filename")
-    file_path: str = Field(..., description="Path to audio file")
+    # file_path removed - now server-managed via upload endpoint
+
+
+class UploadResponse(BaseModel):
+    """Response schema for file upload."""
+
+    file_path: str = Field(..., description="Server-managed file path")
+    filename: str = Field(..., description="Original filename")
+    size_bytes: int = Field(..., description="File size in bytes")
 
 
 class RecordingResponse(BaseModel):

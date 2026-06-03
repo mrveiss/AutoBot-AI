@@ -3,7 +3,7 @@
 # Author: mrveiss
 #
 # Transcriber Orchestrator
-# Issue #9044
+# Issue #9044, #9214
 
 """Orchestration service for transcription pipeline."""
 
@@ -40,12 +40,13 @@ class TranscriberOrchestrator:
         """Process a recording through the full pipeline.
 
         Pipeline stages:
-        1. Extract and normalize audio with FFmpeg
-        2. Detect language
-        3. Generate speaker segments with Pyannote diarization
-        4. Transcribe audio with language-appropriate speech provider
-        5. Merge transcription text with speaker timestamps
-        6. Persist segments to database
+        1. Validate file path security (Issue #9214)
+        2. Extract and normalize audio with FFmpeg
+        3. Detect language
+        4. Generate speaker segments with Pyannote diarization
+        5. Transcribe audio with language-appropriate speech provider
+        6. Merge transcription text with speaker timestamps
+        7. Persist segments to database
 
         Args:
             recording_id: Recording ID to process
@@ -55,6 +56,7 @@ class TranscriberOrchestrator:
 
         Raises:
             Exception: If processing fails at any stage
+            ValueError: If path validation fails (Issue #9214)
         """
         # Get database if not injected
         if self.db is None:
@@ -67,6 +69,32 @@ class TranscriberOrchestrator:
 
         if recording.status != RecordingStatus.PENDING:
             raise ValueError(f"Recording {recording_id} is not in pending status (current: {recording.status})")
+
+        # Security: Validate file path before processing (Issue #9214)
+        # This is a defense-in-depth measure - paths should already be validated at upload time
+        logger.debug("Validating file path for recording %d: %s", recording_id, recording.file_path)
+
+        # Ensure path is absolute
+        if not Path(recording.file_path).is_absolute():
+            raise ValueError(f"Path must be absolute: {recording.file_path}")
+
+        # Ensure path is within upload base directory
+        from transcriber.upload_security import get_upload_base_dir
+
+        upload_base = get_upload_base_dir()
+        try:
+            Path(recording.file_path).resolve().relative_to(upload_base)
+        except ValueError:
+            raise ValueError(f"Path traversal blocked: {recording.file_path} not in upload directory {upload_base}")
+
+        # Ensure file exists and is not a symlink
+        if not Path(recording.file_path).exists():
+            raise ValueError(f"File not found: {recording.file_path}")
+
+        if Path(recording.file_path).is_symlink():
+            raise ValueError(f"Symlinks not allowed: {recording.file_path}")
+
+        logger.info("Path validation passed for recording %d", recording_id)
 
         # Update status to processing
         await self.db.update_recording_status(recording_id, RecordingStatus.PROCESSING)
