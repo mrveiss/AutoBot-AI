@@ -203,7 +203,7 @@ const insertLoading = ref(false)
 
 const currentPrompts = computed(() => promptsByBridge.value[activeBridge.value])
 
-watch(showModal, (show) => {
+watch(showModal, (show: boolean) => {
   if (show && Object.keys(promptsByBridge.value.git).length === 0) {
     loadPrompts()
   }
@@ -252,7 +252,7 @@ async function insertPrompt() {
 
   formError.value = null
 
-  const requiredArgs = selectedPrompt.value.arguments?.filter((a) => a.required) || []
+  const requiredArgs = selectedPrompt.value.arguments?.filter((a: PromptArgument) => a.required) || []
   for (const arg of requiredArgs) {
     if (!formValues.value[arg.name]?.trim()) {
       formError.value = `Please fill in required parameter: ${arg.name}`
@@ -291,7 +291,7 @@ async function insertPrompt() {
         }
         return ''
       })
-      .filter((text) => text.trim())
+      .filter((text): text is string => typeof text === 'string' && text.trim() !== '')
       .join('\n\n')
 
     emit('insert', promptText)
