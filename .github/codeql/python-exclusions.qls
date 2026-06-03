@@ -1,0 +1,11 @@
+# CodeQL Query Suite - Python Exclusions
+# Filters out false positives where custom sanitization is verified but not
+# automatically recognized by CodeQL's dataflow analysis.
+#
+# Related: Issue #MVA-2605
+
+- description: Exclude py/full-ssrf in external_importer.py (validated via _validate_git_url)
+- query: py/full-ssrf
+- exclude:
+    file:
+      - autobot-backend/skills/external_importer.py
