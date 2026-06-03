@@ -1816,6 +1816,17 @@ async def cleanup_services(app: FastAPI):
         except Exception as mcp_err:
             logger.warning("Isolated MCP bridge shutdown failed: %s", mcp_err)
 
+        # GH#9012: Flush LangFuse / LangSmith observer buffers before exit
+        try:
+            from llm_shared.observability.registry import _registry
+
+            for _obs in _registry:
+                if callable(getattr(_obs, "flush", None)):
+                    _obs.flush()
+            logger.info("✅ LLM observer buffers flushed")
+        except Exception as obs_err:
+            logger.warning("LLM observer flush failed: %s", obs_err)
+
         # Redis connections automatically managed by get_redis_client()
         logger.info("✅ Cleanup completed successfully")
     except Exception as e:
