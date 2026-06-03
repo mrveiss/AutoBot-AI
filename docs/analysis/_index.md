@@ -18,7 +18,7 @@ Analysis reports and findings from codebase and system investigations.
 
 ## Related Sections
 
-- [[../audit/_index\|Audit]] — Component and code audits
-- [[../research/_index\|Research]] — Research reports and investigations
-- [[../discovery/_index\|Discovery]] — Discovery and exploration findings
-- [[../fixes/_index\|Fixes]] — Fix reports and patches
+- [[../audit/_index|Audit]] — Component and code audits
+- [[../research/_index|Research]] — Research reports and investigations
+- [[../discovery/_index|Discovery]] — Discovery and exploration findings
+- [[../fixes/_index|Fixes]] — Fix reports and patches
