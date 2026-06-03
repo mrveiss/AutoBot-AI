@@ -7,8 +7,6 @@ Transcript Analysis and KB Integration API (MVA-2176).
 Provides WebSocket streaming for AI analysis and manual KB push endpoints.
 """
 
-import asyncio
-import json
 from typing import AsyncIterator
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
