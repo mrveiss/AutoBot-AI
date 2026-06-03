@@ -1,0 +1,70 @@
+# Auto-update PR branches when Dev_new_gui advances
+#
+# Whenever Dev_new_gui receives a push (merge, direct commit),
+# this workflow finds every open PR targeting Dev_new_gui that is
+# behind the base and merges the base into it automatically.
+# Eliminates the manual "Update branch" click and prevents stale
+# merge-conflict surprises at review time.
+#
+# See: #9300 post-mortem — direct hotfixes on main caused drift
+
+name: Auto-update PR branches
+
+on:
+  push:
+    branches:
+      - Dev_new_gui
+
+jobs:
+  auto-update:
+    runs-on: [self-hosted, linux]
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Update out-of-date PR branches
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "Dev_new_gui was updated — checking open PRs for staleness..."
+
+          # List all open PRs targeting Dev_new_gui that are behind.
+          # .number is always a GitHub-assigned integer — safe to iterate.
+          OUTDATED=$(gh pr list \
+            --repo "$REPO" \
+            --base Dev_new_gui \
+            --state open \
+            --json number,behindBy \
+            --jq '.[] | select(.behindBy > 0) | .number')
+
+          if [ -z "$OUTDATED" ]; then
+            echo "All PR branches are up to date."
+            exit 0
+          fi
+
+          echo "PRs behind Dev_new_gui: $(echo "$OUTDATED" | tr '\n' ' ')"
+
+          UPDATED=0
+          FAILED=0
+          for PR in $OUTDATED; do
+            # Validate numeric to guard against unexpected jq output
+            if ! [[ "$PR" =~ ^[0-9]+$ ]]; then
+              echo "  Skipping non-numeric value: $PR"
+              continue
+            fi
+            echo "Updating PR #$PR..."
+            if gh pr update-branch "$PR" --repo "$REPO" 2>&1; then
+              echo "  ✓ PR #$PR updated"
+              UPDATED=$((UPDATED + 1))
+            else
+              echo "  ✗ PR #$PR failed (conflicts need manual resolution)"
+              FAILED=$((FAILED + 1))
+            fi
+          done
+
+          echo ""
+          echo "Done: $UPDATED updated, $FAILED need manual attention."
+          # Never fail — conflicting PRs just need human resolution
+          exit 0
