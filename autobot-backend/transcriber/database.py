@@ -272,6 +272,9 @@ class Database:
         if src_row[0] != tgt_row[0]:
             raise ValueError("Cannot merge speakers from different recordings")
 
+        if source_speaker_id == target_speaker_id:
+            raise ValueError("Cannot merge a speaker into itself")
+
         # Update all segments that reference source speaker to point to target speaker
         await self._db().execute(
             "UPDATE segments SET speaker_id=? WHERE speaker_id=?",
