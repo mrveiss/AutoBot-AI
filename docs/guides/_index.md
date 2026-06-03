@@ -13,6 +13,7 @@ aliases:
 | Document | Description |
 | --- | --- |
 | [GETTING_STARTED_COMPLETE](GETTING_STARTED_COMPLETE.md) | Complete getting started guide |
+| [Install in a VM](../getting-started/install-vm.md) | VM installation (VirtualBox, VMware, Hyper-V, KVM, WSL2) |
 | [AGENT_SYSTEM_GUIDE](AGENT_SYSTEM_GUIDE.md) | Agent system guide |
 | [MULTI_AGENT_SETUP](MULTI_AGENT_SETUP.md) | Multi-agent setup |
 | [CONFIGURATION_GUIDE](CONFIGURATION_GUIDE.md) | Configuration guide |
