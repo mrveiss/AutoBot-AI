@@ -25,6 +25,7 @@ class TerminalSessionCreateResponse(BaseModel):
     created_at: str
     ssh_keys: Dict[str, Any] | None = None
 
+
 class TerminalSessionItem(BaseModel):
     """Single session entry within a list response."""
 
@@ -71,6 +72,7 @@ class SSHKeyItem(BaseModel):
     fingerprint: str | None = None
     has_passphrase: bool | None = None
     key_path: str | None = None
+
 
 class SSHKeyListResponse(BaseModel):
     """Response for GET /sessions/{session_id}/ssh-keys."""
@@ -143,6 +145,7 @@ class TerminalCommandHistoryResponse(BaseModel):
     total_commands: int | None = None
     message: str | None = None
 
+
 class TerminalAuditLogResponse(BaseModel):
     """Response for GET /audit/{session_id}."""
 
@@ -190,6 +193,7 @@ class TerminalHealthResponse(BaseModel):
     metrics: TerminalHealthMetrics | None = None
     error: str | None = None
 
+
 class TerminalStatusFeatures(BaseModel):
     pty_support: bool
     websocket_support: bool
@@ -203,6 +207,7 @@ class TerminalStatusSessionInfo(BaseModel):
     active_sessions: int
     max_concurrent_sessions: int | None = None
 
+
 class TerminalSystemStatusResponse(BaseModel):
     """Response for GET /status."""
 
@@ -211,6 +216,7 @@ class TerminalSystemStatusResponse(BaseModel):
     features: TerminalStatusFeatures | None = None
     session_info: TerminalStatusSessionInfo | None = None
     error: str | None = None
+
 
 class TerminalCapabilitiesResponse(BaseModel):
     """Response for GET /capabilities."""
@@ -243,6 +249,7 @@ class TerminalImplementationItem(BaseModel):
     backend_api: str
     approval_workflow: bool
     service_layer: str | None = None
+
 
 class TerminalFeaturesResponse(BaseModel):
     """Response for GET /features."""
@@ -315,6 +322,7 @@ class AgentTerminalSessionCreateResponse(BaseModel):
     created_at: float
     pty_session_id: str | None = None
 
+
 class AgentTerminalSessionItem(BaseModel):
     """Single session entry within list response."""
 
@@ -328,6 +336,7 @@ class AgentTerminalSessionItem(BaseModel):
     last_activity: float | None = None
     command_count: int
     pty_session_id: str | None = None
+
 
 class AgentTerminalSessionListResponse(BaseModel):
     """Response for GET /agent-terminal/sessions."""
@@ -376,6 +385,7 @@ class AgentTerminalCommandStateResponse(BaseModel):
     approved_by_user_id: str | None = None
     approval_comment: str | None = None
 
+
 class AgentTerminalInfoResponse(BaseModel):
     """Response for GET /agent-terminal/."""
 
@@ -416,6 +426,7 @@ class AgentTerminalHostSelectionGetResponse(BaseModel):
     created_at: str
     updated_at: str | None = None
 
+
 class AgentTerminalHostSelectionSubmitResponse(BaseModel):
     """Response for POST /agent-terminal/host-selection/{request_id}/select."""
 
@@ -424,6 +435,7 @@ class AgentTerminalHostSelectionSubmitResponse(BaseModel):
     selected_host_id: str | None = None
     selected_host_name: str | None = None
     connection_info: Dict[str, Any] | None = None
+
 
 class AgentTerminalHostSelectionCancelResponse(BaseModel):
     """Response for POST /agent-terminal/host-selection/{request_id}/cancel."""
