@@ -68,6 +68,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import type { CodePayload } from '@/types/canvas'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('CodeCell')
 
 const props = defineProps<{
   richPayload: CodePayload | null
@@ -148,7 +151,7 @@ async function copyToClipboard() {
     }, 2000)
   } catch (err) {
     copyFeedback.value = '❌ Copy failed'
-    console.error('[CodeCell] copy failed:', err)
+    logger.error('copy failed:', err)
   }
 }
 
@@ -162,7 +165,7 @@ watch(() => props.richPayload, () => {
 onMounted(() => {
   if (props.richPayload) {
     loadLibraries().catch(err => {
-      console.error('[CodeCell] init error:', err)
+      logger.error('init error:', err)
     })
   }
 })
