@@ -287,6 +287,16 @@ class ExternalSkillImporter:
         """
         from autobot_shared.url_safety import is_public_url_async
 
+        # SSRF Guard: Validate URL scheme before making request
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            raise RuntimeError(
+                f"Catalog URL must use http or https scheme, got: {parsed.scheme!r}"
+            )
+
+        if not parsed.netloc:
+            raise RuntimeError(f"Catalog URL missing hostname: {url!r}")
+
         if not await is_public_url_async(url):
             raise RuntimeError(f"Catalog URL blocked by SSRF guard: {url}")
 
