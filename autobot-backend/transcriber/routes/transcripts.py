@@ -3,12 +3,20 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Transcript routes: segments, speakers, notes."""
+
 from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from transcriber.database import Database
 from transcriber.deps import get_db
 from transcriber.models import (
-    NoteCreate, NoteOut, NoteUpdate, SegmentOut, SegmentUpdate,
-    SpeakerOut, SpeakerUpdate, TranscriptOut, RecordingOut,
+    NoteCreate,
+    NoteOut,
+    NoteUpdate,
+    SegmentOut,
+    SegmentUpdate,
+    SpeakerOut,
+    SpeakerUpdate,
+    TranscriptOut,
+    RecordingOut,
 )
 
 router = APIRouter(tags=["transcriber-transcripts"])

@@ -3,6 +3,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Recording upload, list, delete routes. Pipeline trigger wired in Plan 2."""
+
 import uuid
 from pathlib import Path
 
@@ -52,9 +53,7 @@ async def upload_recording(
     async with aiofiles.open(dest, "wb") as f:
         while chunk := await file.read(65536):
             await f.write(chunk)
-    rid = await db.create_recording(
-        project_id, file.filename or safe_name, str(dest), user_id=_user_id(request)
-    )
+    rid = await db.create_recording(project_id, file.filename or safe_name, str(dest), user_id=_user_id(request))
     logger.info("Recording uploaded: recording_id=%s project_id=%s filename=%s", rid, project_id, file.filename)
     rec = await db.get_recording(rid)
     return RecordingOut(**rec)

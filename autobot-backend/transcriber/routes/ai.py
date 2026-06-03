@@ -3,6 +3,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Streaming AI analysis route — delegates to AutoBot llm_shared."""
+
 import json
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -16,6 +17,7 @@ from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["transcriber-ai"])
+
 
 # Development fallback — auth middleware populates request.state.user in production
 def _user_id(request: Request) -> str:
@@ -40,6 +42,7 @@ async def ai_ask(
     async def stream():
         try:
             from llm_shared.providers import get_default_provider
+
             provider = get_default_provider()
             async for chunk in provider.stream_chat(
                 system=system_prompt,
