@@ -1,5 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/vue3';
 import FileUpload from './FileUpload.vue';
+import { createLogger } from '@/utils/debugUtils';
+
+const logger = createLogger('FileUploadStory');
 
 const meta = {
   title: 'Components/FileBrowser/FileUpload',
@@ -27,7 +30,7 @@ export const InlineUsage: Story = {
     `,
     methods: {
       onFilesSelected(files: FileList) {
-        console.log('Files selected:', Array.from(files).map(f => f.name));
+        logger.info('Files selected:', Array.from(files).map(f => f.name));
       },
     },
   }),

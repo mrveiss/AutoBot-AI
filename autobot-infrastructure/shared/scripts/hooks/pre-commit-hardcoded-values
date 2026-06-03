@@ -33,9 +33,9 @@ WARNINGS=0
 # pre-commit AND CI gate). The multi-stage allowlist below is hook-specific
 # and must remain.
 get_files_to_scan() {
-    get_staged_files '\.(py|ts|vue)$' "$@" | \
+    get_staged_files '\.(py|ts|vue|js)$' "$@" | \
         grep -v -E '(/__pycache__/|/node_modules/|/\.venv/|/venv/|/archive/|/tmp/|/\.tmp/|^tmp/|^archive/)' | \
-        grep -v -E '(test_|_test\.py|\.test\.ts|\.spec\.ts)' | \
+        grep -v -E '(test_|_test\.py|\.test\.ts|\.test\.js|\.spec\.ts|\.spec\.js)' | \
         grep -v -E '(ssot_config\.py|ssot-config\.ts|threshold_constants\.py)' | \
         grep -v -E '(path_constants\.py|network_constants\.py|security_constants\.py)' | \
         grep -v -E '(constants/|config\.py$|\.env)' || true
