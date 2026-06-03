@@ -10,6 +10,19 @@
 
 name: "AutoBot CodeQL Configuration"
 
+query-filters:
+  - exclude:
+      id: py/path-injection
+      files: autobot-backend/transcriber/upload_security.py
+    reason: >-
+      Path is validated via multi-layer security checks before any file operation:
+      1) Prefix check ensures path starts with user_upload_dir (L126-127)
+      2) Path.resolve() canonicalizes and follows symlinks (L132)
+      3) relative_to(user_upload_dir) confirms resolved path is still within allowed directory (L137)
+      4) Symlink rejection (L144)
+      5) File existence and type validation (L149)
+      These checks prevent path traversal attacks. See #9214.
+
 packs:
   python:
     - codeql/python-queries
