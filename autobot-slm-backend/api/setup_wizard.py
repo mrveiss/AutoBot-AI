@@ -188,14 +188,41 @@ def _build_infra_vars(
     return infra_vars
 
 
+def _sanitize_ansible_name(name: str) -> str:
+    """Sanitize a name to be Ansible group/host compliant (#9283).
+
+    Ansible group names (and host names, which create implicit groups)
+    must not start with numbers and should avoid hyphens to prevent
+    warnings. Converts names like '01-Backend' to 'node_01_Backend'.
+
+    Returns a name that:
+    - Contains only letters, numbers, and underscores
+    - Does not start with a number
+    - Does not contain hyphens
+    """
+    import re
+
+    # Replace hyphens with underscores
+    sanitized = name.replace("-", "_")
+    # Replace any other non-alphanumeric/underscore chars with underscores
+    sanitized = re.sub(r"[^a-zA-Z0-9_]", "_", sanitized)
+    # Prepend 'node_' if starts with a number
+    if sanitized and sanitized[0].isdigit():
+        sanitized = f"node_{sanitized}"
+    return sanitized
+
+
 def _build_host_entries(
     db_nodes: list,
     local_ips: set,
 ) -> tuple[dict[str, dict], dict[str, str], dict[str, str]]:
-    """Build per-host inventory entries from DB node records (#2823).
+    """Build per-host inventory entries from DB node records (#2823, #9283).
 
     Returns (hosts, node_id_to_hostname, node_id_to_ip).
     Sets ansible_connection=local for nodes whose IP is on this machine (#2722).
+
+    Issue #9283: Sanitizes inventory names to avoid Ansible warnings about
+    invalid group characters (host names create implicit groups).
     """
     hosts: dict[str, dict] = {}
     node_id_to_hostname: dict[str, str] = {}
@@ -210,7 +237,9 @@ def _build_host_entries(
             host_vars["ansible_connection"] = "local"
         if node.ssh_port and node.ssh_port != 22:
             host_vars["ansible_port"] = node.ssh_port
-        inventory_name = node.ansible_target  # #1814
+        # Issue #9283: Sanitize inventory name to avoid Ansible warnings
+        raw_name = node.ansible_target  # #1814
+        inventory_name = _sanitize_ansible_name(raw_name)
         hosts[inventory_name] = host_vars
         node_id_to_hostname[node.node_id] = inventory_name
         node_id_to_ip[node.node_id] = node.ip_address
