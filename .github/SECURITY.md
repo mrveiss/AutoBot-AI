@@ -72,7 +72,7 @@ Out of scope:
 
 ## Recognition
 
-AutoBot AI does not operate a paid bug bounty program. We do credit security researchers publicly in the advisory and in the changelog when a fix is shipped, unless you prefer to remain anonymous.
+AutoBot AI is an open-source community project. We credit security researchers publicly in the advisory and in the changelog when a fix is shipped, unless you prefer to remain anonymous. This recognition is our way of thanking the community contributors who help keep AutoBot secure.
 
 ## Security Advisories
 
