@@ -14,10 +14,15 @@ from transcriber.models import (
 router = APIRouter(tags=["transcriber-transcripts"])
 
 
+def _user_id(request: Request) -> str:
+    user = getattr(request.state, "user", None)
+    return user.id if user else "default"
+
+
 @router.get("/recordings/{recording_id}/transcript", response_model=TranscriptOut)
-async def get_transcript(recording_id: int, db: Database = Depends(get_db)):
+async def get_transcript(recording_id: int, request: Request, db: Database = Depends(get_db)):
     rec = await db.get_recording(recording_id)
-    if not rec:
+    if not rec or rec["user_id"] != _user_id(request):
         raise HTTPException(404, "Recording not found")
     speakers = await db.list_speakers(recording_id)
     segments = await db.list_segments(recording_id)
@@ -29,10 +34,14 @@ async def get_transcript(recording_id: int, db: Database = Depends(get_db)):
 
 
 @router.patch("/segments/{segment_id}", response_model=SegmentOut)
-async def update_segment(segment_id: int, body: SegmentUpdate, db: Database = Depends(get_db)):
-    cur = await db._db().execute("SELECT * FROM segments WHERE id=?", (segment_id,))
+async def update_segment(segment_id: int, body: SegmentUpdate, request: Request, db: Database = Depends(get_db)):
+    cur = await db._db().execute("SELECT recording_id FROM segments WHERE id=?", (segment_id,))
     row = await cur.fetchone()
     if not row:
+        raise HTTPException(404, "Segment not found")
+    recording_id = row[0]
+    rec = await db.get_recording(recording_id)
+    if not rec or rec["user_id"] != _user_id(request):
         raise HTTPException(404, "Segment not found")
     await db.update_segment_text(segment_id, body.text)
     cur2 = await db._db().execute("SELECT * FROM segments WHERE id=?", (segment_id,))
@@ -41,10 +50,14 @@ async def update_segment(segment_id: int, body: SegmentUpdate, db: Database = De
 
 
 @router.patch("/speakers/{speaker_id}", response_model=SpeakerOut)
-async def update_speaker(speaker_id: int, body: SpeakerUpdate, db: Database = Depends(get_db)):
-    cur = await db._db().execute("SELECT * FROM speakers WHERE id=?", (speaker_id,))
+async def update_speaker(speaker_id: int, body: SpeakerUpdate, request: Request, db: Database = Depends(get_db)):
+    cur = await db._db().execute("SELECT recording_id FROM speakers WHERE id=?", (speaker_id,))
     row = await cur.fetchone()
     if not row:
+        raise HTTPException(404, "Speaker not found")
+    recording_id = row[0]
+    rec = await db.get_recording(recording_id)
+    if not rec or rec["user_id"] != _user_id(request):
         raise HTTPException(404, "Speaker not found")
     await db.update_speaker(speaker_id, body.display_name)
     cur2 = await db._db().execute("SELECT * FROM speakers WHERE id=?", (speaker_id,))
@@ -59,22 +72,35 @@ async def create_note(segment_id: int, body: NoteCreate, request: Request, db: D
     if not seg_row:
         raise HTTPException(404, "Segment not found")
     recording_id = seg_row[0]
+    rec = await db.get_recording(recording_id)
+    if not rec or rec["user_id"] != _user_id(request):
+        raise HTTPException(404, "Segment not found")
     nid = await db.create_note(segment_id, recording_id, body.content)
     note = await db.get_note(nid)
     return NoteOut(**note)
 
 
 @router.patch("/notes/{note_id}", response_model=NoteOut)
-async def update_note(note_id: int, body: NoteUpdate, db: Database = Depends(get_db)):
-    if not await db.get_note(note_id):
+async def update_note(note_id: int, body: NoteUpdate, request: Request, db: Database = Depends(get_db)):
+    note = await db.get_note(note_id)
+    if not note:
+        raise HTTPException(404, "Note not found")
+    recording_id = note["recording_id"]
+    rec = await db.get_recording(recording_id)
+    if not rec or rec["user_id"] != _user_id(request):
         raise HTTPException(404, "Note not found")
     await db.update_note(note_id, body.content)
     return NoteOut(**await db.get_note(note_id))
 
 
 @router.delete("/notes/{note_id}", status_code=204)
-async def delete_note(note_id: int, db: Database = Depends(get_db)):
-    if not await db.get_note(note_id):
+async def delete_note(note_id: int, request: Request, db: Database = Depends(get_db)):
+    note = await db.get_note(note_id)
+    if not note:
+        raise HTTPException(404, "Note not found")
+    recording_id = note["recording_id"]
+    rec = await db.get_recording(recording_id)
+    if not rec or rec["user_id"] != _user_id(request):
         raise HTTPException(404, "Note not found")
     await db.delete_note(note_id)
     return Response(status_code=204)
