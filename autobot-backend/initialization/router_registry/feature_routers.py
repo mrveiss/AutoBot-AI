@@ -633,6 +633,20 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["voice", "realtime", "webrtc"],
         "realtime_session",
     ),
+    # GH#8605: Per-user voice bundle assignment (admin + user endpoints)
+    (
+        "api.voice_bundle_admin",
+        "",
+        ["voice", "rbac", "admin"],
+        "voice_bundle_admin",
+    ),
+    # GH#8605: Voice bundle management (user-facing endpoints)
+    (
+        "api.voice_bundle_user",
+        "/voice",
+        ["voice", "rbac"],
+        "voice_bundle_user",
+    ),
     # GH#4463: Mobile device pairing for push notifications and offline sync
     (
         "api.mobile_devices",

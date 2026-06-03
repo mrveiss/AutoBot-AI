@@ -27,6 +27,11 @@ bundle_me_router = APIRouter(tags=["voice", "rbac"])
 # Router for admin operations
 bundle_admin_router = APIRouter(prefix="/admin", tags=["admin", "voice", "rbac"])
 
+# Combined router for feature_routers.py discovery (GH#8605)
+router = APIRouter()
+router.include_router(bundle_me_router, prefix="/voice")
+router.include_router(bundle_admin_router)
+
 
 # ---------------------------------------------------------------------------
 # Helpers
