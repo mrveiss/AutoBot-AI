@@ -10,9 +10,6 @@ Part of Issue MVA-2185.
 
 import sys
 from pathlib import Path
-from typing import List, Optional
-
-import pytest
 
 # Add autobot-backend to path
 backend_path = Path(__file__).parent.parent.parent

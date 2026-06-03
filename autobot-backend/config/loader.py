@@ -72,19 +72,27 @@ ENV_VAR_MAPPINGS = {
 
 
 def load_yaml_config(config_file: Path) -> Dict[str, Any]:
-    """Load base configuration from YAML file"""
+    """Load base configuration from YAML file and merge with defaults.
+
+    Always starts with default config and merges the YAML on top.
+    This ensures all required config keys have sensible defaults even
+    if they're not present in the YAML file (Issue #9232).
+    """
+    defaults = get_default_config()
+
     if not config_file.exists():
         logger.info("Base configuration file not found: %s, using defaults", config_file)
-        return get_default_config()
+        return defaults
 
     try:
         with open(config_file, "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f) or {}
+            yaml_config = yaml.safe_load(f) or {}
         logger.info("Base configuration loaded from %s", config_file)
-        return config
+        # Merge YAML config on top of defaults (YAML overrides defaults)
+        return deep_merge(defaults, yaml_config)
     except Exception as e:
         logger.error("Failed to load YAML configuration: %s", e)
-        return get_default_config()
+        return defaults
 
 
 def load_json_settings(settings_file: Path) -> Dict[str, Any]:

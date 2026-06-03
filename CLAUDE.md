@@ -415,3 +415,38 @@ gh issue create --title "discovery(<area>): <what you found>" --body "..." --lab
 ✅ Feature tested end-to-end in dev environment  
 ✅ All edge cases documented as handled  
 ✅ Follow-up issues filed for any gaps found
+
+---
+
+## Issue Ownership & Posting
+
+- Before posting review findings or comments to any Paperclip/MVA issue, **verify the target issue is assigned to this agent**. Attempting to post to another agent's issue wastes a heartbeat and silently fails.
+- If the correct target is unclear, pivot to an agent-owned tracking issue (e.g. the review's source issue) rather than guessing.
+- When the current agent is the **PR author**, GitHub blocks self-approval and self-requested-changes. Post a detailed review comment instead of using the approve/request-changes API. Never attempt self-approval.
+
+---
+
+## Code Review Methodology
+
+All substantive PR reviews must follow the **3-angle recall-biased protocol**:
+
+1. **Dispatch 3 parallel finder agents** covering distinct angles: (a) security/auth/tenancy, (b) correctness/logic, (c) data-layer/edge-cases.
+2. **Ground every finding in the live diff.** Finder and verifier agents MUST read the actual PR diff (`gh pr diff <number>` or `git diff <base>..<head>`) — never reason about files that are not confirmed on disk. Files added by the PR may not exist on disk until checked out.
+3. **Run a verification pass.** A dedicated verifier agent re-reads each cited location from the actual files and rejects any finding it cannot ground in real code. Findings without a real line citation are discarded.
+4. **Post to the correct issue.** Confirm ownership before posting (see Issue Ownership & Posting above).
+
+---
+
+## Git Push Recovery
+
+- Before pushing, always check whether the remote branch has diverged: `git status` and `git log --oneline origin/<branch>..HEAD`.
+- If a push is rejected due to a diverged branch, **do not force-push blindly**. Instead: fetch, rebase (`git rebase origin/<branch>`), resolve any conflicts, then push.
+- If the rebase fails with conflicts you cannot resolve cleanly, stop and report rather than force-pushing and losing upstream changes.
+
+---
+
+## Model Tier Routing
+
+- Route **lightweight heartbeat tasks** (status checks, acknowledgments, quota monitoring, label updates, simple status transitions) to **Claude Haiku** (`claude-haiku-4-5-20251001`) to preserve Sonnet quota.
+- Reserve **Sonnet** for deep code reviews, multi-file bug fixes, feature implementation, and any task requiring extended reasoning.
+- This distinction should be reflected in agent runtime config (`useLightweightMode: true`) or explicit model selection in skill invocations where possible.

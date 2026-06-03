@@ -22,6 +22,8 @@ cssclasses:
 | Document | Description |
 |----------|-------------|
 | [Getting Started](GETTING_STARTED_COMPLETE.md) | Complete setup guide |
+| [Getting Started Index](getting-started/_index.md) | Installation guides by environment |
+| [Install in a VM](getting-started/install-vm.md) | VirtualBox, VMware, Hyper-V, KVM, WSL2 |
 | [Browser VNC Quick Start](QUICK_START_BROWSER_VNC.md) | VNC desktop access |
 | [System State](system-state.md) | Current system status |
 | [Glossary](GLOSSARY.md) | Terminology reference |

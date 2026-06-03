@@ -62,6 +62,8 @@ class CircuitBreakerConfig:
         AttributeError,
     )
 
+    reset_on_success: bool = CircuitBreakerDefaults.CONSECUTIVE_RESET_ON_SUCCESS
+
     # Performance thresholds (Issue #376 - use centralized constants)
     slow_call_threshold: float = CircuitBreakerDefaults.SLOW_CALL_THRESHOLD
     slow_call_rate_threshold: float = CircuitBreakerDefaults.SLOW_CALL_RATE_THRESHOLD
@@ -249,9 +251,14 @@ class CircuitBreaker:
                     self.state_change_time = time.time()
                     self.stats.state_changes += 1
 
-            # Reset failure count on successful call in CLOSED state
+            # Reset failure count on successful call in CLOSED state.
+            # When reset_on_success is True (default), any success fully clears
+            # accumulated transient failures — prevents gradual false lockout.
             elif self.state == CircuitState.CLOSED:
-                self.failure_count = max(0, self.failure_count - 1)
+                if self.config.reset_on_success:
+                    self.failure_count = 0
+                else:
+                    self.failure_count = max(0, self.failure_count - 1)
 
     def _record_failure(self, duration: float, exception: Exception):
         """Record a failed call"""

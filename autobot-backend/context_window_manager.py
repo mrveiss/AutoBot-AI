@@ -14,6 +14,9 @@ instead of hard-capping at 8192.
 from pathlib import Path
 from typing import Dict, List
 
+_CONTEXT_HEADROOM: float = 0.85
+_CONTEXT_HARD_MAX: int = 200_000
+
 import yaml
 
 from autobot_shared.logging_manager import get_logger
@@ -290,6 +293,36 @@ class ContextWindowManager:
             return threshold
 
         return 8192
+
+    def _query_known_context_length(self, model_name: str) -> int:
+        """Try to get context window from llm_shared model registry. Returns 0 when unknown."""
+        try:
+            from llm_shared.model_param_registry import get_model_kwargs
+
+            kwargs = get_model_kwargs(model_name)
+            return int(kwargs.get("context_window_tokens", 0))
+        except Exception:
+            return 0
+
+    def get_adaptive_context_length(self, model_name: str | None = None) -> int:
+        """Return the effective context length for token budget calculations.
+
+        Resolution order:
+        1. Model in YAML config → return declared context_window_tokens exactly.
+        2. Not in YAML → query llm_shared registry; scale by _CONTEXT_HEADROOM,
+           cap at _CONTEXT_HARD_MAX.
+        3. Registry also misses → YAML fallback (4096).
+        """
+        model = model_name or self.current_model
+        if model in self.config["models"]:
+            return int(self.config["models"][model].get("context_window_tokens", 4096))
+
+        discovered = self._query_known_context_length(model)
+        if discovered > 0:
+            return min(int(discovered * _CONTEXT_HEADROOM), _CONTEXT_HARD_MAX)
+
+        default_name = self.config["models"]["default"]["name"]
+        return int(self.config["models"].get(default_name, {}).get("context_window_tokens", 4096))
 
     async def async_should_compress(self, content_tokens: int, model_name: str | None = None) -> bool:
         """Return True when content_tokens exceed the model compression threshold.

@@ -7,11 +7,10 @@
 
 """Tests for FFmpeg audio processing service."""
 
-import asyncio
 import os
 import shutil
 import tempfile
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
