@@ -9,6 +9,7 @@ has persistent top-memories without requiring a RAG retrieval round-trip.
 """
 
 import asyncio
+import hashlib
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -23,8 +24,28 @@ _YAML_PATH = Path(__file__).parent.parent / "config" / "context_windows.yaml"
 # Fallback budget when model is unknown or YAML is unavailable
 _DEFAULT_BUDGET = 600
 
-# Redis cache key template
-_CACHE_KEY = "autobot:essential_story:{model_name}"
+# Redis cache key template — fingerprint makes any fact change invalidate the cache
+_CACHE_KEY = "autobot:essential_story:{model_name}:{fingerprint}"
+
+
+def _compute_facts_fingerprint(facts: list) -> str:
+    """Return a SHA-256 hex digest of fact (id, content, category) tuples.
+
+    Order-independent: sorted before hashing so reordering never invalidates.
+    Any add, edit, or delete changes the digest.
+    """
+    items = sorted(
+        (
+            str(f.get("id", "")),
+            str(f.get("content", "")),
+            str((f.get("metadata") or {}).get("category", "")),
+        )
+        for f in facts
+    )
+    h = hashlib.sha256()
+    for triple in items:
+        h.update(("\x1f".join(triple) + "\x1e").encode("utf-8"))
+    return h.hexdigest()
 
 
 class EssentialStoryGenerator:
@@ -38,12 +59,13 @@ class EssentialStoryGenerator:
         """
         try:
             budget = await self._get_token_budget(model_name or "default")
-            cached = await self._get_cached(model_name or "default")
+            facts = await self._fetch_top_facts(budget)
+            fingerprint = _compute_facts_fingerprint(facts)
+            cached = await self._get_cached(model_name or "default", fingerprint)
             if cached is not None:
                 return cached
-            facts = await self._fetch_top_facts(budget)
             story = await self._format_output(facts)
-            await self._set_cached(model_name or "default", story)
+            await self._set_cached(model_name or "default", fingerprint, story)
             return story
         except Exception:
             logger.warning(
@@ -125,13 +147,13 @@ class EssentialStoryGenerator:
             return ""
         return "\n".join(lines)
 
-    async def _get_cached(self, model_name: str) -> str | None:
+    async def _get_cached(self, model_name: str, fingerprint: str) -> str | None:
         """Return cached story string from Redis, or None on miss/error."""
         try:
             from autobot_shared.redis_client import get_redis_client
 
             redis = await get_redis_client(database="knowledge")
-            key = _CACHE_KEY.format(model_name=model_name)
+            key = _CACHE_KEY.format(model_name=model_name, fingerprint=fingerprint)
             value = await redis.get(key)
             if value is None:
                 return None
@@ -140,14 +162,14 @@ class EssentialStoryGenerator:
             logger.debug("Essential story cache get failed", exc_info=True)
             return None
 
-    async def _set_cached(self, model_name: str, story: str) -> None:
+    async def _set_cached(self, model_name: str, fingerprint: str, story: str) -> None:
         """Write story to Redis cache with TTL_5_MINUTES TTL."""
         try:
             from autobot_shared.redis_client import get_redis_client
             from constants.ttl_constants import TTL_5_MINUTES
 
             redis = await get_redis_client(database="knowledge")
-            key = _CACHE_KEY.format(model_name=model_name)
+            key = _CACHE_KEY.format(model_name=model_name, fingerprint=fingerprint)
             await redis.setex(key, TTL_5_MINUTES, story)
         except Exception:
             logger.debug("Essential story cache set failed", exc_info=True)
