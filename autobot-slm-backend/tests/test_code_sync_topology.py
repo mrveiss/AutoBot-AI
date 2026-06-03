@@ -30,18 +30,14 @@ async def test_sync_node_remote_code_source_uses_ssh_rsync():
         ssh_user="autobot",
         ssh_port=22,
     )
-    mock_db.execute = AsyncMock(
-        return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=mock_node))
-    )
+    mock_db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=mock_node)))
 
     # Mock settings
     with patch("api.code_sync.settings") as mock_settings:
         mock_settings.external_url = "http://10.0.1.10"
 
         # Mock code source connection info (remote)
-        with patch(
-            "api.code_sync._fetch_code_source_connection_info"
-        ) as mock_fetch:
+        with patch("api.code_sync._fetch_code_source_connection_info") as mock_fetch:
             mock_fetch.return_value = (
                 "192.168.1.100",  # remote IP
                 "autobot",
@@ -49,13 +45,9 @@ async def test_sync_node_remote_code_source_uses_ssh_rsync():
             )
 
             # Mock is_local_ip to return False (remote)
-            with patch(
-                "autobot_shared.network_utils.is_local_ip", return_value=False
-            ):
+            with patch("autobot_shared.network_utils.is_local_ip", return_value=False):
                 # Mock _sync_slm_from_code_source to verify it's called
-                with patch(
-                    "api.code_sync.asyncio.create_task"
-                ) as mock_create_task:
+                with patch("api.code_sync.asyncio.create_task") as mock_create_task:
                     request = NodeSyncRequest(restart=True)
 
                     # Call sync_node
@@ -89,18 +81,14 @@ async def test_sync_node_local_code_source_uses_ansible():
         ssh_user="autobot",
         ssh_port=22,
     )
-    mock_db.execute = AsyncMock(
-        return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=mock_node))
-    )
+    mock_db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=mock_node)))
 
     # Mock settings
     with patch("api.code_sync.settings") as mock_settings:
         mock_settings.external_url = "http://10.0.1.10"
 
         # Mock code source connection info (local)
-        with patch(
-            "api.code_sync._fetch_code_source_connection_info"
-        ) as mock_fetch:
+        with patch("api.code_sync._fetch_code_source_connection_info") as mock_fetch:
             mock_fetch.return_value = (
                 "10.0.1.10",  # local IP (same as SLM)
                 "autobot",
@@ -110,9 +98,7 @@ async def test_sync_node_local_code_source_uses_ansible():
             # Mock is_local_ip to return True (local)
             with patch("autobot_shared.network_utils.is_local_ip", return_value=True):
                 # Mock _ansible_self_update to verify it's called
-                with patch(
-                    "api.code_sync.asyncio.create_task"
-                ) as mock_create_task:
+                with patch("api.code_sync.asyncio.create_task") as mock_create_task:
                     request = NodeSyncRequest(restart=True)
 
                     # Call sync_node
