@@ -71,6 +71,14 @@ CREATE TABLE IF NOT EXISTS kb_pushes (
     pushed_by TEXT NOT NULL
 );
 """),
+    (2, """
+CREATE INDEX IF NOT EXISTS idx_recordings_project_id ON recordings(project_id);
+CREATE INDEX IF NOT EXISTS idx_speakers_recording_id ON speakers(recording_id);
+CREATE INDEX IF NOT EXISTS idx_segments_recording_id ON segments(recording_id);
+CREATE INDEX IF NOT EXISTS idx_segments_speaker_id ON segments(speaker_id);
+CREATE INDEX IF NOT EXISTS idx_notes_recording_id ON notes(recording_id);
+CREATE INDEX IF NOT EXISTS idx_notes_segment_id ON notes(segment_id);
+"""),
 ]
 
 

@@ -105,7 +105,7 @@ async def test_migration_table_exists_and_version_recorded(tmp_path):
     async with aiosqlite.connect(db_path) as conn:
         cur = await conn.execute("SELECT version FROM _schema_migrations ORDER BY version")
         versions = [row[0] for row in await cur.fetchall()]
-    assert versions == [1]
+    assert versions == [1, 2]
 
 
 @pytest.mark.asyncio
@@ -120,7 +120,7 @@ async def test_migration_idempotent_on_reconnect(tmp_path):
     async with aiosqlite.connect(db_path) as conn:
         cur = await conn.execute("SELECT COUNT(*) FROM _schema_migrations")
         row = await cur.fetchone()
-    assert row[0] == 1  # version 1 recorded exactly once
+    assert row[0] == 2  # migrations 1 and 2 recorded exactly once each
 
 
 # ── GH#9058: close() uses is not None ────────────────────────────────────────
