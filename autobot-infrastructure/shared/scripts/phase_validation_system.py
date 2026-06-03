@@ -898,7 +898,9 @@ def _output_json_results(results: Dict[str, Any], output_file: str = None):
             json.dump(output, f, indent=2)
         logger.info("Results saved to %s", output_file)
     else:
-        logger.info(json.dumps(output, indent=2))
+        # Use print() instead of logger.info() to output clean JSON without "INFO: " prefix
+        # which would break JSON parsing in CI (MVA-2605)
+        print(json.dumps(output, indent=2))
 
 
 def _output_summary_results(results: Dict[str, Any]):

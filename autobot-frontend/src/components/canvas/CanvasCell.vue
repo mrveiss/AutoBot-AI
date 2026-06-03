@@ -12,7 +12,7 @@
     @click="onCellClick"
     @keydown.alt.enter.prevent="isAgentCell && cell.streamState === 'complete' ? $emit('accept') : undefined"
     @keydown.esc.prevent="isAgentCell && cell.streamState === 'complete' ? $emit('discard') : undefined"
-    @keydown.enter.prevent="isAgentCell && cell.streamState === 'complete' ? $emit('edit') : undefined"
+    @keydown.enter.exact.prevent="isAgentCell && cell.streamState === 'complete' ? $emit('edit') : undefined"
     :tabindex="0"
     :aria-label="`${isAgentCell ? 'Agent' : 'User'} cell: ${cell.streamState}`"
   >
