@@ -13,6 +13,13 @@ aliases:
 >
 > Documents below are historical planning records. Do not add new tasks here.
 
+## Subdirectories
+
+| Directory | Description |
+| --- | --- |
+| [[tasks/_index\|tasks/]] | Implementation task breakdowns |
+| [[milestones/_index\|milestones/]] | Milestone documentation |
+
 ## Implementation Plans
 
 | Document | Description |

@@ -6,6 +6,16 @@ aliases:
   - Database Index
 ---
 
+<<<<<<< HEAD
+# Database
+
+Database schema, memory graph, and Redis specifications.
+
+| Document | Description |
+| --- | --- |
+| [[MEMORY_GRAPH_QUICK_REFERENCE]] | Memory graph quick reference |
+| [[REDIS_MEMORY_GRAPH_SPECIFICATION]] | Redis memory graph specification |
+=======
 # Database Documentation
 
 Database specifications, memory graph design, and quick reference guides.
@@ -22,3 +32,4 @@ Database specifications, memory graph design, and quick reference guides.
 - [[../configuration/_index\|Configuration]] — Database configuration
 - [[../migration/_index\|Migration]] — Database migration guides
 - [[../monitoring/_index\|Monitoring]] — Database monitoring
+>>>>>>> origin/Dev_new_gui

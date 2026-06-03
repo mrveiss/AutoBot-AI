@@ -18,7 +18,7 @@ Audit reports covering frontend components, code quality, and system reviews.
 
 ## Related Sections
 
-- [[../analysis/_index\|Analysis]] — Analysis reports and findings
-- [[../discovery/_index\|Discovery]] — Discovery and exploration reports
-- [[../research/_index\|Research]] — Research reports
-- [[../fixes/_index\|Fixes]] — Fix documentation
+- [[../analysis/_index|Analysis]] — Analysis reports and findings
+- [[../discovery/_index|Discovery]] — Discovery and exploration reports
+- [[../research/_index|Research]] — Research reports
+- [[../fixes/_index|Fixes]] — Fix documentation

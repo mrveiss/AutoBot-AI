@@ -19,7 +19,7 @@ Reference guides for environment variables, service ports, and system configurat
 
 ## Related Sections
 
-- [[../user-guide/_index\|User Guide]] — End-user configuration instructions
-- [[../monitoring/_index\|Monitoring]] — Monitoring configuration
-- [[../database/_index\|Database]] — Database configuration
-- [[../connectors/_index\|Connectors]] — Connector configuration
+- [[../user-guide/_index|User Guide]] — End-user configuration instructions
+- [[../monitoring/_index|Monitoring]] — Monitoring configuration
+- [[../database/_index|Database]] — Database configuration
+- [[../connectors/_index|Connectors]] — Connector configuration

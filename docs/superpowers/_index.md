@@ -6,6 +6,18 @@ aliases:
   - Superpowers Index
 ---
 
+<<<<<<< HEAD
+# Superpowers
+
+Implementation plans and design specifications for AutoBot-AI features.
+
+## Sub-sections
+
+| Section | Description |
+| --- | --- |
+| [[plans/_index\|Plans]] | Feature implementation plans |
+| [[specs/_index\|Specs]] | Feature design specifications |
+=======
 # Superpowers Documentation
 
 Implementation plans and design specifications for AutoBot feature development.
@@ -56,3 +68,4 @@ Implementation plans and design specifications for AutoBot feature development.
 - [[../design/_index\|Design]] — Technical design documents
 - [[../project/_index\|Project]] — Project-level plans
 - [[../releases/_index\|Releases]] — Releases resulting from these plans
+>>>>>>> origin/Dev_new_gui

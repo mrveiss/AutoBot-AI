@@ -8,6 +8,12 @@ aliases:
 
 # Screenshots
 
+<<<<<<< HEAD
+UI screenshots and visual documentation.
+
+This folder contains screenshots and visual assets used in documentation.
+See parent docs sections for context on where these images are referenced.
+=======
 Application screenshots showcasing AutoBot features and UI.
 
 ## Screenshots
@@ -25,3 +31,4 @@ Application screenshots showcasing AutoBot features and UI.
 
 - [[../designs/_index\|Designs]] — Design mockups and wireframes
 - [[../user-guide/_index\|User Guide]] — User guides referencing these screenshots
+>>>>>>> origin/Dev_new_gui
