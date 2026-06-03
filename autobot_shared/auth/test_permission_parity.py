@@ -14,7 +14,6 @@ package is not on sys.path so the shared test suite stays green in isolation
 while still enforcing parity when run from the SLM backend directory.
 """
 
-import pytest
 
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
 
@@ -44,7 +43,7 @@ def test_every_permission_assigned_to_at_least_one_role():
     """Every Permission enum value must appear in ROLE_PERMISSIONS for at least one role."""
     uncovered = _all_perm_values() - _all_role_perm_values()
     assert not uncovered, (
-        f"Permissions defined in the enum but not assigned to any role:\n"
+        "Permissions defined in the enum but not assigned to any role:\n"
         + "\n".join(f"  {p}" for p in sorted(uncovered))
         + "\nAdd them to at least one role in autobot_shared/auth/permissions.py."
     )
@@ -67,7 +66,7 @@ def test_admin_role_contains_all_permissions():
     admin_values = {p.value if isinstance(p, Permission) else p for p in ROLE_PERMISSIONS[Role.ADMIN]}
     required = _all_perm_values() - {Permission.SHELL_EXECUTE.value}
     missing = required - admin_values
-    assert not missing, f"ROLE_PERMISSIONS[Role.ADMIN] is missing permissions:\n" + "\n".join(
+    assert not missing, "ROLE_PERMISSIONS[Role.ADMIN] is missing permissions:\n" + "\n".join(
         f"  {p}" for p in sorted(missing)
     )
 
