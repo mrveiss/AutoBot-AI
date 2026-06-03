@@ -37,7 +37,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useCanvasStore } from '@/stores/useCanvasStore'
 import { useCanvasAutoSave } from '@/composables/useCanvasAutoSave'
 import { useCanvasWebSocket } from '@/composables/useCanvasWebSocket'
-import { useApi } from '@/composables/useApi'
+import { useApiClient } from '@/plugins/api'
 import CanvasSplitLayout from './CanvasSplitLayout.vue'
 import CanvasPanel from './CanvasPanel.vue'
 import type { CanvasLayoutVariant } from '@/constants/canvas'
@@ -56,7 +56,7 @@ const emit = defineEmits<{
 const store = useCanvasStore()
 const layoutVariant = ref<CanvasLayoutVariant>('split')
 const loadError = ref(false)
-const api = useApi()
+const api = useApiClient()
 
 async function saveCanvas(canvasId: string, cells: unknown[]) {
   await api.put(`/api/canvas/${canvasId}`, { cells })

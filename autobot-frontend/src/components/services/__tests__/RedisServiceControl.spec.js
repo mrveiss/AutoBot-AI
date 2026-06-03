@@ -22,6 +22,8 @@ import { ref } from 'vue';
 import en from '@/i18n/locales/en.json';
 import RedisServiceControl from '@/components/services/RedisServiceControl.vue';
 
+const REDIS_VM_HOST = '172.16.168.23'
+
 // Create i18n with real English messages so $t() returns translated text (#2641)
 const createTestI18n = () =>
   createI18n({
@@ -43,7 +45,7 @@ const createDefaultMockReturn = (overrides = {}) => ({
     connections: 42,
     commands_processed: 500000,
     last_check: new Date().toISOString(),
-    vm_info: { host: '172.16.168.23', name: 'Redis VM', ssh_accessible: true },
+    vm_info: { host: REDIS_VM_HOST, name: 'Redis VM', ssh_accessible: true },
   }),
   healthStatus: ref({
     overall_status: 'healthy',
