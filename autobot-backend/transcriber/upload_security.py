@@ -25,8 +25,6 @@ MAX_FILE_SIZE = 500 * 1024 * 1024
 class UploadSecurityError(Exception):
     """Exception raised for upload security violations."""
 
-    pass
-
 
 def get_upload_base_dir() -> Path:
     """Get the base upload directory from environment or default.
