@@ -26,13 +26,24 @@ What remains here is shared infra reused across the new stack:
 # Adapter registry (Issue #1403)
 from .adapters import AdapterBase, AdapterRegistry, get_adapter_registry
 
-# Pluggable LLM observability (GH#6593)
+# Pluggable LLM observability (GH#6593, GH#9012)
 from .observability import LLMObserver, register
+from .observability.langfuse_observer import LangFuseObserver
+from .observability.langsmith_observer import LangSmithObserver
 from .observability.otel_observer import OTELObserver
 from .observability.prometheus_observer import PrometheusObserver
+from .observability.tracing_config import LangFuseTracingConfig, LangSmithTracingConfig
 
 register(OTELObserver())
 register(PrometheusObserver())
+
+_langfuse_cfg = LangFuseTracingConfig()
+if _langfuse_cfg.enabled:
+    register(LangFuseObserver(_langfuse_cfg))
+
+_langsmith_cfg = LangSmithTracingConfig()
+if _langsmith_cfg.enabled:
+    register(LangSmithObserver(_langsmith_cfg))
 
 # Provider registry and base (canonical imports for MVA-62 consolidation)
 # These were in llm_providers/ but are now consolidated in llm_shared
