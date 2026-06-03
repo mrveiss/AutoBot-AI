@@ -15,7 +15,7 @@ from autobot_shared.logging_manager import get_logger
 from media.audio.diarization_service import get_diarization_service
 from media.audio.ffmpeg_service import get_ffmpeg_service
 from transcriber.database import TranscriberDatabase, get_transcriber_db
-from transcriber.models import RecordingStatus, TranscriptionSegment
+from transcriber.models import RecordingStatus
 from voice_processing.language_detection import detect_language
 from voice_processing.providers import get_speech_provider_registry
 

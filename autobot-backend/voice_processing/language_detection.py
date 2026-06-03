@@ -8,7 +8,6 @@ Detects language from audio files for speech provider routing.
 Part of Issue MVA-2185.
 """
 
-import asyncio
 import os
 from typing import Optional
 

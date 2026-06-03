@@ -117,7 +117,7 @@ class PaperclipClient:
         run_id: str | None = None,
         comment_dedup_ttl: int = _COMMENT_DEDUP_TTL_SECONDS,
     ) -> None:
-        self._api_url = (api_url or os.environ.get("PAPERCLIP_API_URL", "")).rstrip("/")
+        self._api_url = (api_url or os.environ.get("PAPERCLIP_API_URL") or "").rstrip("/")
         self._api_key = api_key or os.environ.get("PAPERCLIP_API_KEY", "")
         self._run_id = run_id or os.environ.get("PAPERCLIP_RUN_ID", "")
         self._comment_dedup_ttl = comment_dedup_ttl
