@@ -302,6 +302,7 @@ import ConnectionSettingsPanel from '@/components/desktop/ConnectionSettingsPane
 import FeatureFlagsSettingsPanel from '@/components/settings/FeatureFlagsSettingsPanel.vue'
 import PresetsSettingsPanel from '@/components/settings/PresetsSettingsPanel.vue'
 import PushNotificationSettingsPanel from '@/components/settings/PushNotificationSettingsPanel.vue'
+import MobileDevicePairingPanel from '@/components/settings/MobileDevicePairingPanel.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -315,7 +316,7 @@ const { showToast } = useNotificationBus()
 
 logger.debug('Settings view initialized')
 
-type PreferenceTab = 'appearance' | 'language' | 'voice' | 'webresearch' | 'apikeys' | 'connection' | 'featureflags' | 'presets' | 'notifications'
+type PreferenceTab = 'appearance' | 'language' | 'voice' | 'webresearch' | 'apikeys' | 'connection' | 'featureflags' | 'presets' | 'telegram' | 'notifications' | 'mobile'
 const activeTab = ref<PreferenceTab>('appearance')
 const showApiKeyWizard = ref(false)
 
