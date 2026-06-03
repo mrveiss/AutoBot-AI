@@ -1,6 +1,7 @@
 """
 Test SSRF protection in ExternalSkillImporter (MVA-2584)
 """
+
 import pytest
 
 from skills.external_importer import ExternalSkillImporter

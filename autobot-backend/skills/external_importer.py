@@ -290,9 +290,7 @@ class ExternalSkillImporter:
         # SSRF Guard: Validate URL scheme before making request
         parsed = urlparse(url)
         if parsed.scheme not in ("http", "https"):
-            raise RuntimeError(
-                f"Catalog URL must use http or https scheme, got: {parsed.scheme!r}"
-            )
+            raise RuntimeError(f"Catalog URL must use http or https scheme, got: {parsed.scheme!r}")
 
         if not parsed.netloc:
             raise RuntimeError(f"Catalog URL missing hostname: {url!r}")
