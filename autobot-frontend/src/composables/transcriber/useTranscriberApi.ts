@@ -97,10 +97,9 @@ export function useTranscriberApi() {
 
     // Export
     exportRecording: (recordingId: number, format: 'docx' | 'pdf' | 'srt' | 'vtt', options = {}) =>
-      fetch(`${base}/recordings/${recordingId}/export`, {
+      api.rawRequest(`${base}/recordings/${recordingId}/export`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ format, ...options }),
+        body: { format, ...options },
       }),
 
     // AI
