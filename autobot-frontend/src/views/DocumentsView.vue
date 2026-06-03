@@ -136,6 +136,24 @@
     <div v-if="errorMessage" class="error-toast" role="alert">
       {{ errorMessage }}
     </div>
+
+    <!-- Transcriber Projects Section -->
+    <section v-if="transcriberProjects.length" class="transcriber-section">
+      <div class="section-header">
+        <h3>Transcriber Projects</h3>
+        <RouterLink :to="{ name: 'transcriber-projects' }" class="btn-link">View all</RouterLink>
+      </div>
+      <div class="projects-mini-grid">
+        <RouterLink
+          v-for="p in transcriberProjects"
+          :key="p.id"
+          :to="{ name: 'transcriber-project-detail', params: { projectId: p.id } }"
+          class="mini-card"
+        >
+          🎙 {{ p.name }}
+        </RouterLink>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -146,6 +164,8 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import AIDocumentEditor from '@/components/documents/AIDocumentEditor.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { useAIDocument, type AIDocument } from '@/composables/useAIDocument'
+import { useTranscriberApi } from '@/composables/transcriber/useTranscriberApi'
+import type { Project } from '@/composables/transcriber/useTranscriberApi'
 import { createLogger } from '@/utils/debugUtils'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
@@ -153,6 +173,8 @@ import { useInitialFocus } from '@/composables/useInitialFocus'
 import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
 
 const logger = createLogger('DocumentsView')
+const transcriberApi = useTranscriberApi()
+const transcriberProjects = ref<Project[]>([])
 
 const PAGE_SIZE = 50
 
@@ -176,6 +198,11 @@ const errorMessage = ref<string | null>(null)
 
 onMounted(async () => {
   await loadPage()
+  try {
+    transcriberProjects.value = (await transcriberApi.listProjects()).slice(0, 4)
+  } catch {
+    /* transcriber may be disabled */
+  }
 })
 
 // ---------------------------------------------------------------------------
