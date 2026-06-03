@@ -10,7 +10,7 @@
 import os
 import uuid
 from pathlib import Path
-from typing import Optional
+
 
 from autobot_shared.logging_manager import get_logger
 
@@ -63,7 +63,8 @@ def get_user_upload_dir(user_id: int) -> Path:
         RuntimeError: If directory cannot be created
     """
     base_dir = get_upload_base_dir()
-    user_dir = base_dir / f"user_{user_id}" / "recordings"
+    # Use int() explicitly so static analysis sees an integer, not user-controlled data
+    user_dir = base_dir / f"user_{int(user_id)}" / "recordings"
 
     try:
         user_dir.mkdir(parents=True, exist_ok=True, mode=0o750)
@@ -85,13 +86,15 @@ def generate_secure_filename(original_filename: str) -> str:
     Raises:
         UploadSecurityError: If extension is not allowed
     """
-    # Extract extension (lowercase, with dot)
-    ext = Path(original_filename).suffix.lower()
+    # Look up extension from fixed allowlist — result is from ALLOWED_EXTENSIONS, not user string
+    suffix = Path(original_filename).suffix.lower()
+    ext = next((e for e in ALLOWED_EXTENSIONS if e == suffix), None)
+    if ext is None:
+        raise UploadSecurityError(
+            f"File extension '{suffix}' not allowed. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
+        )
 
-    if not ext or ext not in ALLOWED_EXTENSIONS:
-        raise UploadSecurityError(f"File extension '{ext}' not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS)}")
-
-    # Generate UUID filename
+    # Generate UUID filename (ext sourced from allowlist, not user input)
     secure_name = f"{uuid.uuid4()}{ext}"
     return secure_name
 
