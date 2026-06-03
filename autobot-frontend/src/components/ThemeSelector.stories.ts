@@ -9,7 +9,6 @@
 
 import type { Meta, StoryObj } from '@storybook/vue3'
 import { useTheme } from '@/composables/useTheme'
-import { ref } from 'vue'
 
 const meta = {
   title: 'Theme/Theme System',

@@ -31,6 +31,7 @@ class Recording:
     id: int
     filename: str
     file_path: str
+    user_id: str
     duration: Optional[float]
     language: Optional[str]
     status: RecordingStatus
@@ -69,6 +70,7 @@ class RecordingResponse(BaseModel):
     id: int
     filename: str
     file_path: str
+    user_id: str
     duration: Optional[float]
     language: Optional[str]
     status: RecordingStatus

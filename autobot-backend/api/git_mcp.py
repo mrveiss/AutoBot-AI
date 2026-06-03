@@ -44,9 +44,7 @@ from api.schemas_code import (
     GitStatusRequest,
     MCPTool,
     SubscribeResourceRequest,
-    SubscribeResourceResponse,
     UnsubscribeResourceRequest,
-    UnsubscribeResourceResponse,
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
