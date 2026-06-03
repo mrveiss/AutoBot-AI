@@ -165,6 +165,7 @@ test.describe('Message Display Toggles', () => {
     // Should be same or more messages (depending on if there were debug messages in history)
     expect(messagesAfterToggle).toBeGreaterThanOrEqual(messagesBeforeToggle);
 
+    // eslint-disable-next-line no-console
     console.log(`Historical message filtering test: ${messagesBeforeToggle} -> ${messagesAfterToggle} messages`);
   });
 
