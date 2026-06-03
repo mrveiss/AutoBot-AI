@@ -68,6 +68,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import type { CodePayload } from '@/types/canvas'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('CodeCell')
 
 const props = defineProps<{
   richPayload: CodePayload | null
@@ -89,14 +92,16 @@ const codeContent = computed(() => props.richPayload?.code)
 const codeLanguage = computed(() => props.richPayload?.language || '')
 
 // Lazy-load highlight.js and DOMPurify
+let _cachedLibs: { hljs: typeof import('highlight.js')['default']; dompurify: typeof import('dompurify')['default'] } | null = null
 async function loadLibraries() {
-  if (highlightJsLoaded.value) return
+  if (_cachedLibs) return _cachedLibs
 
   try {
     const hljs = await import('highlight.js')
     const dompurify = await import('dompurify')
     highlightJsLoaded.value = true
-    return { hljs: hljs.default, dompurify: dompurify.default }
+    _cachedLibs = { hljs: hljs.default, dompurify: dompurify.default }
+    return _cachedLibs
   } catch (err) {
     renderError.value = `Failed to load libraries: ${err instanceof Error ? err.message : String(err)}`
     throw err
@@ -104,12 +109,17 @@ async function loadLibraries() {
 }
 
 // Highlight code with syntax highlighting
-const highlightedCode = computed(async () => {
-  if (!codeContent.value) return ''
+const highlightedCode = ref<string>('')
+
+async function updateHighlightedCode() {
+  if (!codeContent.value) {
+    highlightedCode.value = ''
+    return
+  }
 
   try {
     const libs = await loadLibraries()
-    if (!libs) return ''
+    if (!libs) return
 
     const { hljs, dompurify } = libs
 
@@ -126,12 +136,12 @@ const highlightedCode = computed(async () => {
     }
 
     // Sanitize HTML before rendering
-    return dompurify.sanitize(highlighted, { ALLOWED_TAGS: ['span'], ALLOWED_ATTR: ['class'] })
+    highlightedCode.value = dompurify.sanitize(highlighted, { ALLOWED_TAGS: ['span'], ALLOWED_ATTR: ['class'] })
   } catch (err) {
     renderError.value = `Syntax highlight failed: ${err instanceof Error ? err.message : String(err)}`
-    return codeContent.value
+    highlightedCode.value = codeContent.value ?? ''
   }
-})
+}
 
 // Copy code to clipboard
 async function copyToClipboard() {
@@ -148,21 +158,22 @@ async function copyToClipboard() {
     }, 2000)
   } catch (err) {
     copyFeedback.value = '❌ Copy failed'
-    console.error('[CodeCell] copy failed:', err)
+    logger.error('copy failed:', err)
   }
 }
 
-// Watch payload changes
+// Watch payload changes and update highlighted code
 watch(() => props.richPayload, () => {
   renderError.value = ''
   copyFeedback.value = ''
+  updateHighlightedCode()
 }, { immediate: true })
 
 // Initial load
 onMounted(() => {
   if (props.richPayload) {
-    loadLibraries().catch(err => {
-      console.error('[CodeCell] init error:', err)
+    updateHighlightedCode().catch(err => {
+      logger.error('init error:', err)
     })
   }
 })

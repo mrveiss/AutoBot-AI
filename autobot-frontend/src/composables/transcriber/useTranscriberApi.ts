@@ -1,7 +1,7 @@
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
-import { useApi } from '@/composables/useApi'
+import { useApiClient } from '@/plugins/api'
 
 export interface Project {
   id: number
@@ -60,7 +60,7 @@ export interface KbPushStatus {
 }
 
 export function useTranscriberApi() {
-  const api = useApi()
+  const api = useApiClient()
   const base = '/api/transcriber'
 
   return {
