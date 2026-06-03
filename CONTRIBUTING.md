@@ -143,10 +143,6 @@ npm run dev
 
 ---
 
-## Bounties
-
-Some issues are tagged with a `bounty` label. These carry financial rewards via [Polar.sh](https://polar.sh/mrveiss/AutoBot-AI). Check there for amounts and eligibility.
-
 ## Good First Issues
 
 New to the codebase? Start with issues tagged [`good-first-issue`](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aopen+label%3Agood-first-issue).
