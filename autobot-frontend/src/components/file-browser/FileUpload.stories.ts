@@ -27,7 +27,8 @@ export const InlineUsage: Story = {
     `,
     methods: {
       onFilesSelected(files: FileList) {
-        console.log('Files selected:', Array.from(files).map(f => f.name)); // noqa: console
+        // eslint-disable-next-line no-console
+        console.log('Files selected:', Array.from(files).map(f => f.name));
       },
     },
   }),
