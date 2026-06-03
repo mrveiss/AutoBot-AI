@@ -8,6 +8,14 @@ aliases:
 
 # Developer Documentation
 
+## Subdirectories
+
+| Directory | Description |
+| --- | --- |
+| [[audits/_index\|audits/]] | Code quality and architecture audits |
+| [[i18n/_index\|i18n/]] | Internationalization and translation docs |
+| [[skills/_index\|skills/]] | Skills system documentation |
+
 ## Core References
 
 | Document | Description |
