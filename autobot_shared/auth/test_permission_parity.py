@@ -14,7 +14,6 @@ package is not on sys.path so the shared test suite stays green in isolation
 while still enforcing parity when run from the SLM backend directory.
 """
 
-
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
 
 # ---------------------------------------------------------------------------
