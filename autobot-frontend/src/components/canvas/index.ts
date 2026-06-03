@@ -3,7 +3,7 @@
 // Author: mrveiss
 export { default as CanvasView } from './CanvasView.vue'
 export { default as CanvasCell } from './CanvasCell.vue'
-export { default as ChartCell } from './ChartCell.vue'
+export { default as ChartCell } from '../artifact-cells/ChartCell.vue'
 export { default as CodeCell } from './CodeCell.vue'
 export { default as CanvasSplitLayout } from './CanvasSplitLayout.vue'
 export { default as CanvasPanel } from './CanvasPanel.vue'
