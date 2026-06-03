@@ -21,8 +21,8 @@ from voice_processing.providers import (
     ProviderRegistry,
     SpeechProvider,
     TranscriptSegment,
-    get_speech_provider_registry,
     get_speech_provider,
+    get_speech_provider_registry,
 )
 from voice_processing.providers.generic_provider import GenericProvider
 from voice_processing.providers.lv.late_provider import LateProvider
