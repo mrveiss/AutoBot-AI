@@ -65,6 +65,15 @@
                   ({{ message.metadata.model }})
                 </span>
               </span>
+              <!-- MVA-1993: Lightweight mode cost indicator -->
+              <span
+                v-if="message.sender === 'assistant' && message.metadata?.lightweight_mode_used"
+                class="message-type-badge badge-info"
+                :title="$t('chat.lightweightModeTooltip', { default: '~90% cheaper than standard mode' })"
+              >
+                <i class="fas fa-bolt mr-1"></i>
+                {{ $t('chat.lightweightMode', { default: 'Lightweight' }) }}
+              </span>
               <!-- Issue #1310: Visible type badge for typed messages -->
               <span
                 v-if="getMessageTypeBadge(message)"
@@ -137,6 +146,29 @@
           :step="message.metadata.step as any"
         />
 
+        <!-- GH#9015: AI-generated image message -->
+        <ImageCell
+          v-else-if="(message.type === 'image' || message.metadata?.display_type === 'image') && message.metadata?.image_payload"
+          :rich-payload="(message.metadata.image_payload as Record<string, unknown>)"
+        />
+
+        <!-- MVA-2006: Context summary message -->
+        <div
+          v-else-if="message.type === 'summary' || message.metadata?.is_summary"
+          class="message-content summary-message"
+        >
+          <div class="summary-header">
+            <span class="summary-icon">📝</span>
+            <span class="summary-title">{{ $t('chat.contextWindow.summaryTitle') }}</span>
+          </div>
+          <details class="summary-details">
+            <summary class="summary-toggle">
+              {{ $t('chat.contextWindow.summaryToggle') }}
+            </summary>
+            <div class="summary-content message-text" v-html="formatMessageContent(message.content, message.id)"></div>
+          </details>
+        </div>
+
         <!-- Message Content -->
         <div v-else class="message-content" :class="getContentClass(message)">
           <!-- Streaming content with typing indicator -->
@@ -157,6 +189,10 @@
           <!-- Message Metadata -->
           <div v-if="message.metadata && shouldShowMetadata(message)" class="message-metadata">
             <div class="metadata-items">
+              <!-- GH#8993: Thinking used indicator -->
+              <span v-if="message.sender === 'assistant' && message.metadata.thinking_used" class="metadata-item thinking-used-badge">
+                🧠 {{ $t('chat.messages.thinkingUsed', 'Extended thinking') }}
+              </span>
               <span v-if="message.metadata.model" class="metadata-item">
                 <Icon name="robot" />
                 {{ message.metadata.model }}
@@ -532,6 +568,7 @@ import BaseModal from '@/components/ui/BaseModal.vue'
 import OverseerPlanMessage from '@/components/chat/OverseerPlanMessage.vue'
 import OverseerStepMessage from '@/components/chat/OverseerStepMessage.vue'
 import CitationsDisplay from '@/components/chat/CitationsDisplay.vue'
+import ImageCell from '@/components/artifact-cells/ImageCell.vue'
 import { formatFileSize, formatTime } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { useCommandApproval } from '@/composables/useCommandApproval'
@@ -1229,6 +1266,50 @@ onMounted(async () => {
   border-radius: var(--radius-xl);
 }
 
+/* MVA-2006: SUMMARY MESSAGES - Context compression indicator */
+.summary-message {
+  @apply bg-blue-50 border border-blue-200 rounded-lg p-3 mb-2;
+}
+
+.summary-header {
+  @apply flex items-center gap-2 font-semibold text-blue-900 mb-2;
+}
+
+.summary-icon {
+  @apply text-xl;
+}
+
+.summary-title {
+  @apply text-sm;
+}
+
+.summary-details {
+  @apply mt-2;
+}
+
+.summary-toggle {
+  @apply cursor-pointer text-sm text-blue-700 hover:text-blue-900 select-none;
+  list-style: none;
+}
+
+.summary-toggle::marker {
+  display: none;
+}
+
+.summary-toggle::before {
+  content: '▶ ';
+  display: inline-block;
+  transition: transform 0.2s;
+}
+
+.summary-details[open] .summary-toggle::before {
+  transform: rotate(90deg);
+}
+
+.summary-content {
+  @apply mt-2 pt-2 border-t border-blue-200 text-sm text-gray-700;
+}
+
 /* ============================================
    MESSAGE TYPE STYLING
    Different visual styles for message types:
@@ -1645,6 +1726,11 @@ onMounted(async () => {
 
 .metadata-item {
   @apply flex items-center gap-1;
+}
+
+/* GH#8993: Thinking used badge */
+.thinking-used-badge {
+  @apply bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded text-xs font-medium border border-amber-200;
 }
 
 .message-attachments {

@@ -49,9 +49,11 @@
           :session-info="sessionInfo"
           :connection-status="connectionStatus"
           :is-connected="isConnected"
+          :context-window-props="contextWindowProps"
           @export-session="exportSession"
           @clear-session="clearSession"
           @toggle-mobile-sidebar="showMobileSidebar = !showMobileSidebar"
+          @open-settings="showChatSettings = true"
           class="shrink-0"
         >
           <!-- File Panel Toggle Button (injected into header) -->
@@ -256,6 +258,12 @@
       v-if="showVoiceOverlay"
       @close="showVoiceOverlay = false"
     />
+
+    <!-- Chat Settings Modal (MVA-2006) -->
+    <ChatSettingsModal
+      :show="showChatSettings"
+      @close="showChatSettings = false"
+    />
   </ErrorBoundary>
 </template>
 
@@ -277,6 +285,9 @@ import { useAppStore } from '@/stores/useAppStore'
 import { useNotificationBus } from '@/composables/useNotificationBus'
 import { usePreferences } from '@/composables/usePreferences'
 import { useOverseerAgent } from '@/composables/useOverseerAgent'
+// GH#9062: migrated from useGlobalWebSocket — context events flow through
+// LiveEventManager (global channel), so useEventBus is the correct subscriber
+import { useEventBus } from '@/composables/useEventBus'
 import ApiClient from '@/utils/ApiClient'
 import batchApiService from '@/services/BatchApiService'
 // MIGRATED: Using AppConfig.js for better configuration management
@@ -300,6 +311,7 @@ import CommandPermissionDialog from '@/components/ui/CommandPermissionDialog.vue
 import WorkflowProgressWidget from '@/components/workflow/WorkflowProgressWidget.vue'
 import VoiceConversationOverlay from './VoiceConversationOverlay.vue'
 import VoiceConversationPanel from './VoiceConversationPanel.vue'
+import ChatSettingsModal from './ChatSettingsModal.vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 // Issue #3232: chain-of-thought reasoning trace
 import ReasoningTrace from './ReasoningTrace.vue'
@@ -308,6 +320,8 @@ import { useReasoningTrace } from '@/composables/useReasoningTrace'
 import { useToolApproval, type PendingToolApproval } from '@/composables/useToolApproval'
 // Issue #4414: multi-model comparison
 import MultiModelChat from './MultiModelChat.vue'
+// GH#8990: context window usage indicator
+import { useContextWindow } from '@/composables/chat/useContextWindow'
 
 // i18n
 const { t } = useI18n()
@@ -327,6 +341,20 @@ const {
   isActive: cotIsActive,
   clear: cotClear,
 } = useReasoningTrace(store.currentSessionId)
+
+// GH#8990: context window usage indicator
+const _ctxWindow = useContextWindow(
+  computed(() => store.currentSession?.messages ?? []),
+  computed(() => store.settings.model),
+)
+const contextWindowProps = computed(() => ({
+  tokensUsed: _ctxWindow.tokensUsed.value,
+  contextWindow: _ctxWindow.contextWindow.value,
+  usagePercent: _ctxWindow.usagePercent.value,
+  isWarning: _ctxWindow.isWarning.value,
+  isCritical: _ctxWindow.isCritical.value,
+  hasData: _ctxWindow.hasData.value,
+}))
 
 // Issue #4952: agent-loop tool approval via POST /api/agent-terminal/tools/approve/{id}
 const {
@@ -415,7 +443,7 @@ const {
 const voiceConversation = useVoiceConversation()
 const showVoiceOverlay = ref(false)
 const showVoicePanel = ref(false)
-const { voiceDisplayMode } = usePreferences()
+const { voiceDisplayMode, contextOverflowMode } = usePreferences()
 
 function openVoiceConversation(): void {
   if (voiceDisplayMode.value === 'sidepanel') {
@@ -437,6 +465,45 @@ const notify = (message: string, type: 'info' | 'success' | 'warning' | 'error' 
   showToast(message, type, type === 'error' ? 0 : type === 'warning' ? 6000 : 4000)
 }
 
+// MVA-2006: Context window overflow WebSocket listeners
+// GH#9062: migrated to useEventBus for channel-based event subscriptions
+const { subscribe } = useEventBus()
+const contextWarningShown = ref(false)
+
+// Listen for context_warning events (80% threshold)
+subscribe('global', (event) => {
+  if (event.event_type === 'context_warning') {
+    const data = event.payload as any
+    logger.debug('[ContextWindow] Warning event received:', data)
+
+    // Only show toast if mode is 'auto' or 'warn', and not already shown
+    if (contextOverflowMode.value !== 'disabled' && !contextWarningShown.value) {
+      const percent = data.usage_percent ?? _ctxWindow.usagePercent.value
+      notify(
+        t('chat.contextWindow.warningToast', { percent: percent.toFixed(1) }),
+        'warning'
+      )
+      contextWarningShown.value = true
+    }
+  } else if (event.event_type === 'context_compressed') {
+    const data = event.payload as any
+    logger.info('[ContextWindow] Context compressed:', data)
+
+    // Reset warning flag so next session can show it again
+    contextWarningShown.value = false
+
+    // Notify user that compression occurred
+    if (contextOverflowMode.value === 'auto') {
+      notify(t('chat.contextWindow.compressedToast'), 'info')
+    }
+  }
+})
+
+// Reset warning flag when session changes
+watch(() => store.currentSessionId, () => {
+  contextWarningShown.value = false
+})
+
 // Issue #4414: multi-model compare panel toggle
 const showComparePanel = ref(false)
 
@@ -447,6 +514,8 @@ const showWorkflowProgress = ref(false)
 const showFilePanel = ref(false)
 // Mobile sidebar overlay (#1804)
 const showMobileSidebar = ref(false)
+// Chat settings modal (MVA-2006)
+const showChatSettings = ref(false)
 
 // Dialog data
 const currentChatContext = ref<any>(null)

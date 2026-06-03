@@ -94,6 +94,12 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "vite"
         update-types: ["version-update:semver-major"]
+      - dependency-name: "vega"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "vega-embed"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "vega-lite"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "npm"
     directory: "/autobot-slm-frontend"

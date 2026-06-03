@@ -5,6 +5,8 @@
   "description": "Simple example plugin demonstrating basic plugin structure",
   "author": "AutoBot Team",
   "entry_point": "plugins.core_plugins.hello_plugin.main",
+  "capabilities": [],
+  "trust_tier": "official",
   "dependencies": [],
   "config_schema": {
     "type": "object",

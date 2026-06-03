@@ -177,6 +177,16 @@ export const WIDGET_STYLES = `
   40%           { transform: scale(1);   opacity: 1; }
 }
 
+/* ── Error banner ───────────────────────────────────────────────────────── */
+.ab-error {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: #b91c1c;
+  background: #fef2f2;
+  border-top: 1px solid #fecaca;
+}
+
 /* ── Input row ──────────────────────────────────────────────────────────── */
 .ab-input-row {
   display: flex;

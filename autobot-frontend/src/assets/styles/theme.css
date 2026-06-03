@@ -12,11 +12,8 @@
    * COLOR SYSTEM
    * ============================================ */
 
-  /* Primary Colors - Teal for technical aesthetic */
-  --color-primary: #0d9488;
-  --color-primary-hover: #0f766e;
-  --color-primary-light: #5eead4;
-  --color-primary-dark: #115e59;
+  /* Primary Colors - Defined in design-tokens.css (electric blue by default)
+   * Accent color variants below override via [data-accent-color] attribute */
 
   /* Secondary Colors */
   --color-secondary: #64748b;
@@ -338,11 +335,7 @@
  * ============================================ */
 
 [data-theme="dark"] {
-  /* Primary Colors - Lighter teal for dark mode */
-  --color-primary: #2dd4bf;
-  --color-primary-hover: #5eead4;
-  --color-primary-light: #99f6e4;
-  --color-primary-dark: #14b8a6;
+  /* Primary Colors inherited from design-tokens.css (electric blue) */
 
   /* Background Colors - Slate palette */
   --bg-primary: #0f172a;
@@ -376,11 +369,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    /* Primary Colors - Lighter teal for dark mode */
-    --color-primary: #2dd4bf;
-    --color-primary-hover: #5eead4;
-    --color-primary-light: #99f6e4;
-    --color-primary-dark: #14b8a6;
+    /* Primary Colors inherited from design-tokens.css (electric blue) */
 
     /* Background Colors - Slate palette */
     --bg-primary: #0f172a;

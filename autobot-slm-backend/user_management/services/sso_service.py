@@ -56,6 +56,37 @@ class SSOAuthenticationError(SSOServiceError):
 class SSOService(BaseService):
     """SSO provider management and authentication service."""
 
+    @staticmethod
+    def get_provider_endpoint_template(provider_type: str, domain: str = "") -> dict[str, str]:
+        """Return pre-filled OIDC endpoint config for known provider types."""
+        templates = {
+            SSOProviderType.OKTA.value: {
+                "authorize_url": f"https://{domain}/oauth2/v1/authorize",
+                "token_url": f"https://{domain}/oauth2/v1/token",
+                "userinfo_url": f"https://{domain}/oauth2/v1/userinfo",
+                "scope": "openid email profile groups",
+            },
+            SSOProviderType.MICROSOFT_ENTRA.value: {
+                "authorize_url": f"https://login.microsoftonline.com/{domain}/oauth2/v2.0/authorize",
+                "token_url": f"https://login.microsoftonline.com/{domain}/oauth2/v2.0/token",
+                "userinfo_url": "https://graph.microsoft.com/oidc/userinfo",
+                "scope": "openid email profile",
+            },
+            SSOProviderType.GOOGLE_WORKSPACE.value: {
+                "authorize_url": "https://accounts.google.com/o/oauth2/v2/auth",
+                "token_url": "https://oauth2.googleapis.com/token",
+                "userinfo_url": "https://openidconnect.googleapis.com/v1/userinfo",
+                "scope": "openid email profile",
+            },
+            SSOProviderType.GITHUB.value: {
+                "authorize_url": "https://github.com/login/oauth/authorize",
+                "token_url": "https://github.com/login/oauth/access_token",
+                "userinfo_url": "https://api.github.com/user",
+                "scope": "user:email read:user",
+            },
+        }
+        return templates.get(provider_type, {})
+
     async def create_provider(self, data: SSOProviderCreate) -> SSOProvider:
         """Create a new SSO provider."""
         provider = SSOProvider(
@@ -211,11 +242,9 @@ class SSOService(BaseService):
             raise SSOAuthenticationError(f"SSO provider {provider.name} is disabled")
         return await self._get_oauth_authorize_url(provider, callback_url)
 
-    async def complete_oauth_login(self, provider_id: uuid.UUID, code: str, state: str, callback_url: str) -> User:
+    async def complete_oauth_login(self, code: str, state: str, callback_url: str) -> User:
         """Complete OAuth2 login flow and return authenticated user."""
-        validated_provider_id = await self._validate_oauth_state(state)
-        if validated_provider_id != provider_id:
-            raise SSOAuthenticationError("OAuth state mismatch")
+        provider_id = await self._validate_oauth_state(state)
         provider = await self.get_provider(provider_id)
         token = await self._exchange_oauth_code(provider, code, callback_url)
         userinfo = await self._get_oauth_userinfo(provider, token)

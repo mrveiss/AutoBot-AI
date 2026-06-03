@@ -25,8 +25,8 @@ from urllib.parse import urlparse
 from fastapi import HTTPException, UploadFile, status
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.plugin_sdk import PluginManifest
 from autobot_shared.ssot_config import config
-from plugin_sdk.base import PluginManifest
 
 logger = get_logger(__name__)
 

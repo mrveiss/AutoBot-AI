@@ -1,0 +1,121 @@
+{
+  "metadata": {
+    "name": "Software Development Team",
+    "description": "Complete software development workflow with architect, developer, code reviewer, and QA agent",
+    "category": "company",
+    "version": "1.0",
+    "tags": ["software", "development", "engineering", "qa", "code-review"]
+  },
+  "variables": {
+    "company_name": "{{COMPANY_NAME}}",
+    "repo_url": "{{REPO_URL}}",
+    "main_branch": "{{MAIN_BRANCH}}"
+  },
+  "agents": [
+    {
+      "name": "Lead Architect",
+      "role": "architect",
+      "description": "Technical lead responsible for architecture decisions, system design, and code review standards",
+      "capabilities": ["architecture_design", "code_review", "technical_planning"],
+      "instructions": "You are the technical architect. Design scalable systems, establish coding standards, and guide the development team through architectural decisions.",
+      "model": "claude-sonnet-4-6",
+      "adapter_config": {
+        "type": "local",
+        "tools": ["read", "write", "bash", "grep", "glob"]
+      }
+    },
+    {
+      "name": "Senior Developer",
+      "role": "developer",
+      "description": "Full-stack developer implementing features, fixing bugs, and maintaining code quality",
+      "capabilities": ["feature_implementation", "bug_fixing", "refactoring"],
+      "instructions": "You are a senior developer. Implement features following best practices, write clean maintainable code, and collaborate with the architect on technical decisions.",
+      "model": "claude-sonnet-4-6",
+      "adapter_config": {
+        "type": "local",
+        "tools": ["read", "write", "edit", "bash", "grep", "glob"]
+      }
+    },
+    {
+      "name": "Code Reviewer",
+      "role": "code_reviewer",
+      "description": "Dedicated code reviewer ensuring quality, security, and maintainability",
+      "capabilities": ["code_review", "security_audit", "quality_assurance"],
+      "instructions": "You are a code reviewer. Review pull requests for correctness, security vulnerabilities, performance issues, and maintainability. Provide constructive feedback.",
+      "model": "claude-sonnet-4-6",
+      "adapter_config": {
+        "type": "local",
+        "tools": ["read", "bash", "grep", "glob"]
+      }
+    },
+    {
+      "name": "QA Engineer",
+      "role": "qa",
+      "description": "Quality assurance engineer writing tests and ensuring system reliability",
+      "capabilities": ["test_writing", "integration_testing", "bug_verification"],
+      "instructions": "You are a QA engineer. Write comprehensive tests, verify bug fixes, and ensure features work as expected. Focus on edge cases and integration scenarios.",
+      "model": "claude-haiku-4-5",
+      "adapter_config": {
+        "type": "local",
+        "tools": ["read", "write", "bash", "grep"]
+      }
+    }
+  ],
+  "goals": [
+    {
+      "title": "Establish Development Workflow",
+      "description": "Set up branching strategy, CI/CD pipeline, and code review process",
+      "priority": "high",
+      "status": "todo"
+    },
+    {
+      "title": "Build Core Features",
+      "description": "Implement the minimum viable product with essential features",
+      "priority": "high",
+      "status": "backlog"
+    },
+    {
+      "title": "Quality Assurance Setup",
+      "description": "Establish testing framework, coverage requirements, and QA processes",
+      "priority": "medium",
+      "status": "backlog"
+    }
+  ],
+  "work_items": [
+    {
+      "title": "Setup repository structure",
+      "description": "Initialize project structure, configure linters, and set up pre-commit hooks",
+      "assignee_role": "architect",
+      "priority": "high",
+      "status": "todo"
+    },
+    {
+      "title": "Define coding standards",
+      "description": "Document coding conventions, architecture patterns, and best practices",
+      "assignee_role": "architect",
+      "priority": "high",
+      "status": "todo"
+    },
+    {
+      "title": "Configure CI/CD pipeline",
+      "description": "Set up automated testing, linting, and deployment workflows",
+      "assignee_role": "developer",
+      "priority": "medium",
+      "status": "todo"
+    }
+  ],
+  "kb_collections": [
+    {
+      "name": "Architecture Docs",
+      "description": "System architecture, design decisions, and technical RFCs"
+    },
+    {
+      "name": "Development Guides",
+      "description": "Development setup, coding standards, and best practices"
+    },
+    {
+      "name": "Code Review Guidelines",
+      "description": "Code review checklists, security patterns, and quality standards"
+    }
+  ]
+}

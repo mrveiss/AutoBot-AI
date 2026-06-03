@@ -110,17 +110,16 @@ async def oauth_callback(
     request: Request,
     code: str = Query(...),
     state: str = Query(...),
-    provider_id: uuid.UUID = Query(...),
     db: AsyncSession = Depends(get_slm_db),
 ) -> RedirectResponse:
     """Handle OAuth2 callback."""
-    logger.info("Processing OAuth2 callback for provider: %s", provider_id)
+    logger.info("Processing OAuth2 callback")
     context = TenantContext(is_platform_admin=False)
     sso_service = SSOService(db, context)
 
     try:
         callback_url = _build_callback_url(request)
-        user = await sso_service.complete_oauth_login(provider_id, code, state, callback_url)
+        user = await sso_service.complete_oauth_login(code, state, callback_url)
 
         # Convert User ORM object to dict-like structure for auth_service
         user_dict = type(

@@ -9,7 +9,7 @@ import re
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -3940,3 +3940,91 @@ class AssessmentMutationData(BaseModel):
     success: bool = True
     message: str = ""
     request_id: str = ""
+
+
+# ---------------------------------------------------------------------------
+# Telegram Bot (MVA-2074)
+# ---------------------------------------------------------------------------
+
+
+class TelegramWebhookUpdate(BaseModel):
+    """Telegram webhook update object."""
+
+    update_id: int
+    message: Optional[Dict[str, Any]] = None
+    edited_message: Optional[Dict[str, Any]] = None
+    channel_post: Optional[Dict[str, Any]] = None
+    edited_channel_post: Optional[Dict[str, Any]] = None
+    callback_query: Optional[Dict[str, Any]] = None
+
+
+class TelegramBotConfigRequest(BaseModel):
+    """Request to configure Telegram bot."""
+
+    bot_token: str = Field(..., description="Telegram Bot API token")
+    webhook_url: Optional[str] = Field(None, description="Webhook URL (optional)")
+
+
+class TelegramBotConfigResponse(BaseModel):
+    """Response for Telegram bot configuration."""
+
+    status: str
+    message: str
+    webhook_url: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Execution Snapshot schemas (GH#4458, MVA-2227)
+# ---------------------------------------------------------------------------
+
+
+class CreateSnapshotRequest(BaseModel):
+    """Request for POST /execution/snapshots."""
+
+    container_id: str = Field(..., description="Docker container ID to snapshot")
+    session_id: str = Field("", description="Optional agent session identifier")
+
+
+class SnapshotMetadata(BaseModel):
+    """Snapshot metadata returned by list/create endpoints."""
+
+    snapshot_id: str
+    session_id: str
+    container_id: str
+    image_name: str
+    created_at: str
+    size_bytes: int
+    labels: Dict[str, str] = Field(default_factory=dict)
+    user_id: str = ""
+
+
+class CreateSnapshotResponse(BaseModel):
+    """Response for POST /execution/snapshots."""
+
+    success: bool
+    snapshot: SnapshotMetadata
+    message: str = ""
+
+
+class SnapshotListResponse(BaseModel):
+    """Response for GET /execution/snapshots."""
+
+    success: bool
+    snapshots: List[SnapshotMetadata]
+    count: int
+
+
+class RestoreSnapshotResponse(BaseModel):
+    """Response for POST /execution/snapshots/{id}/restore."""
+
+    success: bool
+    container_id: str = Field(..., description="ID of the restored container")
+    snapshot_id: str
+    message: str = ""
+
+
+class DeleteSnapshotResponse(BaseModel):
+    """Response for DELETE /execution/snapshots/{id}."""
+
+    success: bool
+    message: str

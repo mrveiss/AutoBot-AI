@@ -31,6 +31,7 @@ from __future__ import annotations
 import asyncio
 import os
 import time
+from contextvars import ContextVar
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
@@ -43,6 +44,9 @@ from .base_provider import BaseProvider
 
 logger = get_logger(__name__)
 
+# Context variable for per-run credential overrides (GH#9037)
+_run_credentials: ContextVar[Optional["RunCredentialContext"]] = ContextVar("run_credentials", default=None)
+
 # Cache health results for 30 s to avoid a health check on every request.
 _HEALTH_CACHE_TTL = 30.0
 
@@ -52,6 +56,69 @@ _NPU_PIPELINE_MAX_LATENCY_MULTIPLIER: float = float(os.environ.get("NPU_PIPELINE
 
 # Provider name used for the NPU worker pool.
 _NPU_POOL_PROVIDER_NAME = "npu_pool"
+
+
+class RunCredentialContext:
+    """Per-run provider credentials for multi-tenant deployments (GH#9037).
+
+    Allows each workflow or task invocation to inject provider API keys at
+    runtime, scoped to the single request. Credentials never persist beyond
+    the invocation and are redacted from all logs.
+
+    Attributes:
+        provider_credentials: Dict mapping provider names to their settings.
+                              Example: {"anthropic": {"api_key": "sk-..."}}
+    """
+
+    def __init__(self, provider_credentials: Dict[str, Dict[str, Any]] | None = None) -> None:
+        """Initialize the credential context.
+
+        Args:
+            provider_credentials: Mapping of provider name → settings dict.
+                                  Keys match provider names (anthropic, openai, etc).
+                                  Values are dicts with provider-specific settings
+                                  (api_key, base_url, etc).
+        """
+        self.provider_credentials = provider_credentials or {}
+
+    def get_credentials(self, provider_name: str) -> Dict[str, Any] | None:
+        """Get runtime credentials for a provider.
+
+        Args:
+            provider_name: Provider identifier (anthropic, openai, etc)
+
+        Returns:
+            Settings dict with runtime credentials, or None if not provided.
+        """
+        return self.provider_credentials.get(provider_name)
+
+    def __repr__(self) -> str:
+        """Redacted string representation for logging."""
+        # Never log actual credentials
+        providers = list(self.provider_credentials.keys())
+        return f"<RunCredentialContext providers={providers}>"
+
+
+def set_run_credentials(context: RunCredentialContext | None) -> None:
+    """Set the credential context for the current async task (GH#9037).
+
+    This should be called at the start of a request handler to inject
+    per-user or per-run credentials. The context is automatically scoped
+    to the current async task and will not leak to concurrent requests.
+
+    Args:
+        context: RunCredentialContext with provider credentials, or None to clear.
+    """
+    _run_credentials.set(context)
+
+
+def get_run_credentials() -> RunCredentialContext | None:
+    """Get the current credential context for this async task.
+
+    Returns:
+        The active RunCredentialContext, or None if not set.
+    """
+    return _run_credentials.get()
 
 
 class ProviderRegistry:
@@ -296,8 +363,80 @@ class ProviderRegistry:
     # Provider selection
     # ------------------------------------------------------------------
 
+    def _create_ephemeral_provider(
+        self,
+        provider_name: str,
+        runtime_credentials: Dict[str, Any],
+    ) -> BaseProvider | None:
+        """Create a temporary provider instance with runtime credentials (GH#9037).
+
+        Args:
+            provider_name: Name of the provider to instantiate.
+            runtime_credentials: Settings dict with API keys, base URLs, etc.
+
+        Returns:
+            Ephemeral provider instance, or None if the provider type is unknown.
+        """
+        from llm_shared.providers.anthropic import AnthropicProvider
+        from llm_shared.providers.bedrock import BedrockProvider
+        from llm_shared.providers.custom_openai import CustomOpenAIProvider
+        from llm_shared.providers.groq import GroqProvider
+        from llm_shared.providers.huggingface import HuggingFaceProvider
+        from llm_shared.providers.nous_portal import NousPortalProvider
+        from llm_shared.providers.ollama_provider import OllamaProvider
+        from llm_shared.providers.openai import OpenAIProvider
+        from llm_shared.providers.openrouter import OpenRouterProvider
+        from llm_shared.providers.vertexai import VertexAIProvider
+        from llm_shared.providers.vllm_base import VLLMBaseProvider
+
+        provider_map = {
+            "anthropic": AnthropicProvider,
+            "openai": OpenAIProvider,
+            "ollama": OllamaProvider,
+            "groq": GroqProvider,
+            "huggingface": HuggingFaceProvider,
+            "custom_openai": CustomOpenAIProvider,
+            "openrouter": OpenRouterProvider,
+            "nous_portal": NousPortalProvider,
+            "vllm": VLLMBaseProvider,
+            "vertexai": VertexAIProvider,
+            "bedrock": BedrockProvider,
+        }
+
+        provider_class = provider_map.get(provider_name)
+        if provider_class is None:
+            logger.warning("Unknown provider for ephemeral instantiation: %s", provider_name)
+            return None
+
+        try:
+            # Instantiate provider with runtime credentials
+            provider = provider_class(settings=runtime_credentials)
+            logger.info(
+                "Created ephemeral provider: %s (credentials from run context)",
+                provider_name,
+            )
+            return provider
+        except Exception as exc:
+            logger.error("Failed to create ephemeral provider %s: %s", provider_name, exc)
+            return None
+
     async def get_provider(self, name: str) -> BaseProvider | None:
         """Return the named provider if registered and available, else None."""
+        # Check for runtime credential override (GH#9037)
+        run_ctx = get_run_credentials()
+        if run_ctx:
+            runtime_creds = run_ctx.get_credentials(name)
+            if runtime_creds:
+                # Create ephemeral provider with runtime credentials
+                ephemeral = self._create_ephemeral_provider(name, runtime_creds)
+                if ephemeral:
+                    logger.debug(
+                        "Using ephemeral provider %s with runtime credentials",
+                        name,
+                    )
+                    return ephemeral
+                # Fall through to registered provider if ephemeral creation fails
+
         provider = self._providers.get(name)
         if provider is None:
             logger.debug("Provider not found: %s", name)
@@ -442,12 +581,14 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
 
     from autobot_shared.ssot_config import get_config as get_ssot_config
     from llm_shared.providers.anthropic import AnthropicProvider
+    from llm_shared.providers.bedrock import BedrockProvider
     from llm_shared.providers.custom_openai import CustomOpenAIProvider
     from llm_shared.providers.groq import GroqProvider
     from llm_shared.providers.huggingface import HuggingFaceProvider
     from llm_shared.providers.nous_portal import NousPortalProvider
     from llm_shared.providers.openai import OpenAIProvider
     from llm_shared.providers.openrouter import OpenRouterProvider
+    from llm_shared.providers.vertexai import VertexAIProvider
     from llm_shared.providers.vllm_base import VLLMBaseProvider
 
     fallback: List[str] = []
@@ -568,6 +709,63 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
     else:
         logger.debug("VLLM_MODEL not set — vLLM provider not registered")
 
+    # Vertex AI — registered when GCP project is configured (GH#9009)
+    vertex_project = config.vertex_ai_project
+    if vertex_project:
+        try:
+            vertex_provider = VertexAIProvider(
+                settings={
+                    "project": vertex_project,
+                    "location": config.vertex_ai_location,
+                    "service_account_json": config.vertex_ai_service_account_json,
+                    "default_model": config.vertex_ai_default_model,
+                }
+            )
+            registry.register(vertex_provider)
+            fallback.append(vertex_provider.provider_name)
+        except Exception as exc:
+            logger.debug("Vertex AI provider not registered: %s", exc)
+    else:
+        logger.debug("VERTEX_AI_PROJECT not set — Vertex AI provider not registered")
+
+    # AWS Bedrock — registered when AWS credentials are available (GH#9010)
+    # Credentials can come from env vars (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY)
+    # or IAM role (automatic in EC2/ECS). Region defaults to us-east-1.
+    aws_access_key = os.getenv("AWS_ACCESS_KEY_ID")
+    aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+    aws_region = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+
+    # Register if credentials are explicitly provided OR if we're in an AWS environment
+    # (IAM role will be used automatically by boto3)
+    if aws_access_key and aws_secret_key:
+        try:
+            bedrock_provider = BedrockProvider(
+                settings={
+                    "aws_access_key_id": aws_access_key,
+                    "aws_secret_access_key": aws_secret_key,
+                    "region": aws_region,
+                    "default_model": "claude-3-5-sonnet",
+                }
+            )
+            registry.register(bedrock_provider)
+            fallback.append(bedrock_provider.provider_name)
+        except Exception as exc:
+            logger.debug("Bedrock provider not registered: %s", exc)
+    else:
+        # Try IAM role registration (will work in EC2/ECS without explicit credentials)
+        try:
+            bedrock_provider = BedrockProvider(
+                settings={
+                    "region": aws_region,
+                    "default_model": "claude-3-5-sonnet",
+                }
+            )
+            registry.register(bedrock_provider)
+            fallback.append(bedrock_provider.provider_name)
+            logger.debug("Bedrock provider registered with IAM role authentication")
+        except Exception as exc:
+            logger.debug("Bedrock provider not registered (no credentials or IAM role): %s", exc)
+
     registry.set_fallback_chain(fallback)
     logger.info(
         "Provider registry initialised with %d providers: %s",
@@ -576,4 +774,10 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
     )
 
 
-__all__ = ["ProviderRegistry", "get_provider_registry"]
+__all__ = [
+    "ProviderRegistry",
+    "get_provider_registry",
+    "RunCredentialContext",
+    "set_run_credentials",
+    "get_run_credentials",
+]

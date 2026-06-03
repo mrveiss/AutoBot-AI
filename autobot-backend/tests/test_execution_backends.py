@@ -511,7 +511,7 @@ class TestSnapshotIndex:
     """Unit tests for SnapshotIndex file-based storage."""
 
     def test_add_and_get(self, tmp_path):
-        from pathlib import Path
+        pass
 
         from services.execution.snapshot_index import SnapshotIndex, SnapshotRecord
 

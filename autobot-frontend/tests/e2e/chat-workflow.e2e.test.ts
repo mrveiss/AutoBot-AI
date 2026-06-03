@@ -31,6 +31,7 @@ test.describe('Chat Workflow E2E Tests', () => {
     try {
       await expect(page.locator('[data-testid="assistant-message"]').last()).toBeVisible({ timeout: 30000 })
     } catch {
+      // eslint-disable-next-line no-console
       console.warn('Backend response timeout - continuing with client-side tests')
     }
 

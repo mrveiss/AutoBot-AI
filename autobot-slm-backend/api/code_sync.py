@@ -439,11 +439,9 @@ async def resolve_drift(
     """
     Resync a single component from code_source/ to /opt/autobot/<component>/ (#7149).
 
-    Drives the same `_rsync_component_local()` used by SLM self-sync — pulls
-    files from the local code_source checkout and overwrites the deployed copy.
-    Used by the CodeSyncView "Resync from Source" button to clear drift in one
-    click (instead of forcing the user to find the SLM self-node and trigger a
-    full /nodes/{id}/sync).
+    Uses `_rsync_component_local()` to pull files from the local code_source
+    checkout and overwrite the deployed copy.  Used by the CodeSyncView
+    "Resync from Source" button to clear drift in one click.
 
     Body:
         component: Sub-directory under /opt/autobot/. Must be in ALLOWED_COMPONENTS.
@@ -1079,6 +1077,8 @@ async def _ansible_self_update(node_id: str) -> None:
     plugins, npu-worker, browser-worker, etc.) — not just the SLM components.
     Fire-and-forget: the SLM service restarts mid-run so this coroutine dies;
     callers must poll health rather than await a result.
+
+    Issue #9224: Update node version in DB after successful sync.
     """
     executor = get_playbook_executor()
     limit = ["localhost", node_id]
@@ -1091,6 +1091,8 @@ async def _ansible_self_update(node_id: str) -> None:
             logger.error("Ansible full-machine update failed for %s: %s", node_id, result["output"][:500])
         else:
             logger.info("Ansible full-machine update complete for %s", node_id)
+            # Update node version in DB (Issue #9224)
+            await _update_fleet_node_version(node_id)
     except Exception as exc:
         logger.error("Ansible full-machine update error for %s: %s", node_id, exc)
 

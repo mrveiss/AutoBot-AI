@@ -420,7 +420,7 @@ export interface VoiceStatus {
 export interface AgentTask {
   id: string
   description: string
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'abstained'
   priority: 'low' | 'medium' | 'high' | 'urgent'
   created_at: string
   started_at?: string
@@ -429,6 +429,9 @@ export interface AgentTask {
   actual_duration?: number
   result?: Record<string, unknown>
   error_message?: string
+  // GH#6626: Confidence-based abstention fields
+  abstained?: boolean
+  abstention_reason?: string
 }
 
 export interface AgentCapabilities {

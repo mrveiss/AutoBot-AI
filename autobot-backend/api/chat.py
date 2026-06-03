@@ -1159,10 +1159,18 @@ async def send_chat_message_by_id(
     _validate_chat_services(chat_history_manager, chat_workflow_manager)
 
     # Issue #1325: Inject language into context for system prompt resolution
+    # Issue #8993: Inject thinking mode parameters into context
     context = request_data.get("context", {})
     language = request_data.get("language")
     if language:
         context["language"] = language
+
+    thinking_mode_enabled = request_data.get("thinking_mode_enabled")
+    thinking_budget_tokens = request_data.get("thinking_budget_tokens")
+    if thinking_mode_enabled is not None:
+        context["thinking_mode_enabled"] = thinking_mode_enabled
+    if thinking_budget_tokens is not None:
+        context["thinking_budget_tokens"] = thinking_budget_tokens
 
     return _create_streaming_response(
         _stream_chat_workflow_messages(

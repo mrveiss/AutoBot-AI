@@ -178,7 +178,6 @@ _ROLE_DEFAULT_BUNDLE: dict[str, str] = {
 }
 
 _VALID_BUNDLES = frozenset(_BUNDLE_TAG_MAP.keys())
-VALID_BUNDLES: frozenset = _VALID_BUNDLES
 
 # Public alias — import this from callers instead of hardcoding bundle names.
 VALID_BUNDLES: frozenset[str] = _VALID_BUNDLES

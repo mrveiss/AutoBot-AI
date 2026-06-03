@@ -10,10 +10,9 @@ Bridges ConnectorConfig ↔ SecretsService so that sensitive auth fields
 
 import asyncio
 import json
-import threading
-from typing import Optional
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = get_logger(__name__)
 
@@ -155,27 +154,24 @@ class ConnectorCredentialStore:
 
 
 # ---------------------------------------------------------------------------
-# Module-level singleton factory
+# Module-level singleton factory (ADR-007, GH#9099)
 # ---------------------------------------------------------------------------
 
-_store: Optional["ConnectorCredentialStore"] = None
-_store_lock = threading.Lock()
+
+def _build_credential_store() -> "ConnectorCredentialStore":
+    from services.secrets_service import get_secrets_service
+
+    return ConnectorCredentialStore(get_secrets_service())
 
 
-def get_credential_store() -> ConnectorCredentialStore:
-    """Return the module-level ConnectorCredentialStore singleton."""
-    global _store
-    if _store is None:
-        with _store_lock:
-            if _store is None:
-                from services.secrets_service import get_secrets_service
-
-                _store = ConnectorCredentialStore(get_secrets_service())
-    return _store
+get_credential_store = lazy_singleton(_build_credential_store)
 
 
 def reset_credential_store() -> None:
-    """Reset the singleton (test isolation / key rotation)."""
-    global _store
-    with _store_lock:
-        _store = None
+    """Reset the singleton (test isolation / key rotation).
+
+    Creates a fresh lazy_singleton closure so the next get_credential_store()
+    call rebuilds with the current SecretsService instance.
+    """
+    global get_credential_store
+    get_credential_store = lazy_singleton(_build_credential_store)

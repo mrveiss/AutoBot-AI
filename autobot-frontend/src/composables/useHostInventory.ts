@@ -4,6 +4,17 @@
 //
 // useHostInventory — SLM node/host management composable (GH#7513)
 // Calls the SLM backend /api/nodes endpoints.
+//
+// ⚠️ DISTINCT FROM useHostSelection (GH#9063 audit):
+// - useHostInventory: Ansible-managed fleet (SLM nodes with provisioning, roles, health metrics)
+//   → Admin dashboard for managing infrastructure nodes
+//   → Data source: SLM backend /api/nodes (node inventory, Ansible state)
+//
+// - useHostSelection: User-configured SSH targets (secrets.env infrastructure hosts)
+//   → Agent SSH actions + terminal selector
+//   → Data source: main backend /api/infrastructure/hosts (user secrets)
+//
+// These serve DIFFERENT purposes and MUST remain separate composables.
 
 import { ref } from 'vue'
 import { getSLMUrl } from '@/config/ssot-config'

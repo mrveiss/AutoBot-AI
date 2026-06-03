@@ -17,7 +17,7 @@ import json
 import sys
 import types
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 # ---------------------------------------------------------------------------
 # Minimal stubs so api/system.py and initialization/lifespan.py import cleanly
@@ -183,50 +183,13 @@ class TestStartupErrorDiskFile:
 
 
 class TestStartupErrorLifespanConstant:
-    """Verify lifespan.py exports the _STARTUP_ERROR_FILE constant."""
+    """Verify STARTUP_ERROR_FILE constant is imported from autobot_shared."""
 
     def test_constant_is_path_instance(self):
-        # Import the constant directly without triggering the full lifespan startup.
-        # We patch all heavy imports at the module level.
-        heavy = [
-            "fastapi",
-            "autobot_shared",
-            "autobot_shared.logging_manager",
-            "autobot_shared.tracing",
-            "chat_history",
-            "chat_workflow",
-            "config",
-            "config.manager",
-            "knowledge_factory",
-            "security_layer",
-            "services",
-            "services.slm_client",
-            "type_defs",
-            "type_defs.common",
-            "user_management",
-            "user_management.database",
-            "utils",
-            "utils.background_llm_sync",
-            "utils.io_executor",
-        ]
-        stubs = {name: MagicMock() for name in heavy}
-        # FastAPI needs to be a callable that returns a mock
-        stubs["fastapi"] = MagicMock()
-        with patch.dict(sys.modules, stubs):
-            # Force re-import so our stubs take effect
-            import importlib
+        # GH#9066: STARTUP_ERROR_FILE moved to autobot_shared.ssot_constants
+        # to eliminate duplication between system.py and lifespan.py.
+        from autobot_shared.ssot_constants import STARTUP_ERROR_FILE
 
-            if "initialization.lifespan" in sys.modules:
-                del sys.modules["initialization.lifespan"]
-            try:
-                import initialization.lifespan as lifespan
-
-                assert hasattr(lifespan, "_STARTUP_ERROR_FILE")
-                assert isinstance(lifespan._STARTUP_ERROR_FILE, Path)
-                assert "startup-error.json" in str(lifespan._STARTUP_ERROR_FILE)
-            except Exception:
-                # If import fails due to stubs, verify the constant via source parse
-                src = Path(__file__).parent.parent / "initialization" / "lifespan.py"
-                text = src.read_text(encoding="utf-8")
-                assert "_STARTUP_ERROR_FILE" in text
-                assert "startup-error.json" in text
+        assert isinstance(STARTUP_ERROR_FILE, Path)
+        assert "startup-error.json" in str(STARTUP_ERROR_FILE)
+        assert str(STARTUP_ERROR_FILE) == "/run/autobot/startup-error.json"

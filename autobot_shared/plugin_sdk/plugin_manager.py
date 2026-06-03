@@ -14,9 +14,9 @@ import logging
 from pathlib import Path
 from typing import Dict, List
 
-from plugin_sdk.base import PluginRegistry, PluginStatus
-from plugin_sdk.hooks import HookRegistry
-from plugin_sdk.loader import PluginLoader
+from .base import PluginRegistry, PluginStatus
+from .hooks import HookRegistry
+from .loader import PluginLoader
 
 logger = logging.getLogger(__name__)
 

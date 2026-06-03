@@ -1,4 +1,7 @@
-# AutoBot Glossary
+---
+title: Glossary
+nav_order: 5
+---
 
 This glossary defines terms, acronyms, and concepts used throughout AutoBot documentation and codebase.
 

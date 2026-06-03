@@ -134,6 +134,7 @@ class LLMResponse:
     provider_metadata: Dict[str, Any] | None = None
     hidden_params: Dict[str, Any] = field(default_factory=dict)
     tool_calls: List["ToolCall"] | None = None
+    lightweight_mode_used: bool = False  # MVA-1993: Set when trivial tier is used
 
 
 @dataclass
@@ -168,6 +169,7 @@ class LLMRequest:
     request_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     tools: List["ToolDefinition"] | None = None
     tool_choice: str | None = None  # "auto" | "none" | specific tool name
+    lightweight_mode: bool = False  # Skip tools/RAG/memory for trivial queries
 
 
 __all__ = [

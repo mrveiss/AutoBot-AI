@@ -81,6 +81,20 @@ Issue #753: User preference management interface
           <Icon name="bookmark" />
           {{ $t('settings.presets.title') }}
         </button>
+        <button
+          @click="activeTab = 'telegram'"
+          :class="['settings-tab', { active: activeTab === 'telegram' }]"
+        >
+          <Icon name="paper-plane" />
+          Telegram
+        </button>
+        <button
+          @click="activeTab = 'notifications'"
+          :class="['settings-tab', { active: activeTab === 'notifications' }]"
+        >
+          <Icon name="bell" />
+          Notifications
+        </button>
       </div>
 
       <!-- Tab Content -->
@@ -242,6 +256,34 @@ Issue #753: User preference management interface
             <PresetsSettingsPanel />
           </div>
         </section>
+
+        <!-- MVA-2074: Telegram bot configuration -->
+        <section v-if="activeTab === 'telegram'" class="settings-section">
+          <div class="section-header">
+            <h2 class="section-title">
+              <Icon name="paper-plane" />
+              Telegram Bot
+            </h2>
+            <p class="section-description">Configure the AutoBot Telegram bot to receive and respond to messages.</p>
+          </div>
+          <div class="section-content">
+            <TelegramSettingsPanel />
+          </div>
+        </section>
+
+        <!-- GH#4459: Web push notification toggle -->
+        <section v-if="activeTab === 'notifications'" class="settings-section">
+          <div class="section-header">
+            <h2 class="section-title">
+              <Icon name="bell" />
+              Notifications
+            </h2>
+            <p class="section-description">Manage browser push notifications for this device.</p>
+          </div>
+          <div class="section-content">
+            <PushNotificationSettingsPanel />
+          </div>
+        </section>
       </div>
 
     <ApiKeySetupWizard v-model="showApiKeyWizard" @saved="onApiKeysSaved" />
@@ -254,10 +296,12 @@ import PreferencesPanel from '@/components/ui/PreferencesPanel.vue'
 import LanguageSettingsPanel from '@/components/settings/LanguageSettingsPanel.vue'
 import VoiceSettingsPanel from '@/components/settings/VoiceSettingsPanel.vue'
 import WebResearchSettingsPanel from '@/components/settings/WebResearchSettingsPanel.vue'
+import TelegramSettingsPanel from '@/components/settings/TelegramSettingsPanel.vue'
 import ApiKeySetupWizard from '@/components/settings/ApiKeySetupWizard.vue'
 import ConnectionSettingsPanel from '@/components/desktop/ConnectionSettingsPanel.vue'
 import FeatureFlagsSettingsPanel from '@/components/settings/FeatureFlagsSettingsPanel.vue'
 import PresetsSettingsPanel from '@/components/settings/PresetsSettingsPanel.vue'
+import PushNotificationSettingsPanel from '@/components/settings/PushNotificationSettingsPanel.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -271,7 +315,7 @@ const { showToast } = useNotificationBus()
 
 logger.debug('Settings view initialized')
 
-type PreferenceTab = 'appearance' | 'language' | 'voice' | 'webresearch' | 'apikeys' | 'connection' | 'featureflags' | 'presets'
+type PreferenceTab = 'appearance' | 'language' | 'voice' | 'webresearch' | 'apikeys' | 'connection' | 'featureflags' | 'presets' | 'notifications'
 const activeTab = ref<PreferenceTab>('appearance')
 const showApiKeyWizard = ref(false)
 

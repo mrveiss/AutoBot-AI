@@ -71,6 +71,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import type { ChartPayload } from '@/types/canvas'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('ChartCell')
 
 const props = defineProps<{
   richPayload: ChartPayload | null
@@ -162,7 +165,7 @@ async function renderChart() {
     })
   } catch (err) {
     renderError.value = `Chart render failed: ${err instanceof Error ? err.message : String(err)}`
-    console.error('[ChartCell] render error:', err)
+    logger.error('render error:', err)
   }
 }
 

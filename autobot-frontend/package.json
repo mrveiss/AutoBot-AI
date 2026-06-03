@@ -69,16 +69,23 @@
     "pinia-plugin-persistedstate": "^4.7.1",
     "three": "^0.184.0",
     "three-spritetext": "^1.10.0",
-    "vega-embed": "^7.1.0",
+    "vega": "^5.30.0",
+    "vega-embed": "^6.29.0",
+    "vega-lite": "5.23.0",
     "vue": "^3.5.34",
     "vue-i18n": "^11.3.1",
     "vue-router": "^5.0.4",
-    "vue3-apexcharts": "^1.11.1"
+    "vue3-apexcharts": "^1.11.1",
+    "wavesurfer.js": "^7.12.7"
   },
   "overrides": {
     "minimatch": ">=9.0.7",
     "uuid": "^14.0.0",
+    "qs": ">=6.15.2",
     "vega-lite": "5.23.0",
+    "vega-embed": {
+      "vega-lite": "5.23.0"
+    },
     "openapi-typescript": {
       "typescript": "$typescript"
     },
@@ -151,8 +158,5 @@
     "vite-plugin-vue-devtools": "^8.1.2",
     "vitest": "^4.1.5",
     "vue-tsc": "^3.2.8"
-  },
-  "overrides": {
-    "qs": ">=6.15.2"
   }
 }

@@ -43,7 +43,9 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.tracing import get_tracer
 from llm_shared import ProviderRegistry, get_provider_registry
 from llm_shared.cache import CachedResponse, get_llm_cache
+from llm_shared.fallback_chain import get_fallback_chain_manager
 from llm_shared.models import LLMRequest, LLMResponse
+from llm_shared.rate_limit_backoff import extract_rate_limit_info
 from llm_shared.tiered_routing import TierConfig, TieredModelRouter
 from llm_shared.types import LLMType
 
@@ -170,6 +172,10 @@ class LLMService:
         """
         Execute a non-streaming chat completion.
 
+        GH#8998: Supports quota-triggered fallback chains. When a model hits
+        rate limit (429) or quota exceeded, automatically tries fallback models
+        from the configured chain before failing.
+
         Args:
             messages: OpenAI-format message list
                 (``[{"role": "user", "content": "…"}, …]``).
@@ -200,21 +206,109 @@ class LLMService:
             **kwargs,
         )
 
-        provider = await self._registry.get_provider_for_request(
-            provider_name=provider_name,
-            conversation_id=conversation_id,
-        )
-        if provider is None:
-            self._error_count += 1
-            logger.error("No available provider for chat request")
-            return _build_error_response(request, "No available LLM provider", "none")
+        # GH#8998: Track attempted models to avoid infinite loops
+        attempted_models = []
+        fallback_manager = get_fallback_chain_manager()
+        current_provider_name = provider_name
+        current_model = model_name
+        max_fallback_attempts = 10  # Safety limit
 
-        response = await provider.chat_completion(request)
-        if response.error:
+        while len(attempted_models) < max_fallback_attempts:
+            provider = await self._registry.get_provider_for_request(
+                provider_name=current_provider_name,
+                conversation_id=conversation_id,
+            )
+            if provider is None:
+                self._error_count += 1
+                logger.error("No available provider for chat request")
+                return _build_error_response(request, "No available LLM provider", "none")
+
+            # Update request with current model
+            request.model_name = current_model
+
+            # Track this attempt
+            attempt_key = f"{provider.provider_name}:{current_model or 'default'}"
+            if attempt_key in attempted_models:
+                # Avoid infinite loop - this model was already tried
+                logger.warning(
+                    "Fallback chain loop detected at %s, breaking",
+                    attempt_key,
+                )
+                break
+            attempted_models.append(attempt_key)
+
+            logger.debug(
+                "Attempting chat completion with %s (attempt %d/%d)",
+                attempt_key,
+                len(attempted_models),
+                max_fallback_attempts,
+            )
+
+            response = await provider.chat_completion(request)
+
+            # Success case
+            if not response.error:
+                if len(attempted_models) > 1:
+                    logger.info(
+                        "Fallback successful: %s worked after %d attempts (tried: %s)",
+                        attempt_key,
+                        len(attempted_models),
+                        " → ".join(attempted_models),
+                    )
+                self._track_usage(response, conversation_id)
+                return response
+
+            # GH#8998: Check if this is a rate limit error that should trigger fallback
+            is_rate_limited, _ = extract_rate_limit_info(response)
+
+            if is_rate_limited:
+                # Try to find a fallback model
+                fallback_result = fallback_manager.get_next_fallback(
+                    current_model or provider.provider_name,
+                    provider.provider_name,
+                )
+
+                if fallback_result:
+                    next_model, next_provider = fallback_result
+                    logger.info(
+                        "Rate limit hit on %s, falling back to %s:%s",
+                        attempt_key,
+                        next_provider or current_provider_name,
+                        next_model,
+                    )
+                    current_model = next_model
+                    if next_provider:
+                        current_provider_name = next_provider
+                    continue
+                else:
+                    logger.warning(
+                        "Rate limit hit on %s but no fallback chain configured, returning error",
+                        attempt_key,
+                    )
+
+            # Non-rate-limit error or no fallback available
             self._error_count += 1
-            logger.warning("Provider %s returned error: %s", provider.provider_name, response.error)
-        self._track_usage(response, conversation_id)
-        return response
+            logger.warning(
+                "Provider %s returned error: %s (attempted: %s)",
+                provider.provider_name,
+                response.error,
+                " → ".join(attempted_models),
+            )
+            self._track_usage(response, conversation_id)
+            return response
+
+        # Max attempts reached
+        self._error_count += 1
+        logger.error(
+            "Exhausted fallback chain after %d attempts: %s",
+            len(attempted_models),
+            " → ".join(attempted_models),
+        )
+        return _build_error_response(
+            request,
+            f"All fallback models exhausted ({len(attempted_models)} attempts)",
+            attempted_models[-1] if attempted_models else "none",
+        )
 
     async def stream(
         self,

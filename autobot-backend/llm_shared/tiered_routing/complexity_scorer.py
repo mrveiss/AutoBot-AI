@@ -449,7 +449,7 @@ class TaskComplexityScorer:
         """
         Build the final ComplexityResult with tier and reasoning.
 
-        Issue #620.
+        Issue #620, GH#9050.
 
         Args:
             normalized_score: The normalized 0-10 complexity score
@@ -459,7 +459,14 @@ class TaskComplexityScorer:
         Returns:
             ComplexityResult with all fields populated
         """
-        tier = "simple" if normalized_score < self.config.complexity_threshold else "complex"
+        # GH#9050: Trivial tier for ultra-simple queries
+        if normalized_score < self.config.trivial_threshold:
+            tier = "trivial"
+        elif normalized_score < self.config.complexity_threshold:
+            tier = "simple"
+        else:
+            tier = "complex"
+
         reasoning = self._generate_reasoning(factors, normalized_score, tier)
 
         if self.config.logging.log_scores:
@@ -485,6 +492,8 @@ class TaskComplexityScorer:
 
         if not dominant:
             if score < 1:
+                if tier == "trivial":
+                    return "Trivial request — ultra-simple query with no complexity indicators"
                 return "Simple request with no complexity indicators"
             return "Low complexity request with minimal indicators"
 
@@ -499,7 +508,9 @@ class TaskComplexityScorer:
 
         dominant_names = [factor_names.get(f, f) for f in dominant]
 
-        if tier == "simple":
+        if tier == "trivial":
+            return f"Trivial complexity despite {', '.join(dominant_names)}"
+        elif tier == "simple":
             return f"Low complexity despite {', '.join(dominant_names)}"
         else:
             return f"High complexity due to {', '.join(dominant_names)}"
