@@ -1,11 +1,14 @@
-# Claims Audit Report Generator
+# Claims Audit - Report Generator & Issue Filer
+
+This directory contains the report generation and issue filing components of the claims-audit pipeline.
+
+## Components
+
+### Phase 3: `generate-report.py` — Report Generator
 
 Generates human-readable `docs/verification.md` from `docs/verification-inventory.json`.
 
-## Usage
-
-### Command Line
-
+**Usage:**
 ```bash
 # Generate from default paths
 python3 .claude/skills/claims-audit/generate-report.py
@@ -16,150 +19,93 @@ python3 .claude/skills/claims-audit/generate-report.py \
   --output path/to/verification.md
 ```
 
-### As Module
+**Output Format:**
+- Header with auto-generated notice, last verified date, source issue link
+- Summary table with claim counts and percentages by status
+- Category sections (Infrastructure, API, Features, Architecture)
+- Discovery issue links for broken claims
+- Footer with regeneration instructions
 
-```python
-from generate_report import generate_report, load_inventory
+**Features:**
+- ✅ Categorization by infrastructure/api/features/architecture
+- ✅ GitHub permalinks to exact code locations
+- ✅ Summary percentages and distribution
+- ✅ Multiple evidence types (endpoint, service, test, implementation)
+- ✅ Discovery issue links
+- ✅ Clean markdown tables
 
-# Load inventory
-inventory = load_inventory(Path('docs/verification-inventory.json'))
+### Phase 4: `file_issues.py` — Issue Filer
 
-# Generate report
-report = generate_report(inventory)
+Files discovery issues for broken claims found during verification.
 
-# Write to file
-with open('docs/verification.md', 'w') as f:
-    f.write(report)
+**Usage:**
+```bash
+# File issues for all unfiled broken claims
+python3 .claude/skills/claims-audit/file_issues.py
+
+# Dry run to see what would be filed
+python3 .claude/skills/claims-audit/file_issues.py --dry-run
+
+# Use custom inventory path
+python3 .claude/skills/claims-audit/file_issues.py --inventory-path /path/to/inventory.json
 ```
 
-## Output Format
+**Features:**
+- Loads verification inventory from `docs/verification-inventory.json`
+- For each claim with `status: "broken"` and no `discovery_issue` field:
+  - Checks GitHub for duplicate issues
+  - Files a new discovery issue with structured body
+  - Updates inventory with the filed issue URL
+- Skips claims that already have discovery issues filed
+- Provides summary of filed issues
 
-The generated report includes:
-
-1. **Header** - Auto-generated notice, last verified date, source issue link
-2. **Summary** - Claim counts and percentages by status
-3. **Category Sections** - Claims grouped by:
-   - Infrastructure (Docker, Redis, PostgreSQL, Ansible, etc.)
-   - API (FastAPI, WebSocket, A2A, etc.)
-   - Features (RAG, NPU, Vision, Workflow Builder, etc.)
-   - Architecture (Celery, Workers, etc.)
-4. **Discovery Issues** - Links to filed issues for broken claims
-5. **Footer** - Instructions for regeneration
-
-### Example Summary
-
+**Issue Format:**
 ```markdown
-## Summary
+## Finding
+**Capability:** <capability name>
+**Claim source:** [file:line](link)
+**Status:** ❌ broken
 
-| Status | Count | Percentage |
-|--------|-------|------------|
-| ✅ wired | 13 | 76.5% |
-| ⚠️ partial | 3 | 17.6% |
-| ❌ broken | 1 | 5.9% |
-| **Total** | **17** | **100.0%** |
+## Evidence
+<evidence found or "No evidence found">
+
+## Details
+<notes from verification>
+
+## Impact
+<description of user impact>
+
+## Suggested Fix
+<concrete steps to resolve>
+
+## Related
+- Verification report
+- Verification inventory
+- Parent issue #7359
 ```
 
-### Example Claim Entry
+**Duplicate Detection:**
+Before filing, searches GitHub for existing issues with "discovery" + capability name in title.
 
-```markdown
-| 1 | FastAPI REST API | "Backend (FastAPI API server)" | [README.md:188](../README.md#L188) | [implementation](../autobot-backend/main.py#L1), [test](../autobot-backend/tests/) | ✅ wired | 100+ routers registered; smoke-tested by CI |
-```
+## Integration with Claims Audit
 
-## Features
+Full claims-audit workflow:
 
-- ✅ **Categorization** - Automatically groups claims by infrastructure/api/features/architecture
-- ✅ **GitHub Permalinks** - File:line citations link to exact code locations
-- ✅ **Percentages** - Summary shows distribution of claim statuses
-- ✅ **Evidence Formatting** - Multiple evidence types (endpoint, service, test, implementation)
-- ✅ **Discovery Issues** - Links to filed GitHub issues for broken claims
-- ✅ **Markdown Tables** - Clean, readable format for documentation
+1. **Phase 1** (MVA-2720) - Extract claims from docs
+2. **Phase 2** (MVA-2721) - Verify claims against codebase
+3. **Phase 3** (this dir, `generate-report.py`) - Generate verification report and inventory
+4. **Phase 4** (this dir, `file_issues.py`) - File discovery issues for broken claims
 
 ## Testing
 
 Run unit tests:
-
 ```bash
-python3 -m pytest .claude/skills/claims-audit/test_generate_report.py -v
+python3 -m pytest .claude/skills/claims-audit/test_file_issues.py -v
 ```
 
-All 14 tests should pass:
-- Status emoji formatting
-- Category inference
-- GitHub permalink generation
-- Percentage calculation
-- Evidence list formatting
-- Summary section generation
-- Claim grouping
-- Complete report generation
-- Inventory loading
-- Discovery issue handling
-
-## Schema
-
-### Input: `verification-inventory.json`
-
-```json
-{
-  "meta": {
-    "generated_at": "2026-05-26",
-    "generated_by": "claims-audit skill",
-    "source_issue": "https://github.com/mrveiss/AutoBot-AI/issues/7359",
-    "skill_path": ".claude/skills/claims-audit/SKILL.md",
-    "schema_version": "1"
-  },
-  "summary": {
-    "total": 17,
-    "wired": 13,
-    "partial": 3,
-    "broken": 1
-  },
-  "claims": [
-    {
-      "id": "fastapi-rest-api",
-      "capability": "FastAPI REST API",
-      "claim": "Backend (FastAPI API server)",
-      "source": {
-        "file": "README.md",
-        "line": 188
-      },
-      "evidence": [
-        {
-          "kind": "implementation",
-          "file": "autobot-backend/main.py",
-          "line": 1
-        }
-      ],
-      "status": "wired",
-      "notes": "100+ routers registered",
-      "discovery_issue": "https://github.com/..."
-    }
-  ]
-}
-```
-
-### Output: `verification.md`
-
-Markdown document with:
-- Header (auto-generated notice, metadata)
-- Summary table (counts + percentages)
-- Category sections (Infrastructure, API, Features, Architecture)
-- Discovery issues table
-- Footer (regeneration instructions)
-
-## Integration
-
-Called by `/claims-audit` skill after verification phase:
-
-```bash
-# Phase 3 in SKILL.md
-python3 .claude/skills/claims-audit/generate-report.py \
-  --inventory docs/verification-inventory.json \
-  --output docs/verification.md
-```
-
-## Related
-
-- **Parent Issue**: [MVA-2713](/MVA/issues/MVA-2713)
-- **This Implementation**: [MVA-2722](/MVA/issues/MVA-2722)
-- **Verification Script**: [MVA-2721](/MVA/issues/MVA-2721)
-- **Skill Definition**: [SKILL.md](./SKILL.md)
+**Test coverage:**
+- Inventory loading and saving
+- Duplicate issue checking
+- Issue body generation
+- Broken claim processing
+- Skipping already-filed and wired claims
