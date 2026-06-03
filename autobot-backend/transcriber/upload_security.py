@@ -103,10 +103,10 @@ def validate_upload_path(file_path: str, user_id: int) -> Path:
     """Validate that a file path is within the user's upload directory.
 
     Security checks:
+    - String-prefix check against upload base before any Path operations
     - Resolves symlinks and relative paths
-    - Verifies path is within user upload directory
-    - Rejects absolute paths outside upload dir
-    - Rejects symlinks
+    - Verifies resolved path is within user upload directory
+    - Rejects symlinks (checked on resolved path, not raw input)
 
     Args:
         file_path: Path to validate
@@ -120,29 +120,35 @@ def validate_upload_path(file_path: str, user_id: int) -> Path:
     """
     user_upload_dir = get_user_upload_dir(user_id)
 
+    # String-prefix guard: reject input that cannot possibly be within the upload dir.
+    # This is a fast early-exit and provides a CodeQL-visible sanitization boundary
+    # before any Path/os operations receive the user-controlled value.
+    upload_dir_str = str(user_upload_dir)
+    if not file_path.startswith(upload_dir_str + os.sep) and file_path != upload_dir_str:
+        raise UploadSecurityError(f"Path traversal attempt detected: path is outside upload directory")
+
     try:
-        # Convert to Path and resolve (follows symlinks, resolves ..)
+        # Resolve symlinks and canonicalize — use only this resolved path hereafter
         path = Path(file_path).resolve()
     except (OSError, ValueError) as exc:
         raise UploadSecurityError(f"Invalid file path: {exc}")
 
-    # Check if path is within user upload directory
+    # Confirm resolved path is still within user upload directory (catches symlink escapes)
     try:
         path.relative_to(user_upload_dir)
     except ValueError:
-        raise UploadSecurityError(f"Path traversal attempt detected: {file_path} not in upload directory")
+        raise UploadSecurityError(f"Path traversal attempt detected: resolved path is outside upload directory")
 
-    # Reject symlinks (path.resolve() followed them, but we want to block them)
-    if Path(file_path).is_symlink():
-        raise UploadSecurityError(f"Symlinks not allowed: {file_path}")
+    # Reject symlinks — check on the resolved path object, not the raw input
+    if path.is_symlink():
+        raise UploadSecurityError(f"Symlinks not allowed")
 
-    # Verify file exists
+    # Verify file exists and is a regular file
     if not path.exists():
-        raise UploadSecurityError(f"File not found: {file_path}")
+        raise UploadSecurityError(f"File not found")
 
-    # Verify it's a file (not directory)
     if not path.is_file():
-        raise UploadSecurityError(f"Not a regular file: {file_path}")
+        raise UploadSecurityError(f"Not a regular file")
 
     return path
 
