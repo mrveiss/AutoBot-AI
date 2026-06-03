@@ -243,6 +243,11 @@ class Database:
         )
         return [dict(r) for r in await cur.fetchall()]
 
+    async def get_speaker(self, speaker_id: int) -> dict | None:
+        cur = await self._db().execute("SELECT * FROM speakers WHERE id=?", (speaker_id,))
+        row = await cur.fetchone()
+        return dict(row) if row else None
+
     async def update_speaker(self, speaker_id: int, display_name: str) -> None:
         cur = await self._db().execute(
             "UPDATE speakers SET display_name=? WHERE id=?", (display_name, speaker_id)
@@ -305,6 +310,11 @@ class Database:
             (recording_id, limit, offset),
         )
         return [dict(r) for r in await cur.fetchall()]
+
+    async def get_segment(self, segment_id: int) -> dict | None:
+        cur = await self._db().execute("SELECT * FROM segments WHERE id=?", (segment_id,))
+        row = await cur.fetchone()
+        return dict(row) if row else None
 
     async def update_segment_text(self, segment_id: int, text: str) -> None:
         cur = await self._db().execute(

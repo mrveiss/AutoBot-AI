@@ -30,26 +30,22 @@ async def get_transcript(recording_id: int, db: Database = Depends(get_db)):
 
 @router.patch("/segments/{segment_id}", response_model=SegmentOut)
 async def update_segment(segment_id: int, body: SegmentUpdate, db: Database = Depends(get_db)):
-    cur = await db._db().execute("SELECT * FROM segments WHERE id=?", (segment_id,))
-    row = await cur.fetchone()
-    if not row:
+    segment = await db.get_segment(segment_id)
+    if not segment:
         raise HTTPException(404, "Segment not found")
     await db.update_segment_text(segment_id, body.text)
-    cur2 = await db._db().execute("SELECT * FROM segments WHERE id=?", (segment_id,))
-    updated = await cur2.fetchone()
-    return SegmentOut(**dict(updated))
+    updated = await db.get_segment(segment_id)
+    return SegmentOut(**updated)
 
 
 @router.patch("/speakers/{speaker_id}", response_model=SpeakerOut)
 async def update_speaker(speaker_id: int, body: SpeakerUpdate, db: Database = Depends(get_db)):
-    cur = await db._db().execute("SELECT * FROM speakers WHERE id=?", (speaker_id,))
-    row = await cur.fetchone()
-    if not row:
+    speaker = await db.get_speaker(speaker_id)
+    if not speaker:
         raise HTTPException(404, "Speaker not found")
     await db.update_speaker(speaker_id, body.display_name)
-    cur2 = await db._db().execute("SELECT * FROM speakers WHERE id=?", (speaker_id,))
-    updated = await cur2.fetchone()
-    return SpeakerOut(**dict(updated))
+    updated = await db.get_speaker(speaker_id)
+    return SpeakerOut(**updated)
 
 
 @router.post("/speakers/merge", status_code=200)
@@ -66,11 +62,10 @@ async def merge_speakers(body: SpeakerMerge, db: Database = Depends(get_db)):
 
 @router.post("/segments/{segment_id}/notes", response_model=NoteOut, status_code=201)
 async def create_note(segment_id: int, body: NoteCreate, request: Request, db: Database = Depends(get_db)):
-    seg_cur = await db._db().execute("SELECT recording_id FROM segments WHERE id=?", (segment_id,))
-    seg_row = await seg_cur.fetchone()
-    if not seg_row:
+    segment = await db.get_segment(segment_id)
+    if not segment:
         raise HTTPException(404, "Segment not found")
-    recording_id = seg_row[0]
+    recording_id = segment["recording_id"]
     nid = await db.create_note(segment_id, recording_id, body.content)
     note = await db.get_note(nid)
     return NoteOut(**note)
