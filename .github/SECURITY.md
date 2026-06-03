@@ -70,11 +70,9 @@ Out of scope:
 - Issues in third-party dependencies that have a public CVE and a recommended upgrade path already documented
 - Theoretical vulnerabilities without a working proof of concept
 
-## Bug Bounty
+## Recognition
 
-AutoBot AI does not currently operate a paid bug bounty program. For feature and improvement bounties (separate from security), see [BOUNTY.md](../BOUNTY.md) and [Polar.sh](https://polar.sh/mrveiss/AutoBot-AI).
-
-We do credit security researchers publicly in the advisory and in the changelog when a fix is shipped, unless you prefer to remain anonymous.
+AutoBot AI does not operate a paid bug bounty program. We do credit security researchers publicly in the advisory and in the changelog when a fix is shipped, unless you prefer to remain anonymous.
 
 ## Security Advisories
 
