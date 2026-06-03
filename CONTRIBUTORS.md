@@ -215,14 +215,6 @@ If something is broken:
 - [Open an issue](https://github.com/mrveiss/AutoBot-AI/issues/new/choose) with details
 - Check if someone already reported it (search existing issues first)
 
-### 💰 Bounties
-
-Some issues are marked with a **`bounty`** label. These issues have financial rewards available through our bounty program.
-
-- Check the issue for details on the bounty amount
-- Visit [Polar.sh](https://polar.sh/mrveiss/AutoBot-AI) for the full bounty program
-- Bounties are available to community members who complete the work
-
 ---
 
 ## Developer Tips
