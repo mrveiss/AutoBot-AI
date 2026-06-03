@@ -106,13 +106,18 @@ async function loadLibraries() {
   }
 }
 
-// Highlight code with syntax highlighting
-const highlightedCode = computed(async () => {
-  if (!codeContent.value) return ''
+// Highlighted code (populated asynchronously via watcher)
+const highlightedCode = ref<string>('')
+
+async function computeHighlightedCode() {
+  if (!codeContent.value) {
+    highlightedCode.value = ''
+    return
+  }
 
   try {
     const libs = await loadLibraries()
-    if (!libs) return ''
+    if (!libs) return
 
     const { hljs, dompurify } = libs
 
@@ -121,20 +126,18 @@ const highlightedCode = computed(async () => {
       try {
         highlighted = hljs.highlight(codeContent.value, { language: codeLanguage.value }).value
       } catch {
-        // Fallback to plaintext if language not supported
         highlighted = hljs.highlightAuto(codeContent.value).value
       }
     } else {
       highlighted = hljs.highlightAuto(codeContent.value).value
     }
 
-    // Sanitize HTML before rendering
-    return dompurify.sanitize(highlighted, { ALLOWED_TAGS: ['span'], ALLOWED_ATTR: ['class'] })
+    highlightedCode.value = dompurify.sanitize(highlighted, { ALLOWED_TAGS: ['span'], ALLOWED_ATTR: ['class'] })
   } catch (err) {
     renderError.value = `Syntax highlight failed: ${err instanceof Error ? err.message : String(err)}`
-    return codeContent.value
+    highlightedCode.value = codeContent.value ?? ''
   }
-})
+}
 
 // Copy code to clipboard
 async function copyToClipboard() {
@@ -155,10 +158,11 @@ async function copyToClipboard() {
   }
 }
 
-// Watch payload changes
+// Watch payload changes and recompute highlighted code
 watch(() => props.richPayload, () => {
   renderError.value = ''
   copyFeedback.value = ''
+  computeHighlightedCode()
 }, { immediate: true })
 
 // Initial load

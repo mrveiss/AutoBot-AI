@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import { useApi } from '@/composables/useApi'
+import { useApiClient } from '@/plugins/api'
 
 export interface EngagementMetrics {
   timestamp: string
@@ -9,7 +9,7 @@ export interface EngagementMetrics {
 }
 
 export function useEngagementMetrics() {
-  const api = useApi()
+  const api = useApiClient()
   const loading = ref(false)
   const error = ref<string | null>(null)
   const data = ref<EngagementMetrics | null>(null)
@@ -19,8 +19,7 @@ export function useEngagementMetrics() {
     error.value = null
 
     try {
-      const response = await api.get('/analytics/engagement-metrics')
-      data.value = response.data
+      data.value = await api.get<EngagementMetrics>('/analytics/engagement-metrics')
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to load engagement metrics'
     } finally {

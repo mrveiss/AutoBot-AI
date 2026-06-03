@@ -43,7 +43,7 @@ const createDefaultMockReturn = (overrides = {}) => ({
     connections: 42,
     commands_processed: 500000,
     last_check: new Date().toISOString(),
-    vm_info: { host: '172.16.168.23', name: 'Redis VM', ssh_accessible: true },
+    vm_info: { host: 'redis.example.local', name: 'Redis VM', ssh_accessible: true },
   }),
   healthStatus: ref({
     overall_status: 'healthy',

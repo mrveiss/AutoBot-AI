@@ -218,6 +218,9 @@ class ExternalSkillImporter:
             RuntimeError: If git is not available, the URL is blocked by the
                 SSRF guard, or cloning fails.
         """
+        # lgtm[py/full-ssrf] - URL is validated by _validate_git_url against SSRF attacks
+        # CodeQL suppression: URL is validated via _validate_git_url() which blocks
+        # private IPs, file:// schemes, and validates public accessibility before use
         await _validate_git_url(url)
         _validate_git_ref(ref)
 
