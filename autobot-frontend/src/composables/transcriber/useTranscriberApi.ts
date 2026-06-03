@@ -1,7 +1,7 @@
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
-import { useApi } from '@/composables/useApi'
+import { useApiClient } from '@/plugins/api'
 
 export interface Project {
   id: number
@@ -60,7 +60,7 @@ export interface KbPushStatus {
 }
 
 export function useTranscriberApi() {
-  const api = useApi()
+  const api = useApiClient()
   const base = '/api/transcriber'
 
   return {
@@ -97,10 +97,9 @@ export function useTranscriberApi() {
 
     // Export
     exportRecording: (recordingId: number, format: 'docx' | 'pdf' | 'srt' | 'vtt', options = {}) =>
-      fetch(`${base}/recordings/${recordingId}/export`, {
+      api.rawRequest(`${base}/recordings/${recordingId}/export`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ format, ...options }),
+        body: { format, ...options },
       }),
 
     // AI
