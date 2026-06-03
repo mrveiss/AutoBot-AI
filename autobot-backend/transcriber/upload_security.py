@@ -124,7 +124,7 @@ def validate_upload_path(file_path: str, user_id: int) -> Path:
     # before any Path/os operations receive the user-controlled value.
     upload_dir_str = str(user_upload_dir)
     if not file_path.startswith(upload_dir_str + os.sep) and file_path != upload_dir_str:
-        raise UploadSecurityError(f"Path traversal attempt detected: path is outside upload directory")
+        raise UploadSecurityError("Path traversal attempt detected: path is outside upload directory")
 
     try:
         # Resolve symlinks and canonicalize — use only this resolved path hereafter
@@ -136,18 +136,18 @@ def validate_upload_path(file_path: str, user_id: int) -> Path:
     try:
         path.relative_to(user_upload_dir)
     except ValueError:
-        raise UploadSecurityError(f"Path traversal attempt detected: resolved path is outside upload directory")
+        raise UploadSecurityError("Path traversal attempt detected: resolved path is outside upload directory")
 
     # Reject symlinks — check on the resolved path object, not the raw input
     if path.is_symlink():
-        raise UploadSecurityError(f"Symlinks not allowed")
+        raise UploadSecurityError("Symlinks not allowed")
 
     # Verify file exists and is a regular file
     if not path.exists():
-        raise UploadSecurityError(f"File not found")
+        raise UploadSecurityError("File not found")
 
     if not path.is_file():
-        raise UploadSecurityError(f"Not a regular file")
+        raise UploadSecurityError("Not a regular file")
 
     return path
 
