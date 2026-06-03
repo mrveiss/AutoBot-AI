@@ -58,3 +58,7 @@ node_exporter_port: 9100
 # Set this to override the git commit (e.g., for releases)
 # When empty, the current git commit hash is auto-detected
 slm_agent_version: ""
+
+# Redis connection (Issue #9226)
+# Agent imports from autobot_shared which requires REDIS_HOST set
+slm_agent_redis_host: "{{ redis_host | default('127.0.0.1') }}"
