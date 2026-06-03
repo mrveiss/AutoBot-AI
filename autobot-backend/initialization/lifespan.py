@@ -1553,8 +1553,6 @@ async def _init_plugin_manager(app: FastAPI) -> None:
     Non-critical: failures are logged and do not block startup.
     """
     try:
-        from pathlib import Path
-
         from autobot_shared.plugin_sdk import PluginManager
         from autobot_shared.ssot_config import config as ssot_config
 
