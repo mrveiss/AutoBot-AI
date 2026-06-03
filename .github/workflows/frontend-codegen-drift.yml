@@ -70,6 +70,11 @@ jobs:
         # currently needs. Pin to <3 to keep CI fast.
         run: pip install 'pydantic>=2,<3'
 
+      - name: Install minimal codegen deps
+        # pydantic is the only non-stdlib import any MANIFEST source file
+        # currently needs. Pin to <3 to keep CI fast.
+        run: pip install 'pydantic>=2,<3'
+
       - name: Run codegen drift check
         run: |
           python3 autobot-infrastructure/shared/scripts/gen_frontend_types.py --check
