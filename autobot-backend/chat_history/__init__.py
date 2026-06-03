@@ -28,7 +28,14 @@ Usage:
     await manager.add_message(sender="user", text="Hello!")
 """
 
+import time
 from typing import Any, Dict
+
+import aiofiles
+
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 from chat_history.analysis import AnalysisMixin
 from chat_history.base import ChatHistoryBase
@@ -124,6 +131,45 @@ class ChatHistoryManager(
             redis_host=redis_host,
             redis_port=redis_port,
         )
+
+    async def update_session_metadata(self, session_id: str, metadata: dict) -> bool:
+        """Merge provided metadata into the existing session metadata (#8993).
+
+        Loads the session file, merges *metadata* into the existing
+        ``metadata`` sub-dict, saves back to disk, and invalidates the
+        Redis cache entry when Redis is available.
+
+        Returns True if the update succeeded, False otherwise.
+        """
+        try:
+            self._sanitize_session_id(session_id)
+            chats_directory = self._get_chats_directory()
+            chat_file = await self._resolve_session_file_path(session_id, chats_directory)
+            if not chat_file:
+                logger.warning("Session %s not found for metadata update", session_id)
+                return False
+
+            async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
+                file_content = await f.read()
+            chat_data = self._decrypt_data(file_content)
+
+            existing_metadata = chat_data.get("metadata", {})
+            existing_metadata.update(metadata)
+            chat_data["metadata"] = existing_metadata
+            chat_data["last_modified"] = time.strftime("%Y-%m-%d %H:%M:%S")
+
+            await self._write_session_to_storage(chat_file, chat_data)
+            await self._update_redis_session_cache(session_id, chat_data)
+
+            logger.info("Session %s metadata updated successfully", session_id)
+            return True
+
+        except OSError as e:
+            logger.error("Failed to read/write session file for %s: %s", session_id, e)
+            return False
+        except Exception as e:
+            logger.error("Error updating session metadata %s: %s", session_id, e)
+            return False
 
     async def get_statistics(self) -> Dict[str, Any]:
         """Aggregate basic counts for GET /chat/stats (#6490).

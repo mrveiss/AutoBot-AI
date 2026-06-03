@@ -104,11 +104,28 @@
     "filterByCategory": "Filter by category"
   },
   "chat": {
+    "contextWindow": {
+      "ariaLabel": "{used} of {max} tokens used",
+      "tooltip": "{used} / {max} tokens used ({percent}% of context window)",
+      "warningToast": "Conversation approaching context limit ({percent}%). Older messages may be summarized.",
+      "compressedToast": "Context window optimized - older messages summarized",
+      "summaryTitle": "Context Summary",
+      "summaryToggle": "Show details"
+    },
     "sendMessage": "Send a message...",
     "newChat": "New Chat",
     "clearChat": "Clear chat",
     "exportChat": "Export chat",
     "deleteChat": "Delete chat",
+    "openSettings": "Chat settings",
+    "settings": {
+      "title": "Chat Settings",
+      "contextOverflowLabel": "Context Overflow Protection",
+      "contextOverflowDescription": "Choose how to handle conversations approaching the context limit",
+      "contextOverflowAuto": "Auto-summarize",
+      "contextOverflowWarn": "Warn only",
+      "contextOverflowDisabled": "Disabled"
+    },
     "editName": "Edit Name",
     "copyMessage": "Copy message",
     "editMessage": "Edit message",
@@ -204,6 +221,18 @@
       "deletedSuccess": "Deleted {count} chats",
       "deleteFailed": "Failed to delete some chats",
       "sharedSuccess": "Chat shared successfully"
+    },
+    "folders": {
+      "folders": "Folders",
+      "newFolder": "New folder",
+      "folderName": "Folder name",
+      "rename": "Rename folder",
+      "addSubfolder": "Add subfolder",
+      "pin": "Pin folder",
+      "unpin": "Unpin folder",
+      "assignToFolder": "Move to folder",
+      "removeFromFolder": "Remove from folder",
+      "confirmDelete": "Delete folder \"{name}\"? Subfolders will be moved to root."
     },
     "interface": {
       "loadFailed": "Failed to load chat interface",
@@ -675,6 +704,10 @@
       "statusMissing": "Missing",
       "statusSkipped": "Skipped (optional)",
       "manageInSecrets": "Manage all secrets in Settings"
+    },
+    "presets": {
+      "title": "Slash Presets",
+      "description": "Create reusable slash commands that expand into full prompts in the chat input. Type / followed by the preset name to trigger them."
     },
     "appearanceDesc": "Customize the look and feel of your workspace",
     "voiceDesc": "Configure text-to-speech voice and voice profiles",
@@ -1304,6 +1337,8 @@
         "evolutionAria": "Evolution analytics",
         "audit": "Audit",
         "auditAria": "Audit logs",
+        "devTools": "Dev Tools",
+        "devToolsAria": "Developer tools and utilities",
         "usage": "Usage",
         "usageAria": "Usage & Costs",
         "operations": "Operations",
@@ -7312,6 +7347,7 @@
     "devSpeedup": "Dev Tools",
     "desktop": "Desktop",
     "customDashboard": "Custom Dashboard",
+    "transcriber": "Transcriber",
     "agentRegistry": "Agents",
     "agentActivity": "Agent Activity",
     "experiments": "Experiments",
@@ -7367,5 +7403,53 @@
     "newCodeDesc": "Start a code analysis session",
     "newAnalysis": "New Analysis",
     "newAnalysisDesc": "Start an analysis session"
+  },
+  "llc": {
+    "templates": {
+      "searchPlaceholder": "Search templates...",
+      "loading": "Loading templates...",
+      "noMatch": "No templates found matching your search",
+      "preview": "Preview template",
+      "select": "Select template",
+      "useTemplate": "Use this template"
+    },
+    "wizard": {
+      "step1": {
+        "title": "Choose a Starting Point",
+        "description": "Start with a template or build from scratch",
+        "startFromScratch": "Start from Scratch",
+        "startFromScratchDesc": "Build your company structure from the ground up",
+        "useTemplate": "Use a Template",
+        "useTemplateDesc": "Start with a pre-configured company template"
+      },
+      "step2": {
+        "title": "Configure Your Company",
+        "description": "Set up your company details and preferences",
+        "companyName": "Company Name",
+        "companyNamePlaceholder": "e.g., Acme Corporation",
+        "issuePrefix": "Issue Prefix",
+        "issuePrefixPlaceholder": "e.g., ACM",
+        "issuePrefixHint": "2-10 uppercase letters for issue identifiers (e.g., ACM-123)",
+        "mission": "Mission Statement",
+        "missionPlaceholder": "What is your company's mission?",
+        "monthlyBudget": "Monthly Budget",
+        "monthlyBudgetPlaceholder": "100",
+        "estimatedCost": "Estimated cost",
+        "brandColor": "Brand Color",
+        "brandColorPlaceholder": "#667eea",
+        "templateVariables": "Template Configuration"
+      },
+      "step3": {
+        "title": "Review & Create",
+        "description": "Review your configuration and create your company",
+        "companyDetails": "Company Details",
+        "template": "Template",
+        "agents": "Agents",
+        "goals": "Goals",
+        "workItems": "Work Items",
+        "kbCollections": "Knowledge Collections",
+        "createCompany": "Create Company"
+      }
+    }
   }
 }

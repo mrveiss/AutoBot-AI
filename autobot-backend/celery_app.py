@@ -23,6 +23,7 @@ from config.manager import get_config_manager
 
 # Use singleton config instance for extended config values
 config = get_config_manager()
+logger = _get_logger(__name__)
 
 # Build Redis URLs from SSOT configuration (loads directly from .env)
 # DB numbers come from redis-databases.yaml via DATABASE_MAPPING (#2670)
@@ -147,6 +148,9 @@ celery_app.autodiscover_tasks(["tasks", "workers"])
 # workers register it. autodiscover_tasks only scans the listed packages.
 import services.pricing_refresh  # noqa: F401
 
+# GH#4463: Mobile device tasks module
+import tasks.mobile_device_tasks  # noqa: F401
+
 # =========================================================================
 # Issue #4455: Periodic knowledge-base cleanup schedule
 # =========================================================================
@@ -223,4 +227,26 @@ celery_app.conf.beat_schedule = {
         "task": "pricing.refresh_daily",
         "schedule": crontab(hour=2, minute=15),
     },
+    # GH#4463: weekly cleanup of stale mobile devices (inactive for 90+ days)
+    "mobile-devices-cleanup-weekly": {
+        "task": "tasks.cleanup_stale_mobile_devices",
+        "schedule": crontab(hour=3, minute=30, day_of_week=0),  # Sunday 03:30 UTC
+        "kwargs": {"dry_run": False},
+    },
+    # MVA-2228: nightly snapshot cleanup (TTL-based eviction)
+    "snapshot-cleanup-daily": {
+        "task": "tasks.cleanup_expired_snapshots",
+        "schedule": crontab(hour=3, minute=0),
+    },
 }
+
+# GH#4459: Register web-push task_success signal so tasks that pass user_id
+# in their kwargs trigger a browser push notification on completion.
+try:
+    from services.push_notification_service import register_celery_task_success_hook
+
+    register_celery_task_success_hook()
+except ImportError:
+    pass  # pywebpush not installed — push notifications disabled
+except Exception:
+    logger.warning("Push notification hook registration failed (GH#4459)", exc_info=True)

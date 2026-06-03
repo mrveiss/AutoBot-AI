@@ -2,6 +2,8 @@
  * Virtual List Composable
  *
  * Issue #4037: Reusable virtual scrolling for large lists
+ * GH#9061 consolidation: delegates to useVirtualScroll to eliminate
+ * duplicate viewport-calculation logic.
  *
  * Provides efficient rendering of large lists by virtualizing items.
  * Only renders visible items and spacers for off-screen items.
@@ -9,7 +11,7 @@
  * Usage:
  * ```vue
  * <script setup>
- * import { usV irtualList } from '@/composables/useVirtualList'
+ * import { useVirtualList } from '@/composables/useVirtualList'
  *
  * const items = ref([...])
  * const { containerRef, visibleItems, totalHeight } = useVirtualList(items, 56) // 56px item height
@@ -31,98 +33,75 @@
  * ```
  */
 
-import { ref, computed, onMounted, onScopeDispose, getCurrentInstance, getCurrentScope, watch, toValue, type MaybeRefOrGetter } from 'vue'
+import { computed, watch, onScopeDispose, getCurrentScope, toValue, type ComputedRef, type MaybeRefOrGetter } from 'vue'
+import { useVirtualScroll } from '@/composables/useVirtualScroll'
 
-interface VirtualItem<T> {
+export interface VirtualItem<T> {
   data: T
   index: number
+  /** Absolute top offset in pixels — use as `translateY(${item.offset}px)` */
   offset: number
 }
 
 /**
- * Virtual list composable
+ * Virtual list composable — thin wrapper over useVirtualScroll for the
+ * fixed-height absolute-positioned rendering pattern.
+ *
+ * Callers bind `ref="containerRef"` on the scroll container; this composable
+ * attaches the scroll listener imperatively (rather than via containerProps),
+ * keeping existing templates unchanged.
+ *
  * @param items - Array of items to virtualize
- * @param itemHeight - Height of each item in pixels
+ * @param itemHeight - Height of each item in pixels (fixed)
  * @param overscan - Number of items to render outside visible area (default: 3)
- * @returns Virtual list utilities
  */
 export function useVirtualList<T extends { id: string | number }>(
   items: MaybeRefOrGetter<T[]>,
   itemHeight: number,
   overscan: number = 3
 ) {
-  const containerRef = ref<HTMLElement | null>(null)
-  const scrollTop = ref(0)
+  const itemsRef = computed(() => toValue(items))
 
-  // Compute visible items based on scroll position
-  const visibleItems = computed<VirtualItem<T>[]>(() => {
-    if (!containerRef.value) return []
+  const scroll = useVirtualScroll<T>({
+    items: itemsRef,
+    itemHeight,
+    buffer: overscan,
+  })
 
-    const container = containerRef.value
-    const visibleHeight = container.clientHeight
-    const itemsArray = toValue(items)
-
-    if (itemsArray.length === 0) return []
-
-    // Calculate which items are visible
-    const startIndex = Math.max(0, Math.floor(scrollTop.value / itemHeight) - overscan)
-    const endIndex = Math.min(
-      itemsArray.length,
-      Math.ceil((scrollTop.value + visibleHeight) / itemHeight) + overscan
-    )
-
-    return itemsArray.slice(startIndex, endIndex).map((item, relativeIndex) => ({
+  // Adapt visibleItems from { item, index, key } → { data, index, offset }
+  // offset = index * itemHeight is exact for uniform fixed-height items.
+  const visibleItems: ComputedRef<VirtualItem<T>[]> = computed(() =>
+    scroll.visibleItems.value.map(({ item, index }) => ({
       data: item,
-      index: startIndex + relativeIndex,
-      offset: (startIndex + relativeIndex) * itemHeight
+      index,
+      offset: index * itemHeight,
     }))
-  })
+  )
 
-  // Total height of all items
-  const totalHeight = computed(() => {
-    return toValue(items).length * itemHeight
-  })
+  // Alias totalSize → totalHeight (public API name used by callers)
+  const totalHeight = scroll.totalSize
 
-  // Handle scroll events
+  // Imperatively attach the scroll listener so callers can use ref="containerRef"
+  // without needing to v-bind="containerProps".
   const handleScroll = (event: Event) => {
-    const target = event.target as HTMLElement
-    scrollTop.value = target.scrollTop
+    scroll.scrollTop.value = (event.target as HTMLElement).scrollTop
   }
 
-  // Lifecycle
-  if (getCurrentInstance()) {
-    onMounted(() => {
-      if (containerRef.value) {
-        containerRef.value.addEventListener('scroll', handleScroll, { passive: true })
-      }
-    })
-  }
+  watch(scroll.containerRef, (newEl: HTMLElement | null, oldEl: HTMLElement | null) => {
+    oldEl?.removeEventListener('scroll', handleScroll)
+    newEl?.addEventListener('scroll', handleScroll, { passive: true })
+  })
 
   if (getCurrentScope()) {
     onScopeDispose(() => {
-      if (containerRef.value) {
-        containerRef.value.removeEventListener('scroll', handleScroll)
-      }
+      scroll.containerRef.value?.removeEventListener('scroll', handleScroll)
     })
   }
 
-  // Re-attach listener if container ref changes
-  watch(
-    () => containerRef.value,
-    (newContainer, oldContainer) => {
-      if (oldContainer) {
-        oldContainer.removeEventListener('scroll', handleScroll)
-      }
-      if (newContainer) {
-        newContainer.addEventListener('scroll', handleScroll, { passive: true })
-      }
-    }
-  )
-
   return {
-    containerRef,
+    containerRef: scroll.containerRef,
     visibleItems,
     totalHeight,
-    scrollTop
+    scrollTop: scroll.scrollTop,
   }
 }

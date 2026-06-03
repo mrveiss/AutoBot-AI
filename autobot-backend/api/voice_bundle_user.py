@@ -14,9 +14,15 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from auth_middleware import get_auth_middleware, get_current_user
+from api.voice_bundle_constants import (
+    BUNDLE_DEFINITIONS,
+    VALID_BUNDLES,
+    BundleAssignRequest,
+)
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from services.audit.unified_audit import AuditCategory, AuditEvent, emit
 from utils.catalog_http_exceptions import raise_auth_error
 
 logger = get_logger(__name__)
@@ -45,45 +51,29 @@ class UserBundleResponse(BaseModel):
     bundle_name: Optional[str] = None
 
 
-class BundleAssignRequest(BaseModel):
-    """Request to assign or clear a bundle for a user."""
-
-    bundle_name: Optional[str] = None  # None = clear override
-
-
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
-VALID_BUNDLES = {"voice_safe", "voice_extended", "voice_admin"}
-
-BUNDLE_DEFINITIONS: dict[str, dict[str, str]] = {
-    "voice_safe": {
-        "label": "Voice Safe",
-        "description": "Basic voice commands for standard users",
-    },
-    "voice_extended": {
-        "label": "Voice Extended",
-        "description": "Extended voice commands with advanced features",
-    },
-    "voice_admin": {
-        "label": "Voice Admin",
-        "description": "Full voice command set for administrators",
-    },
-}
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+_tool_count_cache: dict[tuple[str, bool], int] = {}
+
 
 async def _count_tools_for_bundle(bundle: str, is_admin: bool) -> int:
-    """Return the number of tools available in this bundle."""
-    from api.redis_mcp.rbac import TOOL_ACCESS_MATRIX, filter_tools_for_bundle  # noqa: PLC0415
+    """Return the number of tools available in this bundle (cached per bundle+role)."""
+    key = (bundle, is_admin)
+    if key not in _tool_count_cache:
+        from api.redis_mcp.rbac import (  # noqa: PLC0415
+            TOOL_ACCESS_MATRIX,
+            filter_tools_for_bundle,
+        )
 
-    all_tools = list(TOOL_ACCESS_MATRIX.keys())
-    return len(filter_tools_for_bundle(all_tools, bundle=bundle, is_admin=is_admin))
+        all_tools = list(TOOL_ACCESS_MATRIX.keys())
+        _tool_count_cache[key] = len(filter_tools_for_bundle(all_tools, bundle=bundle, is_admin=is_admin))
+    return _tool_count_cache[key]
+
+
+def _is_admin(user: dict) -> bool:
+    return user.get("role") == "admin"
 
 
 def _get_user_id(user: dict) -> str:
@@ -94,8 +84,7 @@ def _get_user_id(user: dict) -> str:
 def _check_self_or_admin(request: Request, current_user: dict, target_user_id: str) -> bool:
     """Verify user can access target_user_id (self or admin)."""
     current_user_id = _get_user_id(current_user)
-    is_admin = current_user.get("role") == "admin"
-    return current_user_id == target_user_id or is_admin
+    return current_user_id == target_user_id or _is_admin(current_user)
 
 
 # ---------------------------------------------------------------------------
@@ -117,7 +106,7 @@ async def list_voice_bundles(
     Filters bundles based on user role (admins see all, users see allowed).
     Results are sorted by bundle name for deterministic ordering.
     """
-    is_admin = current_user.get("role", "user") == "admin"
+    is_admin = _is_admin(current_user)
 
     result = []
     for bundle_name in sorted(VALID_BUNDLES):
@@ -163,8 +152,9 @@ async def get_user_bundle(
         raise_auth_error("AUTH_0003", "Cannot access other user's bundle assignment")
 
     try:
-        from user_management.database import get_async_session  # noqa: PLC0415
         from sqlalchemy import text  # noqa: PLC0415
+
+        from user_management.database import get_async_session  # noqa: PLC0415
 
         async with get_async_session() as session:
             row = await session.execute(
@@ -203,8 +193,7 @@ async def set_user_bundle(
     self-service is explicitly prohibited to prevent privilege escalation
     (GH#8969).
     """
-    is_admin = current_user.get("role") == "admin"
-    if not is_admin:
+    if not _is_admin(current_user):
         raise_auth_error("AUTH_0003", "Only admins may assign voice bundles")
 
     if body.bundle_name is not None and body.bundle_name not in VALID_BUNDLES:
@@ -215,9 +204,17 @@ async def set_user_bundle(
 
     current_user_id = _get_user_id(current_user)
 
+    _audit_meta = {
+        "target_user_id": user_id,
+        "requested_bundle_name": body.bundle_name,
+        "assignment_action": "clear" if body.bundle_name is None else "assign",
+    }
+    stored_bundle_name: Optional[str] = None
+
     try:
-        from user_management.database import get_async_session  # noqa: PLC0415
         from sqlalchemy import text  # noqa: PLC0415
+
+        from user_management.database import get_async_session  # noqa: PLC0415
 
         async with get_async_session() as session:
             if body.bundle_name is None:
@@ -235,7 +232,11 @@ async def set_user_bundle(
                               assigned_by = EXCLUDED.assigned_by,
                               assigned_at = EXCLUDED.assigned_at
                         """),
-                    {"uid": user_id, "bundle": body.bundle_name, "by": str(current_user_id)},
+                    {
+                        "uid": user_id,
+                        "bundle": body.bundle_name,
+                        "by": str(current_user_id),
+                    },
                 )
             await session.commit()
             # Re-read after commit so response reflects actual stored value.
@@ -244,27 +245,39 @@ async def set_user_bundle(
                 {"uid": user_id},
             )
             result = row.fetchone()
-            stored_bundle_name: Optional[str] = result[0] if result else None
+            stored_bundle_name = result[0] if result else None
     except Exception as exc:
+        try:
+            emit(
+                AuditEvent(
+                    category=AuditCategory.SECURITY,
+                    action="voice_bundle_assignment_changed",
+                    actor_id=str(current_user_id),
+                    resource_type="user_voice_bundle",
+                    resource_id=user_id,
+                    outcome="failure",
+                    metadata={**_audit_meta, "error": str(exc)},
+                )
+            )
+        except Exception:
+            logger.warning("set_user_bundle: failed to emit failure audit", exc_info=True)
         logger.error("set_user_bundle: DB error: %s", exc)
         raise HTTPException(status_code=500, detail="Database error") from exc
 
-    from services.audit.unified_audit import AuditCategory, AuditEvent, emit  # noqa: PLC0415
-
-    emit(
-        AuditEvent(
-            category=AuditCategory.SECURITY,
-            action="voice_bundle_assignment_changed",
-            actor_id=str(current_user_id),
-            resource_type="user_voice_bundle",
-            resource_id=user_id,
-            metadata={
-                "target_user_id": user_id,
-                "bundle_name": stored_bundle_name,
-                "assignment_action": "clear" if stored_bundle_name is None else "assign",
-            },
+    try:
+        emit(
+            AuditEvent(
+                category=AuditCategory.SECURITY,
+                action="voice_bundle_assignment_changed",
+                actor_id=str(current_user_id),
+                resource_type="user_voice_bundle",
+                resource_id=user_id,
+                outcome="success",
+                metadata={**_audit_meta, "bundle_name": stored_bundle_name},
+            )
         )
-    )
+    except Exception:
+        logger.warning("set_user_bundle: failed to emit success audit", exc_info=True)
 
     logger.info(
         "voice_bundle user_id=%s target=%s bundle=%s",

@@ -55,6 +55,8 @@ export interface ChatSession {
   activities?: SessionActivity[]
   // Issue #608: Session-scoped secrets
   sessionSecrets?: SessionSecret[]
+  // GH#8987: folder assignment (folder_id from useFolderStore)
+  folderId?: string | null
   // Desktop automation context
   // DORMANT: vncUrl preserved for future VNC re-integration (#1130 → #5136)
   desktopSession?: {

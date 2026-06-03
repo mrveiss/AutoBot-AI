@@ -23,6 +23,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
+from user_management.config import DeploymentMode, get_deployment_config
 from user_management.database import get_async_session_factory
 
 from ..models.enums import ActivityEventType, WorkItemStatus, WorkItemType
@@ -80,6 +81,12 @@ class LivenessMonitor:
 
     async def _check_once(self) -> None:
         """Single scan — find stuck runs and trigger recovery for each."""
+        # Skip DB checks in single_user mode where PostgreSQL is not configured (#9089)
+        deployment_config = get_deployment_config()
+        if deployment_config.mode == DeploymentMode.SINGLE_USER:
+            logger.debug("LivenessMonitor: skipping check in single_user mode (no PostgreSQL)")
+            return
+
         factory = get_async_session_factory()
         async with factory() as session:
             stuck = await self._find_stuck_runs(session)

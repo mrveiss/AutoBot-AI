@@ -223,7 +223,7 @@ async def ingest_response_done(session_id: str, body: ResponseDoneRequest) -> di
 
 @router.post("/tools/call")
 async def call_realtime_tool(body: ToolCallRequest) -> dict:
-    """Route a Realtime tool call through the MCP bridge (#7343 stub)."""
+    """Route a Realtime tool call through the MCP bridge (#7343)."""
     from services.realtime_mcp_bridge import get_realtime_bridge
 
     bridge = await get_realtime_bridge()

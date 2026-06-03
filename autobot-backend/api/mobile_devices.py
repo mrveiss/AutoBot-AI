@@ -14,8 +14,6 @@ Device tokens expire after 90 days of inactivity; the GET list endpoint
 prunes them automatically.
 """
 
-import hashlib
-import hmac
 import secrets
 import uuid
 from datetime import timedelta
@@ -197,17 +195,13 @@ async def list_devices(
     """
     user_id: str = str(current_user.get("id") or current_user.get("user_id", ""))
 
-    result = await session.execute(
-        select(MobileDevice).where(MobileDevice.user_id == user_id)
-    )
+    result = await session.execute(select(MobileDevice).where(MobileDevice.user_id == user_id))
     devices = list(result.scalars().all())
 
     active = _prune_expired(devices)
     expired_ids = {d.id for d in devices} - {d.id for d in active}
     if expired_ids:
-        await session.execute(
-            delete(MobileDevice).where(MobileDevice.id.in_(expired_ids))
-        )
+        await session.execute(delete(MobileDevice).where(MobileDevice.id.in_(expired_ids)))
         await session.commit()
         logger.info("Pruned %d expired mobile device(s) for user %s", len(expired_ids), user_id)
 

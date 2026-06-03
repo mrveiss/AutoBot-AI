@@ -105,7 +105,10 @@ function doConnect(): void {
   }
 
   try {
-    socket.value = new WebSocket(WS_URL)
+    const token = sessionStorage.getItem('slm_access_token')
+    socket.value = token
+      ? new WebSocket(WS_URL, ['bearer', token])
+      : new WebSocket(WS_URL)
   } catch {
     // SecurityError when mixed content is blocked (ws:// from https:// page)
     connected.value = false

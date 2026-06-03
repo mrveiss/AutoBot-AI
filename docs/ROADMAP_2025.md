@@ -1,4 +1,7 @@
-# AutoBot Project Roadmap 2025
+---
+title: Roadmap
+nav_order: 4
+---
 
 **Project Start**: July 2025
 **Current Status**: Active Development - See [docs/system-state.md](system-state.md) for current status

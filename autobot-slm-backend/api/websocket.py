@@ -20,14 +20,29 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ws", tags=["websocket"])
 
 
-async def _authenticate_websocket_token(websocket: WebSocket) -> dict | None:
-    """Authenticate a WebSocket connection via the ``token`` query parameter.
+def _extract_ws_token(websocket: WebSocket) -> str | None:
+    """Extract the JWT from a WebSocket connection.
 
-    Reads the ``token`` query parameter, validates it as a JWT using the
-    existing auth service, and returns the decoded payload on success.
-    On failure the socket is closed with code 4001 before it is accepted,
-    and ``None`` is returned.  Callers must return immediately when ``None``
-    is received.
+    Prefers the Sec-WebSocket-Protocol subprotocol header
+    (``['bearer', '<token>']``) so the token is never written to URL access
+    logs.  Falls back to the ``?token=`` query param for backwards
+    compatibility with older clients.
+    """
+    protocols = websocket.headers.get("sec-websocket-protocol", "")
+    if protocols:
+        parts = [p.strip() for p in protocols.split(",")]
+        if len(parts) == 2 and parts[0] == "bearer" and parts[1]:
+            return parts[1]
+    return websocket.query_params.get("token") or None
+
+
+async def _authenticate_websocket_token(websocket: WebSocket) -> dict | None:
+    """Authenticate a WebSocket connection.
+
+    Extracts the JWT via subprotocol header (preferred) or query param
+    (fallback), validates it, accepts the socket on success, and returns
+    the decoded payload.  On failure, accepts then closes with code 4001
+    so the browser receives a proper WS frame rather than an HTTP 403.
 
     Args:
         websocket: The incoming WebSocket connection (not yet accepted).
@@ -35,14 +50,16 @@ async def _authenticate_websocket_token(websocket: WebSocket) -> dict | None:
     Returns:
         Decoded JWT payload dict, or ``None`` if authentication failed.
     """
-    token = websocket.query_params.get("token")
+    token = _extract_ws_token(websocket)
     if not token:
+        await websocket.accept()
         await websocket.close(code=4001, reason="Authentication required")
         logger.warning("WebSocket connection rejected: missing token")
         return None
 
     payload = auth_service.decode_token(token)
     if not payload:
+        await websocket.accept()
         await websocket.close(code=4001, reason="Invalid or expired token")
         logger.warning("WebSocket connection rejected: invalid token")
         return None
@@ -59,7 +76,9 @@ class ConnectionManager:
 
     async def connect(self, websocket: WebSocket, channel: str) -> None:
         """Accept a WebSocket connection and subscribe to a channel."""
-        await websocket.accept()
+        protocols = websocket.headers.get("sec-websocket-protocol", "")
+        subprotocol = "bearer" if protocols.startswith("bearer") else None
+        await websocket.accept(subprotocol=subprotocol)
         async with self._lock:
             if channel not in self._connections:
                 self._connections[channel] = set()

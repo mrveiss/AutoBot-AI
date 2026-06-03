@@ -3,6 +3,7 @@
 from autobot_shared.trust_enums import TrustLevel
 
 from .activity import ActorType, LLCActivityLog, LLCBase
+from .agent_wiki import LLCAgentWikiEntry
 from .approval import LLCApproval
 from .board import LLCBoard, LLCBoardColumn
 from .budget import LLCAgentBudget
@@ -64,6 +65,7 @@ __all__ = [
     "GoalStatus",
     "LLCActivityLog",
     "LLCAgentBudget",
+    "LLCAgentWikiEntry",
     "LLCAgentStatus",
     "HeartbeatInvocationSource",
     "LLCHeartbeatRun",

@@ -63,6 +63,19 @@ export const routes: RouteRecordRaw[] = [
       isPublic: true
     }
   },
+  // GH#8996: public shared conversation view (no auth required)
+  {
+    path: '/shared/:token',
+    name: 'shared-chat',
+    component: () => import('@/views/SharedChatView.vue'),
+    meta: {
+      title: 'Shared Conversation',
+      hideInNav: true,
+      hideFooter: true,
+      requiresAuth: false,
+      isPublic: true
+    }
+  },
   {
     path: '/dashboard',
     redirect: '/home'
@@ -950,6 +963,13 @@ export const routes: RouteRecordRaw[] = [
     name: 'llc-companies',
     component: () => import('@/views/llc/SubCompanyTree.vue'),
     meta: { title: 'Company Hierarchy', requiresAuth: true, llcScope: true, hideInNav: true },
+  },
+  // GH#9164: Company Creation Wizard with Template Browser
+  {
+    path: '/llc/companies/create',
+    name: 'llc-company-create',
+    component: () => import('@/views/llc/CompanyCreationWizard.vue'),
+    meta: { title: 'Create Company', requiresAuth: true, llcScope: true, hideInNav: true, hideFooter: true },
   },
   // Issue #4465: Usage moved under /analytics/usage
   { path: '/usage', redirect: '/analytics/usage' },

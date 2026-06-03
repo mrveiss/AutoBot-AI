@@ -26,12 +26,14 @@ from api.browser_mcp import router as browser_mcp_router
 from api.canvas import router as canvas_router  # MVA-359
 from api.chat import router as chat_router
 from api.chat_compare import router as chat_compare_router  # Issue #4414
+from api.chat_embed import router as chat_embed_router  # GH#9047
 from api.chat_presets import router as chat_presets_router  # GH#8595
 from api.collaboration import router as collaboration_router
 from api.config_revisions import router as config_revisions_router  # #1404
 from api.data_storage import router as data_storage_router
 from api.database_mcp import router as database_mcp_router
 from api.developer import router as developer_router
+from api.execution_snapshots import router as execution_snapshots_router  # GH#4458, MVA-2227
 from api.files import router as files_router
 from api.filesystem_mcp import router as filesystem_mcp_router
 from api.frontend_config import router as frontend_config_router
@@ -81,6 +83,8 @@ from api.service_messages import router as service_messages_router
 from api.settings import router as settings_router
 from api.structured_thinking_mcp import router as structured_thinking_mcp_router
 from api.system import router as system_router
+from api.telegram_bot import router as telegram_bot_router  # MVA-2074
+from api.transcriber import router as transcriber_router  # Issue #9044, MVA-2186
 from api.usage import router as usage_router  # Issue #1807
 from api.user_management.router import router as user_management_router  # Issue #1801
 from api.vnc_manager import router as vnc_router
@@ -110,8 +114,10 @@ def _get_system_routers() -> list:
         (service_messages_router, "", ["service-messages"], "service_messages"),
         (chat_router, "", ["chat"], "chat"),
         (chat_compare_router, "", ["chat", "compare"], "chat_compare"),  # Issue #4414
+        (chat_embed_router, "", ["chat", "embed"], "chat_embed"),  # GH#9047
         (chat_presets_router, "", ["chat"], "chat_presets"),  # GH#8595
         (collaboration_router, "", ["collaboration"], "collaboration"),
+        (telegram_bot_router, "", ["telegram-bot", "integrations"], "telegram_bot"),  # MVA-2074
         (system_router, "/system", ["system"], "system"),
         (settings_router, "/settings", ["settings"], "settings"),
         (usage_router, "/usage", ["usage", "analytics"], "usage"),  # Issue #1807
@@ -314,6 +320,7 @@ def _get_service_routers() -> list:
         (models_router, "/models", ["models"], "models"),
         (adapters_router, "/adapters", ["adapters"], "adapters"),
         (redis_router, "/redis", ["redis"], "redis"),
+        (execution_snapshots_router, "", ["execution", "snapshots"], "execution_snapshots"),  # GH#4458, MVA-2227
         (voice_realtime_router, "/voice", ["voice"], "voice_realtime"),
         (voice_router, "/voice", ["voice"], "voice"),
         (bundle_me_router, "/voice", ["voice", "rbac"], "voice_bundle_me"),
@@ -419,6 +426,13 @@ def _get_canvas_routers() -> list:
     ]
 
 
+def _get_transcriber_routers() -> list:
+    """Transcriber routers (MVA-2186, Issue #9044)."""
+    return [
+        (transcriber_router, "/transcriber", ["transcriber"], "transcriber"),
+    ]
+
+
 def load_core_routers():
     """
     Load and return core API routers (Issue #560: decomposed, #730: plugins).
@@ -441,4 +455,5 @@ def load_core_routers():
     routers.extend(_get_agent_routers())
     routers.extend(_get_plugin_routers())
     routers.extend(_get_canvas_routers())
+    routers.extend(_get_transcriber_routers())
     return routers

@@ -27,6 +27,7 @@ from autobot_shared.async_compat import run_or_schedule
 from llc.models.activity import (  # noqa: F401 — registers LLC tables with metadata
     LLCBase,
 )
+from models.push_subscription import PushSubscription  # noqa: F401 — GH#4459
 from user_management.config import get_deployment_config
 from user_management.models import Base
 

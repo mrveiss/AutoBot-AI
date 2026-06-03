@@ -233,7 +233,7 @@ We welcome contributions! Whether you're fixing bugs, adding features, or improv
 
 1. Check out [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
 2. Look for issues tagged `good-first-issue` if you're new
-3. Bounty opportunities available on some issues — see the `bounty` label
+3. Join the community discussion in [GitHub Discussions](https://github.com/mrveiss/AutoBot-AI/discussions)
 
 ---
 
@@ -281,10 +281,6 @@ Find issues matching your skill area:
   - [Help Wanted: Testing](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Atesting+label%3Ahelp-wanted)
   - [All Testing Issues](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Atesting)
 
-### 💰 Bounty Opportunities
-
-Want to earn money contributing? Check out issues with the [**bounty** label](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Abounty). Visit [Polar.sh](https://polar.sh/mrveiss/AutoBot-AI) for details and to claim rewards.
-
 ### 📖 Step-by-Step Contribution Guide
 
 Detailed contribution process, code style guidelines, and development setup:
@@ -299,10 +295,6 @@ Support AutoBot's development in multiple ways:
 ### Sponsorship & Donations
 - **[GitHub Sponsors](https://github.com/sponsors/mrveiss)** — Recurring sponsorship with direct support and updates
 - **[Ko-fi](https://ko-fi.com/mrveiss)** — One-time or recurring donations for maintenance and features
-
-### Bounty Program
-- **[Polar.sh Bounties](https://polar.sh/mrveiss/AutoBot-AI)** — Earn rewards for implementing features and fixing bugs
-- See [BOUNTY.md](BOUNTY.md) for eligibility criteria and how to claim rewards
 
 Your support helps us:
 - Maintain and improve the codebase

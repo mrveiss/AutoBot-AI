@@ -115,4 +115,27 @@ describe('useChatPresetsStore (GH#8596)', () => {
     expect(result).toBe(true)
     expect(store.presets).toHaveLength(0)
   })
+
+  it('createPreset clears stale error before starting (GH#9070)', async () => {
+    const store = useChatPresetsStore()
+    store.error = 'previous error'
+    await store.createPreset({ name: 'help', description: 'Help', content: 'How can I help?' })
+    expect(store.error).toBeNull()
+  })
+
+  it('updatePreset clears stale error before starting (GH#9070)', async () => {
+    const store = useChatPresetsStore()
+    store.presets = [mockPreset()]
+    store.error = 'previous error'
+    await store.updatePreset('preset-1', { description: 'Updated' })
+    expect(store.error).toBeNull()
+  })
+
+  it('deletePreset clears stale error before starting (GH#9070)', async () => {
+    const store = useChatPresetsStore()
+    store.presets = [mockPreset()]
+    store.error = 'previous error'
+    await store.deletePreset('preset-1')
+    expect(store.error).toBeNull()
+  })
 })

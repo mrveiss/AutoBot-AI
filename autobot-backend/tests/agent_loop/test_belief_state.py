@@ -120,6 +120,62 @@ def _registry(mapping: dict):
             ext_mod.EXTRACTOR_REGISTRY = original
 
 
+# ---------------------------------------------------------------------------
+# BeliefStateUpdater._resolve_contradiction_surface (GH#9114)
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_contradiction_surface_surfaced_positive_delta():
+    updater = BeliefStateUpdater()
+    # |0.9 - 0.5| = 0.4 >= 0.3 → surfaced_to_think
+    assert updater._resolve_contradiction_surface(0.5, 0.9) == "surfaced_to_think"
+
+
+def test_resolve_contradiction_surface_surfaced_negative_delta():
+    updater = BeliefStateUpdater()
+    # |0.5 - 0.9| = 0.4 >= 0.3 → surfaced_to_think regardless of direction
+    assert updater._resolve_contradiction_surface(0.9, 0.5) == "surfaced_to_think"
+
+
+def test_resolve_contradiction_surface_surfaced_at_threshold():
+    updater = BeliefStateUpdater()
+    # |0.6 - 0.3| = 0.3 exactly at threshold → surfaced_to_think
+    assert updater._resolve_contradiction_surface(0.3, 0.6) == "surfaced_to_think"
+
+
+def test_resolve_contradiction_surface_updated_new_higher():
+    updater = BeliefStateUpdater()
+    # delta = |0.7 - 0.6| = 0.1 < 0.3, new 0.7 >= prior 0.6 → updated
+    assert updater._resolve_contradiction_surface(0.6, 0.7) == "updated"
+
+
+def test_resolve_contradiction_surface_updated_equal_confidence():
+    updater = BeliefStateUpdater()
+    # delta = 0, new == prior → updated (ties go to new value)
+    assert updater._resolve_contradiction_surface(0.8, 0.8) == "updated"
+
+
+def test_resolve_contradiction_surface_suppressed_new_lower():
+    updater = BeliefStateUpdater()
+    # delta = |0.6 - 0.7| = 0.1 < 0.3, new 0.6 < prior 0.7 → suppressed
+    assert updater._resolve_contradiction_surface(0.7, 0.6) == "suppressed"
+
+
+def test_resolve_contradiction_surface_just_below_threshold_suppressed():
+    updater = BeliefStateUpdater()
+    # delta = |0.5 - 0.8| = 0.3 → exactly threshold is surfaced, so 0.29 is below
+    assert updater._resolve_contradiction_surface(0.8, 0.51) == "suppressed"
+
+
+def test_resolve_contradiction_surface_custom_threshold():
+    updater = BeliefStateUpdater()
+    updater.CONTRADICTION_SURFACE_THRESHOLD = 0.5
+    # With threshold 0.5: delta=0.4 < 0.5 → updated (not surfaced)
+    assert updater._resolve_contradiction_surface(0.5, 0.9) == "updated"
+    # delta=0.6 >= 0.5 → surfaced_to_think
+    assert updater._resolve_contradiction_surface(0.1, 0.7) == "surfaced_to_think"
+
+
 def test_belief_updater_insert():
     ctx = make_ctx()
     updater = BeliefStateUpdater()

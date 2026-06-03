@@ -13,7 +13,6 @@ import importlib
 import json
 import sys
 from datetime import datetime, timezone
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
@@ -37,6 +36,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
+from autobot_shared.ssot_constants import STARTUP_ERROR_FILE
 from config.manager import get_config_manager
 from constants.model_constants import ModelConstants as ModelConsts
 
@@ -48,10 +48,6 @@ config = get_config_manager()
 router = APIRouter()
 
 logger = get_logger(__name__)
-
-# GH#8947: Disk-persisted Phase 1 error file written by lifespan.py before
-# process exit. Path must match _STARTUP_ERROR_FILE in initialization/lifespan.py.
-_STARTUP_ERROR_FILE = Path("/run/autobot/startup-error.json")
 
 # Issue #380: Module-level tuple for allowed dynamic import modules
 _ALLOWED_IMPORT_MODULES = (
@@ -320,8 +316,9 @@ async def get_system_health(
             # app_state is unreachable. Fall back to the disk file written by
             # lifespan.py before re-raising.
             try:
-                if _STARTUP_ERROR_FILE.exists():
-                    data = json.loads(_STARTUP_ERROR_FILE.read_text(encoding="utf-8"))
+                if await asyncio.to_thread(STARTUP_ERROR_FILE.exists):
+                    text = await asyncio.to_thread(STARTUP_ERROR_FILE.read_text, encoding="utf-8")
+                    data = json.loads(text)
                     startup_error = data.get("error_type")
             except Exception:
                 pass

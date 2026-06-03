@@ -36,6 +36,9 @@ Environment=SLM_NODE_ID={{ slm_node_id }}
 Environment=SLM_ADMIN_URL={{ effective_admin_url }}
 Environment=PYTHONPATH={{ slm_agent_dir }}
 Environment=PYTHONUNBUFFERED=1
+# Issue #9226: Redis connection for autobot_shared imports
+Environment=REDIS_HOST={{ slm_agent_redis_host }}
+Environment=AUTOBOT_REDIS_HOST={{ slm_agent_redis_host }}
 
 # Agent execution — admin_url resolved from SLM_ADMIN_URL env var above,
 # not baked into CLI args, so re-provisioning updates it (#2833).
@@ -56,6 +59,13 @@ WatchdogSec={{ slm_agent_watchdog_sec }}
 # Resource limits
 LimitNOFILE=65536
 LimitNPROC=4096
+
+# Memory limits — agent is lightweight; hard cap prevents OOM cascade (#9086)
+MemoryMax=256M
+MemoryHigh=200M
+
+# OOM priority — kernel kills agent before critical services like Paperclip (#9086)
+OOMScoreAdjust=500
 
 # Security hardening
 NoNewPrivileges=true

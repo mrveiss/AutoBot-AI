@@ -15,11 +15,11 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from pathlib import Path
 
 from fastapi import FastAPI
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import STARTUP_ERROR_FILE
 from autobot_shared.tracing import (
     instrument_aiohttp,
     instrument_redis,
@@ -61,11 +61,6 @@ app_state: Metadata = {
     "initialization_message": "Backend starting...",
     "startup_error": None,  # GH#8947: capture startup errors for health visibility
 }
-
-# GH#8947: Persist Phase 1 startup errors across process exit so /api/health
-# can report them even when the server never bound to port.
-# /run/autobot/ is created by Ansible and owned by the autobot user.
-_STARTUP_ERROR_FILE = Path("/run/autobot/startup-error.json")
 
 
 async def update_app_state(key: str, value) -> None:
@@ -495,10 +490,10 @@ async def initialize_critical_services(app: FastAPI):
         logger.error("❌ CRITICAL INITIALIZATION FAILED: %s", critical_error)
         logger.error("Backend startup ABORTED - critical services must be operational")
         error_type = type(critical_error).__name__
-        error_detail = f"{error_type}: {str(critical_error)}"
+        logger.error("Startup error detail: %s: %s", error_type, str(critical_error))
         await update_app_state_multi(
             initialization_status="error",
-            initialization_message=f"Startup failed: {error_detail}",
+            initialization_message="Startup failed — check server logs for details",
             startup_error=error_type,
         )
         # GH#8947: Persist error type to disk before re-raising — the process will
@@ -506,8 +501,8 @@ async def initialize_critical_services(app: FastAPI):
         # unreachable. The file survives process exit and lets /api/health report
         # the failure when the next (probe) process reads it.
         try:
-            _STARTUP_ERROR_FILE.parent.mkdir(parents=True, exist_ok=True)
-            _STARTUP_ERROR_FILE.write_text(
+            STARTUP_ERROR_FILE.parent.mkdir(parents=True, exist_ok=True)
+            STARTUP_ERROR_FILE.write_text(
                 json.dumps(
                     {
                         "error_type": error_type,
@@ -1512,6 +1507,33 @@ async def _init_budget_watchdog(app: FastAPI) -> None:
         app.state.llc_budget_watchdog = None
 
 
+async def _recover_agent_sessions(app: FastAPI) -> None:
+    """Re-queue runs that were interrupted by a previous server crash (GH#9026)."""
+    logger.info("LLC SessionCheckpointer: recovering incomplete runs...")
+    try:
+        from llc.scheduler.session_checkpointer import recover_incomplete_runs
+
+        await recover_incomplete_runs()
+        logger.info("LLC SessionCheckpointer: recovery complete")
+    except Exception as exc:
+        logger.warning("LLC session recovery failed (non-fatal): %s", exc)
+
+
+async def _init_session_checkpointer(app: FastAPI) -> None:
+    """Start LLC SessionCheckpointer for periodic session state persistence (GH#9026)."""
+    logger.info("LLC SessionCheckpointer: Starting...")
+    try:
+        from llc.scheduler.session_checkpointer import SessionCheckpointer
+
+        checkpointer = SessionCheckpointer()
+        checkpointer.start()
+        app.state.llc_session_checkpointer = checkpointer
+        logger.info("LLC SessionCheckpointer: Started")
+    except Exception as exc:
+        logger.warning("LLC session checkpointer startup failed (non-fatal): %s", exc)
+        app.state.llc_session_checkpointer = None
+
+
 async def _start_llc_notification_router(app: FastAPI) -> None:
     """Start the LLC notification router background task (GH#8255).
 
@@ -1568,8 +1590,8 @@ async def _init_plugin_manager(app: FastAPI) -> None:
     try:
         from pathlib import Path
 
+        from autobot_shared.plugin_sdk import PluginManager
         from autobot_shared.ssot_config import config as ssot_config
-        from plugin_sdk.plugin_manager import PluginManager
 
         plugins_root = ssot_config.path.plugins_path
         plugin_dirs = [
@@ -1619,10 +1641,12 @@ async def initialize_background_services(app: FastAPI):
         await _start_doc_sync_queue_worker(app)
         await _auto_index_documentation()
         await _init_log_forwarding()
+        await _recover_agent_sessions(app)
         await _init_heartbeat_scheduler(app)
         await _init_llc_routine_scheduler(app)
         await _init_liveness_monitor(app)
         await _init_budget_watchdog(app)
+        await _init_session_checkpointer(app)
         await _init_llc_outbound_sync(app)
         await _start_connector_scheduler()
         await _init_trigger_service(app)
@@ -1651,7 +1675,7 @@ async def initialize_background_services(app: FastAPI):
         # GH#8947: Successful startup — remove the Phase 1 error file if it exists
         # from a previous failed boot attempt.
         try:
-            _STARTUP_ERROR_FILE.unlink(missing_ok=True)
+            STARTUP_ERROR_FILE.unlink(missing_ok=True)
         except Exception:
             pass
         logger.info("✅ [100%] PHASE 2 COMPLETE: All background services initialized")
@@ -1755,6 +1779,10 @@ async def cleanup_services(app: FastAPI):
         if hasattr(app.state, "llc_budget_watchdog") and app.state.llc_budget_watchdog:
             app.state.llc_budget_watchdog.stop()
             logger.info("✅ LLC budget watchdog stopped")
+        # GH#9026: Stop LLC session checkpointer
+        if hasattr(app.state, "llc_session_checkpointer") and app.state.llc_session_checkpointer:
+            app.state.llc_session_checkpointer.stop()
+            logger.info("✅ LLC session checkpointer stopped")
 
         # GH#8257: Stop LLC outbound sync service
         if hasattr(app.state, "llc_outbound_sync") and app.state.llc_outbound_sync:

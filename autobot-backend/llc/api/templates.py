@@ -13,7 +13,7 @@ Route group: /llc/templates
 """
 
 import uuid
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,6 +30,7 @@ from llc.models.template import (
     TemplateSearchResult,
 )
 from llc.services.template import (
+    BuiltInTemplateNotFoundError,
     TemplateAccessError,
     TemplateNotFoundError,
     TemplateSecretPlaceholderError,
@@ -139,3 +140,29 @@ async def delete_template(
         await svc.session.commit()
     except TemplateNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
+
+
+@router.get("/built-in", response_model=List[Dict])
+async def list_built_in_templates() -> List[Dict]:
+    """List all built-in company templates (GH#9042).
+
+    Returns template metadata only (name, description, category, tags).
+    Does not require authentication or database access.
+    """
+    return TemplateService.list_built_in_templates()
+
+
+@router.get("/built-in/{template_key}", response_model=Dict)
+async def get_built_in_template(template_key: str) -> Dict:
+    """Fetch a specific built-in template by key (GH#9042).
+
+    Args:
+        template_key: Template identifier (e.g., 'software-team')
+
+    Returns:
+        Full template JSON including metadata, variables, agents, goals, work_items, kb_collections
+    """
+    try:
+        return TemplateService.get_built_in_template(template_key)
+    except BuiltInTemplateNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))

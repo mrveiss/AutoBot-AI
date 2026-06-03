@@ -17,17 +17,23 @@ Provides integrations with external tools and services:
 
 from integrations.base import BaseIntegration, IntegrationConfig, IntegrationStatus
 from integrations.github_integration import GitHubIntegration
+from integrations.microsoft365_integration import Microsoft365Integration
 from integrations.notion_integration import NotionIntegration
 from integrations.rate_limiter import IntegrationRateLimiter
 from integrations.slack_integration import SlackChannelMapping, SlackNotificationIntegration
+from integrations.whatsapp_integration import WhatsAppIntegration, WhatsAppOptInStatus
 
 __all__ = [
     "BaseIntegration",
     "GitHubIntegration",
     "IntegrationConfig",
     "IntegrationRateLimiter",
+    "Microsoft365Integration",
     "IntegrationStatus",
+    "Microsoft365Integration",
     "NotionIntegration",
     "SlackChannelMapping",
     "SlackNotificationIntegration",
+    "WhatsAppIntegration",
+    "WhatsAppOptInStatus",
 ]

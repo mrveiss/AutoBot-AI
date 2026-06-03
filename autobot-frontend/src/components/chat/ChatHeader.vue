@@ -28,10 +28,26 @@
 
       <!-- Right: Actions + connection status -->
       <div class="flex items-center gap-1 sm:gap-2 shrink-0">
+        <!-- GH#8990: context window usage indicator (hidden on mobile to save space) -->
+        <ContextWindowIndicator
+          v-if="contextWindowProps?.hasData"
+          class="hidden sm:flex"
+          v-bind="contextWindowProps"
+        />
+
         <!-- Custom Actions Slot -->
         <slot name="actions"></slot>
 
         <!-- Session Actions -->
+        <button
+          v-if="currentSessionId"
+          @click="$emit('open-settings')"
+          class="header-btn"
+          :title="$t('chat.openSettings')"
+        >
+          <Icon name="cog" />
+        </button>
+
         <button
           v-if="currentSessionId"
           @click="$emit('export-session')"
@@ -62,7 +78,17 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
+import ContextWindowIndicator from './ContextWindowIndicator.vue'
 import { computed } from 'vue'
+
+interface ContextWindowProps {
+  tokensUsed: number
+  contextWindow: number
+  usagePercent: number
+  isWarning: boolean
+  isCritical: boolean
+  hasData: boolean
+}
 
 interface Props {
   currentSessionId: string | null
@@ -70,18 +96,19 @@ interface Props {
   sessionInfo: string
   connectionStatus: string
   isConnected: boolean
+  contextWindowProps?: ContextWindowProps
 }
 
 interface Emits {
   (e: 'export-session'): void
   (e: 'clear-session'): void
   (e: 'toggle-mobile-sidebar'): void
+  (e: 'open-settings'): void
 }
 
 const props = defineProps<Props>()
 defineEmits<Emits>()
 
-// Computed properties for connection status
 const connectionStatusClass = computed(() => ({
   'text-green-600': props.isConnected,
   'text-red-600': !props.isConnected,

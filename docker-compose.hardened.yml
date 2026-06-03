@@ -86,6 +86,20 @@ services:
     # tmpfs the process hits EROFS on first write under read_only: true.
     # Mounting /chroma as tmpfs would shadow /chroma/chromadb/log_config.yml
     # (the regression introduced by PR #8912 that caused GH#8913).
+    #
+    # ChromaDB 0.5.23 log_config.yml defines a RotatingFileHandler writing to
+    # /chroma/chroma.log.  Under read_only: true that path is not writable and
+    # not covered by any volume or tmpfs above, so uvicorn crashes before the
+    # health-check endpoint comes up.  Override the command to drop the
+    # --log-config flag; uvicorn then falls back to stdout-only logging.
+    command: >
+      uvicorn chromadb.app:app
+      --workers 1
+      --host 0.0.0.0
+      --port 8000
+      --proxy-headers
+      --log-level warning
+      --timeout-keep-alive 30
     deploy:
       resources:
         limits:

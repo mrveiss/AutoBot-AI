@@ -72,6 +72,7 @@ DEFAULT_EMBEDDING_MODEL = "nomic-embed-text:latest"
 
 # Per-role model defaults (6-tier mapping, #2553)
 # Each tier is optimised for its workload class — see docs/developer/TIERED_MODEL_ROUTING.md
+TRIVIAL_MODEL = "llama3.2:1b"  # Trivial tier: simplest queries, no tools/RAG/memory (GH#9050)
 ROUTING_MODEL = "llama3.2:1b"  # Orchestrator only, no tool use
 CLASSIFICATION_MODEL = "gemma2:2b"  # Intent detection, classification
 LIGHT_PROCESSING_MODEL = "phi3:mini"  # Extraction, formatting, lightweight tasks
@@ -161,6 +162,7 @@ class LLMConfig(BaseSettings):
     # Primary models — each role maps to its optimal 6-tier (#2553)
     default_model: str = Field(default=DEFAULT_LLM_MODEL, alias="AUTOBOT_DEFAULT_LLM_MODEL")
     embedding_model: str = Field(default=DEFAULT_EMBEDDING_MODEL, alias="AUTOBOT_EMBEDDING_MODEL")
+    trivial_model: str = Field(default=TRIVIAL_MODEL, alias="AUTOBOT_TRIVIAL_MODEL")  # GH#9050
     classification_model: str = Field(default=CLASSIFICATION_MODEL, alias="AUTOBOT_CLASSIFICATION_MODEL")
     reasoning_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_REASONING_MODEL")
     rag_model: str = Field(default=INSTRUCTION_MODEL, alias="AUTOBOT_RAG_MODEL")
@@ -1176,6 +1178,10 @@ class MiscConfig(BaseSettings):
     chat_history_file: str = Field(default="", alias="AUTOBOT_CHAT_HISTORY_FILE")
     chat_recent_max_entries: str = Field(default="", alias="AUTOBOT_CHAT_RECENT_MAX_ENTRIES")
     chat_session_cache_ttl: str = Field(default="", alias="AUTOBOT_CHAT_SESSION_CACHE_TTL")
+    contradiction_surface_threshold: str = Field(
+        default="",
+        alias="AUTOBOT_CONTRADICTION_SURFACE_THRESHOLD",
+    )
     chat_ssot_strict: str = Field(default="", alias="AUTOBOT_CHAT_SSOT_STRICT")
     chat_timeout: int = Field(default=0, alias="AUTOBOT_CHAT_TIMEOUT")
     chromadb_collection: str = Field(default="", alias="AUTOBOT_CHROMADB_COLLECTION")
@@ -1420,6 +1426,10 @@ class MiscConfig(BaseSettings):
     username: str = Field(default="", alias="USERNAME")
     virustotal_api_key: str = Field(default="", alias="VIRUSTOTAL_API_KEY")
     virustotal_rate_limit: int = Field(default=0, alias="VIRUSTOTAL_RATE_LIMIT")
+    vertex_ai_default_model: str = Field(default="gemini-2.5-flash", alias="VERTEX_AI_DEFAULT_MODEL")
+    vertex_ai_location: str = Field(default="us-central1", alias="VERTEX_AI_LOCATION")
+    vertex_ai_project: str = Field(default="", alias="VERTEX_AI_PROJECT")
+    vertex_ai_service_account_json: str = Field(default="", alias="VERTEX_AI_SERVICE_ACCOUNT_JSON")
     vllm_dtype: str = Field(default="", alias="VLLM_DTYPE")
     vllm_gpu_memory_utilization: str = Field(default="", alias="VLLM_GPU_MEMORY_UTILIZATION")
     vllm_host: str = Field(default="", alias="VLLM_HOST")

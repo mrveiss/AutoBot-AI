@@ -41,6 +41,9 @@ from .base_provider import BaseProvider
 # Issue #551: L1/L2 dual-tier caching
 from .cache import CachedResponse, LLMResponseCache, get_llm_cache
 
+# GH#8998: Model fallback chains for quota/rate limit handling
+from .fallback_chain import FallbackChain, FallbackChainManager, get_fallback_chain_manager
+
 # Hardware detection
 from .hardware import TORCH_AVAILABLE, HardwareDetector
 
@@ -99,6 +102,10 @@ __all__ = [
     "get_llm_cache",
     # Semantic cache (Issue #8168)
     "SemanticLLMCache",
+    # Fallback chains (GH#8998)
+    "FallbackChain",
+    "FallbackChainManager",
+    "get_fallback_chain_manager",
     # Mock providers
     "LocalLLM",
     "MockPalm",

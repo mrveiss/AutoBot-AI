@@ -49,6 +49,7 @@ from models.schemas import (
     ScheduleResponse,
     ScheduleRunResponse,
     ScheduleUpdate,
+    SelfUpdateResponse,
 )
 from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
@@ -438,11 +439,9 @@ async def resolve_drift(
     """
     Resync a single component from code_source/ to /opt/autobot/<component>/ (#7149).
 
-    Drives the same `_rsync_component_local()` used by SLM self-sync — pulls
-    files from the local code_source checkout and overwrites the deployed copy.
-    Used by the CodeSyncView "Resync from Source" button to clear drift in one
-    click (instead of forcing the user to find the SLM self-node and trigger a
-    full /nodes/{id}/sync).
+    Uses `_rsync_component_local()` to pull files from the local code_source
+    checkout and overwrite the deployed copy.  Used by the CodeSyncView
+    "Resync from Source" button to clear drift in one click.
 
     Body:
         component: Sub-directory under /opt/autobot/. Must be in ALLOWED_COMPONENTS.
@@ -666,7 +665,7 @@ async def _rsync_component_local(
 
     Used when source_ip matches the SLM server's own IP — no SSH needed.
     """
-    cmd = ["rsync", "-avz", "--delete"]
+    cmd = ["rsync", "-avz", "--delete", "--no-group", "--no-owner"]
     for exc in excludes:
         cmd.append(f"--exclude={exc}")
     cmd.append(f"{source_path}/{component}/")
@@ -1054,22 +1053,88 @@ async def sync_node(
     is_slm_server = bool(slm_own_ip) and node.ip_address == slm_own_ip
 
     if is_slm_server and request.restart:
-        # SLM server cannot self-sync via the Ansible playbook because
-        # ansible.posix.synchronize runs rsync FROM the controller (SLM server),
-        # but the source path ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source} only exists on the dev  # noqa
-        # machine. Instead, pull code FROM the code source node directly (#913).
-        logger.info("SLM self-sync: pulling from code source (fire-and-forget)")
-        asyncio.create_task(_sync_slm_from_code_source(node_id))
+        # Use Ansible to update all deployed roles on this machine (#9073).
+        # Covers backend, frontend, shared, agent, plugins, workers, etc.
+        logger.info("SLM self-update via Ansible: queuing (fire-and-forget)")
+        asyncio.create_task(_ansible_self_update(node_id))
         return NodeSyncResponse(
             success=True,
             message=(
-                "SLM update queued: pulling from code source + restarting services. " "Check backend health in ~30s."
+                "SLM update queued: Ansible will update all roles on this machine and restart services. "
+                "Check backend health in ~60s."
             ),
             node_id=node_id,
         )
 
     # Normal execution - wait for result with progress updates
     return await _execute_node_playbook(executor, node, node_id, request, progress_callback, db)
+
+
+async def _ansible_self_update(node_id: str) -> None:
+    """Run update-all-nodes.yml against this machine to update all deployed roles (#9073).
+
+    Covers every role Ansible knows about (backend, frontend, shared, agent,
+    plugins, npu-worker, browser-worker, etc.) — not just the SLM components.
+    Fire-and-forget: the SLM service restarts mid-run so this coroutine dies;
+    callers must poll health rather than await a result.
+
+    Issue #9224: Update node version in DB after successful sync.
+    """
+    executor = get_playbook_executor()
+    limit = ["localhost", node_id]
+    try:
+        result = await executor.execute_playbook(
+            playbook_name="update-all-nodes.yml",
+            limit=limit,
+        )
+        if not result["success"]:
+            logger.error("Ansible full-machine update failed for %s: %s", node_id, result["output"][:500])
+        else:
+            logger.info("Ansible full-machine update complete for %s", node_id)
+            # Update node version in DB (Issue #9224)
+            await _update_fleet_node_version(node_id)
+    except Exception as exc:
+        logger.error("Ansible full-machine update error for %s: %s", node_id, exc)
+
+
+@router.post("/self-update", response_model=SelfUpdateResponse)
+async def self_update(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> SelfUpdateResponse:
+    """Trigger an Ansible-based update of the SLM server itself (#9073).
+
+    Looks up the SLM's own node record by matching the external_url IP,
+    then runs update-all-nodes.yml against it as a fire-and-forget task
+    (the service restarts mid-run, so the caller should poll health).
+    Returns immediately with a queued message.
+    """
+    slm_own_ip = urlparse(settings.external_url).hostname or ""
+    if not slm_own_ip:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Cannot determine SLM IP from external_url setting",
+        )
+
+    result = await db.execute(select(Node).where(Node.ip_address == slm_own_ip))
+    slm_node = result.scalar_one_or_none()
+    if not slm_node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No node found with IP {slm_own_ip} — ensure this server is registered",
+        )
+
+    logger.info("Full machine update via Ansible: queuing for node %s", slm_node.node_id)
+    asyncio.create_task(_ansible_self_update(slm_node.node_id))
+
+    return SelfUpdateResponse(
+        success=True,
+        message=(
+            "Full update queued: Ansible will update all roles on this machine"
+            " and restart services. Check backend health in ~60s."
+        ),
+        node_id=slm_node.node_id,
+    )
 
 
 async def _sync_regular_nodes(executor, job: FleetSyncJob, regular_nodes: list) -> None:
@@ -1135,7 +1200,7 @@ async def _sync_slm_self_node(executor, job: FleetSyncJob, slm_self_node: NodeSy
         await _update_job_status_db(job.job_id, status=pre_status, completed_at=datetime.now(timezone.utc))
         # Fire-and-forget — restart kills this process,
         # but all nodes are already done and persisted.
-        await _sync_slm_from_code_source(slm_self_node.node_id)
+        await _ansible_self_update(slm_self_node.node_id)
         slm_self_node.status = "success"
         slm_self_node.completed_at = datetime.now(timezone.utc)
     else:

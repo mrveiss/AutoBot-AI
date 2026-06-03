@@ -242,18 +242,14 @@ class RoutineScheduler:
             try:
                 import uuid
 
-                from sqlalchemy import select
-                from sqlalchemy.ext.asyncio import AsyncSession
-
                 from database.get_session import get_async_session_factory
+                from sqlalchemy import select
 
                 from ..models.work_item import LLCWorkItem
 
                 factory = get_async_session_factory()
                 session = factory()
-                result = await session.execute(
-                    select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id))
-                )
+                result = await session.execute(select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)))
                 work_item = result.scalar_one_or_none()
                 if work_item:
                     company_id = str(work_item.company_id)

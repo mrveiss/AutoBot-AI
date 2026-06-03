@@ -511,7 +511,7 @@ class TestSnapshotIndex:
     """Unit tests for SnapshotIndex file-based storage."""
 
     def test_add_and_get(self, tmp_path):
-        from pathlib import Path
+        pass
 
         from services.execution.snapshot_index import SnapshotIndex, SnapshotRecord
 
@@ -651,7 +651,7 @@ class TestDockerBackendSnapshot:
         mock_new_container.id = "new-cont-id-123"
         mock_client.containers.run.return_value = mock_new_container
 
-        new_id = await backend.restore("snap-001")
+        new_id = await backend.restore("snap-001", caller_user_id="__system__")
 
         assert new_id == "new-cont-id-123"
         mock_client.containers.run.assert_called_once_with(
@@ -675,7 +675,7 @@ class TestDockerBackendSnapshot:
             backend.client = mock_client
 
         with pytest.raises(KeyError, match="not found"):
-            await backend.restore("nonexistent-snap")
+            await backend.restore("nonexistent-snap", caller_user_id="__system__")
 
     @pytest.mark.asyncio
     async def test_delete_snapshot_removes_record(self, tmp_path):
@@ -690,15 +690,184 @@ class TestDockerBackendSnapshot:
         record = await backend.snapshot("cont-del", session_id="s")
         assert idx.get(record.snapshot_id) is not None
 
-        deleted = await backend.delete_snapshot(record.snapshot_id)
+        deleted = await backend.delete_snapshot(record.snapshot_id, caller_user_id="__system__")
         assert deleted is True
         assert idx.get(record.snapshot_id) is None
 
     @pytest.mark.asyncio
     async def test_delete_nonexistent_snapshot_returns_false(self, tmp_path):
         backend, _, _ = self._make_backend(tmp_path)
-        result = await backend.delete_snapshot("ghost-snap")
+        result = await backend.delete_snapshot("ghost-snap", caller_user_id="__system__")
         assert result is False
+
+    # ------------------------------------------------------------------
+    # Ownership checks (GH#8968)
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_restore_owner_can_restore(self, tmp_path):
+        """Snapshot owner is allowed to restore."""
+        from services.execution.snapshot_index import SnapshotIndex, SnapshotRecord
+
+        idx = SnapshotIndex(storage_path=tmp_path)
+        idx.add(
+            SnapshotRecord(
+                snapshot_id="own-snap",
+                session_id="s",
+                container_id="c",
+                image_name="autobot-snapshot-own-snap:latest",
+                created_at="2025-01-01T00:00:00",
+                user_id="user-alice",
+            )
+        )
+        mock_client = MagicMock()
+        mock_client.ping.return_value = True
+        with patch("services.execution.docker_backend.docker") as mock_docker:
+            mock_docker.from_env.return_value = mock_client
+            mock_docker.errors.DockerException = Exception
+            backend = DockerBackend(snapshot_index=idx)
+            backend.client = mock_client
+
+        mock_new_container = MagicMock()
+        mock_new_container.id = "restored-id"
+        mock_client.containers.run.return_value = mock_new_container
+
+        new_id = await backend.restore("own-snap", caller_user_id="user-alice")
+        assert new_id == "restored-id"
+
+    @pytest.mark.asyncio
+    async def test_restore_wrong_user_raises_permission_error(self, tmp_path):
+        """A user who does not own the snapshot cannot restore it."""
+        from services.execution.snapshot_index import SnapshotIndex, SnapshotRecord
+
+        idx = SnapshotIndex(storage_path=tmp_path)
+        idx.add(
+            SnapshotRecord(
+                snapshot_id="priv-snap",
+                session_id="s",
+                container_id="c",
+                image_name="autobot-snapshot-priv-snap:latest",
+                created_at="2025-01-01T00:00:00",
+                user_id="user-alice",
+            )
+        )
+        mock_client = MagicMock()
+        mock_client.ping.return_value = True
+        with patch("services.execution.docker_backend.docker") as mock_docker:
+            mock_docker.from_env.return_value = mock_client
+            mock_docker.errors.DockerException = Exception
+            backend = DockerBackend(snapshot_index=idx)
+            backend.client = mock_client
+
+        with pytest.raises(PermissionError, match="not authorised"):
+            await backend.restore("priv-snap", caller_user_id="user-bob")
+
+    @pytest.mark.asyncio
+    async def test_restore_no_user_id_on_snapshot_allows_any_caller(self, tmp_path):
+        """Legacy snapshots (no user_id) are accessible to any caller."""
+        from services.execution.snapshot_index import SnapshotIndex, SnapshotRecord
+
+        idx = SnapshotIndex(storage_path=tmp_path)
+        idx.add(
+            SnapshotRecord(
+                snapshot_id="legacy-snap",
+                session_id="s",
+                container_id="c",
+                image_name="autobot-snapshot-legacy-snap:latest",
+                created_at="2025-01-01T00:00:00",
+            )
+        )
+        mock_client = MagicMock()
+        mock_client.ping.return_value = True
+        with patch("services.execution.docker_backend.docker") as mock_docker:
+            mock_docker.from_env.return_value = mock_client
+            mock_docker.errors.DockerException = Exception
+            backend = DockerBackend(snapshot_index=idx)
+            backend.client = mock_client
+
+        mock_new_container = MagicMock()
+        mock_new_container.id = "legacy-new"
+        mock_client.containers.run.return_value = mock_new_container
+
+        new_id = await backend.restore("legacy-snap", caller_user_id="user-anyone")
+        assert new_id == "legacy-new"
+
+    @pytest.mark.asyncio
+    async def test_delete_wrong_user_raises_permission_error(self, tmp_path):
+        """A user who does not own the snapshot cannot delete it."""
+        from services.execution.snapshot_index import SnapshotIndex, SnapshotRecord
+
+        idx = SnapshotIndex(storage_path=tmp_path)
+        idx.add(
+            SnapshotRecord(
+                snapshot_id="del-priv",
+                session_id="s",
+                container_id="c",
+                image_name="autobot-snapshot-del-priv:latest",
+                created_at="2025-01-01T00:00:00",
+                user_id="user-alice",
+            )
+        )
+        mock_client = MagicMock()
+        mock_client.ping.return_value = True
+        with patch("services.execution.docker_backend.docker") as mock_docker:
+            mock_docker.from_env.return_value = mock_client
+            mock_docker.errors.DockerException = Exception
+            backend = DockerBackend(snapshot_index=idx)
+            backend.client = mock_client
+
+        with pytest.raises(PermissionError, match="not authorised"):
+            await backend.delete_snapshot("del-priv", caller_user_id="user-bob")
+
+    @pytest.mark.asyncio
+    async def test_delete_owner_can_delete(self, tmp_path):
+        """Snapshot owner is allowed to delete their snapshot."""
+        backend, mock_client, idx = self._make_backend(tmp_path)
+
+        mock_container = MagicMock()
+        mock_image = MagicMock()
+        mock_image.attrs = {"Size": 512}
+        mock_container.commit.return_value = mock_image
+        mock_client.containers.get.return_value = mock_container
+
+        record = await backend.snapshot("cont-owned", session_id="s", user_id="user-alice")
+        assert idx.get(record.snapshot_id) is not None
+
+        deleted = await backend.delete_snapshot(record.snapshot_id, caller_user_id="user-alice")
+        assert deleted is True
+        assert idx.get(record.snapshot_id) is None
+
+    @pytest.mark.asyncio
+    async def test_system_caller_bypasses_ownership_on_restore(self, tmp_path):
+        """_SYSTEM_CALLER can restore any snapshot regardless of user_id."""
+        from services.execution.docker_backend import _SYSTEM_CALLER
+        from services.execution.snapshot_index import SnapshotIndex, SnapshotRecord
+
+        idx = SnapshotIndex(storage_path=tmp_path)
+        idx.add(
+            SnapshotRecord(
+                snapshot_id="sys-snap",
+                session_id="s",
+                container_id="c",
+                image_name="autobot-snapshot-sys-snap:latest",
+                created_at="2025-01-01T00:00:00",
+                user_id="user-alice",
+            )
+        )
+        mock_client = MagicMock()
+        mock_client.ping.return_value = True
+        with patch("services.execution.docker_backend.docker") as mock_docker:
+            mock_docker.from_env.return_value = mock_client
+            mock_docker.errors.DockerException = Exception
+            backend = DockerBackend(snapshot_index=idx)
+            backend.client = mock_client
+
+        mock_new_container = MagicMock()
+        mock_new_container.id = "sys-restored-id"
+        mock_client.containers.run.return_value = mock_new_container
+
+        new_id = await backend.restore("sys-snap", caller_user_id=_SYSTEM_CALLER)
+        assert new_id == "sys-restored-id"
 
     @pytest.mark.asyncio
     async def test_get_snapshots_for_session(self, tmp_path):

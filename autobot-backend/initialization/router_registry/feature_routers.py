@@ -129,6 +129,8 @@ def get_cross_worker_load_results() -> Dict[str, Any]:
 # Issue #281: Router configurations as data instead of repetitive code blocks
 # Format: (module_path, prefix, tags, name)
 FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
+    # GH#4458: execution snapshot/restore — now loaded via core_routers (MVA-2531)
+    # ("api.execution_snapshots", "", ["execution", "snapshots"], "execution_snapshots"),
     # Core workflow and batch processing
     # Issue #6229: api.websockets and api.live_events promoted to core_routers
     ("api.workflow", "/workflow", ["workflow"], "workflow"),
@@ -209,6 +211,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ),
     ("api.playwright", "/playwright", ["playwright"], "playwright"),
     ("api.vision", "/vision", ["vision", "gui-automation"], "vision"),
+    # GH#9015: Image generation — DALL-E 3, Flux, Stable Diffusion
+    (
+        "api.image_generation",
+        "/image-generation",
+        ["image-generation", "media"],
+        "image_generation",
+    ),
     (
         "api.web_research_settings",
         "/web-research-settings",
@@ -614,6 +623,14 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ("api.agent_diary", "/agent-diary", ["agents"], "agent_diary"),
     # Partially wired or legacy feature routers
     ("api.chat_sessions", "", ["chat-sessions"], "chat_sessions"),
+    # GH#8993: thinking mode preferences for conversations
+    ("api.chat_sessions_thinking", "", ["chat-thinking"], "chat_sessions_thinking"),
+    # GH#8996: public shared chat links with optional password protection
+    ("api.chat_shared_links", "", ["chat-shared-links"], "chat_shared_links"),
+    # GH#9047: embed widget unauthenticated chat endpoint
+    ("api.chat_embed", "", ["chat", "embed"], "chat_embed"),
+    # GH#8987: conversation folders and collections
+    ("api.chat_folders", "", ["chat-folders"], "chat_folders"),
     # Issue #5061: First-run onboarding presets + doctor
     ("api.onboarding", "/onboarding", ["onboarding"], "onboarding"),
     # NOTE (#4203): api.diagnostics removed — already registered in monitoring_routers.py
@@ -640,6 +657,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["mobile-devices", "push-notifications"],
         "mobile_devices",
     ),
+    # GH#4459: Web push notification endpoints (subscribe/unsubscribe/vapid-key)
+    ("api.push", "/push", ["push", "notifications"], "push"),
     # GH#9044: Transcriber module — project + recording CRUD under /api/transcriber
     # Guarded by TRANSCRIBER_ENABLED env var (defaults to true).
     # The combined router in transcriber_extension carries its own /api/transcriber

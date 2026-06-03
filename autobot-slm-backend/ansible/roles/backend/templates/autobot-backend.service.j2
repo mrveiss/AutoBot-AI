@@ -15,6 +15,8 @@ Environment="PATH={{ backend_code_dir | default(backend_install_dir) }}/venv/bin
 Environment="PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir | default(backend_install_dir) }}:{{ backend_install_dir | dirname }}/autobot_shared:{{ backend_install_dir | dirname }}"
 EnvironmentFile={{ backend_code_dir | default(backend_install_dir) }}/.env
 EnvironmentFile=-{{ service_auth_keys_dir | default('/etc/autobot/service-keys') }}/{{ service_auth_service_id | default('main-backend') }}.env
+# MVA-1633: Validate env vars before starting to prevent silent crashes
+ExecStartPre={{ backend_code_dir | default(backend_install_dir) }}/venv/bin/python -u {{ backend_code_dir | default(backend_install_dir) }}/startup_validation.py
 # Issue #891: Removed ExecStartPre symlink creation - causes infinite import loops with fixed backend imports
 ExecStart={{ backend_code_dir }}/venv/bin/uvicorn main:app --host {{ backend_host }} --port {{ backend_port }} --workers {{ backend_workers }}
 Restart=always

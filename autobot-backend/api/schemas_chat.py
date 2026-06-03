@@ -382,6 +382,51 @@ class SessionShareRequest(BaseModel):
     knowledge_facts: list[str] | None = Field(None, description="Specific fact IDs to share (all if omitted)")
 
 
+# ---------------------------------------------------------------------------
+# Shared link schemas (GH#8996)
+# ---------------------------------------------------------------------------
+
+
+class SharedLinkCreateRequest(BaseModel):
+    """Request to create a public shared link for a chat session."""
+
+    password: str | None = Field(None, min_length=1, max_length=128, description="Optional access password")
+    expires_in_seconds: int | None = Field(None, ge=60, description="Link TTL in seconds; omit for no expiry")
+
+
+class SharedLinkData(BaseModel):
+    """Response payload after creating a shared link."""
+
+    token: str
+    session_id: str
+    has_password: bool
+    expires_at: datetime | None
+    created_at: datetime
+
+
+class SharedLinkAccessRequest(BaseModel):
+    """Request body for accessing a password-protected shared link."""
+
+    password: str | None = Field(None, description="Password for protected links")
+
+
+class SharedMessageItem(BaseModel):
+    """A single message in a shared conversation view."""
+
+    role: str
+    content: str
+    created_at: datetime | None = None
+
+
+class SharedLinkSessionData(BaseModel):
+    """Public read-only view of a shared conversation."""
+
+    session_id: str
+    title: str | None = None
+    messages: list[SharedMessageItem]
+    has_password: bool
+
+
 class ChatResetRequest(BaseModel):
     """Request model for chat reset"""
 
@@ -406,6 +451,18 @@ class ChatMessage(BaseModel):
         None,
         description="Preferred response language code (e.g. 'en', 'es', 'de'). "
         "Overrides personality language when set.",
+    )
+    thinking_mode_enabled: bool | None = Field(
+        None,
+        description="Enable extended thinking mode for reasoning models (Claude 3.7+, DeepSeek R1). "
+        "When enabled, the model performs chain-of-thought reasoning before responding.",
+    )
+    thinking_budget_tokens: int | None = Field(
+        None,
+        ge=1000,
+        le=128000,
+        description="Thinking budget in tokens (e.g., 1000, 5000, 10000, 63000). "
+        "Only used when thinking_mode_enabled=True. Limits the amount of reasoning tokens.",
     )
 
 
@@ -451,6 +508,18 @@ class EnhancedChatMessage(BaseModel):
     use_knowledge_base: bool = Field(True, description="Whether to include knowledge base context")
     response_style: str = Field("conversational", description="Response style preference")
     include_sources: bool = Field(True, description="Whether to include source citations")
+    thinking_mode_enabled: bool | None = Field(
+        None,
+        description="Enable extended thinking mode for reasoning models (Claude 3.7+, DeepSeek R1). "
+        "When enabled, the model performs chain-of-thought reasoning before responding.",
+    )
+    thinking_budget_tokens: int | None = Field(
+        None,
+        ge=1000,
+        le=128000,
+        description="Thinking budget in tokens (e.g., 1000, 5000, 10000, 63000). "
+        "Only used when thinking_mode_enabled=True. Limits the amount of reasoning tokens.",
+    )
 
 
 class ChatPreferences(BaseModel):
@@ -460,6 +529,26 @@ class ChatPreferences(BaseModel):
     technical_level: str = Field("adaptive", description="Technical complexity level")
     include_reasoning: bool = Field(False, description="Include reasoning steps in responses")
     fact_checking: bool = Field(True, description="Enable fact checking against knowledge base")
+
+
+class ThinkingPreferences(BaseModel):
+    """Thinking mode preferences per conversation (#8993)."""
+
+    enabled: bool = Field(False, description="Enable extended thinking mode by default")
+    budget_tokens: int = Field(
+        10000,
+        ge=1000,
+        le=128000,
+        description="Default thinking budget in tokens (1k-128k)",
+    )
+
+
+class ThinkingPreferencesData(BaseModel):
+    """Data payload for GET/PUT /chat/sessions/{session_id}/thinking-preferences."""
+
+    session_id: str
+    enabled: bool
+    budget_tokens: int
 
 
 class TranslateRequest(BaseModel):
@@ -536,3 +625,47 @@ class SessionMcpCallData(BaseModel):
     model_config = {"extra": "allow"}
 
     success: bool
+
+
+# ── Chat Folder schemas (GH#8987) ────────────────────────────────────────────
+
+
+class FolderCreate(BaseModel):
+    """Request body for POST /chat/folders."""
+
+    name: str = Field(..., min_length=1, max_length=100, description="Folder display name")
+    parent_id: str | None = Field(None, description="Parent folder ID for nesting (max 3 levels)")
+
+
+class FolderUpdate(BaseModel):
+    """Request body for PUT /chat/folders/{folder_id}."""
+
+    name: str | None = Field(None, min_length=1, max_length=100, description="New folder name")
+    parent_id: str | None = Field(None, description="New parent folder ID (None = root)")
+    pinned: bool | None = Field(None, description="Pin folder to top of list")
+
+
+class FolderData(BaseModel):
+    """Single folder object returned by the API."""
+
+    id: str
+    name: str
+    parent_id: str | None = None
+    owner: str
+    pinned: bool = False
+    created_at: str
+    session_ids: List[str] = Field(default_factory=list)
+    session_count: int = 0
+
+
+class FolderListData(BaseModel):
+    """data payload for GET /chat/folders."""
+
+    folders: List[FolderData]
+    count: int
+
+
+class SessionFolderAssign(BaseModel):
+    """Request body for PUT /chat/sessions/{session_id}/folder."""
+
+    folder_id: str | None = Field(None, description="Folder ID to assign; None removes from folder")

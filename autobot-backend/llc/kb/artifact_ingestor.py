@@ -125,9 +125,7 @@ class ArtifactIngestor:
         # Guard: verify requester's company does not write to ancestor company's project (GH#8598).
         # Deny-by-default: a missing project is not a bypass — it is a hard stop.
         if company_id:
-            project_result = await session.execute(
-                select(LLCProject).where(LLCProject.id == uuid.UUID(project_id))
-            )
+            project_result = await session.execute(select(LLCProject).where(LLCProject.id == uuid.UUID(project_id)))
             project = project_result.scalar_one_or_none()
             if not project:
                 logger.warning(

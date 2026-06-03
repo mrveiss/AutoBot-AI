@@ -839,7 +839,6 @@ class ToolHandlerMixin:
         """Initialize terminal tool for command execution."""
         try:
             import api.agent_terminal as agent_terminal_api
-
             from tools.terminal_tool import TerminalTool
 
             # CRITICAL: Access the global singleton instance directly

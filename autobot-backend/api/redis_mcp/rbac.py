@@ -179,6 +179,9 @@ _ROLE_DEFAULT_BUNDLE: dict[str, str] = {
 
 _VALID_BUNDLES = frozenset(_BUNDLE_TAG_MAP.keys())
 
+# Public alias — import this from callers instead of hardcoding bundle names.
+VALID_BUNDLES: frozenset[str] = _VALID_BUNDLES
+
 
 async def resolve_bundle_for_user(user_id: str, role: str = "user") -> tuple[str, str]:
     """Return (bundle_name, resolution) for a user.

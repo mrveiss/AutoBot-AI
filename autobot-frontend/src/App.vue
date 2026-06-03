@@ -524,6 +524,9 @@
 
   <!-- Global confirm dialog (#6092) -->
   <ConfirmDialog />
+
+  <!-- Global command palette — opened via Ctrl/Cmd+K (#8989) -->
+  <CommandPalette ref="commandPaletteRef" />
 </template>
 
 <script lang="ts">
@@ -537,7 +540,9 @@ import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useSystemStatus } from '@/composables/useSystemStatus'
 import { useHostSelection } from '@/composables/useHostSelection';
 import { useNavOverflow } from '@/composables/useNavOverflow'
+import { useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 import NavOverflowMenu from '@/components/layout/NavOverflowMenu.vue'
+import CommandPalette from '@/components/CommandPalette.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { cacheBuster } from '@/utils/CacheBuster.js';
 import { optimizedHealthMonitor } from '@/utils/OptimizedHealthMonitor.js';
@@ -572,6 +577,7 @@ export default {
     ProfileModal,
     ErrorBoundary,
     NavOverflowMenu,
+    CommandPalette,
     DarkModeToggle: defineAsyncComponent(() => import('@/components/ui/DarkModeToggle.vue')),
     LanguageSwitcher: defineAsyncComponent(() => import('@/components/layout/LanguageSwitcher.vue')),
   },
@@ -649,6 +655,10 @@ export default {
     // Reactive data (non-status related)
     const showMobileNav = ref(false);
     const showProfileModal = ref(false);
+
+    // Global keyboard shortcuts (#8989)
+    const commandPaletteRef = ref<InstanceType<typeof CommandPalette> | null>(null)
+    useGlobalShortcuts({ commandPaletteRef })
 
     // GH#8748: profile dropdown (settings/admin items moved from primary nav)
     const showProfileDropdown = ref(false);
@@ -987,6 +997,7 @@ export default {
       knowledgeStore,
 
       // Reactive data
+      commandPaletteRef,
       showMobileNav,
       showProfileModal,
       showProfileDropdown,

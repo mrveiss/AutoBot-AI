@@ -1666,6 +1666,14 @@ class NodeSyncResponse(BaseModel):
     job_id: str | None = None
 
 
+class SelfUpdateResponse(BaseModel):
+    """Response from SLM self-update via Ansible (#9073)."""
+
+    success: bool
+    message: str
+    node_id: str | None = None
+
+
 class FleetSyncRequest(BaseModel):
     """Request to sync code to multiple nodes."""
 

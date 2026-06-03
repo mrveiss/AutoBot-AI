@@ -14,6 +14,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from api.voice_bundle_constants import VALID_BUNDLES, BundleAssignRequest
+from api.voice_bundle_user import _count_tools_for_bundle
 from auth_middleware import get_auth_middleware, get_current_user
 from autobot_shared.logging_manager import get_logger
 from services.event_log import EventType, emit
@@ -58,29 +60,9 @@ class BundleAssignmentResponse(BaseModel):
     bundle_name: Optional[str]
 
 
-class BundleAssignRequest(BaseModel):
-    bundle_name: Optional[str] = None  # None = clear override
-
-
 # ---------------------------------------------------------------------------
 # GET /voice/realtime/bundle/me
 # ---------------------------------------------------------------------------
-
-VALID_BUNDLES = {"voice_safe", "voice_extended", "voice_admin"}
-
-_BUNDLE_TOOL_COUNTS: dict[str, int] = {
-    "voice_safe": 0,  # computed lazily below
-    "voice_extended": 0,
-    "voice_admin": 0,
-}
-
-
-async def _count_tools_for_bundle(bundle: str, is_admin: bool) -> int:
-    """Return the number of tools available in this bundle."""
-    from api.redis_mcp.rbac import TOOL_ACCESS_MATRIX, filter_tools_for_bundle  # noqa: PLC0415
-
-    all_tools = list(TOOL_ACCESS_MATRIX.keys())
-    return len(filter_tools_for_bundle(all_tools, bundle=bundle, is_admin=is_admin))
 
 
 @bundle_me_router.get("/realtime/bundle/me", response_model=BundleMeResponse)
@@ -118,8 +100,9 @@ async def get_user_bundle(
 ) -> BundleAssignmentResponse:
     """Return the explicit bundle assignment for a user (admin only)."""
     try:
-        from database.session import get_async_session  # noqa: PLC0415
         from sqlalchemy import text  # noqa: PLC0415
+
+        from user_management.database import get_async_session  # noqa: PLC0415
 
         async with get_async_session() as session:
             row = await session.execute(
@@ -157,8 +140,9 @@ async def set_user_bundle(
     admin_id = admin_user.get("user_id") or admin_user.get("sub") or admin_user.get("username") or "unknown"
 
     try:
-        from database.session import get_async_session  # noqa: PLC0415
         from sqlalchemy import text  # noqa: PLC0415
+
+        from user_management.database import get_async_session  # noqa: PLC0415
 
         async with get_async_session() as session:
             if body.bundle_name is None:

@@ -403,7 +403,7 @@ async def test_on_run_complete_swallows_writer_exception() -> None:
 @pytest.mark.asyncio
 async def test_write_from_run_enforces_write_guard_on_ancestor_work_item() -> None:
     """Verify write_from_run() raises HTTPException(403) if requester writes to ancestor's work item."""
-    from unittest.mock import AsyncMock, MagicMock, patch
+    from unittest.mock import AsyncMock, patch
 
     from fastapi import HTTPException
 
@@ -412,7 +412,9 @@ async def test_write_from_run_enforces_write_guard_on_ancestor_work_item() -> No
     company_id = "child-company-id"
     work_item_id = "work-item-id"
 
-    with patch.object(writer, "_check_write_guard", new=AsyncMock(side_effect=HTTPException(status_code=403, detail="Forbidden"))):
+    with patch.object(
+        writer, "_check_write_guard", new=AsyncMock(side_effect=HTTPException(status_code=403, detail="Forbidden"))
+    ):
         with pytest.raises(HTTPException) as exc_info:
             await writer.write_from_run(
                 run_id="run-1",
@@ -451,9 +453,8 @@ async def test_write_from_run_skips_guard_when_no_company_id() -> None:
 @pytest.mark.asyncio
 async def test_check_write_guard_queries_work_item_company() -> None:
     """Verify _check_write_guard() fetches work item and calls assert_not_writing_to_ancestor_kb()."""
-    from unittest.mock import AsyncMock, MagicMock, patch
-
     import uuid
+    from unittest.mock import AsyncMock, MagicMock, patch
 
     writer = AgentDiaryKbWriter()
     mock_session = AsyncMock()

@@ -20,6 +20,7 @@ export type FontSize = 'small' | 'medium' | 'large'
 export type AccentColor = 'teal' | 'emerald' | 'blue' | 'purple' | 'orange'
 export type LayoutDensity = 'compact' | 'comfortable' | 'spacious'
 export type VoiceDisplayMode = 'modal' | 'sidepanel'
+export type ContextOverflowMode = 'auto' | 'warn' | 'disabled'
 
 export interface UserPreferences {
   fontSize: FontSize
@@ -27,6 +28,7 @@ export interface UserPreferences {
   layoutDensity: LayoutDensity
   voiceDisplayMode: VoiceDisplayMode
   language: string
+  contextOverflowMode: ContextOverflowMode
 }
 
 // Default preferences
@@ -35,7 +37,8 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   accentColor: 'teal',
   layoutDensity: 'comfortable',
   voiceDisplayMode: 'modal',
-  language: 'en'
+  language: 'en',
+  contextOverflowMode: 'auto'
 }
 
 // Reactive preferences state
@@ -44,6 +47,7 @@ const accentColor = ref<AccentColor>('teal')
 const layoutDensity = ref<LayoutDensity>('comfortable')
 const voiceDisplayMode = ref<VoiceDisplayMode>('modal')
 const language = ref<string>('en')
+const contextOverflowMode = ref<ContextOverflowMode>('auto')
 
 // Local storage key
 const STORAGE_KEY = 'autobot-preferences'
@@ -64,6 +68,7 @@ function loadPreferences(): void {
       layoutDensity.value = parsed.layoutDensity || DEFAULT_PREFERENCES.layoutDensity
       voiceDisplayMode.value = parsed.voiceDisplayMode || DEFAULT_PREFERENCES.voiceDisplayMode
       language.value = parsed.language || localStorage.getItem('autobot-language') || DEFAULT_PREFERENCES.language
+      contextOverflowMode.value = parsed.contextOverflowMode || DEFAULT_PREFERENCES.contextOverflowMode
 
       logger.debug('Preferences loaded from localStorage', {
         fontSize: fontSize.value,
@@ -88,7 +93,8 @@ function savePreferences(): void {
       accentColor: accentColor.value,
       layoutDensity: layoutDensity.value,
       voiceDisplayMode: voiceDisplayMode.value,
-      language: language.value
+      language: language.value,
+      contextOverflowMode: contextOverflowMode.value
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences))
     logger.debug('Preferences saved to localStorage', preferences)
@@ -192,6 +198,10 @@ export function usePreferences() {
     watch(voiceDisplayMode, () => {
       savePreferences()
     })
+
+    watch(contextOverflowMode, () => {
+      savePreferences()
+    })
   }
 
   /**
@@ -219,6 +229,10 @@ export function usePreferences() {
     voiceDisplayMode.value = mode
   }
 
+  function setContextOverflowMode(mode: ContextOverflowMode): void {
+    contextOverflowMode.value = mode
+  }
+
   async function setLanguage(code: string): Promise<void> {
     language.value = code
     await setLocale(code)
@@ -235,6 +249,7 @@ export function usePreferences() {
     layoutDensity.value = DEFAULT_PREFERENCES.layoutDensity
     voiceDisplayMode.value = DEFAULT_PREFERENCES.voiceDisplayMode
     language.value = DEFAULT_PREFERENCES.language
+    contextOverflowMode.value = DEFAULT_PREFERENCES.contextOverflowMode
     setLocale(DEFAULT_PREFERENCES.language)
     logger.debug('Preferences reset to defaults')
   }
@@ -247,6 +262,7 @@ export function usePreferences() {
     layoutDensity,
     voiceDisplayMode,
     language,
+    contextOverflowMode,
 
     // Actions
     setFontSize,
@@ -254,6 +270,7 @@ export function usePreferences() {
     setLayoutDensity,
     setVoiceDisplayMode,
     setLanguage,
+    setContextOverflowMode,
     loadLanguageFromBackend,
     resetPreferences
   }

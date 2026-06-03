@@ -150,14 +150,14 @@ async function handleSyncNode(node: PendingNode): Promise<void> {
     // Issue #1231: SLM self-sync is fire-and-forget — backend returns
     // before the background task completes and restarts the service.
     // Show a banner and auto-refresh after the restart window.
-    const isSLMSelfSync = result.message?.includes('SLM update queued')
+    const isSLMSelfSync = result.message?.includes('update queued')
     if (isSLMSelfSync) {
       slmRestartPending.value = true
       if (slmRefreshTimer) clearTimeout(slmRefreshTimer)
       slmRefreshTimer = setTimeout(async () => {
         slmRestartPending.value = false
         await handleRefresh()
-      }, 35000)
+      }, 65000)
     }
 
     logger.info('Node sync completed:', node.node_id)
@@ -226,6 +226,32 @@ async function handleSyncAll(): Promise<void> {
     await handleRefresh()
   } else {
     codeSync.setError(result.message || 'Fleet sync failed')
+  }
+}
+
+// =============================================================================
+// SLM Self-Update (#9073)
+// =============================================================================
+
+const selfUpdating = ref(false)
+
+async function handleSelfUpdate(): Promise<void> {
+  selfUpdating.value = true
+  codeSync.clearError()
+  successMessage.value = null
+
+  const result = await codeSync.selfUpdate()
+  selfUpdating.value = false
+
+  if (result.success) {
+    slmRestartPending.value = true
+    if (slmRefreshTimer) clearTimeout(slmRefreshTimer)
+    slmRefreshTimer = setTimeout(async () => {
+      slmRestartPending.value = false
+      await handleRefresh()
+    }, 65000)
+  } else {
+    codeSync.setError(result.message || 'Self-update failed')
   }
 }
 
@@ -445,6 +471,27 @@ onUnmounted(() => {
             />
           </svg>
           {{ isPulling ? 'Pulling...' : 'Pull from Source' }}
+        </button>
+        <button
+          @click="handleSelfUpdate"
+          :disabled="selfUpdating || slmRestartPending"
+          class="btn btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Sync code from source and restart this SLM server"
+        >
+          <svg
+            :class="['w-4 h-4', selfUpdating ? 'animate-spin' : '']"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+            />
+          </svg>
+          {{ selfUpdating ? 'Updating...' : 'Update This Server' }}
         </button>
         <button
           @click="handleRefresh"

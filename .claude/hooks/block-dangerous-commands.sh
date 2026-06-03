@@ -93,17 +93,22 @@ if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+(
   deny "Blocked: never check out main/master locally (#4113, #6512). Main is read-only; commits flow Dev_new_gui → main via release cycle. If you need to inspect main, use git log origin/main or create a worktree: git worktree add .worktrees/inspect-main main"
 fi
 
-# Block ALL branch checkouts from the main working tree (#6512)
+# Block ALL branch checkouts and branch creation from the main working tree (#6512)
 # Subagents running in parallel would trample the shared HEAD for every other session.
-# Any branch work (rebases, fixes, reviews) must happen inside an isolated worktree.
-# Allowed from main tree: Dev_new_gui (the primary branch), -b/-B (new branch creation),
-#   --orphan, detached-HEAD SHAs, and file-restore targets (. or paths). Everything else is denied.
-if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+(checkout|switch)[[:space:]]+[^-]'; then
+# Any branch work must happen inside an isolated worktree.
+# BUG FIX: previously -b/-B/-c flags bypassed the pattern because [^-] required a
+# non-dash first char after checkout/switch. Now both cases are caught explicitly.
+if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+(checkout|switch)[[:space:]]'; then
   CURRENT_DIR=$(pwd)
   if [[ ! "$CURRENT_DIR" =~ \.worktrees/ ]]; then
-    # Extract the first non-flag argument after checkout/switch.
-    # Cannot use grep -oP lookbehind with alternation — GNU grep 3.7 requires fixed-length
-    # lookbehinds. Use awk instead to skip flags and grab the first positional argument.
+    # Detect -b/-B/-c/--create/--orphan flags — new-branch creation always denied on main tree
+    # because it still moves HEAD away from Dev_new_gui.
+    HAS_NEW_BRANCH_FLAG=0
+    if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+(checkout|switch)[[:space:]]+(-b|-B|-c|--create|--orphan)([[:space:]]|$)' || \
+       echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+(checkout|switch)[[:space:]]+.*[[:space:]](-b|-B|-c|--create|--orphan)([[:space:]]|$)'; then
+      HAS_NEW_BRANCH_FLAG=1
+    fi
+
     BRANCH_ARG=$(echo "$COMMAND_TO_CHECK" | awk '{
       found=0
       for(i=1;i<=NF;i++) {
@@ -115,13 +120,14 @@ if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+(
         }
       }
     }')
-    # Allow Dev_new_gui, bare SHAs (7-40 hex chars), tag-like refs (v1.2.3),
-    # and file/path restore targets (. or absolute paths).
-    if [[ "$BRANCH_ARG" != "Dev_new_gui" ]] && \
-       [[ "$BRANCH_ARG" != "." ]] && \
-       ! [[ "$BRANCH_ARG" =~ ^[0-9a-f]{7,40}$ ]] && \
-       ! [[ "$BRANCH_ARG" =~ ^v[0-9]+\.[0-9]+ ]] && \
-       ! [[ "$BRANCH_ARG" =~ ^/ ]]; then
+
+    if [[ "$HAS_NEW_BRANCH_FLAG" -eq 1 ]]; then
+      deny "Blocked: creating a branch on the main working tree moves HEAD away from Dev_new_gui and tramples parallel sessions (#6512). Use a worktree instead: git worktree add .worktrees/<name> -b <branch> Dev_new_gui && cd .worktrees/<name>"
+    elif [[ "$BRANCH_ARG" != "Dev_new_gui" ]] && \
+         [[ "$BRANCH_ARG" != "." ]] && \
+         ! [[ "$BRANCH_ARG" =~ ^[0-9a-f]{7,40}$ ]] && \
+         ! [[ "$BRANCH_ARG" =~ ^v[0-9]+\.[0-9]+ ]] && \
+         ! [[ "$BRANCH_ARG" =~ ^/ ]]; then
       deny "Blocked: switching branches on the main working tree tramples HEAD for parallel sessions (#6512). Use a worktree instead: git worktree add .worktrees/<name> <branch> && cd .worktrees/<name>. Then do your work and remove with: git worktree remove .worktrees/<name>"
     fi
   fi

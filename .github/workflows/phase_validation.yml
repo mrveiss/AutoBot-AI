@@ -110,7 +110,11 @@ jobs:
         # file/directory presence is what we can measure pre-deploy.
         python3 autobot-infrastructure/shared/scripts/phase_validation_system.py \
           --ci-mode --output-format json \
-          > phase_validation_results.json \
+          > phase_validation_results.json || true
+        # Only apply zero-maturity fallback when the script produced no valid JSON
+        # (e.g. import error). A non-zero exit due to Redis unavailability still
+        # writes valid JSON — overwriting it with 0 was the cause of false failures.
+        python3 -c 'import json; json.load(open("phase_validation_results.json"))' 2>/dev/null \
           || echo '{"overall_maturity": 0, "phases": []}' > phase_validation_results.json
 
         # Display results summary

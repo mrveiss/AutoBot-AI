@@ -61,9 +61,7 @@ logger = logging.getLogger(__name__)
 # Defaults
 # ---------------------------------------------------------------------------
 
-_COMMENT_DEDUP_TTL_SECONDS = int(
-    os.environ.get("AUTOBOT_PAPERCLIP_COMMENT_DEDUP_TTL", 3600)
-)
+_COMMENT_DEDUP_TTL_SECONDS = int(os.environ.get("AUTOBOT_PAPERCLIP_COMMENT_DEDUP_TTL", 3600))
 _ISSUE_SEARCH_LIMIT = 50  # max results to scan when checking for duplicates
 _REDIS_KEY_PREFIX = "paperclip:idem:"
 
@@ -119,7 +117,7 @@ class PaperclipClient:
         run_id: str | None = None,
         comment_dedup_ttl: int = _COMMENT_DEDUP_TTL_SECONDS,
     ) -> None:
-        self._api_url = (api_url or os.environ.get("PAPERCLIP_API_URL", "")).rstrip("/")
+        self._api_url = (api_url or os.environ.get("PAPERCLIP_API_URL") or "").rstrip("/")
         self._api_key = api_key or os.environ.get("PAPERCLIP_API_KEY", "")
         self._run_id = run_id or os.environ.get("PAPERCLIP_RUN_ID", "")
         self._comment_dedup_ttl = comment_dedup_ttl
@@ -225,9 +223,7 @@ class PaperclipClient:
             "priority": priority,
             **extra_fields,
         }
-        created = await self._post_json(
-            session, f"/api/companies/{company_id}/issues", payload
-        )
+        created = await self._post_json(session, f"/api/companies/{company_id}/issues", payload)
         logger.info(
             "paperclip_client.create_issue_idempotent: created id=%s title=%r",
             created.get("id"),
@@ -266,17 +262,14 @@ class PaperclipClient:
             dedup_key = _comment_dedup_key(issue_id, fp)
             if await self._redis_exists(dedup_key):
                 logger.debug(
-                    "paperclip_client.post_comment_idempotent: suppressed duplicate "
-                    "issue_id=%s fingerprint=%s",
+                    "paperclip_client.post_comment_idempotent: suppressed duplicate " "issue_id=%s fingerprint=%s",
                     issue_id,
                     fp,
                 )
                 return None
 
         session = await self._ensure_session()
-        comment = await self._post_json(
-            session, f"/api/issues/{issue_id}/comments", {"body": body}
-        )
+        comment = await self._post_json(session, f"/api/issues/{issue_id}/comments", {"body": body})
 
         if ttl > 0 and comment.get("id"):
             await self._redis_set(_comment_dedup_key(issue_id, fp), "1", ttl=ttl)
@@ -365,9 +358,7 @@ class PaperclipClient:
             logger.error("paperclip_client GET %s failed: %s", path, exc)
             raise
 
-    async def _post_json(
-        self, session: aiohttp.ClientSession, path: str, payload: dict
-    ) -> dict:
+    async def _post_json(self, session: aiohttp.ClientSession, path: str, payload: dict) -> dict:
         url = f"{self._api_url}{path}"
         try:
             async with session.post(url, json=payload) as resp:
@@ -377,9 +368,7 @@ class PaperclipClient:
             logger.error("paperclip_client POST %s failed: %s", path, exc)
             raise
 
-    async def _patch_json(
-        self, session: aiohttp.ClientSession, path: str, payload: dict
-    ) -> dict:
+    async def _patch_json(self, session: aiohttp.ClientSession, path: str, payload: dict) -> dict:
         url = f"{self._api_url}{path}"
         try:
             async with session.patch(url, json=payload) as resp:
@@ -389,14 +378,10 @@ class PaperclipClient:
             logger.error("paperclip_client PATCH %s failed: %s", path, exc)
             raise
 
-    async def _get_issue(
-        self, session: aiohttp.ClientSession, issue_id: str
-    ) -> dict | None:
+    async def _get_issue(self, session: aiohttp.ClientSession, issue_id: str) -> dict | None:
         return await self._get_json(session, f"/api/issues/{issue_id}")
 
-    async def _search_issue_by_title(
-        self, session: aiohttp.ClientSession, company_id: str, title: str
-    ) -> dict | None:
+    async def _search_issue_by_title(self, session: aiohttp.ClientSession, company_id: str, title: str) -> dict | None:
         """Return the first open issue whose title exactly matches *title*."""
         encoded = _url_quote(title, safe="")
         path = f"/api/companies/{company_id}/issues?q={encoded}&limit={_ISSUE_SEARCH_LIMIT}"

@@ -38,6 +38,26 @@
     <!-- Sidebar Content - FIXED: Better scroll behavior -->
     <div v-if="!store.sidebarCollapsed" class="flex-1 flex flex-col min-h-0 overflow-hidden">
 
+      <!-- Folders Section (GH#8987) -->
+      <section v-if="folderStore.folders.length > 0 || true" class="border-b border-autobot-border p-3 pb-2 shrink-0 max-h-56 overflow-y-auto" style="scrollbar-width: thin;">
+        <div class="flex items-center justify-between mb-1">
+          <button
+            class="flex items-center gap-1 text-xs font-semibold text-autobot-text-secondary hover:text-autobot-text-primary transition-colors"
+            @click="showFolders = !showFolders"
+          >
+            <Icon :name="showFolders ? 'chevron-down' : 'chevron-right'" class="text-xs" />
+            {{ $t('chat.folders.folders') }}
+            <span v-if="folderStore.folders.length" class="text-autobot-text-muted font-normal">({{ folderStore.folders.length }})</span>
+          </button>
+        </div>
+        <ChatFolderTree
+          v-if="showFolders"
+          :sessions="store.sessions"
+          :current-session-id="store.currentSessionId"
+          @session-click="(id) => controller.switchToSession(id)"
+        />
+      </section>
+
       <!-- Chat History Section - FIXED: Scrollable area with multi-select -->
       <section class="flex-1 flex flex-col min-h-0 overflow-hidden p-4 pb-0">
         <div class="flex items-center justify-between mb-3 shrink-0">
@@ -102,6 +122,39 @@
                 {{ session.title || getSessionPreview(session) }}
               </span>
               <div v-if="!selectionMode" class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                <!-- GH#8987: Assign to folder -->
+                <div class="relative" @click.stop>
+                  <BaseButton
+                    variant="ghost"
+                    size="xs"
+                    class="text-autobot-text-muted p-1"
+                    :title="$t('chat.folders.assignToFolder')"
+                    tabindex="-1"
+                    @click.stop="folderAssignTarget = folderAssignTarget === session.id ? null : session.id"
+                  >
+                    <Icon name="folder" class="text-xs" />
+                  </BaseButton>
+                  <div
+                    v-if="folderAssignTarget === session.id"
+                    class="absolute end-0 top-6 z-50 min-w-36 bg-autobot-bg-card border border-autobot-border rounded shadow-lg p-1 text-xs"
+                  >
+                    <button
+                      class="w-full text-start px-2 py-1 rounded hover:bg-autobot-bg-secondary text-autobot-text-muted"
+                      @click="folderStore.assignSessionToFolder(session.id, null); folderAssignTarget = null"
+                    >
+                      {{ $t('chat.folders.removeFromFolder') }}
+                    </button>
+                    <hr class="border-autobot-border my-0.5" />
+                    <button
+                      v-for="f in folderStore.folders"
+                      :key="f.id"
+                      class="w-full text-start px-2 py-1 rounded hover:bg-autobot-bg-secondary text-autobot-text-primary"
+                      @click="folderStore.assignSessionToFolder(session.id, f.id); folderAssignTarget = null"
+                    >
+                      <Icon name="folder" class="text-xs me-1" />{{ f.name }}
+                    </button>
+                  </div>
+                </div>
                 <BaseButton
                   variant="ghost"
                   size="xs"
@@ -309,7 +362,7 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 // #1804: emit close-mobile so ChatInterface can close the mobile overlay
@@ -317,6 +370,8 @@ const emit = defineEmits<{ 'close-mobile': [] }>()
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import { useDisplaySettings, type DisplaySettings } from '@/composables/useDisplaySettings'
+import ChatFolderTree from './ChatFolderTree.vue'
+import { useFolderStore } from '@/stores/useFolderStore'
 import { useBatchSelection } from '@/composables/useBatchSelection'
 import type { ChatSession } from '@/stores/useChatStore'
 import DeleteConversationDialog from './DeleteConversationDialog.vue'
@@ -338,6 +393,15 @@ const { t } = useI18n()
 const store = useChatStore()
 const controller = useChatController()
 const { getSetting, setSetting } = useDisplaySettings()
+const folderStore = useFolderStore()
+
+// GH#8987: state for folder section
+const showFolders = ref(true)
+const folderAssignTarget = ref<string | null>(null)
+
+onMounted(() => {
+  folderStore.fetchFolders()
+})
 
 // Local state
 const showEditModal = ref(false)

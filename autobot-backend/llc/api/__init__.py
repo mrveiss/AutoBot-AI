@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from .activity import router as activity_router
 from .agent_api import router as agent_router
 from .agent_hires import router as agent_hires_router
+from .agent_wiki import router as agent_wiki_router
 from .agents import router as agents_router
 from .api_keys import router as api_keys_router
 from .approvals import router as approvals_router
@@ -48,6 +49,7 @@ router.include_router(work_items_router)
 router.include_router(api_keys_router)
 router.include_router(agent_router)
 router.include_router(agents_router)
+router.include_router(agent_wiki_router)
 router.include_router(runs_router)
 router.include_router(ceo_chat_router)
 router.include_router(decisions_router)

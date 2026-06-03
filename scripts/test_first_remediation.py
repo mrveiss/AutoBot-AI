@@ -35,6 +35,7 @@ BLOCKED_COMMANDS = ("rm -rf", "rsync --delete", "git reset --hard", "git clean -
 # Data
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class RemediationResult:
     issue_number: int
@@ -49,6 +50,7 @@ class RemediationResult:
 # Git helpers
 # ---------------------------------------------------------------------------
 
+
 def _run(cmd: list[str], *, cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, check=check)
 
@@ -59,8 +61,7 @@ REPO_ROOT = Path(__file__).parent.parent
 def create_worktree(issue_number: int) -> Path:
     branch = f"issue-{issue_number}"
     worktree_path = WORKTREE_BASE / branch
-    _run(["git", "worktree", "add", str(worktree_path), "-b", branch, "origin/Dev_new_gui"],
-         cwd=REPO_ROOT)
+    _run(["git", "worktree", "add", str(worktree_path), "-b", branch, "origin/Dev_new_gui"], cwd=REPO_ROOT)
     _run(["git", "-C", str(worktree_path), "branch", "--unset-upstream"])
     return worktree_path
 
@@ -69,11 +70,13 @@ def cleanup_worktree(worktree_path: Path) -> None:
     branch = worktree_path.name
     subprocess.run(
         ["git", "worktree", "remove", str(worktree_path), "--force"],
-        capture_output=True, cwd=REPO_ROOT,
+        capture_output=True,
+        cwd=REPO_ROOT,
     )
     subprocess.run(
         ["git", "branch", "-D", branch],
-        capture_output=True, cwd=REPO_ROOT,
+        capture_output=True,
+        cwd=REPO_ROOT,
     )
 
 
@@ -88,6 +91,7 @@ def git_commit(worktree: Path, message: str, files: list[str] | None = None) -> 
 # ---------------------------------------------------------------------------
 # Test helpers
 # ---------------------------------------------------------------------------
+
 
 def run_pytest(worktree: Path, test_path: str | None = None) -> tuple[bool, str]:
     cmd = ["python3", "-m", "pytest", "-x", "--tb=short", "-q", "--no-header"]
@@ -127,16 +131,32 @@ def has_new_failures(worktree: Path, baseline: set[str]) -> tuple[bool, str]:
 # GitHub helpers
 # ---------------------------------------------------------------------------
 
+
 def fetch_issue(number: int) -> dict:
-    r = _run(["gh", "issue", "view", str(number), "-R", REPO,
-               "--json", "number,title,body,labels"])
+    r = _run(["gh", "issue", "view", str(number), "-R", REPO, "--json", "number,title,body,labels"])
     return json.loads(r.stdout)
 
 
 def pick_oldest_bug_issue() -> dict:
-    r = _run(["gh", "issue", "list", "-R", REPO, "--label", "bug",
-               "--state", "open", "--limit", "1",
-               "--json", "number,title,body,labels", "--jq", ".[0]"])
+    r = _run(
+        [
+            "gh",
+            "issue",
+            "list",
+            "-R",
+            REPO,
+            "--label",
+            "bug",
+            "--state",
+            "open",
+            "--limit",
+            "1",
+            "--json",
+            "number,title,body,labels",
+            "--jq",
+            ".[0]",
+        ]
+    )
     data = r.stdout.strip()
     if not data:
         raise SystemExit("No open bug issues found")
@@ -145,18 +165,26 @@ def pick_oldest_bug_issue() -> dict:
 
 def create_pr(worktree: Path, issue_number: int, title: str) -> str:
     _run(["git", "push", "-u", "origin", f"issue-{issue_number}"], cwd=worktree)
-    r = _run([
-        "gh", "pr", "create",
-        "--title", f"fix(#{issue_number}): {title[:60]}",
-        "--body", (
-            f"Closes #{issue_number}\n\n"
-            "## Approach\n"
-            "Test-first remediation: failing repro test committed first, "
-            "then production fix. Two separate commits make the regression "
-            "vs fix history explicit."
-        ),
-        "--base", "Dev_new_gui",
-    ], cwd=worktree)
+    r = _run(
+        [
+            "gh",
+            "pr",
+            "create",
+            "--title",
+            f"fix(#{issue_number}): {title[:60]}",
+            "--body",
+            (
+                f"Closes #{issue_number}\n\n"
+                "## Approach\n"
+                "Test-first remediation: failing repro test committed first, "
+                "then production fix. Two separate commits make the regression "
+                "vs fix history explicit."
+            ),
+            "--base",
+            "Dev_new_gui",
+        ],
+        cwd=worktree,
+    )
     return r.stdout.strip()
 
 
@@ -177,6 +205,7 @@ def post_failure_comment(issue_number: int, report: str) -> None:
 # ---------------------------------------------------------------------------
 # Claude CLI agent
 # ---------------------------------------------------------------------------
+
 
 def _is_destructive(cmd: str) -> bool:
     return any(blocked in cmd for blocked in BLOCKED_COMMANDS)
@@ -200,7 +229,9 @@ def claude_write_test(issue: dict, worktree: Path) -> str | None:
     )
     result = subprocess.run(
         ["claude", "--print", prompt],
-        capture_output=True, text=True, cwd=str(worktree),
+        capture_output=True,
+        text=True,
+        cwd=str(worktree),
     )
     if result.returncode != 0:
         return None
@@ -208,8 +239,7 @@ def claude_write_test(issue: dict, worktree: Path) -> str | None:
     return test_file if full_path.exists() else None
 
 
-def claude_fix(issue: dict, worktree: Path, test_file: str,
-               iteration: int, last_output: str) -> None:
+def claude_fix(issue: dict, worktree: Path, test_file: str, iteration: int, last_output: str) -> None:
     """Ask claude CLI to fix the production code for one iteration."""
     prompt = (
         f"Working directory: {worktree}\n"
@@ -227,13 +257,16 @@ def claude_fix(issue: dict, worktree: Path, test_file: str,
     )
     subprocess.run(
         ["claude", "--print", prompt],
-        capture_output=True, text=True, cwd=str(worktree),
+        capture_output=True,
+        text=True,
+        cwd=str(worktree),
     )
 
 
 # ---------------------------------------------------------------------------
 # Core loop
 # ---------------------------------------------------------------------------
+
 
 async def remediate_issue(issue: dict, dry_run: bool = False) -> RemediationResult:
     issue_number = issue["number"]
@@ -254,14 +287,18 @@ async def remediate_issue(issue: dict, dry_run: bool = False) -> RemediationResu
         test_file = claude_write_test(issue, worktree)
         if not test_file:
             return RemediationResult(
-                issue_number, False, 0,
+                issue_number,
+                False,
+                0,
                 failure_report="claude failed to produce a test file",
             )
 
         passed, output = run_pytest(worktree, test_file)
         if passed:
             return RemediationResult(
-                issue_number, False, 0,
+                issue_number,
+                False,
+                0,
                 failure_report=f"Repro test passed before any fix — test does not reproduce the bug:\n{output}",
             )
 
@@ -311,6 +348,7 @@ async def remediate_issue(issue: dict, dry_run: bool = False) -> RemediationResu
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 async def main(issue_numbers: list[int], dry_run: bool) -> None:
     if issue_numbers:
         issues = [fetch_issue(n) for n in issue_numbers]
@@ -321,7 +359,7 @@ async def main(issue_numbers: list[int], dry_run: bool) -> None:
     for issue in issues:
         print(f"\n{'='*60}")
         print(f"Issue #{issue['number']}: {issue['title']}")
-        print("="*60)
+        print("=" * 60)
         result = await remediate_issue(issue, dry_run=dry_run)
         results.append(result)
         status = "✅ FIXED" if result.success else "❌ FAILED"
@@ -339,9 +377,15 @@ async def main(issue_numbers: list[int], dry_run: bool) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Test-first remediation loop")
-    parser.add_argument("issues", nargs="*", type=int, metavar="ISSUE_NUMBER",
-                        help="GitHub issue numbers (omit to pick oldest open bug)")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Print plan without creating worktrees or making changes")
+    parser.add_argument(
+        "issues",
+        nargs="*",
+        type=int,
+        metavar="ISSUE_NUMBER",
+        help="GitHub issue numbers (omit to pick oldest open bug)",
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Print plan without creating worktrees or making changes"
+    )
     args = parser.parse_args()
     asyncio.run(main(args.issues, dry_run=args.dry_run))

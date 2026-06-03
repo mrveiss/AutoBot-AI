@@ -114,6 +114,12 @@ def emit(event: AuditEvent) -> None:
     run_redis_write(record(event), label="unified_audit")
 
 
+# Capture the real emit before the Phase-2 bridge shadows the name below.
+# emit_compliance / emit_security must call _emit_real to avoid a recursion
+# cycle: bridge-emit → emit_compliance → emit → bridge-emit → ...
+_emit_real = emit
+
+
 # ---------------------------------------------------------------------------
 # Read path
 # ---------------------------------------------------------------------------
@@ -168,7 +174,7 @@ def emit_compliance(
     ip_address: str | None = None,
 ) -> None:
     """Drop-in shim for services/event_log.emit()."""
-    emit(
+    _emit_real(
         AuditEvent(
             category=AuditCategory.COMPLIANCE,
             action=action,
@@ -193,7 +199,7 @@ def emit_security(
     outcome: str = "success",
 ) -> None:
     """Drop-in shim for services/audit/audit_log.audit_record()."""
-    emit(
+    _emit_real(
         AuditEvent(
             category=AuditCategory.SECURITY,
             action=action,

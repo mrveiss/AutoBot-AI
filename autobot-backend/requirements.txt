@@ -23,6 +23,7 @@ aiosqlite>=0.21.0
 # AI/ML
 openai>=2.32.0
 anthropic>=0.104.1
+boto3>=1.35.0                       # GH#9010: AWS Bedrock provider
 chromadb>=1.5.9,<2.0.0             # upper bound guards against breaking API changes; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
 protobuf>=5.29.6,<8.0.0           # required floor for chromadb 1.5.5+ opentelemetry exporter; resolves googleapis-common-protos conflict (#4061)
 sentence-transformers>=5.4.1
@@ -67,6 +68,9 @@ PyYAML>=6.0.3            # SKILL.md frontmatter parsing (Phase 3 sync engine)
 # Community growth skill (Issue #1161)
 praw>=7.8.1             # Reddit OAuth API for CommunityGrowthSkill
 
+# Web push notifications (GH#4459)
+pywebpush>=2.0.0        # VAPID/RFC8291 browser push delivery
+
 # NLP / Neural Mesh RAG (Issue #1994)
 spacy>=3.8.13                  # Issue #2025: NLP entity extraction
 scikit-learn>=1.8.0           # Issue #2027: RAPTOR clustering
@@ -82,6 +86,7 @@ pywebpush>=2.0.0        # VAPID/RFC8291 browser push delivery (GH#4459)
 beautifulsoup4>=4.14.3  # HTML parsing for link pipeline
 Pillow>=12.1.1          # Image processing - SECURITY UPDATE (OOB write fix)
 jsonschema>=4.26.0      # Issue #7405: JSON Schema validation for /knowledge/extract
+defusedxml>=0.7.1       # MVA-2039: XML parsing for WebDAV (Nextcloud connector)
 # Optional (install separately for full media support):
 # opencv-python>=4.8.0   # Frame extraction for video pipeline
 # transformers>=4.30.0   # Whisper transcription for audio pipeline
