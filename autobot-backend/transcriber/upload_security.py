@@ -26,7 +26,6 @@ class UploadSecurityError(Exception):
     """Exception raised for upload security violations."""
 
 
-
 def get_upload_base_dir() -> Path:
     """Get the base upload directory from environment or default.
 
