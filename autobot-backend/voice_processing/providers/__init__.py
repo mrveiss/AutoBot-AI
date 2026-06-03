@@ -10,7 +10,7 @@ Part of Issue #9044 (MVA-2154 parent).
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
 
@@ -43,19 +43,16 @@ class SpeechProvider(ABC):
         Returns:
             List of transcript segments with timing
         """
-        pass
 
     @property
     @abstractmethod
     def provider_name(self) -> str:
         """Return provider name for logging/debugging."""
-        pass
 
     @property
     @abstractmethod
     def supported_languages(self) -> List[str]:
         """Return list of supported language codes."""
-        pass
 
 
 class ProviderRegistry:

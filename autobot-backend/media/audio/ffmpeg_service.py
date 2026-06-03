@@ -10,7 +10,6 @@
 import asyncio
 import os
 import tempfile
-from pathlib import Path
 from typing import Optional
 
 from autobot_shared.logging_manager import get_logger

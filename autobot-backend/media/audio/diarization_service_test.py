@@ -7,9 +7,8 @@
 
 """Tests for Pyannote speaker diarization service."""
 
-import asyncio
 import tempfile
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -263,8 +262,7 @@ class TestDiarizationServiceIntegration:
         """
         pytest.skip("Requires Pyannote model files and HuggingFace token")
 
-        service = DiarizationService()
+        DiarizationService()
 
         # Would need a real audio file for full integration test
         # Skipping actual execution to avoid model download in CI
-        pass
