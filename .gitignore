@@ -472,3 +472,6 @@ docs/.obsidian/core-plugins.json
 
 # Canonical-check local audit reports
 .canonical-audit/
+
+# Claims audit generated output
+.claude/skills/claims-audit/extracted-claims.json

@@ -1,0 +1,53 @@
+{
+  "category": "features",
+  "patterns": [
+    {
+      "type": "capability",
+      "pattern": "\\b(NPU acceleration|GPU acceleration|multi-modal|voice|realtime|streaming|federation|a2a)\\b",
+      "description": "Feature capability claims"
+    },
+    {
+      "type": "support",
+      "pattern": "supports?\\s+(\\w+(?:\\s+\\w+){0,3})",
+      "description": "Support statements"
+    },
+    {
+      "type": "integration",
+      "pattern": "integrat(?:es?|ion)\\s+with\\s+(\\w+)",
+      "description": "Integration claims"
+    },
+    {
+      "type": "model_provider",
+      "pattern": "\\b(OpenAI|Anthropic|Ollama|Groq|Claude|GPT|LLaMA)\\b",
+      "description": "AI model provider mentions"
+    },
+    {
+      "type": "protocol",
+      "pattern": "\\b(WebSocket|SSE|REST|GraphQL|gRPC|HTTP|HTTPS)\\b",
+      "description": "Protocol support claims"
+    },
+    {
+      "type": "format",
+      "pattern": "\\b(JSON|YAML|Markdown|CSV|XML)\\b",
+      "description": "Data format support"
+    }
+  ],
+  "keywords": [
+    "NPU",
+    "GPU",
+    "multi-modal",
+    "voice",
+    "realtime",
+    "streaming",
+    "federation",
+    "a2a",
+    "supports",
+    "integration",
+    "OpenAI",
+    "Anthropic",
+    "Ollama",
+    "Claude",
+    "WebSocket",
+    "SSE"
+  ]
+}
