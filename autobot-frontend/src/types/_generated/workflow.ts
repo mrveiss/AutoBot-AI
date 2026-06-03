@@ -9,7 +9,7 @@
 // to regenerate. CI checks this file is in sync with the canonical
 // Python dataclasses in `autobot_shared/workflow/types.py` (#7122).
 
- 
+/* eslint-disable */
 
 /** Generated from `autobot_shared.workflow.types.PromptSpec` */
 export interface PromptSpec {
@@ -52,10 +52,10 @@ export interface WorkflowTask {
   error: unknown;
   start_time: unknown;
   end_time: unknown;
-  skill_name: unknown;
-  skill_action: unknown;
-  skill_resolution_method: unknown;
-  pending_skill_id: unknown;
+  skill_name: string | null;
+  skill_action: string | null;
+  skill_resolution_method: string | null;
+  pending_skill_id: string | null;
   preconditions: string[];
   effects: string[];
   metadata: Record<string, unknown>;
