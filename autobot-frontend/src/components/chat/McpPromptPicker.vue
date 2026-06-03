@@ -145,9 +145,9 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useApi } from '@/composables/useApi'
-import BaseButton from '@/components/common/BaseButton.vue'
-import BaseModal from '@/components/common/BaseModal.vue'
-import Icon from '@/components/common/Icon.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
+import BaseModal from '@/components/ui/BaseModal.vue'
+import Icon from '@/components/ui/Icon.vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('McpPromptPicker')
