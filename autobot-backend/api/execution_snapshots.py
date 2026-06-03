@@ -102,7 +102,6 @@ async def create_snapshot(
         except Exception as container_err:
             logger.warning("Container verification failed for %s: %s", container_id, container_err)
             # Container not found or not accessible - let backend.snapshot handle it
-            pass
 
         snapshot_record = await backend.snapshot(
             container_id=container_id,

@@ -154,6 +154,31 @@ class SessionTokenTracker:
             logger.error("Failed to reset session %s: %s", session_id, e)
 
 
+def _sanitize_tool_messages(msgs: List[Dict]) -> List[Dict]:
+    """Drop orphaned tool messages and dangling assistant tool_calls.
+
+    OpenAI/Anthropic APIs require every role='tool' message to immediately
+    follow an assistant message that carries tool_calls. Front-trimming
+    conversation history can cut the assistant tool_calls parent while keeping
+    its tool responses, causing provider validation errors.
+    """
+    cleaned: List[Dict] = []
+    in_batch = False
+    for m in msgs:
+        role = m.get("role")
+        if role == "tool":
+            if in_batch:
+                cleaned.append(m)
+            # else: orphan — drop silently
+            continue
+        if role == "assistant" and m.get("tool_calls"):
+            in_batch = True
+        else:
+            in_batch = False
+        cleaned.append(m)
+    return cleaned
+
+
 class ConversationSummarizer:
     """Uses LLM to create intelligent conversation summaries.
 
@@ -167,20 +192,29 @@ class ConversationSummarizer:
     """
 
     _SUMMARIZATION_PROMPT = (
-        "Compress the following conversation segment preserving all decisions, "
-        "facts, and action items.\n"
-        "The summary should be compact but complete enough that someone reading "
-        "it later can understand what was discussed and decided.\n"
-        "Focus on:\n"
-        "- Key decisions made\n"
-        "- Important facts mentioned\n"
-        "- Action items or tasks identified\n"
-        "- Critical context needed for future messages\n"
-        "\n"
-        "Original conversation:\n"
-        "{conversation}\n"
-        "\n"
-        "Provide a concise summary in 2-3 paragraphs:"
+        "You are summarizing a conversation to preserve context after compaction. "
+        "Produce a structured summary that lets the conversation continue seamlessly.\n\n"
+        "Use this format:\n\n"
+        "## Conversation Summary\n"
+        "**Turns summarized:** {{count}}\n\n"
+        "### User Goal\n"
+        "One sentence describing what the user is trying to accomplish.\n\n"
+        "### What Was Done\n"
+        "- Bullet points of completed actions, decisions made, and key outputs\n"
+        "- Include specific file paths, function names, variable names, URLs, and config values\n"
+        "- Note any errors encountered and how they were resolved\n\n"
+        "### Current State\n"
+        "What is the system/task state right now? What was the last thing discussed?\n\n"
+        "### Pending / Next Steps\n"
+        "- What remains to be done\n"
+        "- Any open questions or blockers\n\n"
+        "### Key Context\n"
+        "- Important constraints, preferences, or decisions that must not be forgotten\n"
+        "- Specific values: model names, ports, paths, credentials references, versions\n\n"
+        "Keep the summary under 1000 tokens. Be dense — every token should carry information.\n\n"
+        "Conversation to summarize:\n"
+        "{{conversation}}\n\n"
+        "Provide ONLY the structured summary above — no preamble or meta-commentary."
     )
 
     async def summarize_messages(
@@ -203,9 +237,12 @@ class ConversationSummarizer:
 
             gateway = get_llm_gateway()
 
-            # Format conversation for summarization
-            conversation_text = self._format_messages(messages)
-            prompt = self._SUMMARIZATION_PROMPT.format(conversation=conversation_text)
+            # Sanitize orphaned tool messages before formatting
+            safe_messages = _sanitize_tool_messages(messages)
+            conversation_text = self._format_messages(safe_messages)
+            prompt = self._SUMMARIZATION_PROMPT.replace("{{conversation}}", conversation_text).replace(
+                "{{count}}", str(len(messages))
+            )
 
             # Generate summary via LLM
             response = await gateway.chat_completion(
@@ -233,12 +270,20 @@ class ConversationSummarizer:
             return f"[Summary: {len(messages)} earlier message(s) were summarized to preserve context.]"
 
     def _format_messages(self, messages: List[Dict[str, Any]]) -> str:
-        """Format messages into readable conversation text."""
+        """Format messages into readable conversation text.
+
+        Handles both API schema (role/content) and display schema (sender/text).
+        """
         lines = []
         for msg in messages:
-            sender = msg.get("sender", "unknown")
-            text = msg.get("text", "")
-            lines.append(f"{sender}: {text}")
+            role = msg.get("role") or msg.get("sender", "unknown")
+            content = msg.get("content") or msg.get("text", "")
+            if isinstance(content, list):
+                content = " ".join(
+                    p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"
+                )
+            if role and content:
+                lines.append(f"{role}: {content}")
         return "\n".join(lines)
 
 

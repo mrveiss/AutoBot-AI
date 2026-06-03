@@ -43,19 +43,16 @@ class SpeechProvider(ABC):
         Returns:
             List of transcript segments with timing
         """
-        pass
 
     @property
     @abstractmethod
     def provider_name(self) -> str:
         """Return provider name for logging/debugging."""
-        pass
 
     @property
     @abstractmethod
     def supported_languages(self) -> List[str]:
         """Return list of supported language codes."""
-        pass
 
 
 class ProviderRegistry:
