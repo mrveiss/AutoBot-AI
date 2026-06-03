@@ -10,6 +10,7 @@ Part of Issue MVA-2185.
 
 import sys
 from pathlib import Path
+
 # Add autobot-backend to path
 backend_path = Path(__file__).parent.parent.parent
 if str(backend_path) not in sys.path:
