@@ -522,6 +522,7 @@ class CircuitBreakerDefaults:
     PERFORMANCE_WINDOW = 300.0
     QUANTILE_SAMPLE_SIZE = 20
     MAX_HISTORY_SIZE = 100
+    CONSECUTIVE_RESET_ON_SUCCESS = True
 
 
 class VoiceRecognitionConfig:

@@ -10,7 +10,6 @@ delivery and offline conversation sync.
 
 import uuid
 from enum import Enum
-from typing import Optional
 
 from sqlalchemy import Column, DateTime, String, Text
 from sqlalchemy.types import Uuid
