@@ -1,7 +1,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""ClaudeCodeAdapter — runs Claude Code CLI sessions as LLC agent heartbeats (GH#8258).
+"""ClaudeCodeAdapter — runs Claude Code CLI sessions as LLC agent heartbeats (GH#8258, GH#9030).
 
 adapter_config schema::
 
@@ -11,12 +11,15 @@ adapter_config schema::
         "allowed_tools": ["Bash", "Read"],
         "output_dir": "/tmp",
         "timeout_seconds": 3600,
+        "streaming_watchdog_timeout_seconds": 120,
         "workspace_dir": "/path/to/worktree"
     }
 
 ``run_id`` is ``"<pid>/<session_id>"``.
 ``workspace_dir`` sets the subprocess cwd; if the directory has been deleted the
 adapter retries without it and clears the config value for subsequent calls.
+``streaming_watchdog_timeout_seconds`` configures per-agent silent-stream timeout
+(defaults to 120s global, overridable per adapter or per agent).
 """
 
 from __future__ import annotations
@@ -34,13 +37,14 @@ from typing import Optional
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
+from ..config import DEFAULT_STREAMING_WATCHDOG_TIMEOUT
 from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
 
 logger = get_logger(__name__)
 
 _SESSION_TTL_SECONDS = 4 * 3600
-_SIGTERM_GRACE_SECONDS = 5
+_SIGTERM_GRACE_SECONDS = 10  # GH#9030: increased from 5s for streaming watchdog
 _DEFAULT_TIMEOUT_SECONDS = 3600
 _DEFAULT_OUTPUT_DIR = "/tmp"  # nosec B108 - test/controlled code uses tmpdir intentionally
 _SESSION_KEY = "llc:agent:{agent_id}:claude_session"
@@ -161,6 +165,9 @@ class ClaudeCodeAdapter:
             output_file,
         )
 
+        watchdog_sec: float = float(
+            cfg.get("streaming_watchdog_timeout_seconds", DEFAULT_STREAMING_WATCHDOG_TIMEOUT)
+        )
         state = {
             "pid": proc.pid,
             "session_id": session_id,
@@ -168,6 +175,7 @@ class ClaudeCodeAdapter:
             "output_file": output_file,
             "started_at": time.time(),
             "timeout_seconds": timeout_sec,
+            "streaming_watchdog_timeout_seconds": watchdog_sec,
         }
         with open(_state_path(output_dir, run_id), "w", encoding="utf-8") as fh:
             json.dump(state, fh)
@@ -200,11 +208,44 @@ class ClaudeCodeAdapter:
         pid: int = state["pid"]
         timeout_sec: float = state.get("timeout_seconds", _DEFAULT_TIMEOUT_SECONDS)
         started_at: float = state.get("started_at", 0.0)
+        output_file: str = state.get("output_file", "")
 
+        # Total runtime timeout check
         if time.time() - started_at > timeout_sec:
             logger.warning("ClaudeCodeAdapter: run_id %s timed out (%ss)", run_id, timeout_sec)
             await self.cancel(agent_config, run_id)
             return AdapterRunStatus(status=LLCRunStatus.TIMEOUT)
+
+        # Streaming watchdog timeout check (GH#9030)
+        # Read from state first (persisted at invoke time), fall back to config, then default
+        watchdog_sec: float = float(
+            state.get(
+                "streaming_watchdog_timeout_seconds",
+                cfg.get("streaming_watchdog_timeout_seconds", DEFAULT_STREAMING_WATCHDOG_TIMEOUT)
+            )
+        )
+        if output_file and watchdog_sec > 0:
+            try:
+                mtime = os.path.getmtime(output_file)
+                silence_duration = time.time() - mtime
+                if silence_duration > watchdog_sec:
+                    logger.warning(
+                        "ClaudeCodeAdapter: run_id %s silent for %.1fs (watchdog: %ss) — killing",
+                        run_id,
+                        silence_duration,
+                        watchdog_sec,
+                    )
+                    await self.cancel(agent_config, run_id)
+                    return AdapterRunStatus(
+                        status=LLCRunStatus.TIMEOUT,
+                        error=f"Streaming watchdog: no output for {silence_duration:.0f}s",
+                    )
+            except OSError as exc:
+                logger.debug(
+                    "ClaudeCodeAdapter: failed to stat output_file %r: %s",
+                    output_file,
+                    exc,
+                )
 
         return self._probe_pid(pid)
 

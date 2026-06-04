@@ -15,7 +15,6 @@ from llm_shared.model_fallback_coordinator import ModelFallbackCoordinator
 from llm_shared.models import LLMRequest, LLMResponse
 from llm_shared.optimization.rate_limiter import RateLimitError
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -123,11 +122,13 @@ async def test_multiple_fallback_hops():
     """Two rate limits → succeeds on third model in chain."""
     coordinator = ModelFallbackCoordinator()
     ok = _ok_response("claude-haiku-4")
-    registry = _make_registry([
-        RateLimitError("quota"),
-        RateLimitError("quota"),
-        ok,
-    ])
+    registry = _make_registry(
+        [
+            RateLimitError("quota"),
+            RateLimitError("quota"),
+            ok,
+        ]
+    )
 
     mgr = _chain_manager_with("claude-opus-4", ["claude-sonnet-4", "claude-haiku-4"])
 
@@ -136,9 +137,7 @@ async def test_multiple_fallback_hops():
 
     assert result.content == "hello"
     assert result.provider_metadata["attempt_count"] == 3
-    assert result.provider_metadata["fallback_chain_tried"] == [
-        "claude-opus-4", "claude-sonnet-4", "claude-haiku-4"
-    ]
+    assert result.provider_metadata["fallback_chain_tried"] == ["claude-opus-4", "claude-sonnet-4", "claude-haiku-4"]
 
 
 @pytest.mark.asyncio
@@ -150,9 +149,7 @@ async def test_all_fallbacks_exhausted():
     mgr = _chain_manager_with("claude-opus-4", ["claude-sonnet-4"])
 
     with patch("llm_shared.model_fallback_coordinator.get_fallback_chain_manager", return_value=mgr):
-        result = await coordinator.execute_with_fallback(
-            _make_request("claude-opus-4"), registry, max_attempts=2
-        )
+        result = await coordinator.execute_with_fallback(_make_request("claude-opus-4"), registry, max_attempts=2)
 
     assert result.content == ""
     assert result.error is not None

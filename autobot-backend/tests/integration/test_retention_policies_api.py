@@ -30,7 +30,6 @@ from user_management.models.base import Base
 from user_management.models.retention_policy import RetentionPolicy
 from user_management.models.user import User
 
-
 # Test database setup
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
 
@@ -113,6 +112,7 @@ def test_client_regular(test_db_session, regular_user):
     # Regular user will fail admin check
     def reject_non_admin():
         from utils.catalog_http_exceptions import raise_auth_error
+
         raise_auth_error("AUTH_0003", "Admin permission required")
 
     app.dependency_overrides[_require_admin] = reject_non_admin
@@ -142,9 +142,7 @@ async def test_create_global_policy(test_client_admin, test_db_session):
     assert "created_at" in data
 
     # Verify in database
-    result = await test_db_session.execute(
-        select(RetentionPolicy).where(RetentionPolicy.policy_type == "chat")
-    )
+    result = await test_db_session.execute(select(RetentionPolicy).where(RetentionPolicy.policy_type == "chat"))
     policy = result.scalar_one()
     assert policy.retention_days == 90
 
@@ -277,9 +275,7 @@ async def test_policy_resolution_user_override(test_client_admin, test_db_sessio
     )
 
     # Get policy for specific user (should return user override)
-    response = test_client_admin.get(
-        f"/api/admin/retention-policies/chat?user_id={user_id}"
-    )
+    response = test_client_admin.get(f"/api/admin/retention-policies/chat?user_id={user_id}")
 
     assert response.status_code == 200
     data = response.json()

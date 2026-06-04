@@ -120,6 +120,16 @@ backend:
     AUTOBOT_BACKEND_PORT: 8001
 
 # ==========================================
+# DATA RETENTION & HYGIENE (GH#8995, MVA-3044)
+# ==========================================
+
+# Retention TTL for automated cleanup tasks (days)
+# Override these in host_vars for environment-specific values
+chat_retention_days: 90     # Chat sessions and conversations
+file_retention_days: 90     # Uploaded file attachments
+audit_retention_days: 365   # Audit logs (1 year for compliance)
+
+# ==========================================
 # SYSTEM PACKAGES
 # ==========================================
 

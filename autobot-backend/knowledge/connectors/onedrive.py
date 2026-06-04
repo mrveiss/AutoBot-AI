@@ -530,17 +530,31 @@ class OneDriveConnector(AbstractConnector):
         last_modified_str = file_item.get("lastModifiedDateTime", "")
         last_modified = parse_utc_iso(last_modified_str) if last_modified_str else now_utc()
 
+        # Build path from parent reference
+        parent_ref = file_item.get("parentReference", {})
+        parent_path = parent_ref.get("path", "")
+        # Extract the actual folder path from the full path format
+        # e.g., "/drive/root:/Documents" -> "/Documents"
+        if "/root:" in parent_path:
+            folder_path = parent_path.split("/root:", 1)[1]
+        else:
+            folder_path = "/"
+        full_path = f"{folder_path}/{file_name}".replace("//", "/")
+
         return SourceInfo(
             source_id=source_id,
             name=file_name,
-            description=f"OneDrive file: {file_name}",
+            path=full_path,
+            content_type=self._get_content_type(file_ext),
+            size_bytes=file_item.get("size", 0),
             last_modified=last_modified,
             metadata={
                 "file_id": file_id,
                 "file_name": file_name,
                 "file_extension": file_ext,
                 "web_url": file_item.get("webUrl", ""),
-                "size": file_item.get("size", 0),
+                "drive_id": parent_ref.get("driveId", ""),
+                "site_id": self._site_id or "",
             },
         )
 
@@ -550,6 +564,19 @@ class OneDriveConnector(AbstractConnector):
         if "." in file_name:
             return "." + file_name.rsplit(".", 1)[-1]
         return ""
+
+    @staticmethod
+    def _get_content_type(file_ext: str) -> str:
+        """Map file extension to MIME type."""
+        content_type_map = {
+            ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".pdf": "application/pdf",
+            ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            ".md": "text/markdown",
+            ".txt": "text/plain",
+        }
+        return content_type_map.get(file_ext.lower(), "application/octet-stream")
 
     async def _graph_request(
         self,

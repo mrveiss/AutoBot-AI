@@ -104,8 +104,7 @@ class ModelFallbackCoordinator:
                 )
                 if fallback_used:
                     logger.info(
-                        "quota-fallback: request succeeded on attempt %d "
-                        "using model=%r (primary=%r) chain=%s",
+                        "quota-fallback: request succeeded on attempt %d " "using model=%r (primary=%r) chain=%s",
                         attempt + 1,
                         current_model,
                         primary_model,
@@ -128,9 +127,7 @@ class ModelFallbackCoordinator:
                     )
                     break
 
-                fallback = get_fallback_chain_manager().get_next_fallback(
-                    current_model, current_provider
-                )
+                fallback = get_fallback_chain_manager().get_next_fallback(current_model, current_provider)
                 if fallback is None:
                     logger.warning(
                         "quota-fallback: no fallback registered for model=%r provider=%r",
@@ -173,12 +170,8 @@ class ModelFallbackCoordinator:
     @staticmethod
     async def _dispatch(request: LLMRequest, registry: "ProviderRegistry") -> LLMResponse:
         """Select provider for *request* and call chat_completion, raising on rate limit."""
-        provider_name: Optional[str] = (
-            request.provider.value if request.provider else None
-        )
-        provider = await registry.get_provider_for_request(
-            provider_name=provider_name, request=request
-        )
+        provider_name: Optional[str] = request.provider.value if request.provider else None
+        provider = await registry.get_provider_for_request(provider_name=provider_name, request=request)
         if provider is None:
             return LLMResponse(
                 content="",

@@ -22,6 +22,7 @@ import json
 import os
 import time
 from typing import Any, AsyncIterator, Dict, List
+from uuid import uuid4
 
 from autobot_shared.logging_manager import get_logger
 from llm_shared.models import LLMRequest, LLMResponse, ToolCall
@@ -84,8 +85,9 @@ class BedrockProvider(BaseProvider):
         self._client = None
         self._runtime_client = None
         self._region: str | None = None
+        self._current_correlation_id: str | None = None
 
-    def _resolve_credentials(self) -> tuple[str | None, str | None, str | None]:
+    def _resolve_credentials(self, correlation_id: str | None = None, model: str | None = None) -> tuple[str | None, str | None, str | None]:
         """
         Resolve AWS credentials from SecretsService, settings, or environment.
 
@@ -94,6 +96,10 @@ class BedrockProvider(BaseProvider):
         2. Environment variables (fallback for migration)
         3. IAM role (boto3 default credential chain)
 
+        Args:
+            correlation_id: Correlation ID for audit trail
+            model: Model name being used (for audit trail)
+
         Returns:
             Tuple of (access_key_id, secret_access_key, region).
             Any value can be None to use boto3's default credential chain.
@@ -101,6 +107,14 @@ class BedrockProvider(BaseProvider):
         access_key = None
         secret_key = None
         region = None
+        correlation_id = correlation_id or str(uuid4())
+
+        # Build audit context
+        audit_context = {
+            "correlation_id": correlation_id,
+            "model": model,
+            "timestamp": time.time(),
+        }
 
         # 1. Try SecretsService first (encrypted, audited)
         try:
@@ -110,16 +124,21 @@ class BedrockProvider(BaseProvider):
                 secret_type="aws_bedrock_credentials",
                 scope="general",
                 include_value=True,
-                accessed_by="bedrock_provider",
+                accessed_by=f"bedrock_provider|correlation_id={correlation_id}",
             )
             if secret and "value" in secret:
                 creds = json.loads(secret["value"])
                 access_key = creds.get("aws_access_key_id")
                 secret_key = creds.get("aws_secret_access_key")
                 region = creds.get("region")
-                logger.info("Loaded Bedrock credentials from SecretsService (encrypted)")
+                logger.info(
+                    "Loaded Bedrock credentials from SecretsService (correlation_id=%s, model=%s)",
+                    correlation_id,
+                    model,
+                )
         except Exception as exc:
             logger.debug("SecretsService lookup failed (using fallback): %s", exc)
+            self._log_credential_access_failure(correlation_id, model, "secrets_service_lookup", str(exc))
 
         # 2. Fall back to environment variables (legacy path during migration)
         if not (access_key and secret_key):
@@ -127,8 +146,9 @@ class BedrockProvider(BaseProvider):
             secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
             if access_key and secret_key:
                 logger.warning(
-                    "Using plain-text AWS credentials from environment variables. "
-                    "Run migrate_bedrock_credentials.py to store them securely."
+                    "Using plain-text AWS credentials from environment variables (correlation_id=%s). "
+                    "Run migrate_bedrock_credentials.py to store them securely.",
+                    correlation_id,
                 )
 
         # Region can come from SecretsService, env, or default
@@ -137,32 +157,119 @@ class BedrockProvider(BaseProvider):
 
         return access_key, secret_key, region
 
-    def _ensure_runtime_client(self):
-        """Lazily initialize the bedrock-runtime client."""
+    def _log_credential_access_failure(
+        self,
+        correlation_id: str,
+        model: str | None,
+        failure_type: str,
+        error_message: str,
+    ) -> None:
+        """
+        Log failed credential access attempts to audit trail.
+
+        Args:
+            correlation_id: Correlation ID for the request
+            model: Model name being accessed
+            failure_type: Type of failure (e.g., "secrets_service_lookup", "authentication")
+            error_message: Error message
+        """
+        try:
+            import sqlite3
+            from autobot_shared.time_utils import now_utc
+
+            secrets_service = get_secrets_service()
+
+            audit_details = {
+                "correlation_id": correlation_id,
+                "model": model,
+                "region": self._region,
+                "failure_type": failure_type,
+                "error": error_message,
+                "timestamp": now_utc().isoformat(),
+            }
+
+            # Insert directly into audit table for failed attempts
+            conn = sqlite3.connect(secrets_service.db_path)
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO secrets_audit (id, secret_id, action, performed_by, performed_at, details)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    str(uuid4()),
+                    "bedrock_credentials_failed",
+                    "failed_credential_access",
+                    f"bedrock_provider|correlation_id={correlation_id}",
+                    now_utc().isoformat(),
+                    json.dumps(audit_details),
+                ),
+            )
+            conn.commit()
+            conn.close()
+
+            logger.warning(
+                "Bedrock credential access failed: %s (correlation_id=%s, model=%s)",
+                failure_type,
+                correlation_id,
+                model,
+            )
+        except Exception as audit_exc:
+            # Don't let audit logging failure break the main flow
+            logger.debug("Failed to log credential access failure to audit trail: %s", audit_exc)
+
+    def _ensure_runtime_client(self, correlation_id: str | None = None, model: str | None = None):
+        """Lazily initialize the bedrock-runtime client.
+
+        Args:
+            correlation_id: Correlation ID for audit trail
+            model: Model name being used (for audit trail)
+
+        Returns:
+            Initialized boto3 bedrock-runtime client
+        """
         if self._runtime_client is not None:
             return self._runtime_client
+
+        correlation_id = correlation_id or str(uuid4())
+        self._current_correlation_id = correlation_id
 
         try:
             import boto3
         except ImportError as exc:
+            self._log_credential_access_failure(correlation_id, model, "boto3_import", str(exc))
             raise ImportError("boto3 not installed. Run: pip install boto3") from exc
 
-        access_key, secret_key, region = self._resolve_credentials()
-        self._region = region
+        try:
+            access_key, secret_key, region = self._resolve_credentials(correlation_id, model)
+            self._region = region
 
-        # Build client kwargs
-        client_kwargs: Dict[str, Any] = {"region_name": region, "service_name": "bedrock-runtime"}
+            # Build client kwargs
+            client_kwargs: Dict[str, Any] = {"region_name": region, "service_name": "bedrock-runtime"}
 
-        # Only specify credentials if explicitly provided (otherwise use IAM role)
-        if access_key and secret_key:
-            client_kwargs["aws_access_key_id"] = access_key
-            client_kwargs["aws_secret_access_key"] = secret_key
+            # Only specify credentials if explicitly provided (otherwise use IAM role)
+            if access_key and secret_key:
+                client_kwargs["aws_access_key_id"] = access_key
+                client_kwargs["aws_secret_access_key"] = secret_key
 
-        self._runtime_client = boto3.client(**client_kwargs)
-        logger.info(
-            "Initialized Bedrock runtime client in region %s", region
-        )  # codeql[py/clear-text-logging-sensitive-data]
-        return self._runtime_client
+            self._runtime_client = boto3.client(**client_kwargs)
+            logger.info(
+                "Initialized Bedrock runtime client in region %s (correlation_id=%s, model=%s)",
+                region,
+                correlation_id,
+                model,
+            )
+            return self._runtime_client
+
+        except Exception as exc:
+            # Log authentication/initialization failures
+            self._log_credential_access_failure(
+                correlation_id,
+                model,
+                "client_initialization",
+                str(exc),
+            )
+            raise
 
     def _resolve_model_id(self, model_name: str) -> str:
         """
@@ -493,8 +600,19 @@ class BedrockProvider(BaseProvider):
         model_name = request.model_name or self._get_setting("default_model", "claude-3-5-sonnet")
         model_id = self._resolve_model_id(model_name)
 
+        # Generate correlation ID for audit trail
+        correlation_id = str(uuid4())
+        workflow_id = getattr(request, "workflow_id", None)
+
+        logger.info(
+            "Bedrock API call: model=%s, correlation_id=%s, workflow_id=%s",
+            model_id,
+            correlation_id,
+            workflow_id,
+        )
+
         try:
-            client = self._ensure_runtime_client()
+            client = self._ensure_runtime_client(correlation_id, model_id)
             request_body = self._build_request_body(model_id, request)
 
             # Invoke the model
@@ -507,11 +625,34 @@ class BedrockProvider(BaseProvider):
 
             # Parse response
             response_body = json.loads(response["body"].read())
-            return self._parse_response(model_id, response_body, start)
+            llm_response = self._parse_response(model_id, response_body, start)
+
+            # Add correlation ID to response metadata
+            if llm_response.provider_metadata:
+                llm_response.provider_metadata["correlation_id"] = correlation_id
+                llm_response.provider_metadata["workflow_id"] = workflow_id
+
+            return llm_response
 
         except Exception as exc:
             self._total_errors += 1
-            logger.error("Bedrock chat_completion error for model %s: %s", model_id, exc)
+
+            # Check if this is an authentication error
+            error_str = str(exc).lower()
+            if any(auth_keyword in error_str for auth_keyword in ["credential", "authentication", "unauthorized", "forbidden", "access denied"]):
+                self._log_credential_access_failure(
+                    correlation_id,
+                    model_id,
+                    "authentication_error",
+                    str(exc),
+                )
+
+            logger.error(
+                "Bedrock chat_completion error for model %s (correlation_id=%s): %s",
+                model_id,
+                correlation_id,
+                exc,
+            )
             return LLMResponse(
                 content="",
                 model=model_id,
@@ -519,6 +660,7 @@ class BedrockProvider(BaseProvider):
                 processing_time=time.time() - start,
                 request_id="",
                 error=str(exc),
+                provider_metadata={"correlation_id": correlation_id, "workflow_id": workflow_id},
             )
 
     async def stream_completion(self, request: LLMRequest) -> AsyncIterator[str]:
@@ -532,8 +674,19 @@ class BedrockProvider(BaseProvider):
         model_name = request.model_name or self._get_setting("default_model", "claude-3-5-sonnet")
         model_id = self._resolve_model_id(model_name)
 
+        # Generate correlation ID for audit trail
+        correlation_id = str(uuid4())
+        workflow_id = getattr(request, "workflow_id", None)
+
+        logger.info(
+            "Bedrock streaming API call: model=%s, correlation_id=%s, workflow_id=%s",
+            model_id,
+            correlation_id,
+            workflow_id,
+        )
+
         try:
-            client = self._ensure_runtime_client()
+            client = self._ensure_runtime_client(correlation_id, model_id)
             request_body = self._build_request_body(model_id, request)
 
             # Invoke with streaming
@@ -569,26 +722,50 @@ class BedrockProvider(BaseProvider):
 
         except Exception as exc:
             self._total_errors += 1
-            logger.error("Bedrock stream_completion error for model %s: %s", model_id, exc)
+
+            # Check if this is an authentication error
+            error_str = str(exc).lower()
+            if any(auth_keyword in error_str for auth_keyword in ["credential", "authentication", "unauthorized", "forbidden", "access denied"]):
+                self._log_credential_access_failure(
+                    correlation_id,
+                    model_id,
+                    "authentication_error",
+                    str(exc),
+                )
+
+            logger.error(
+                "Bedrock stream_completion error for model %s (correlation_id=%s): %s",
+                model_id,
+                correlation_id,
+                exc,
+            )
             raise
 
     async def is_available(self) -> bool:
         """Return True if Bedrock credentials are configured and the service is reachable."""
+        correlation_id = str(uuid4())
         try:
-            self._ensure_runtime_client()  # Verify runtime client can be created
+            self._ensure_runtime_client(correlation_id, "availability_check")  # Verify runtime client can be created
             # Simple health check - list foundation models (no cost)
             import boto3
 
+            access_key, secret_key, region = self._resolve_credentials(correlation_id, "availability_check")
             bedrock_client = boto3.client(
                 "bedrock",
-                region_name=self._region,
-                aws_access_key_id=self._resolve_credentials()[0],
-                aws_secret_access_key=self._resolve_credentials()[1],
+                region_name=region or self._region,
+                aws_access_key_id=access_key,
+                aws_secret_access_key=secret_key,
             )
             bedrock_client.list_foundation_models(maxResults=1)
             return True
         except Exception as exc:
-            logger.debug("Bedrock availability check failed: %s", exc)
+            logger.debug("Bedrock availability check failed (correlation_id=%s): %s", correlation_id, exc)
+            self._log_credential_access_failure(
+                correlation_id,
+                "availability_check",
+                "availability_check_failed",
+                str(exc),
+            )
             return False
 
     async def list_models(self) -> List[str]:
