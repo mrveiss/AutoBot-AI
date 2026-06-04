@@ -28,7 +28,6 @@ from user_management.services import TenantContext
 from ..models.heartbeat_run import LLCHeartbeatRun
 from ..scheduler.heartbeat_scheduler import get_heartbeat_scheduler
 
-
 logger = get_logger(__name__)
 router = APIRouter(prefix="/agents", tags=["llc-agents"])
 

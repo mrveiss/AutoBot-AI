@@ -95,7 +95,6 @@ class CoworkerRequest(BaseModel):
     actor_user_id: Optional[str] = None
 
 
-
 logger = get_logger(__name__)
 router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
 _get_service = lazy_singleton(WorkItemService)

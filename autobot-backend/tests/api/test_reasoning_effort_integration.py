@@ -30,12 +30,7 @@ import pathlib as _pathlib
 
 _re_spec = _ilu.spec_from_file_location(
     "llm_shared.providers.reasoning_effort",
-    str(
-        _pathlib.Path(__file__).parent.parent.parent
-        / "llm_shared"
-        / "providers"
-        / "reasoning_effort.py"
-    ),
+    str(_pathlib.Path(__file__).parent.parent.parent / "llm_shared" / "providers" / "reasoning_effort.py"),
 )
 _re_mod = _ilu.module_from_spec(_re_spec)
 _re_spec.loader.exec_module(_re_mod)
@@ -45,6 +40,7 @@ _map_effort_to_provider_params = _re_mod._map_effort_to_provider_params
 # ---------------------------------------------------------------------------
 # UserPreferences model validation
 # ---------------------------------------------------------------------------
+
 
 class TestUserPreferencesModel:
     @pytest.mark.parametrize("effort", ["low", "medium", "high", "auto"])
@@ -58,11 +54,13 @@ class TestUserPreferencesModel:
 
     def test_invalid_effort_rejected(self):
         import pydantic
+
         with pytest.raises(pydantic.ValidationError):
             UserPreferences(reasoning_effort="extreme")
 
     def test_empty_effort_rejected(self):
         import pydantic
+
         with pytest.raises(pydantic.ValidationError):
             UserPreferences(reasoning_effort="")
 
@@ -70,6 +68,7 @@ class TestUserPreferencesModel:
 # ---------------------------------------------------------------------------
 # Redis helpers
 # ---------------------------------------------------------------------------
+
 
 def _async_redis(mock_redis):
     """Return an AsyncMock that, when awaited, yields mock_redis."""
@@ -118,6 +117,7 @@ async def test_store_preferences_calls_redis_set():
 # private helpers rather than through the decorated route object.
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_get_preferences_full_flow_returns_correct_effort():
     """Full get-preferences flow: Redis returns stored value → correct pref returned."""
@@ -150,6 +150,7 @@ async def test_update_preferences_raises_redis_error():
 # ---------------------------------------------------------------------------
 # /chat endpoint: thinking parameters flow through to LLM context
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_chat_send_message_passes_thinking_fields_to_process():
@@ -209,6 +210,7 @@ async def test_chat_send_message_passes_thinking_fields_to_process():
 # ---------------------------------------------------------------------------
 # Provider params round-trip: effort → provider params
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize(
     "effort,provider,expected",
