@@ -7049,5 +7049,16 @@
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
     }
+  },
+  "mobile": {
+    "pairing": {
+      "title": "Pievienot mobilās ierīces",
+      "instructions": "Noskanuējiet šo QR kodu ar savu mobilās ierīci",
+      "instructionsDetail": "Atveriet AutoBot mobilās lietotnes un noskanuējiet šo kodu, lai pievienotu savu ierīci",
+      "generating": "QR kods tiek ģenerēts...",
+      "expired": "Beidzies",
+      "refresh": "Saņemt jauno kodu",
+      "retry": "Mēģiniet vēlreiz"
+    }
   }
 }

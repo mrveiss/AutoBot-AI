@@ -37,6 +37,35 @@ AutoBot supports comprehensive configuration through environment variables with 
 | `AUTOBOT_SYSTEM_MODEL` | `dolphin-llama3:8b` | System | Commands, security |
 | `AUTOBOT_DEFAULT_LLM_MODEL` | `qwen3.5:9b` | Quality | Chat, research, code |
 
+### LLM Fallback Chain Configuration (GH#8998)
+
+When the primary model hits a rate limit (429) or quota cap, AutoBot automatically routes to backup models. See [LLM Fallback Configuration](../backend/llm-fallback.md) for the full guide.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AUTOBOT_FALLBACK_CHAIN_<MODEL>` | _(none)_ | Comma-separated fallback models for `<MODEL>`. Use `provider:model` format to specify provider (e.g. `anthropic:claude-sonnet-4,openai:gpt-4o-mini`). Model suffix uses uppercase with underscores (hyphens are auto-converted). |
+
+**Examples:**
+
+```bash
+# Claude Opus → Sonnet → GPT-4o-mini if Anthropic quota exhausted
+AUTOBOT_FALLBACK_CHAIN_CLAUDE_OPUS_4=anthropic:claude-sonnet-4,openai:gpt-4o-mini
+
+# GPT-4o → mini → local Ollama as last resort
+AUTOBOT_FALLBACK_CHAIN_GPT_4O=openai:gpt-4o-mini,ollama:llama3
+```
+
+### LLM Rate Limiter Configuration (GH#8170)
+
+Proactive per-provider token-bucket rate limiter (Redis-backed, shared across all uvicorn workers).
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AUTOBOT_LLM_RL_<PROVIDER>_RPM` | _(see below)_ | Requests per minute for `<PROVIDER>` (e.g. `AUTOBOT_LLM_RL_ANTHROPIC_RPM=200`) |
+| `AUTOBOT_LLM_RL_<PROVIDER>_BURST` | Same as RPM | Burst token capacity for `<PROVIDER>` |
+
+**Provider defaults:** `openai`=500, `anthropic`=60, `groq`=30, `ollama`=600, `vllm`=600, `huggingface`=30, `openrouter`=60, `custom_openai`=120. All others default to 60 RPM.
+
 ## Redis Configuration
 
 | Variable | Default | Description |

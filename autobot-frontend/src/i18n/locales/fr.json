@@ -7049,5 +7049,16 @@
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
     }
+  },
+  "mobile": {
+    "pairing": {
+      "title": "Appareiller un appareil mobile",
+      "instructions": "Scannez ce code QR avec votre appareil mobile",
+      "instructionsDetail": "Ouvrez l'application mobile AutoBot et scannez ce code pour appairer votre appareil",
+      "generating": "Génération du code QR...",
+      "expired": "Expiré",
+      "refresh": "Obtenir un nouveau code",
+      "retry": "Réessayer"
+    }
   }
 }

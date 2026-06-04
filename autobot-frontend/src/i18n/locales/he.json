@@ -7143,5 +7143,16 @@
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
     }
+  },
+  "mobile": {
+    "pairing": {
+      "title": "זיווג התקן נייד",
+      "instructions": "סרוק קוד QR זה בעזרת ההתקן הנייד שלך",
+      "instructionsDetail": "פתח את אפליקציית AutoBot הנייד וסרוק קוד זה כדי לזווג את ההתקן שלך",
+      "generating": "יוצר קוד QR...",
+      "expired": "פג תוקף",
+      "refresh": "קבל קוד חדש",
+      "retry": "נסה שוב"
+    }
   }
 }

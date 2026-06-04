@@ -7049,5 +7049,16 @@
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
     }
+  },
+  "mobile": {
+    "pairing": {
+      "title": "إقران الجهاز المحمول",
+      "instructions": "امسح رمز QR هذا باستخدام جهازك المحمول",
+      "instructionsDetail": "افتح تطبيق AutoBot المحمول وامسح هذا الرمز لإقران جهازك",
+      "generating": "جاري إنشاء رمز QR...",
+      "expired": "انتهت صلاحيته",
+      "refresh": "الحصول على رمز جديد",
+      "retry": "حاول مرة أخرى"
+    }
   }
 }
