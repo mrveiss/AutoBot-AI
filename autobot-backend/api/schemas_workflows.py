@@ -121,7 +121,6 @@ class StateTrackingStatusResponse(BaseModel):
     change_count: Any | None = None
     latest_snapshot: Any | None = None
 
-
 class StateTrackingSummaryResponse(BaseModel):
     """Response for GET /summary."""
 
@@ -302,7 +301,6 @@ class RUMEventResponse(BaseModel):
     status: str
     message: str
     session_event_count: int | None = None
-
 
 class RUMDisableResponse(BaseModel):
     """Response for POST /rum/disable."""

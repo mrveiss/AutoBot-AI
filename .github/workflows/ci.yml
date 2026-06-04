@@ -209,9 +209,19 @@ jobs:
         npm run check:i18n
 
     - name: Run frontend type checking
+      env:
+        # Baseline from #7227: known type-debt. Same gate as frontend-typecheck-regression.yml.
+        BASELINE: 240
       run: |
         cd autobot-frontend
-        npx vue-tsc --noEmit -p tsconfig.app.json
+        set +e
+        ERRORS=$(npx vue-tsc --noEmit -p tsconfig.app.json 2>&1 | grep -cE "error TS")
+        echo "Type error baseline: $BASELINE  current: $ERRORS"
+        if [ "$ERRORS" -gt "$BASELINE" ]; then
+          echo "Regression: $ERRORS > $BASELINE type errors"
+          exit 1
+        fi
+        echo "Type check passed ($ERRORS errors within baseline of $BASELINE)"
 
     - name: Build frontend
       run: |

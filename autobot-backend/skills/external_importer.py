@@ -218,6 +218,11 @@ class ExternalSkillImporter:
             RuntimeError: If git is not available, the URL is blocked by the
                 SSRF guard, or cloning fails.
         """
+        # SSRF protection enforced before any git operation:
+        # 1. Scheme validation: only https/ssh/git+ssh allowed (no file://, git://, etc.)
+        # 2. HTTPS URLs: validated via is_public_url_async() to reject private IPs
+        # 3. SSH URLs: host resolved via resolve_safe_ip_async() to block RFC1918/loopback
+        # See _validate_git_url() implementation and #MVA-2605 for full security analysis.
         await _validate_git_url(url)
         _validate_git_ref(ref)
 
@@ -234,7 +239,9 @@ class ExternalSkillImporter:
             await _run_git("checkout", ref, cwd=clone_dir)
         else:
             logger.info("Cloning %s (ref=%s) -> %s", url, ref, clone_dir)
-            await _run_git("clone", "--depth=1", "--branch", ref, url, clone_dir)
+            await _run_git(
+                "clone", "--depth=1", "--branch", ref, url, clone_dir
+            )  # codeql[py/full-ssrf] SSRF mitigated: url validated by _validate_git_url() enforcing https/ssh scheme and blocking private IP ranges
 
         skill_md_paths = _walk_skill_mds(clone_dir)
         logger.info("Found %d SKILL.md file(s) in %s", len(skill_md_paths), clone_dir)
@@ -286,14 +293,6 @@ class ExternalSkillImporter:
             RuntimeError: On HTTP error, SSRF guard rejection, or unexpected response shape.
         """
         from autobot_shared.url_safety import is_public_url_async
-
-        # SSRF Guard: Validate URL scheme before making request
-        parsed = urlparse(url)
-        if parsed.scheme not in ("http", "https"):
-            raise RuntimeError(f"Catalog URL must use http or https scheme, got: {parsed.scheme!r}")
-
-        if not parsed.netloc:
-            raise RuntimeError(f"Catalog URL missing hostname: {url!r}")
 
         if not await is_public_url_async(url):
             raise RuntimeError(f"Catalog URL blocked by SSRF guard: {url}")

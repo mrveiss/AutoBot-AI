@@ -1167,10 +1167,14 @@ class MiscConfig(BaseSettings):
     cache_enabled: bool = Field(default=False, alias="AUTOBOT_CACHE_ENABLED")
     cache_size: int = Field(default=0, alias="AUTOBOT_CACHE_SIZE")
     cache_l1_size: int = Field(
-        default=100, alias="AUTOBOT_CACHE_L1_SIZE", description="L1 in-memory LLM response cache size"
+        default=100,
+        alias="AUTOBOT_CACHE_L1_SIZE",
+        description="L1 in-memory LLM response cache size",
     )
     cache_l2_ttl: int = Field(
-        default=300, alias="AUTOBOT_CACHE_L2_TTL", description="L2 Redis LLM response cache TTL in seconds"
+        default=300,
+        alias="AUTOBOT_CACHE_L2_TTL",
+        description="L2 Redis LLM response cache TTL in seconds",
     )
     celery_result_expires: str = Field(default="", alias="AUTOBOT_CELERY_RESULT_EXPIRES")
     celery_visibility_timeout: int = Field(default=0, alias="AUTOBOT_CELERY_VISIBILITY_TIMEOUT")
@@ -1395,7 +1399,7 @@ class MiscConfig(BaseSettings):
     password: str = Field(default="", alias="PASSWORD")
     pytest_current_test: str = Field(default="", alias="PYTEST_CURRENT_TEST")
     pytest_running: str = Field(default="", alias="PYTEST_RUNNING")
-    redis_host: str = Field(default="", alias="REDIS_HOST")
+    redis_host: str = Field(default="localhost", alias="REDIS_HOST")
     redis_node_id: str = Field(default="", alias="REDIS_NODE_ID")
     redis_port: int = Field(default=0, alias="REDIS_PORT")
     secret_key: str = Field(default="", alias="SECRET_KEY")

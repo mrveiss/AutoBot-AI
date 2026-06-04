@@ -7014,7 +7014,11 @@
     "usage": "Usage & Costs",
     "more": "More",
     "moreItems": "More navigation items",
-    "transcriber": "Transcriber"
+    "transcriber": "Transcriber",
+    "llcPortability": "Portability",
+    "settingsAndTools": "Settings & Tools",
+    "adminPanel": "Admin Panel",
+    "documents": "AI Documents"
   },
   "reasoningTrace": {
     "title": "Rastro de raciocinio",

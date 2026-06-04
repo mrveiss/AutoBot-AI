@@ -35,6 +35,9 @@ async def _async_cleanup_expired_snapshots(ttl_days: int) -> Dict[str, int]:
 
     for record in snapshots:
         created = datetime.fromisoformat(record.created_at)
+        # Normalize naive datetimes from legacy records (GH#9236)
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
         age_days = (datetime.now(timezone.utc) - created).days
 
         if created < cutoff:

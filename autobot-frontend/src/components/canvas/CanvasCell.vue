@@ -31,7 +31,7 @@
     <!-- Rich artifact rendering (Phase 2) -->
     <ChartCell
       v-if="chartPayload"
-      :rich-payload="chartPayload"
+      :rich-payload="chartPayload.spec"
       data-testid="chart-cell"
     />
     <CodeCell
@@ -161,7 +161,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { CanvasCell, ChartPayload, CodePayload } from '@/types/canvas'
-import ChartCell from './ChartCell.vue'
+import ChartCell from '@/components/artifact-cells/ChartCell.vue'
 import CodeCell from './CodeCell.vue'
 
 const props = defineProps<{ cell: CanvasCell }>()

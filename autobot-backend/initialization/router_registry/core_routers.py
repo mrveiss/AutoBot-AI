@@ -45,6 +45,7 @@ from api.knowledge_ai_stack import router as knowledge_ai_stack_router
 from api.knowledge_audit import router as knowledge_audit_router
 from api.knowledge_boards import router as knowledge_boards_router
 from api.knowledge_categories import router as knowledge_categories_router
+from api.knowledge_chroma import router as knowledge_chroma_router  # MVA-2046
 from api.knowledge_cognition import router as knowledge_cognition_router
 from api.knowledge_collaboration import router as knowledge_collaboration_router
 from api.knowledge_collections import router as knowledge_collections_router
@@ -136,6 +137,7 @@ def _get_core_knowledge_routers() -> list:
     return [
         (knowledge_router, "/knowledge_base", ["knowledge"], "knowledge"),
         (knowledge_audit_router, "", ["knowledge-audit"], "knowledge_audit"),
+        (knowledge_chroma_router, "", ["knowledge-chroma"], "knowledge_chroma"),  # MVA-2046
         (
             knowledge_search_router,
             "/knowledge_base",

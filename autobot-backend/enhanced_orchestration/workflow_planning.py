@@ -17,7 +17,7 @@ is tracked separately in #6820.
 
 import re
 import uuid
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Optional, Set
 
 from autobot_shared.logging_manager import get_logger
 

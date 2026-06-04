@@ -1,0 +1,49 @@
+{
+  "category": "api",
+  "patterns": [
+    {
+      "type": "endpoint",
+      "pattern": "(?:GET|POST|PUT|DELETE|PATCH)\\s+(/api/[\\w/-]+)",
+      "description": "API endpoint declarations"
+    },
+    {
+      "type": "route_path",
+      "pattern": "/api/([\\w/-]+)",
+      "description": "API route paths"
+    },
+    {
+      "type": "http_method",
+      "pattern": "\\b(GET|POST|PUT|DELETE|PATCH)\\b",
+      "description": "HTTP method mentions"
+    },
+    {
+      "type": "status_code",
+      "pattern": "\\b(200|201|204|400|401|403|404|500|502|503)\\b",
+      "description": "HTTP status code mentions"
+    },
+    {
+      "type": "auth",
+      "pattern": "\\b(JWT|token|bearer|API key|authentication|authorization)\\b",
+      "description": "Authentication mechanism claims"
+    },
+    {
+      "type": "response_format",
+      "pattern": "returns?\\s+(JSON|\\{[^}]+\\})",
+      "description": "API response format claims"
+    }
+  ],
+  "keywords": [
+    "/api/",
+    "endpoint",
+    "GET",
+    "POST",
+    "PUT",
+    "DELETE",
+    "PATCH",
+    "JWT",
+    "token",
+    "authentication",
+    "authorization",
+    "status code"
+  ]
+}

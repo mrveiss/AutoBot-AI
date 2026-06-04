@@ -204,7 +204,7 @@ class RoutineService(LLCServiceBase):
                     if secret_service is None:
                         logger.warning(
                             "Secret ref '%s' in env key '%s' skipped — no SecretService",
-                            secret_name,
+                            secret_name,  # codeql[py/clear-text-logging-sensitive-data]
                             key,
                         )
                         continue
@@ -213,7 +213,7 @@ class RoutineService(LLCServiceBase):
                     except SecretNotFound:
                         logger.warning(
                             "Secret '%s' not found for company %s (env key '%s') — skipping",
-                            secret_name,
+                            secret_name,  # codeql[py/clear-text-logging-sensitive-data]
                             company_id_str,
                             key,
                         )

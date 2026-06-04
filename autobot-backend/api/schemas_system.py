@@ -169,7 +169,6 @@ class FeatureFlagStatusResponse(BaseModel):
     success: bool
     data: Any | None = None
 
-
 class FeatureFlagEnforcementModeResponse(SuccessDataResponse):
     """Response for PUT /feature-flags/enforcement-mode."""
 
@@ -378,7 +377,6 @@ class FilePreviewResponse(BaseModel):
     mime_type: str | None = None
     size: int | None = None
     name: str | None = None
-
 
 class FileDeleteResponse(BaseModel):
     """Response for DELETE /files/delete.
@@ -594,7 +592,6 @@ class VisionOCRResponse(BaseModel):
     text_regions: List[Any]
     total_text_regions: int
     region: Dict[str, Any] | None = None
-
 
 class VisionAutomationOpportunitiesResponse(BaseModel):
     """Response for GET /vision/automation-opportunities."""
@@ -3286,9 +3283,9 @@ class SecretType(str, Enum):
     """Secret type enumeration."""
 
     SSH_KEY = "ssh_key"
-    PASSWORD = "password"  # nosec B105 - enum value  # nosemgrep: autobot-hardcoded-secret-key
-    API_KEY = "api_key"  # nosemgrep: autobot-hardcoded-secret-key
-    TOKEN = "token"  # nosec B105 - enum value  # nosemgrep: autobot-hardcoded-secret-key
+    PASSWORD = "password"  # nosec B105 - enum value  # nosemgrep: autobot-hardcoded-secret-key  # nosemgrep
+    API_KEY = "api_key"  # nosemgrep: autobot-hardcoded-secret-key  # nosemgrep
+    TOKEN = "token"  # nosec B105 - enum value  # nosemgrep: autobot-hardcoded-secret-key  # nosemgrep
     CERTIFICATE = "certificate"
     DATABASE_URL = "database_url"
     INFRASTRUCTURE_HOST = "infrastructure_host"

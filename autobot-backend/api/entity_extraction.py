@@ -50,7 +50,6 @@ from utils.request_utils import generate_request_id
 router = APIRouter(tags=["entity-extraction"])
 logger = get_logger(__name__)
 
-
 # ====================================================================
 # Dependency Injection
 # ====================================================================
