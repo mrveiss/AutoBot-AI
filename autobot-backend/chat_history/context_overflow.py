@@ -417,13 +417,17 @@ class ContextOverflowProtection:
         return result
 
     async def _get_context_limit(self, model_name: str) -> int:
-        """Get context window limit for a model."""
+        """Get context window limit for a model.
+
+        Issue #9294: Uses adaptive budget scaling for models not in YAML config.
+        Queries llm_shared registry when available, scales to 85% of discovered
+        context window, caps at 200k tokens.
+        """
         try:
             from context_window_manager import ContextWindowManager
 
             manager = ContextWindowManager()
-            model_info = manager.get_model_info(model_name)
-            return model_info.get("context_window_tokens", 4096)
+            return manager.get_adaptive_context_length(model_name)
         except Exception as e:
             logger.error("Failed to get context limit for %s: %s", model_name, e)
             return 4096  # Safe fallback
