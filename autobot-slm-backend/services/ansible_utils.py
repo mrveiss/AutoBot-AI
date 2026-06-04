@@ -21,8 +21,9 @@ def _extract_failure_summary(output: str) -> str:
     while i < len(lines):
         line = lines[i].strip()
 
-        if line.startswith("TASK ["):
-            task_match = re.search(r"TASK \[(.+?)\]", line)
+        # Track both TASK and RUNNING HANDLER lines (#9286)
+        if line.startswith("TASK [") or line.startswith("RUNNING HANDLER ["):
+            task_match = re.search(r"(?:TASK|RUNNING HANDLER) \[(.+?)\]", line)
             if task_match:
                 current_task = task_match.group(1).strip()
 
