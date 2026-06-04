@@ -26,9 +26,7 @@ class LangSmithObserver:
         try:
             import langsmith
         except ImportError as exc:
-            raise RuntimeError(
-                "langsmith package not installed — run: pip install langsmith>=0.1.0"
-            ) from exc
+            raise RuntimeError("langsmith package not installed — run: pip install langsmith>=0.1.0") from exc
 
         self._client = langsmith.Client(api_url=config.api_url, api_key=config.api_key)
         self._project = config.project
