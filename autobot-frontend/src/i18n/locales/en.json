@@ -101,7 +101,8 @@
     "exportJson": "Export as JSON",
     "exportCsv": "Export as CSV",
     "download": "Download",
-    "filterByCategory": "Filter by category"
+    "filterByCategory": "Filter by category",
+    "copied": "Copied!"
   },
   "chat": {
     "contextWindow": {
@@ -313,7 +314,20 @@
       "explainDesc": "Explain a concept in detail",
       "sendingMessage": "Sending message...",
       "aiResponding": "AI is responding...",
-      "typeMessage": "Type a message..."
+      "typeMessage": "Type a message...",
+      "generate": "Generate",
+      "generateImage": "Generate Image",
+      "generateImageTitle": "Image Generation",
+      "generating": "Generating...",
+      "imagePromptLabel": "Image prompt",
+      "imagePromptPlaceholder": "Describe the image you want to generate...",
+      "imageProvider": "Image provider",
+      "selectPromptTemplate": "Select prompt template",
+      "thinkingBudget": "Thinking budget",
+      "thinkingOff": "Off",
+      "thinkingOffLabel": "Extended thinking off",
+      "thinkingOn": "On",
+      "thinkingOnLabel": "Extended thinking on"
     },
     "translate": {
       "title": "Translate Text",
@@ -356,7 +370,8 @@
       "statusSending": "Sending...",
       "statusSent": "Sent",
       "statusFailed": "Failed to send",
-      "confirmDelete": "Delete this message? This action cannot be undone."
+      "confirmDelete": "Delete this message? This action cannot be undone.",
+      "thinkingUsed": "Thinking used: {tokens} tokens"
     },
     "approval": {
       "autoApproved": "Auto-Approved",
@@ -542,7 +557,35 @@
       "selectAll": "Select All",
       "deselectAll": "Deselect All",
       "share": "Share",
-      "sharing": "Sharing..."
+      "sharing": "Sharing...",
+      "createAnother": "Create another",
+      "createLink": "Create link",
+      "creating": "Creating...",
+      "emptyConversation": "This conversation is empty",
+      "enterPassword": "Enter password",
+      "expiry": "Expiry",
+      "expiry1d": "1 day",
+      "expiry1h": "1 hour",
+      "expiry30d": "30 days",
+      "expiry7d": "7 days",
+      "expiryNever": "Never",
+      "linkExpired": "This link has expired",
+      "linkExpires": "Link expires",
+      "linkNotFound": "Link not found",
+      "linkPasswordProtected": "Link is password protected",
+      "linkReady": "Link ready",
+      "optionalPassword": "Optional password",
+      "passwordGate": "Password required",
+      "passwordGateHint": "This conversation is password protected",
+      "passwordPlaceholder": "Enter password (optional)",
+      "publicLink": "Public link",
+      "publicView": "Public view",
+      "readOnlyNote": "This is a read-only view",
+      "revokeLink": "Revoke link",
+      "revoking": "Revoking...",
+      "shareWithUsers": "Share with users",
+      "unlock": "Unlock",
+      "wrongPassword": "Wrong password"
     },
     "vision": {
       "title": "Image Analysis",
@@ -663,7 +706,9 @@
       "nameRequired": "Name is required",
       "nameInvalid": "Only letters, numbers, hyphens, and underscores are allowed",
       "contentRequired": "Content is required"
-    }
+    },
+    "lightweightMode": "Lightweight mode",
+    "lightweightModeTooltip": "Use a faster, more efficient model for simpler tasks"
   },
   "settings": {
     "title": "Settings",
@@ -4348,7 +4393,8 @@
     "notFound": "Not found.",
     "serverError": "Server error. Please try again later.",
     "timeout": "Request timed out.",
-    "validation": "Please check your input."
+    "validation": "Please check your input.",
+    "genericError": "An error occurred"
   },
   "status": {
     "online": "Online",
@@ -4841,7 +4887,12 @@
       "seriesName": "Problems",
       "xAxisTitle": "Number of Problems",
       "tooltipProblems": "problems"
-    }
+    },
+    "ariaLabel": "Chart visualization",
+    "cellPlaceholder": "Chart placeholder",
+    "defaultAriaLabel": "Data visualization chart",
+    "renderError": "Error rendering chart",
+    "viewData": "View data"
   },
   "_meta": {
     "dir": "ltr",
@@ -5828,7 +5879,9 @@
       "noConfig": "No configuration stored for this plugin.",
       "invalidJson": "Invalid JSON — please fix before saving.",
       "saveFailed": "Failed to save configuration.",
-      "marketplace": "Marketplace"
+      "marketplace": "Marketplace",
+      "auditLog": "Audit log",
+      "trustTier": "Trust tier"
     },
     "marketplace": {
       "title": "Plugin Marketplace",
@@ -6603,7 +6656,8 @@
       "recentTasks": "Recent Tasks",
       "detailsBtn": "Details",
       "pauseBtn": "Pause",
-      "liveActivityFeed": "Live Activity Feed"
+      "liveActivityFeed": "Live Activity Feed",
+      "abstained": "Abstained"
     },
     "resourceHeatmap": {
       "defaultTitle": "Resource Utilization Heatmap",
@@ -7308,7 +7362,9 @@
       "initializingSession": "Initializing browser session...",
       "sessionId": "Session ID: {id}",
       "notAvailable": "Not available",
-      "templates": "Scrape Templates"
+      "templates": "Scrape Templates",
+      "exitRegionMode": "Exit region mode",
+      "markRegions": "Mark regions"
     }
   },
   "serviceMessages": {
@@ -7460,6 +7516,45 @@
       "expired": "Expired",
       "refresh": "Get New Code",
       "retry": "Try Again"
+    }
+  },
+  "code": {
+    "cellPlaceholder": "Code placeholder",
+    "copied": "Copied!",
+    "copy": "Copy",
+    "copyCodeAriaLabel": "Copy code to clipboard",
+    "copyFailed": "Copy failed"
+  },
+  "imageCell": {
+    "copyUrl": "Copy URL",
+    "download": "Download",
+    "downloadLabel": "Download image",
+    "generated": "Generated",
+    "lightbox": "Open in lightbox",
+    "loadError": "Error loading image",
+    "placeholder": "Image placeholder",
+    "viewFull": "View full size"
+  },
+  "plugins": {
+    "capabilities": {
+      "approvalDescription": "Review and approve plugin capabilities",
+      "approvalTitle": "Capability Approval",
+      "approveAll": "Approve all",
+      "approveSelected": "Approve selected",
+      "approving": "Approving...",
+      "auditLogTitle": "Capability Audit Log",
+      "capability": "Capability",
+      "denied": "Denied",
+      "filterByPlugin": "Filter by plugin",
+      "granted": "Granted",
+      "loading": "Loading...",
+      "loadingAudit": "Loading audit log...",
+      "noAuditEntries": "No audit entries",
+      "noPending": "No pending capabilities",
+      "operation": "Operation",
+      "plugin": "Plugin",
+      "status": "Status",
+      "timestamp": "Timestamp"
     }
   }
 }
