@@ -1,3 +1,9 @@
+---
+tags: [type/reference, status/current]
+date: 2026-04-10
+issue: 4069
+---
+
 # CausalInferenceEngine - Production Root-Cause Analysis Service
 
 **Issue:** #4069  

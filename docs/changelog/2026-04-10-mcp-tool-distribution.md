@@ -1,3 +1,9 @@
+---
+tags: [type/reference, status/current]
+date: 2026-04-10
+issue: 3386
+---
+
 # MCP Tool Distribution - Phase 1 Implementation Summary
 
 ## Issue: #3386 - Distribute MCP Tool Capabilities Across Agent Roster

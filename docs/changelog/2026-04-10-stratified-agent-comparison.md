@@ -1,3 +1,8 @@
+---
+tags: [type/reference, status/current]
+date: 2026-04-10
+---
+
 # Stratified Agent Comparison Implementation Summary
 
 **Task:** Extend AgentAnalytics with stratified comparison (confounder-controlled agent evaluation)
