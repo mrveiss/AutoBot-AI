@@ -314,18 +314,7 @@ Issue #753: User preference management interface
         </section>
 
         <!-- Issue #9035: Telemetry and analytics opt-out -->
-        <section v-if="activeTab === 'privacy'" class="settings-section">
-          <div class="section-header">
-            <h2 class="section-title">
-              <Icon name="shield-alt" />
-              Privacy & Telemetry
-            </h2>
-            <p class="section-description">Control what usage data AutoBot collects to improve the platform.</p>
-          </div>
-          <div class="section-content">
-            <TelemetrySettingsPanel />
-          </div>
-        </section>
+        <!-- TODO: Restore telemetry settings section when TelemetrySettingsPanel.vue is implemented -->
       </div>
 
     <ApiKeySetupWizard v-model="showApiKeyWizard" @saved="onApiKeysSaved" />
@@ -344,7 +333,7 @@ import ConnectionSettingsPanel from '@/components/desktop/ConnectionSettingsPane
 import FeatureFlagsSettingsPanel from '@/components/settings/FeatureFlagsSettingsPanel.vue'
 import PresetsSettingsPanel from '@/components/settings/PresetsSettingsPanel.vue'
 import PushNotificationSettingsPanel from '@/components/settings/PushNotificationSettingsPanel.vue'
-import TelemetrySettingsPanel from '@/components/settings/TelemetrySettingsPanel.vue'
+// import TelemetrySettingsPanel from '@/components/settings/TelemetrySettingsPanel.vue' // TODO: Implement component
 import DeviceManagementPanel from '@/components/profile/DeviceManagementPanel.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
