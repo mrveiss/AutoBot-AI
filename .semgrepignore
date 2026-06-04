@@ -1,0 +1,9 @@
+# Semgrep Cloud suppressions for false positives
+
+# SQL injection false positives - identifiers validated or from system tables
+autobot-backend/api/database_mcp.py
+autobot-backend/utils/common.py
+
+# Hardcoded secret false positives - enum string literals, not actual secrets
+autobot-backend/models/secret.py
+autobot-backend/services/agent_secrets_integration.py
