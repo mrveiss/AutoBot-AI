@@ -2257,14 +2257,13 @@ async def summarize_conversation(
         [f"{msg.get('role', 'unknown').upper()}: {msg.get('content', '')}" for msg in messages_to_summarize]
     )
 
-    summarization_prompt = f"""Summarize the following conversation segment concisely. Preserve key context, decisions, and technical details that would be needed to continue the conversation naturally.
-
-Target length: approximately {body.target_length or 500} tokens.
-
-Conversation:
-{conversation_text}
-
-Summary:"""
+    summarization_prompt = (
+        f"Summarize the following conversation segment concisely. "
+        f"Preserve key context, decisions, and technical details "
+        f"that would be needed to continue the conversation naturally.\n\n"
+        f"Target length: approximately {body.target_length or 500} tokens.\n\n"
+        f"Conversation:\n{conversation_text}\n\nSummary:"
+    )
 
     # Get LLM service and generate summary
     llm_service = get_llm_service(request)
