@@ -32,13 +32,15 @@ def mock_redis():
 @pytest.fixture
 def mock_db_session():
     """Mock database session for device existence checks."""
-    session = AsyncMock()
     result = MagicMock()
     result.scalar_one_or_none = MagicMock()
-    session.execute = AsyncMock(return_value=result)
-    session.__aenter__ = AsyncMock(return_value=session)
-    session.__aexit__ = AsyncMock()
-    with patch("services.device_jwt.async_session_maker", return_value=session):
+
+    async def mock_get_async_session():
+        session = AsyncMock()
+        session.execute = AsyncMock(return_value=result)
+        yield session
+
+    with patch("user_management.database.get_async_session", side_effect=mock_get_async_session):
         yield result
 
 

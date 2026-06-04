@@ -178,12 +178,13 @@ async def _device_exists_cached(device_id: str) -> bool:
     # Cache miss — query DB
     from sqlalchemy import select
 
-    from autobot_shared.database_connection import async_session_maker
     from models.mobile_device import MobileDevice
+    from user_management.database import get_async_session
 
-    async with async_session_maker() as session:
+    async for session in get_async_session():
         result = await session.execute(select(MobileDevice.id).where(MobileDevice.id == device_id).limit(1))
         exists = result.scalar_one_or_none() is not None
+        break  # Only need one iteration
 
     # Write to cache
     if redis is not None:

@@ -40,13 +40,15 @@ def mock_db_session():
     """Mock database session for device existence checks."""
     from unittest.mock import MagicMock
 
-    session = AsyncMock()
     result = MagicMock()
     result.scalar_one_or_none = MagicMock(return_value=str(uuid.uuid4()))
-    session.execute = AsyncMock(return_value=result)
-    session.__aenter__ = AsyncMock(return_value=session)
-    session.__aexit__ = AsyncMock()
-    with patch("services.device_jwt.async_session_maker", return_value=session):
+
+    async def mock_get_async_session():
+        session = AsyncMock()
+        session.execute = AsyncMock(return_value=result)
+        yield session
+
+    with patch("user_management.database.get_async_session", side_effect=mock_get_async_session):
         yield result
 
 
@@ -205,14 +207,15 @@ class TestDeviceJWTAuthMiddleware:
 
         # Mock device does not exist (cache miss, DB returns None)
         mock_redis.get.return_value = None
-        session = AsyncMock()
         result = MagicMock()
         result.scalar_one_or_none = MagicMock(return_value=None)
-        session.execute = AsyncMock(return_value=result)
-        session.__aenter__ = AsyncMock(return_value=session)
-        session.__aexit__ = AsyncMock()
 
-        with patch("services.device_jwt.async_session_maker", return_value=session):
+        async def mock_get_async_session_deleted():
+            session = AsyncMock()
+            session.execute = AsyncMock(return_value=result)
+            yield session
+
+        with patch("services.device_jwt.get_async_session", side_effect=mock_get_async_session_deleted):
             request = Request(
                 {
                     "type": "http",
