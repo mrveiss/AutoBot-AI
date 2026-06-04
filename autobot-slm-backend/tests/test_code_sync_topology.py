@@ -8,7 +8,6 @@ Verifies that code_sync routes to SSH rsync for remote code sources
 and Ansible for local sources, fixing the multi-server regression.
 """
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
