@@ -405,7 +405,6 @@ class LLMService:
                         " → ".join(attempted_models),
                     )
                 return
-<<<<<<< HEAD
 
             except Exception as exc:
                 # If we already yielded chunks, we can't retry - raise immediately

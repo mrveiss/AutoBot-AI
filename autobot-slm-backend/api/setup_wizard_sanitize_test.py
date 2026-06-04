@@ -5,7 +5,6 @@
 Tests for Ansible inventory name sanitization (#9283).
 """
 
-
 from api.setup_wizard import _sanitize_ansible_name
 
 
