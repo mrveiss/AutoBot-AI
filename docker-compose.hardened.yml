@@ -143,6 +143,7 @@ services:
       - /tmp
       - /var/run
       - /app/data/tmp:mode=1777
+      - /app/autobot-slm-backend/data:mode=1777
       # /app/logs is writable via slm_logs named volume in base compose
     secrets:
       - slm_admin_password
