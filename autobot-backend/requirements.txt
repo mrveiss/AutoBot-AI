@@ -69,7 +69,7 @@ spacy>=3.8.13                  # Issue #2025: NLP entity extraction
 scikit-learn>=1.8.0           # Issue #2027: RAPTOR clustering
 
 # Media processing pipelines (Issue #932)
-aiohttp>=3.13.4         # Async HTTP client - SECURITY UPDATE
+aiohttp>=3.14.0         # Async HTTP client - SECURITY UPDATE
 beautifulsoup4>=4.14.3  # HTML parsing for link pipeline
 Pillow>=12.1.1          # Image processing - SECURITY UPDATE (OOB write fix)
 jsonschema>=4.23.0      # Issue #7405: JSON Schema validation for /knowledge/extract
