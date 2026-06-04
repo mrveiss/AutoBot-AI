@@ -6,7 +6,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from transcriber.database import Database
-from transcriber.deps import get_db
+from transcriber.deps import get_db, DEFAULT_USER
 from transcriber.models import (
     NoteCreate,
     NoteOut,
@@ -22,12 +22,10 @@ from transcriber.models import (
 
 router = APIRouter(tags=["transcriber-transcripts"])
 
-_DEFAULT_USER = "default"
-
 
 def _user_id(request: Request) -> str:
     user = getattr(request.state, "user", None)
-    return user.id if user else _DEFAULT_USER
+    return user.id if user else DEFAULT_USER
 
 
 async def _require_recording_owner(recording_id: int, user_id: str, db: Database) -> None:

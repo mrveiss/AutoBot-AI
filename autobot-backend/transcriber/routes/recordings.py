@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 
 from autobot_shared.logging_manager import get_logger
 from transcriber.database import Database
-from transcriber.deps import get_db
+from transcriber.deps import get_db, DEFAULT_USER
 from transcriber.models import RecordingOut
 
 logger = get_logger(__name__)
@@ -26,13 +26,9 @@ def _upload_dir(request: Request) -> Path:
     return Path(request.app.state.transcriber_upload_dir)
 
 
-# Development fallback — auth middleware populates request.state.user in production (Plan 2)
-_DEFAULT_USER = "default"
-
-
 def _user_id(request: Request) -> str:
     user = getattr(request.state, "user", None)
-    return user.id if user else _DEFAULT_USER
+    return user.id if user else DEFAULT_USER
 
 
 @router.post("/projects/{project_id}/recordings", response_model=RecordingOut, status_code=202)
