@@ -135,7 +135,7 @@ import BaseAlert from '@/components/ui/BaseAlert.vue';
 import Icon from '@/components/ui/Icon.vue';
 
 const logger = createLogger('TelemetrySettingsPanel');
-const { showError, showSuccess } = useNotificationBus();
+const { notifyError, notifySuccess } = useNotificationBus();
 
 // State
 const loading = ref(false);
@@ -181,11 +181,11 @@ async function handleSettingChange() {
 
     successMessage.value = 'Telemetry settings updated';
     logger.info('Telemetry settings updated', settings.value);
-    showSuccess('Telemetry settings updated');
+    notifySuccess('Telemetry settings updated');
   } catch (err) {
     operationError.value = 'Failed to update telemetry settings';
     logger.error('Failed to update telemetry settings', err);
-    showError('Failed to update telemetry settings');
+    notifyError('Failed to update telemetry settings');
   }
 }
 
