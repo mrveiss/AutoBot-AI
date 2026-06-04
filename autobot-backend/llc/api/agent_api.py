@@ -23,6 +23,9 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 router = APIRouter(prefix="/agent", tags=["llc-agent"])
 
 
