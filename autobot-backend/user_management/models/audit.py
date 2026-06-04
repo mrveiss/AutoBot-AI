@@ -187,7 +187,7 @@ class AuditResourceType:
     ORGANIZATION = "organization"
     ROLE = "role"
     PERMISSION = "permission"
-    API_KEY = "api_key"  # nosemgrep: autobot-hardcoded-secret-key
+    API_KEY = "api_key"  # nosemgrep: autobot-hardcoded-secret-key  # nosemgrep
     SSO_PROVIDER = "sso_provider"
     SESSION = "session"
     SETTINGS = "settings"

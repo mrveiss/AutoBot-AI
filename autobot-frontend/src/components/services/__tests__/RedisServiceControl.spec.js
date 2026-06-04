@@ -22,7 +22,8 @@ import { ref } from 'vue';
 import en from '@/i18n/locales/en.json';
 import RedisServiceControl from '@/components/services/RedisServiceControl.vue';
 
-const REDIS_VM_HOST = '172.16.168.23' // noqa: hardcoded-value (test fixture)
+// eslint-disable-next-line no-restricted-syntax -- test fixture value
+const REDIS_VM_HOST = '172.16.168.23'
 
 // Create i18n with real English messages so $t() returns translated text (#2641)
 const createTestI18n = () =>

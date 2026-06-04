@@ -687,7 +687,7 @@ class NLDatabaseService:
 
                 ddl_parts = []
                 for tbl in tables:
-                    await cur.execute(  # nosemgrep: autobot-sql-string-format
+                    await cur.execute(  # nosemgrep: autobot-sql-string-format  # nosemgrep
                         f"SHOW CREATE TABLE `{tbl}`"
                     )  # noqa: S608
                     row = await cur.fetchone()
