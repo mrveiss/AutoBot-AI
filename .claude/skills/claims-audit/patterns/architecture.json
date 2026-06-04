@@ -1,0 +1,50 @@
+{
+  "category": "architecture",
+  "patterns": [
+    {
+      "type": "component",
+      "pattern": "\\b(frontend|backend|control plane|agent loop|workflow engine|event bus|message queue)\\b",
+      "description": "Architectural component mentions"
+    },
+    {
+      "type": "pattern",
+      "pattern": "\\b(singleton|factory|observer|pub-sub|microservice|monolith|event-driven)\\b",
+      "description": "Architectural pattern mentions"
+    },
+    {
+      "type": "layer",
+      "pattern": "\\b(presentation|business logic|data access|persistence|API|service)\\s+layer",
+      "description": "Architectural layer claims"
+    },
+    {
+      "type": "separation",
+      "pattern": "\\b(SLM|control plane).*separate.*\\b(autobot-backend|managed service)",
+      "description": "Component separation claims"
+    },
+    {
+      "type": "communication",
+      "pattern": "\\b(synchronous|asynchronous|async|event-driven|message-based)\\b",
+      "description": "Communication pattern claims"
+    },
+    {
+      "type": "deployment",
+      "pattern": "\\b(containerized|Docker|Kubernetes|systemd|Ansible)\\b",
+      "description": "Deployment architecture claims"
+    }
+  ],
+  "keywords": [
+    "frontend",
+    "backend",
+    "control plane",
+    "agent loop",
+    "workflow",
+    "event bus",
+    "singleton",
+    "factory",
+    "microservice",
+    "async",
+    "event-driven",
+    "Docker",
+    "Ansible"
+  ]
+}
