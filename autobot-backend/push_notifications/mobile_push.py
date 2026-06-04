@@ -291,4 +291,3 @@ async def _remove_invalid_devices(device_ids: list[str]) -> None:
 
 class InvalidTokenError(Exception):
     """Raised when a device token is invalid or expired."""
-

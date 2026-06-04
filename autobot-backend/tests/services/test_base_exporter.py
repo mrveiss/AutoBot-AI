@@ -1,6 +1,5 @@
 """Tests for transcript export base classes and data models."""
 
-
 from services.transcript_export.base import Segment, Transcript
 
 
