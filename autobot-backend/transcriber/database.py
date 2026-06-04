@@ -392,3 +392,25 @@ class Database:
         )
         row = await cur.fetchone()
         return dict(row) if row else None
+
+
+# ── Singleton ─────────────────────────────────────────────────────────────
+
+_db_instance: Database | None = None
+
+
+async def get_transcriber_db() -> Database:
+    """Get or create the singleton transcriber database instance.
+    
+    Returns:
+        Database: The shared database connection instance
+    """
+    global _db_instance
+    if _db_instance is None:
+        # Get database path from environment, default to data/transcriber.db
+        db_path = os.getenv("AUTOBOT_TRANSCRIBER_DB_PATH", "data/transcriber.db")
+        _db_instance = Database(db_path)
+        await _db_instance.connect()
+        await _db_instance.migrate()
+        logger.info(f"Transcriber database initialized at {db_path}")
+    return _db_instance
