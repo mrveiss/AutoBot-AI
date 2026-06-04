@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from api.voice_bundle_constants import VALID_BUNDLES, BundleAssignRequest
 from api.voice_bundle_helpers import _count_tools_for_bundle, _require_admin
-from auth_middleware import get_current_user
+from auth_middleware import get_auth_middleware, get_current_user
 from autobot_shared.logging_manager import get_logger
 from services.event_log import EventType, emit
 
@@ -62,6 +62,7 @@ async def get_my_bundle(
 ) -> BundleMeResponse:
     """Return the resolved voice bundle for the authenticated caller."""
     from api.redis_mcp.rbac import resolve_bundle_for_user  # noqa: PLC0415
+    from api.voice_bundle_user import _count_tools_for_bundle  # noqa: PLC0415
 
     user_id = current_user.get("user_id") or current_user.get("sub") or current_user.get("username")
     role = current_user.get("role", "user")
