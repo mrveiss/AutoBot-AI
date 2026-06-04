@@ -10,7 +10,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Minimal LLMRequest / LLMResponse stand-ins so tests don't need the full
 # backend import chain.
@@ -48,9 +47,7 @@ def mock_langsmith_module():
     fake_client.create_run = MagicMock()
     fake_client.update_run = MagicMock()
 
-    with patch.dict(
-        "sys.modules", {"langsmith": MagicMock(Client=MagicMock(return_value=fake_client))}
-    ):
+    with patch.dict("sys.modules", {"langsmith": MagicMock(Client=MagicMock(return_value=fake_client))}):
         yield fake_client
 
 
