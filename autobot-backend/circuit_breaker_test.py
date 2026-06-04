@@ -207,3 +207,89 @@ class TestProtectedCalls:
             return "result"
 
         assert await protected_network_call(net) == "result"
+
+
+class TestResetOnSuccess:
+    """Tests for reset_on_success feature (Issue #9293)."""
+
+    def test_reset_on_success_enabled_default(self):
+        """With reset_on_success=True (default), any success in CLOSED state resets failure_count to 0."""
+        config = CircuitBreakerConfig(failure_threshold=5)
+        assert config.reset_on_success is True  # Verify default
+
+        cb = CircuitBreaker("reset_test", config)
+
+        # Accumulate 3 failures
+        cb._record_failure(0.1, ConnectionError("test"))
+        cb._record_failure(0.1, ConnectionError("test"))
+        cb._record_failure(0.1, ConnectionError("test"))
+        assert cb.failure_count == 3
+        assert cb.state == CircuitState.CLOSED
+
+        # One success should reset to 0
+        cb._record_success(0.1)
+        assert cb.failure_count == 0, "reset_on_success=True should reset failure_count to 0"
+
+    def test_reset_on_success_disabled_legacy(self):
+        """With reset_on_success=False, success in CLOSED state decrements failure_count by 1 (legacy)."""
+        config = CircuitBreakerConfig(failure_threshold=5, reset_on_success=False)
+        cb = CircuitBreaker("legacy_reset_test", config)
+
+        # Accumulate 3 failures
+        cb._record_failure(0.1, ConnectionError("test"))
+        cb._record_failure(0.1, ConnectionError("test"))
+        cb._record_failure(0.1, ConnectionError("test"))
+        assert cb.failure_count == 3
+
+        # Success should decrement by 1
+        cb._record_success(0.1)
+        assert cb.failure_count == 2, "reset_on_success=False should decrement failure_count by 1"
+
+        # Another success
+        cb._record_success(0.1)
+        assert cb.failure_count == 1
+
+        # Another success
+        cb._record_success(0.1)
+        assert cb.failure_count == 0
+
+    def test_reset_prevents_false_lockout(self):
+        """Reset on success prevents gradual lockout from intermittent failures."""
+        config = CircuitBreakerConfig(failure_threshold=3, reset_on_success=True)
+        cb = CircuitBreaker("intermittent_test", config)
+
+        # Simulate intermittent pattern: fail-fail-success-fail-fail-success
+        # With reset_on_success=True, this should NOT open the circuit
+        cb._record_failure(0.1, ConnectionError("test"))
+        cb._record_failure(0.1, ConnectionError("test"))
+        assert cb.failure_count == 2
+
+        cb._record_success(0.1)  # Resets to 0
+        assert cb.failure_count == 0
+
+        cb._record_failure(0.1, ConnectionError("test"))
+        cb._record_failure(0.1, ConnectionError("test"))
+        assert cb.failure_count == 2
+        assert cb.state == CircuitState.CLOSED, "Circuit should remain CLOSED with intermittent pattern"
+
+        cb._record_success(0.1)  # Resets to 0 again
+        assert cb.failure_count == 0
+
+    def test_legacy_mode_accumulates_failures(self):
+        """Legacy mode (reset_on_success=False) accumulates failures even with successes."""
+        config = CircuitBreakerConfig(failure_threshold=3, reset_on_success=False)
+        cb = CircuitBreaker("legacy_accumulate_test", config)
+
+        # Same pattern: fail-fail-success-fail-fail-success
+        # With reset_on_success=False, failures accumulate toward threshold
+        cb._record_failure(0.1, ConnectionError("test"))
+        cb._record_failure(0.1, ConnectionError("test"))
+        assert cb.failure_count == 2
+
+        cb._record_success(0.1)  # Decrements to 1
+        assert cb.failure_count == 1
+
+        cb._record_failure(0.1, ConnectionError("test"))
+        cb._record_failure(0.1, ConnectionError("test"))
+        assert cb.failure_count == 3
+        assert cb.state == CircuitState.OPEN, "Legacy mode should open after net failures reach threshold"
