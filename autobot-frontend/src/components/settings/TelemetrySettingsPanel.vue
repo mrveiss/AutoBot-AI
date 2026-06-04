@@ -135,7 +135,7 @@ import BaseAlert from '@/components/ui/BaseAlert.vue';
 import Icon from '@/components/ui/Icon.vue';
 
 const logger = createLogger('TelemetrySettingsPanel');
-const { notifyError, notifySuccess } = useNotificationBus();
+const { showError, showSuccess } = useNotificationBus();
 
 // State
 const loading = ref(false);
@@ -181,11 +181,11 @@ async function handleSettingChange() {
 
     successMessage.value = 'Telemetry settings updated';
     logger.info('Telemetry settings updated', settings.value);
-    notifySuccess('Telemetry settings updated');
+    showSuccess('Telemetry settings updated');
   } catch (err) {
     operationError.value = 'Failed to update telemetry settings';
     logger.error('Failed to update telemetry settings', err);
-    notifyError('Failed to update telemetry settings');
+    showError('Failed to update telemetry settings');
   }
 }
 
@@ -195,7 +195,7 @@ onMounted(() => {
 });
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .telemetry-settings-panel {
   padding: 0;
 }
@@ -222,10 +222,10 @@ onMounted(() => {
   border-radius: 0.25rem;
   cursor: pointer;
   font-size: 0.875rem;
-}
 
-.retry-btn:hover {
-  background: var(--color-primary-dark);
+  &:hover {
+    background: var(--color-primary-dark);
+  }
 }
 
 .settings-content {
@@ -260,27 +260,27 @@ onMounted(() => {
   align-items: flex-start;
   padding: 1rem 0;
   border-bottom: 1px solid var(--color-border);
-}
 
-.setting-row:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
+  &:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
 
-.setting-row:first-child {
-  padding-top: 0;
+  &:first-child {
+    padding-top: 0;
+  }
 }
 
 .setting-label {
   flex: 1;
   padding-right: 2rem;
-}
 
-.setting-label strong {
-  display: block;
-  margin-bottom: 0.25rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
+  strong {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
 }
 
 .setting-hint {
@@ -299,53 +299,53 @@ onMounted(() => {
   display: inline-block;
   width: 48px;
   height: 24px;
-}
 
-.toggle-switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
+  input {
+    opacity: 0;
+    width: 0;
+    height: 0;
 
-.toggle-switch input:checked + .toggle-slider {
-  background-color: var(--color-primary);
-}
+    &:checked + .toggle-slider {
+      background-color: var(--color-primary);
 
-.toggle-switch input:checked + .toggle-slider::before {
-  transform: translateX(24px);
-}
+      &::before {
+        transform: translateX(24px);
+      }
+    }
 
-.toggle-switch input:disabled + .toggle-slider {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+    &:disabled + .toggle-slider {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
 
-.toggle-slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--color-border);
-  transition: 0.3s;
-  border-radius: 24px;
-}
+  .toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--color-border);
+    transition: 0.3s;
+    border-radius: 24px;
 
-.toggle-slider::before {
-  position: absolute;
-  content: '';
-  height: 18px;
-  width: 18px;
-  left: 3px;
-  bottom: 3px;
-  background-color: white;
-  transition: 0.3s;
-  border-radius: 50%;
-}
+    &::before {
+      position: absolute;
+      content: '';
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: 0.3s;
+      border-radius: 50%;
+    }
 
-.toggle-slider:hover {
-  opacity: 0.8;
+    &:hover {
+      opacity: 0.8;
+    }
+  }
 }
 
 .privacy-notice {
@@ -355,19 +355,19 @@ onMounted(() => {
   background: var(--color-info-bg);
   border: 1px solid var(--color-info-border);
   border-radius: 0.5rem;
-}
 
-.privacy-notice p {
-  margin: 0;
-  font-size: 0.875rem;
-  color: var(--color-text-secondary);
-  line-height: 1.6;
-}
+  p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+  }
 
-.privacy-notice :deep(.icon) {
-  flex-shrink: 0;
-  color: var(--color-info);
-  width: 1.25rem;
-  height: 1.25rem;
+  :deep(.icon) {
+    flex-shrink: 0;
+    color: var(--color-info);
+    width: 1.25rem;
+    height: 1.25rem;
+  }
 }
 </style>
