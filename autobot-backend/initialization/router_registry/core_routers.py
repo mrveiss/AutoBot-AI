@@ -71,6 +71,7 @@ from api.llm_providers import router as llm_providers_router
 from api.manual_mcp import router as manual_mcp_router
 from api.mcp_registry import router as mcp_registry_router
 from api.memory import router as memory_router
+from api.mobile_devices import router as mobile_devices_router  # GH#4463
 from api.models import router as models_router
 from api.overseer_handlers import router as overseer_router
 from api.process_management import router as process_management_router  # Issue #1406
@@ -122,6 +123,7 @@ def _get_system_routers() -> list:
         (settings_router, "/settings", ["settings"], "settings"),
         (usage_router, "/usage", ["usage", "analytics"], "usage"),  # Issue #1807
         (user_management_router, "", ["user-management"], "user_management"),  # Issue #1801
+        (mobile_devices_router, "/devices", ["devices", "integrations"], "mobile_devices"),  # GH#4463
         (data_storage_router, "", ["data-storage"], "data_storage"),
         (prompts_router, "/prompts", ["prompts"], "prompts"),
         (frontend_config_router, "", ["frontend-config"], "frontend_config"),
