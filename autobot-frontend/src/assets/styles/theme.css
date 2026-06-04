@@ -217,9 +217,10 @@
 /* ============================================
  * ACCENT COLOR VARIANTS
  * Activated via [data-accent-color] attribute
+ * Default: Electric Blue (from design-tokens.css)
  * ============================================ */
 
-/* Teal (default) */
+/* Teal */
 [data-accent-color="teal"] {
   --color-primary: #0d9488;
   --color-primary-hover: #0f766e;
