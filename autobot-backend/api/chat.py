@@ -52,6 +52,9 @@ from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
+
+# Import context overflow protection (#9043)
+from chat_history.overflow_integration import create_summary_message, handle_message_completion
 from constants.threshold_constants import TimingConstants
 
 # Import dependencies and utilities - Using available dependencies
@@ -75,9 +78,6 @@ from utils.chat_utils import (
     log_chat_event,
     validate_chat_session_id,
 )
-
-# Import context overflow protection (#9043)
-from chat_history.overflow_integration import handle_message_completion, create_summary_message
 
 # Import models - DISABLED: Models don't exist yet
 # from backend.models.conversation import ConversationModel

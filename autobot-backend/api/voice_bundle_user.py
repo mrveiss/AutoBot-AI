@@ -19,7 +19,7 @@ from api.voice_bundle_constants import (
     VALID_BUNDLES,
     BundleAssignRequest,
 )
-from auth_middleware import get_current_user, get_auth_middleware
+from auth_middleware import get_auth_middleware, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.audit.unified_audit import AuditCategory, AuditEvent, emit

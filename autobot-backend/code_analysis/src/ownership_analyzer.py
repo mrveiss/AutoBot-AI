@@ -24,8 +24,6 @@ from typing import Any, Dict, List, Tuple
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 
-from autobot_shared.async_compat import run_or_schedule
-
 # Issue #542: Handle imports for both standalone execution and backend import
 _project_root = Path(__file__).resolve().parents[3]
 if str(_project_root) not in sys.path:
