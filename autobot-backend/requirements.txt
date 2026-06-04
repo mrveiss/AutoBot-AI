@@ -29,7 +29,7 @@ python-pptx>=0.6.23 # PowerPoint file parsing for OneDrive connector (GH#9004)
 
 # AI/ML
 openai>=2.32.0
-anthropic>=0.104.1
+anthropic>=0.105.2
 boto3>=1.43.22                       # GH#9010: AWS Bedrock provider
 chromadb>=1.5.9,<2.0.0             # upper bound guards against breaking API changes; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
 protobuf>=5.29.6,<8.0.0           # required floor for chromadb 1.5.5+ opentelemetry exporter; resolves googleapis-common-protos conflict (#4061)
