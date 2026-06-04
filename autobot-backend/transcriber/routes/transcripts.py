@@ -41,10 +41,9 @@ async def _require_recording_owner(recording_id: int, user_id: str, db: Database
 
 
 @router.get("/recordings/{recording_id}/transcript", response_model=TranscriptOut)
-async def get_transcript(recording_id: int, db: Database = Depends(get_db)):
+async def get_transcript(recording_id: int, request: Request, db: Database = Depends(get_db)):
+    await _require_recording_owner(recording_id, _user_id(request), db)
     rec = await db.get_recording(recording_id)
-    if not rec:
-        raise HTTPException(404, "Recording not found")
     speakers = await db.list_speakers(recording_id)
     segments = await db.list_segments(recording_id)
     return TranscriptOut(
