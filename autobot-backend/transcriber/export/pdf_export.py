@@ -5,6 +5,7 @@
 """Export transcript to PDF via HTML→WeasyPrint."""
 
 import html as html_lib
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
