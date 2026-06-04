@@ -1,31 +1,42 @@
+// AutoBot - AI-Powered Automation Platform
+// Copyright (c) 2025 mrveiss
+// Author: mrveiss
 /**
- * AutoBot - AI-Powered Automation Platform
- * Copyright (c) 2025 mrveiss
- *
- * usePairingQR Composable (MVA-3003)
+ * usePairingQR Composable (MVA-2993)
  *
  * Handles QR code pairing lifecycle for mobile device pairing.
- * - Fetches challenge token from backend
- * - Generates QR code data URL
- * - Manages countdown timer
- * - Detects device pairing completion via polling
+ * - Fetches challenge token from backend (GET /api/devices/pair-qr)
+ * - Generates QR code data URL using the `qrcode` package
+ * - Manages countdown timer (5-minute TTL)
+ * - Detects device pairing completion via polling (GET /api/devices)
  */
 
 import { ref, computed, onUnmounted } from 'vue'
 import QRCode from 'qrcode'
 import { createLogger } from '@/utils/debugUtils'
-import { getApiClient } from '@/utils/ApiClient'
+import apiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
+
+const logger = createLogger('usePairingQR')
 
 interface QRChallengeResponse {
   challenge_token: string
   expires_in_seconds: number
 }
 
-export function usePairingQR() {
-  const logger = createLogger('usePairingQR')
-  const apiClient = getApiClient()
+interface DeviceResponse {
+  id: string
+  device_name: string
+  platform: string
+  last_seen_at: string | null
+  created_at: string
+}
 
-  // State
+interface DeviceListResponse {
+  devices: DeviceResponse[]
+}
+
+export function usePairingQR() {
   const challengeToken = ref<string | null>(null)
   const qrDataUrl = ref<string | null>(null)
   const expiresInSeconds = ref<number>(0)
@@ -33,45 +44,40 @@ export function usePairingQR() {
   const error = ref<string | null>(null)
   const isPaired = ref(false)
 
-  // Computed
   const isExpired = computed(() => expiresInSeconds.value <= 0)
-  const minutesRemaining = computed(() => Math.floor(expiresInSeconds.value / 60))
-  const secondsRemaining = computed(() => expiresInSeconds.value % 60)
-  const formattedTime = computed(() =>
-    `${minutesRemaining.value}:${secondsRemaining.value.toString().padStart(2, '0')}`
-  )
+  const formattedTime = computed(() => {
+    const m = Math.floor(expiresInSeconds.value / 60)
+    const s = expiresInSeconds.value % 60
+    return `${m}:${s.toString().padStart(2, '0')}`
+  })
 
-  // Timers
   let countdownInterval: number | null = null
   let pairingCheckInterval: number | null = null
 
-  // Methods
   async function fetchChallenge() {
+    stopCountdown()
+    stopPairingCheck()
     loading.value = true
     error.value = null
+    isPaired.value = false
+    qrDataUrl.value = null
 
     try {
-      const response = await apiClient.get('/devices/pair-qr')
+      const response: QRChallengeResponse = await apiClient.get(
+        `${getApiBase()}/devices/pair-qr`
+      )
       challengeToken.value = response.challenge_token
       expiresInSeconds.value = response.expires_in_seconds
 
-      // Generate QR code
       const qrUrl = `autobot://pair?token=${response.challenge_token}`
       qrDataUrl.value = await QRCode.toDataURL(qrUrl, {
         width: 300,
         margin: 2,
-        color: {
-          dark: '#000000',
-          light: '#FFFFFF'
-        }
+        color: { dark: '#000000', light: '#FFFFFF' },
       })
 
-      // Start countdown
       startCountdown()
-
-      // Start polling for pairing completion
       startPairingCheck()
-
       logger.info('QR challenge fetched successfully')
     } catch (err) {
       error.value = 'Failed to generate QR code. Please try again.'
@@ -82,7 +88,6 @@ export function usePairingQR() {
   }
 
   function startCountdown() {
-    stopCountdown()
     countdownInterval = window.setInterval(() => {
       if (expiresInSeconds.value > 0) {
         expiresInSeconds.value--
@@ -99,29 +104,24 @@ export function usePairingQR() {
     }
   }
 
-  async function startPairingCheck() {
-    stopPairingCheck()
-    // Poll every 2 seconds to check if device was paired
+  function startPairingCheck() {
     pairingCheckInterval = window.setInterval(async () => {
       try {
-        const devices = await apiClient.get('/devices')
-        // If device count increased, pairing succeeded
-        // (More robust: check for device with matching token, but backend doesn't expose that)
-        // For now, trust that any new device during the challenge window is the paired one
-        if (devices.devices && devices.devices.length > 0) {
-          // Check if any device was created in the last 10 seconds
-          const recentDevice = devices.devices.find((d: any) => {
-            const createdAt = new Date(d.created_at)
-            const now = new Date()
-            return (now.getTime() - createdAt.getTime()) < 10000 // 10 seconds
-          })
+        const data: DeviceListResponse = await apiClient.get(
+          `${getApiBase()}/devices`
+        )
+        if (!data.devices?.length) return
 
-          if (recentDevice) {
-            isPaired.value = true
-            stopPairingCheck()
-            stopCountdown()
-            logger.info('Device paired successfully')
-          }
+        const recentDevice = data.devices.find((d) => {
+          const age = Date.now() - new Date(d.created_at).getTime()
+          return age < 10_000
+        })
+
+        if (recentDevice) {
+          isPaired.value = true
+          stopPairingCheck()
+          stopCountdown()
+          logger.info('Device paired: %s (%s)', recentDevice.device_name, recentDevice.id)
         }
       } catch (err) {
         logger.warn('Pairing check failed:', err)
@@ -146,27 +146,21 @@ export function usePairingQR() {
     isPaired.value = false
   }
 
-  // Cleanup on unmount
   onUnmounted(() => {
     stopCountdown()
     stopPairingCheck()
   })
 
   return {
-    // State
     challengeToken,
     qrDataUrl,
     expiresInSeconds,
     loading,
     error,
     isPaired,
-
-    // Computed
     isExpired,
     formattedTime,
-
-    // Methods
     fetchChallenge,
-    reset
+    reset,
   }
 }
