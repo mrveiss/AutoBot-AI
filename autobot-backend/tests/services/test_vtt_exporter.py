@@ -1,4 +1,5 @@
 """Tests for VTT (WebVTT) subtitle exporter."""
+
 import pytest
 from services.transcript_export.base import Segment, Transcript
 from services.transcript_export.vtt_exporter import VTTExporter
